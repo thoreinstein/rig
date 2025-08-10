@@ -1,0 +1,219 @@
+package git
+
+import (
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+)
+
+// WorktreeManager handles Git worktree operations
+type WorktreeManager struct {
+	RepoPath   string
+	BaseBranch string
+	Verbose    bool
+}
+
+// NewWorktreeManager creates a new WorktreeManager
+func NewWorktreeManager(repoPath, baseBranch string, verbose bool) *WorktreeManager {
+	return &WorktreeManager{
+		RepoPath:   repoPath,
+		BaseBranch: baseBranch,
+		Verbose:    verbose,
+	}
+}
+
+// CreateWorktree creates a new git worktree for the given ticket
+func (wm *WorktreeManager) CreateWorktree(ticketType, ticket string) (string, error) {
+	worktreePath := filepath.Join(wm.RepoPath, ticketType, ticket)
+	
+	// Check if bare repo exists
+	if !wm.repoExists() {
+		return "", fmt.Errorf("bare repository not found at %s", wm.RepoPath)
+	}
+	
+	// Create type directory if it doesn't exist
+	typeDir := filepath.Join(wm.RepoPath, ticketType)
+	if err := os.MkdirAll(typeDir, 0755); err != nil {
+		return "", fmt.Errorf("failed to create type directory: %w", err)
+	}
+	
+	// Check if worktree already exists
+	if _, err := os.Stat(worktreePath); err == nil {
+		if wm.Verbose {
+			fmt.Printf("Worktree already exists at %s\n", worktreePath)
+		}
+		return worktreePath, nil
+	}
+	
+	// Determine base branch to use
+	baseBranch, err := wm.getBaseBranch()
+	if err != nil {
+		return "", fmt.Errorf("failed to determine base branch: %w", err)
+	}
+	
+	if wm.Verbose {
+		fmt.Printf("Creating git worktree for %s using base branch %s...\n", ticket, baseBranch)
+	}
+	
+	// Create the worktree
+	err = wm.createWorktreeFromBranch(ticketType, ticket, baseBranch)
+	if err != nil {
+		return "", fmt.Errorf("failed to create worktree: %w", err)
+	}
+	
+	return worktreePath, nil
+}
+
+// repoExists checks if the repository exists and is a git repository
+func (wm *WorktreeManager) repoExists() bool {
+	if _, err := os.Stat(wm.RepoPath); os.IsNotExist(err) {
+		return false
+	}
+	
+	// Check if it's a git repository
+	gitDir := filepath.Join(wm.RepoPath, ".git")
+	if _, err := os.Stat(gitDir); err == nil {
+		return true
+	}
+	
+	// Check if it's a bare repository
+	if _, err := os.Stat(filepath.Join(wm.RepoPath, "refs")); err == nil {
+		return true
+	}
+	
+	return false
+}
+
+// getBaseBranch determines which base branch to use
+func (wm *WorktreeManager) getBaseBranch() (string, error) {
+	branches := []string{wm.BaseBranch, "master", "main"}
+	
+	for _, branch := range branches {
+		if wm.branchExists(branch) {
+			return branch, nil
+		}
+	}
+	
+	// If no standard branches exist, get the first available branch
+	branch, err := wm.getFirstBranch()
+	if err != nil {
+		// If no branches exist, create initial commit
+		return wm.createInitialBranch()
+	}
+	
+	return branch, nil
+}
+
+// branchExists checks if a branch exists in the repository
+func (wm *WorktreeManager) branchExists(branch string) bool {
+	cmd := exec.Command("git", "show-ref", "--verify", "--quiet", fmt.Sprintf("refs/heads/%s", branch))
+	cmd.Dir = wm.RepoPath
+	return cmd.Run() == nil
+}
+
+// getFirstBranch gets the first available branch
+func (wm *WorktreeManager) getFirstBranch() (string, error) {
+	cmd := exec.Command("git", "branch", "-r")
+	cmd.Dir = wm.RepoPath
+	output, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if strings.Contains(line, "HEAD ->") {
+			continue
+		}
+		if strings.HasPrefix(line, "origin/") {
+			return strings.TrimPrefix(line, "origin/"), nil
+		}
+	}
+	
+	return "", fmt.Errorf("no branches found")
+}
+
+// createInitialBranch creates an initial branch with empty commit
+func (wm *WorktreeManager) createInitialBranch() (string, error) {
+	if wm.Verbose {
+		fmt.Println("Creating initial commit on main branch...")
+	}
+	
+	// Switch to main branch
+	cmd := exec.Command("git", "switch", "-c", "main")
+	cmd.Dir = wm.RepoPath
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("failed to create main branch: %w", err)
+	}
+	
+	// Create empty commit
+	cmd = exec.Command("git", "commit", "--allow-empty", "-m", "Initial commit")
+	cmd.Dir = wm.RepoPath
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("failed to create initial commit: %w", err)
+	}
+	
+	return "main", nil
+}
+
+// createWorktreeFromBranch creates a worktree from the specified base branch
+func (wm *WorktreeManager) createWorktreeFromBranch(ticketType, ticket, baseBranch string) error {
+	relativePath := filepath.Join(ticketType, ticket)
+	
+	cmd := exec.Command("git", "worktree", "add", relativePath, "-b", ticket, baseBranch)
+	cmd.Dir = wm.RepoPath
+	
+	if wm.Verbose {
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+	}
+	
+	return cmd.Run()
+}
+
+// ListWorktrees returns a list of all existing worktrees
+func (wm *WorktreeManager) ListWorktrees() ([]string, error) {
+	cmd := exec.Command("git", "worktree", "list", "--porcelain")
+	cmd.Dir = wm.RepoPath
+	
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list worktrees: %w", err)
+	}
+	
+	var worktrees []string
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	
+	for _, line := range lines {
+		if strings.HasPrefix(line, "worktree ") {
+			path := strings.TrimPrefix(line, "worktree ")
+			worktrees = append(worktrees, path)
+		}
+	}
+	
+	return worktrees, nil
+}
+
+// RemoveWorktree removes a worktree
+func (wm *WorktreeManager) RemoveWorktree(ticketType, ticket string) error {
+	worktreePath := filepath.Join(wm.RepoPath, ticketType, ticket)
+	
+	// Check if worktree exists
+	if _, err := os.Stat(worktreePath); os.IsNotExist(err) {
+		return fmt.Errorf("worktree does not exist: %s", worktreePath)
+	}
+	
+	relativePath := filepath.Join(ticketType, ticket)
+	cmd := exec.Command("git", "worktree", "remove", relativePath)
+	cmd.Dir = wm.RepoPath
+	
+	if wm.Verbose {
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+	}
+	
+	return cmd.Run()
+}
