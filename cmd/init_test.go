@@ -177,3 +177,147 @@ func TestTicketInfo(t *testing.T) {
 		t.Errorf("Number = %q, want %q", info.Number, "123")
 	}
 }
+
+func TestInitCommandDescription(t *testing.T) {
+	cmd := initCmd
+
+	if cmd.Use != "init <ticket>" {
+		t.Errorf("init command Use = %q, want %q", cmd.Use, "init <ticket>")
+	}
+
+	if cmd.Short == "" {
+		t.Error("init command should have Short description")
+	}
+
+	if cmd.Long == "" {
+		t.Error("init command should have Long description")
+	}
+
+	// Verify key information is in the description
+	if !containsSubstring(cmd.Long, "worktree") {
+		t.Error("init command Long description should mention 'worktree'")
+	}
+
+	if !containsSubstring(cmd.Long, "Obsidian") {
+		t.Error("init command Long description should mention 'Obsidian'")
+	}
+
+	if !containsSubstring(cmd.Long, "tmux") {
+		t.Error("init command Long description should mention 'tmux'")
+	}
+}
+
+func TestInitCommandArgs(t *testing.T) {
+	cmd := initCmd
+
+	// Command should require exactly 1 argument
+	if cmd.Args == nil {
+		t.Error("init command should have Args validation")
+	}
+}
+
+func TestTicketTypeNormalization(t *testing.T) {
+	// Test that ticket types are normalized to lowercase
+	tests := []struct {
+		name         string
+		ticket       string
+		expectedType string
+	}{
+		{
+			name:         "uppercase type",
+			ticket:       "FRAAS-123",
+			expectedType: "fraas",
+		},
+		{
+			name:         "lowercase type",
+			ticket:       "fraas-123",
+			expectedType: "fraas",
+		},
+		{
+			name:         "mixed case type",
+			ticket:       "FrAaS-123",
+			expectedType: "fraas",
+		},
+		{
+			name:         "CRE uppercase",
+			ticket:       "CRE-456",
+			expectedType: "cre",
+		},
+		{
+			name:         "incident mixed",
+			ticket:       "Incident-789",
+			expectedType: "incident",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := parseTicket(tt.ticket)
+			if err != nil {
+				t.Fatalf("parseTicket(%q) error: %v", tt.ticket, err)
+			}
+
+			if result.Type != tt.expectedType {
+				t.Errorf("parseTicket(%q).Type = %q, want %q", tt.ticket, result.Type, tt.expectedType)
+			}
+		})
+	}
+}
+
+func TestTicketFullPreservation(t *testing.T) {
+	// Test that the original ticket format is preserved in Full field
+	tests := []struct {
+		name         string
+		ticket       string
+		expectedFull string
+	}{
+		{
+			name:         "uppercase preserved",
+			ticket:       "FRAAS-123",
+			expectedFull: "FRAAS-123",
+		},
+		{
+			name:         "lowercase preserved",
+			ticket:       "fraas-123",
+			expectedFull: "fraas-123",
+		},
+		{
+			name:         "mixed case preserved",
+			ticket:       "FrAaS-123",
+			expectedFull: "FrAaS-123",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := parseTicket(tt.ticket)
+			if err != nil {
+				t.Fatalf("parseTicket(%q) error: %v", tt.ticket, err)
+			}
+
+			if result.Full != tt.expectedFull {
+				t.Errorf("parseTicket(%q).Full = %q, want %q", tt.ticket, result.Full, tt.expectedFull)
+			}
+		})
+	}
+}
+
+func TestParseTicketErrorMessages(t *testing.T) {
+	// Test that error messages are helpful
+	_, err := parseTicket("invalid")
+	if err == nil {
+		t.Fatal("Expected error for invalid ticket")
+	}
+
+	errorMsg := err.Error()
+
+	// Error should mention expected format
+	if !containsSubstring(errorMsg, "TYPE-NUMBER") {
+		t.Error("Error message should mention expected format TYPE-NUMBER")
+	}
+
+	// Error should give an example
+	if !containsSubstring(errorMsg, "fraas-25857") {
+		t.Error("Error message should include an example like 'fraas-25857'")
+	}
+}
