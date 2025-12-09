@@ -14,6 +14,7 @@ type NoteManager struct {
 	TemplatesDir string
 	AreasDir     string
 	DailyDir     string
+	VaultSubdir  string // Configurable subdirectory (e.g., "Jira", "Incidents", "Hacks")
 	Verbose      bool
 }
 
@@ -24,21 +25,31 @@ func NewNoteManager(vaultPath, templatesDir, areasDir, dailyDir string, verbose 
 		TemplatesDir: templatesDir,
 		AreasDir:     areasDir,
 		DailyDir:     dailyDir,
+		VaultSubdir:  "", // Will use default logic if not set
 		Verbose:      verbose,
 	}
 }
 
+// SetVaultSubdir sets the vault subdirectory for note creation
+func (nm *NoteManager) SetVaultSubdir(subdir string) {
+	nm.VaultSubdir = subdir
+}
+
 // CreateTicketNote creates or updates a ticket note in Obsidian
 func (nm *NoteManager) CreateTicketNote(ticketType, ticket string, jiraInfo *JiraInfo) (string, error) {
-	// Determine vault subdirectory based on ticket type
-	var vaultSubdir string
-	switch ticketType {
-	case "incident":
-		vaultSubdir = "Incidents"
-	default:
-		vaultSubdir = "Jira"
+	// Determine vault subdirectory - use configured subdir or fall back to defaults
+	vaultSubdir := nm.VaultSubdir
+	if vaultSubdir == "" {
+		switch ticketType {
+		case "incident":
+			vaultSubdir = "Incidents"
+		case "hack":
+			vaultSubdir = "Hacks"
+		default:
+			vaultSubdir = "Jira"
+		}
 	}
-	
+
 	// Create full note path
 	notePath := filepath.Join(nm.VaultPath, nm.AreasDir, vaultSubdir, ticketType, ticket+".md")
 	noteDir := filepath.Dir(notePath)

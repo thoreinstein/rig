@@ -70,24 +70,29 @@ func runInitCommand(ticket string) error {
 	if err != nil {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
-	
+
 	// Parse ticket
 	ticketInfo, err := parseTicket(ticket)
 	if err != nil {
 		return err
 	}
-	
+
+	// Get repository config for this ticket type
+	repoConfig := cfg.GetRepoForTicketType(ticketInfo.Type)
+	repoPath := cfg.GetRepositoryPathForRepo(repoConfig)
+
 	if verbose {
 		fmt.Printf("Starting workflow for ticket: %s\n", ticketInfo.Full)
 		fmt.Printf("  Type: %s\n", ticketInfo.Type)
 		fmt.Printf("  Number: %s\n", ticketInfo.Number)
+		fmt.Printf("  Repository: %s/%s\n", repoConfig.Owner, repoConfig.Name)
 	}
-	
+
 	// Step 1: Create git worktree
 	if verbose {
 		fmt.Println("Creating git worktree...")
 	}
-	gitManager := git.NewWorktreeManager(cfg.GetRepositoryPath(), cfg.Repository.BaseBranch, verbose)
+	gitManager := git.NewWorktreeManager(repoPath, repoConfig.BaseBranch, verbose)
 	worktreePath, err := gitManager.CreateWorktree(ticketInfo.Type, ticketInfo.Full)
 	if err != nil {
 		return fmt.Errorf("failed to create git worktree: %w", err)
@@ -117,6 +122,7 @@ func runInitCommand(ticket string) error {
 	if verbose {
 		fmt.Println("Creating Obsidian note...")
 	}
+	vaultSubdir := cfg.GetVaultSubdir(ticketInfo.Type)
 	noteManager := obsidian.NewNoteManager(
 		cfg.Vault.Path,
 		cfg.Vault.TemplatesDir,
@@ -124,6 +130,7 @@ func runInitCommand(ticket string) error {
 		cfg.Vault.DailyDir,
 		verbose,
 	)
+	noteManager.SetVaultSubdir(vaultSubdir)
 	notePath, err := noteManager.CreateTicketNote(ticketInfo.Type, ticketInfo.Full, jiraInfo)
 	if err != nil {
 		return fmt.Errorf("failed to create Obsidian note: %w", err)

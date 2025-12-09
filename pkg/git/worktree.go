@@ -25,20 +25,26 @@ func NewWorktreeManager(repoPath, baseBranch string, verbose bool) *WorktreeMana
 }
 
 // CreateWorktree creates a new git worktree for the given ticket
+// The branch name defaults to the ticket name
 func (wm *WorktreeManager) CreateWorktree(ticketType, ticket string) (string, error) {
-	worktreePath := filepath.Join(wm.RepoPath, ticketType, ticket)
-	
+	return wm.CreateWorktreeWithBranch(ticketType, ticket, ticket)
+}
+
+// CreateWorktreeWithBranch creates a new git worktree with a custom branch name
+func (wm *WorktreeManager) CreateWorktreeWithBranch(ticketType, name, branchName string) (string, error) {
+	worktreePath := filepath.Join(wm.RepoPath, ticketType, name)
+
 	// Check if bare repo exists
 	if !wm.repoExists() {
 		return "", fmt.Errorf("bare repository not found at %s", wm.RepoPath)
 	}
-	
+
 	// Create type directory if it doesn't exist
 	typeDir := filepath.Join(wm.RepoPath, ticketType)
 	if err := os.MkdirAll(typeDir, 0755); err != nil {
 		return "", fmt.Errorf("failed to create type directory: %w", err)
 	}
-	
+
 	// Check if worktree already exists
 	if _, err := os.Stat(worktreePath); err == nil {
 		if wm.Verbose {
@@ -46,23 +52,31 @@ func (wm *WorktreeManager) CreateWorktree(ticketType, ticket string) (string, er
 		}
 		return worktreePath, nil
 	}
-	
+
 	// Determine base branch to use
 	baseBranch, err := wm.getBaseBranch()
 	if err != nil {
 		return "", fmt.Errorf("failed to determine base branch: %w", err)
 	}
-	
-	if wm.Verbose {
-		fmt.Printf("Creating git worktree for %s using base branch %s...\n", ticket, baseBranch)
+
+	// Fetch and pull latest changes before creating worktree
+	if err := wm.fetchAndPull(baseBranch); err != nil {
+		// Log warning but don't fail - repo might be offline or have no remote
+		if wm.Verbose {
+			fmt.Printf("Warning: Could not fetch/pull latest changes: %v\n", err)
+		}
 	}
-	
-	// Create the worktree
-	err = wm.createWorktreeFromBranch(ticketType, ticket, baseBranch)
+
+	if wm.Verbose {
+		fmt.Printf("Creating git worktree for %s using base branch %s...\n", name, baseBranch)
+	}
+
+	// Create the worktree with custom branch name
+	err = wm.createWorktreeFromBranchWithName(ticketType, name, branchName, baseBranch)
 	if err != nil {
 		return "", fmt.Errorf("failed to create worktree: %w", err)
 	}
-	
+
 	return worktreePath, nil
 }
 
@@ -104,6 +118,41 @@ func (wm *WorktreeManager) getBaseBranch() (string, error) {
 	}
 	
 	return branch, nil
+}
+
+// fetchAndPull fetches from origin and pulls the latest changes for the base branch
+func (wm *WorktreeManager) fetchAndPull(baseBranch string) error {
+	if wm.Verbose {
+		fmt.Println("Fetching latest changes from origin...")
+	}
+
+	// git fetch origin
+	cmd := exec.Command("git", "fetch", "origin")
+	cmd.Dir = wm.RepoPath
+	if wm.Verbose {
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+	}
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("git fetch failed: %w", err)
+	}
+
+	if wm.Verbose {
+		fmt.Printf("Pulling latest changes for %s...\n", baseBranch)
+	}
+
+	// git pull origin <baseBranch>
+	cmd = exec.Command("git", "pull", "origin", baseBranch)
+	cmd.Dir = wm.RepoPath
+	if wm.Verbose {
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+	}
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("git pull failed: %w", err)
+	}
+
+	return nil
 }
 
 // branchExists checks if a branch exists in the repository
@@ -160,17 +209,23 @@ func (wm *WorktreeManager) createInitialBranch() (string, error) {
 }
 
 // createWorktreeFromBranch creates a worktree from the specified base branch
+// Uses the ticket name as both the directory name and branch name
 func (wm *WorktreeManager) createWorktreeFromBranch(ticketType, ticket, baseBranch string) error {
-	relativePath := filepath.Join(ticketType, ticket)
-	
-	cmd := exec.Command("git", "worktree", "add", relativePath, "-b", ticket, baseBranch)
+	return wm.createWorktreeFromBranchWithName(ticketType, ticket, ticket, baseBranch)
+}
+
+// createWorktreeFromBranchWithName creates a worktree with a custom branch name
+func (wm *WorktreeManager) createWorktreeFromBranchWithName(ticketType, name, branchName, baseBranch string) error {
+	relativePath := filepath.Join(ticketType, name)
+
+	cmd := exec.Command("git", "worktree", "add", relativePath, "-b", branchName, baseBranch)
 	cmd.Dir = wm.RepoPath
-	
+
 	if wm.Verbose {
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 	}
-	
+
 	return cmd.Run()
 }
 
