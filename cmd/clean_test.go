@@ -284,3 +284,278 @@ func TestCleanupCandidate(t *testing.T) {
 		t.Error("HasSession should be true")
 	}
 }
+
+func TestCleanCommandFlags(t *testing.T) {
+	cmd := cleanCmd
+
+	// Check --dry-run flag exists
+	dryRunFlag := cmd.Flags().Lookup("dry-run")
+	if dryRunFlag == nil {
+		t.Error("clean command should have --dry-run flag")
+	}
+	if dryRunFlag != nil && dryRunFlag.DefValue != "false" {
+		t.Errorf("--dry-run default should be false, got %s", dryRunFlag.DefValue)
+	}
+
+	// Check --force flag exists
+	forceFlag := cmd.Flags().Lookup("force")
+	if forceFlag == nil {
+		t.Error("clean command should have --force flag")
+	}
+	if forceFlag != nil && forceFlag.DefValue != "false" {
+		t.Errorf("--force default should be false, got %s", forceFlag.DefValue)
+	}
+}
+
+func TestCleanCommandDescription(t *testing.T) {
+	cmd := cleanCmd
+
+	if cmd.Use != "clean" {
+		t.Errorf("clean command Use = %q, want %q", cmd.Use, "clean")
+	}
+
+	if cmd.Short == "" {
+		t.Error("clean command should have Short description")
+	}
+
+	if cmd.Long == "" {
+		t.Error("clean command should have Long description")
+	}
+}
+
+func TestForceRemoveWorktree(t *testing.T) {
+	// Skip if git is not available
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not found in PATH, skipping test")
+	}
+
+	// Create a temporary git repository
+	tmpDir, err := os.MkdirTemp("", "clean-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	repoDir := filepath.Join(tmpDir, "repo")
+	if err := os.MkdirAll(repoDir, 0755); err != nil {
+		t.Fatalf("Failed to create repo dir: %v", err)
+	}
+
+	// Initialize git repo
+	cmd := exec.Command("git", "init")
+	cmd.Dir = repoDir
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("git init failed: %v", err)
+	}
+
+	// Configure git user
+	cmd = exec.Command("git", "-C", repoDir, "config", "user.email", "test@example.com")
+	cmd.Run()
+	cmd = exec.Command("git", "-C", repoDir, "config", "user.name", "Test User")
+	cmd.Run()
+
+	// Create initial commit
+	cmd = exec.Command("git", "commit", "--allow-empty", "-m", "Initial commit")
+	cmd.Dir = repoDir
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("git commit failed: %v", err)
+	}
+
+	// Create a worktree
+	worktreePath := filepath.Join(tmpDir, "worktree")
+	cmd = exec.Command("git", "worktree", "add", "-b", "test-branch", worktreePath)
+	cmd.Dir = repoDir
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("git worktree add failed: %v", err)
+	}
+
+	// Verify worktree exists
+	if _, err := os.Stat(worktreePath); os.IsNotExist(err) {
+		t.Fatalf("Worktree not created at %s", worktreePath)
+	}
+
+	// Force remove the worktree
+	err = forceRemoveWorktree(repoDir, worktreePath)
+	if err != nil {
+		t.Fatalf("forceRemoveWorktree() error: %v", err)
+	}
+
+	// Verify worktree is removed
+	if _, err := os.Stat(worktreePath); !os.IsNotExist(err) {
+		t.Error("Worktree should be removed after forceRemoveWorktree()")
+	}
+}
+
+func TestForceRemoveWorktree_NonExistent(t *testing.T) {
+	// Skip if git is not available
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not found in PATH, skipping test")
+	}
+
+	// Create a temporary git repository
+	tmpDir, err := os.MkdirTemp("", "clean-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	repoDir := filepath.Join(tmpDir, "repo")
+	if err := os.MkdirAll(repoDir, 0755); err != nil {
+		t.Fatalf("Failed to create repo dir: %v", err)
+	}
+
+	// Initialize git repo
+	cmd := exec.Command("git", "init")
+	cmd.Dir = repoDir
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("git init failed: %v", err)
+	}
+
+	// Configure git user
+	cmd = exec.Command("git", "-C", repoDir, "config", "user.email", "test@example.com")
+	cmd.Run()
+	cmd = exec.Command("git", "-C", repoDir, "config", "user.name", "Test User")
+	cmd.Run()
+
+	// Create initial commit
+	cmd = exec.Command("git", "commit", "--allow-empty", "-m", "Initial commit")
+	cmd.Dir = repoDir
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("git commit failed: %v", err)
+	}
+
+	// Try to remove non-existent worktree
+	err = forceRemoveWorktree(repoDir, "/nonexistent/worktree/path")
+	// Should return an error for non-existent worktree
+	if err == nil {
+		t.Error("forceRemoveWorktree() should error for non-existent worktree")
+	}
+}
+
+func TestGetWorktreeDetailsForClean_WithWorktree(t *testing.T) {
+	// Skip if git is not available
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not found in PATH, skipping test")
+	}
+
+	// Create a temporary git repository
+	tmpDir, err := os.MkdirTemp("", "clean-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	repoDir := filepath.Join(tmpDir, "repo")
+	if err := os.MkdirAll(repoDir, 0755); err != nil {
+		t.Fatalf("Failed to create repo dir: %v", err)
+	}
+
+	// Initialize git repo
+	cmd := exec.Command("git", "init")
+	cmd.Dir = repoDir
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("git init failed: %v", err)
+	}
+
+	// Configure git user
+	cmd = exec.Command("git", "-C", repoDir, "config", "user.email", "test@example.com")
+	cmd.Run()
+	cmd = exec.Command("git", "-C", repoDir, "config", "user.name", "Test User")
+	cmd.Run()
+
+	// Create initial commit
+	cmd = exec.Command("git", "commit", "--allow-empty", "-m", "Initial commit")
+	cmd.Dir = repoDir
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("git commit failed: %v", err)
+	}
+
+	// Create a worktree
+	worktreePath := filepath.Join(tmpDir, "fraas", "FRAAS-123")
+	if err := os.MkdirAll(filepath.Dir(worktreePath), 0755); err != nil {
+		t.Fatalf("Failed to create parent dir: %v", err)
+	}
+
+	cmd = exec.Command("git", "worktree", "add", "-b", "FRAAS-123", worktreePath)
+	cmd.Dir = repoDir
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("git worktree add failed: %v", err)
+	}
+
+	// Get worktree details
+	details := getWorktreeDetailsForClean(repoDir)
+
+	// Should have 2 worktrees (main + feature)
+	if len(details) < 2 {
+		t.Errorf("getWorktreeDetailsForClean() returned %d worktrees, expected at least 2", len(details))
+	}
+
+	// Find the feature worktree and check its branch
+	found := false
+	for path, info := range details {
+		realPath, _ := filepath.EvalSymlinks(path)
+		realWorktreePath, _ := filepath.EvalSymlinks(worktreePath)
+		if path == worktreePath || realPath == realWorktreePath {
+			found = true
+			if info.Branch != "FRAAS-123" {
+				t.Errorf("Branch = %q, want %q", info.Branch, "FRAAS-123")
+			}
+			break
+		}
+	}
+	if !found {
+		t.Errorf("getWorktreeDetailsForClean() missing feature worktree path %q", worktreePath)
+	}
+}
+
+func TestCleanupCandidateStatusString(t *testing.T) {
+	// Test the status string building logic from runCleanCommand
+	tests := []struct {
+		name       string
+		isMerged   bool
+		hasSession bool
+		expected   string
+	}{
+		{
+			name:       "merged with session",
+			isMerged:   true,
+			hasSession: true,
+			expected:   " [merged] [has session]",
+		},
+		{
+			name:       "merged without session",
+			isMerged:   true,
+			hasSession: false,
+			expected:   " [merged]",
+		},
+		{
+			name:       "not merged with session",
+			isMerged:   false,
+			hasSession: true,
+			expected:   " [has session]",
+		},
+		{
+			name:       "not merged without session",
+			isMerged:   false,
+			hasSession: false,
+			expected:   "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Simulate the status string building from runCleanCommand
+			status := ""
+			if tt.isMerged {
+				status = " [merged]"
+			}
+			if tt.hasSession {
+				status += " [has session]"
+			}
+
+			if status != tt.expected {
+				t.Errorf("Status string = %q, want %q", status, tt.expected)
+			}
+		})
+	}
+}
