@@ -14,6 +14,9 @@ A modern, extensible Go CLI tool for Site Reliability Engineering workflow autom
 ### 🛠️ **Powerful CLI Interface**
 ```bash
 sre init <ticket>              # Initialize complete workflow
+sre hack <name>                # Lightweight workflow for non-ticket work
+sre list                       # Show all worktrees and tmux sessions
+sre clean                      # Remove old worktrees and sessions
 sre session list/attach/kill   # Manage tmux sessions
 sre timeline <ticket>          # Export command history timeline
 sre history query [pattern]    # Query command database
@@ -85,6 +88,7 @@ sre config --show/--init       # Manage configuration
 
 The CLI uses YAML configuration at `~/.config/sre/config.yaml`:
 
+### Single Repository Configuration
 ```yaml
 vault:
   path: "~/Documents/Second Brain"
@@ -111,12 +115,64 @@ tmux:
   windows:
     - name: "note"
       command: "nvim {note_path}"
-    - name: "code" 
+    - name: "code"
       command: "nvim"
       working_dir: "{worktree_path}"
     - name: "term"
       working_dir: "{worktree_path}"
 ```
+
+### Multi-Repository Configuration
+For working with multiple repositories, use the `repositories` map with `ticket_types` to route tickets:
+
+```yaml
+vault:
+  path: "~/Documents/Second Brain"
+  templates_dir: "templates"
+  areas_dir: "Areas/Ping Identity"
+  daily_dir: "Daily"
+
+# Define multiple repositories
+repositories:
+  main-repo:
+    owner: "myorg"
+    name: "main-service"
+    base_path: "~/src/myorg"
+    base_branch: "main"
+  infra-repo:
+    owner: "myorg"
+    name: "infrastructure"
+    base_path: "~/src/myorg"
+    base_branch: "main"
+
+# Map ticket prefixes to repositories
+ticket_types:
+  fraas: "main-repo"
+  cre: "main-repo"
+  ops: "infra-repo"
+  infra: "infra-repo"
+
+history:
+  database_path: "~/.histdb/zsh-history.db"
+  ignore_patterns: ["ls", "cd", "pwd", "clear"]
+
+jira:
+  enabled: true
+  cli_command: "acli"
+
+tmux:
+  session_prefix: ""
+  windows:
+    - name: "note"
+      command: "nvim {note_path}"
+    - name: "code"
+      command: "nvim"
+      working_dir: "{worktree_path}"
+    - name: "term"
+      working_dir: "{worktree_path}"
+```
+
+With multi-repo config, `sre init fraas-123` routes to `main-repo` while `sre init ops-456` routes to `infra-repo`.
 
 ## Commands Reference
 
@@ -136,6 +192,38 @@ sre init fraas-25857
 - Creates Obsidian note from template
 - Updates daily note with timestamp
 - Launches tmux session with configured windows
+
+#### `sre hack <name>`
+Lightweight workflow for non-ticket work (experiments, spikes, etc.).
+
+**Example:**
+```bash
+sre hack winter-cleanup
+sre hack --notes experiment-auth
+```
+
+**Options:**
+- `--notes` - Also create an Obsidian note for the hack session
+
+**What it does:**
+- Creates git worktree at `hack/<name>` with branch `hack/<name>`
+- Creates tmux session
+- Skips JIRA integration (no ticket needed)
+- Optionally creates Obsidian note with `--notes` flag
+
+#### `sre list`
+Show all worktrees and tmux sessions across configured repositories.
+
+**Options:**
+- `--worktrees` - Show only worktrees
+- `--sessions` - Show only tmux sessions
+
+#### `sre clean`
+Remove old worktrees and associated tmux sessions.
+
+**Options:**
+- `--dry-run` - Show what would be removed without removing
+- `--force` - Skip confirmation prompts
 
 #### `sre timeline <ticket>`
 Generate and export command timeline to Obsidian.
@@ -240,23 +328,27 @@ Second Brain/
 ### Project Structure
 ```
 main/
-├── cmd/              # CLI commands
+├── cmd/              # CLI commands (with comprehensive test coverage)
+│   ├── clean.go      # Worktree and session cleanup
 │   ├── config.go     # Configuration management
-│   ├── init.go       # Ticket workflow initialization  
-│   ├── session.go    # Tmux session management
-│   ├── timeline.go   # Command history export
+│   ├── hack.go       # Lightweight non-ticket workflow
 │   ├── history.go    # History database queries
+│   ├── init.go       # Ticket workflow initialization
+│   ├── list.go       # List worktrees and sessions
+│   ├── root.go       # Root command setup
+│   ├── session.go    # Tmux session management
 │   ├── sync.go       # Obsidian note synchronization
-│   └── root.go       # Root command setup
-├── pkg/              # Core packages
+│   ├── timeline.go   # Command history export
+│   └── *_test.go     # Unit tests for each command
+├── pkg/              # Core packages (with unit tests)
 │   ├── config/       # Configuration handling with Viper
-│   ├── git/          # Git worktree operations
-│   ├── obsidian/     # Obsidian note management
-│   ├── tmux/         # Tmux session automation
-│   ├── history/      # SQLite history database integration
-│   └── jira/         # JIRA API integration via acli
-├── go.mod           # Dependencies
-└── main.go          # Entry point
+│   ├── git/          # Git worktree operations (mock-based testing)
+│   ├── history/      # SQLite history queries (zsh-histdb + atuin)
+│   ├── jira/         # JIRA integration via CLI (acli)
+│   ├── obsidian/     # Obsidian note/template management
+│   └── tmux/         # Tmux session automation
+├── go.mod            # Dependencies
+└── main.go           # Entry point
 ```
 
 ### Dependencies
@@ -274,15 +366,44 @@ go build -o sre
 ```
 
 ### Testing
+
+The project has comprehensive test coverage across all packages.
+
 ```bash
 cd main/
+
+# Run all tests
 go test ./...
+
+# Run tests with verbose output
+go test -v ./...
+
+# Run a specific test
+go test -run TestParseTicket ./cmd/...
+
+# Run tests for a specific package
+go test ./pkg/git/...
 ```
+
+#### Test Architecture
+- **Table-driven tests**: Most tests use Go's table-driven pattern for comprehensive coverage
+- **Mock-based unit tests**: `pkg/git` uses `CommandRunner` interface for mocking git commands
+- **Integration tests**: Some tests create real git repos in temp directories (skipped if git unavailable)
+
+#### Test Coverage by Package
+- `cmd/` - 9 test files covering all commands except root.go
+- `pkg/config/` - Configuration loading and validation
+- `pkg/git/` - Mock-based worktree operations testing
+- `pkg/history/` - Database schema detection and query building
+- `pkg/jira/` - JIRA CLI output parsing
+- `pkg/obsidian/` - Note and template management
+- `pkg/tmux/` - Session parsing and management
 
 ### Adding New Commands
 1. Create new command file in `cmd/`
 2. Add command to root command in `init()`
 3. Implement business logic in appropriate `pkg/` package
+4. Add corresponding `_test.go` file with table-driven tests
 
 ## Migration from Bash Script
 
