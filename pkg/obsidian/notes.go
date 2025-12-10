@@ -38,18 +38,8 @@ func (nm *NoteManager) SetVaultSubdir(subdir string) {
 
 // CreateTicketNote creates or updates a ticket note in Obsidian
 func (nm *NoteManager) CreateTicketNote(ticketType, ticket string, jiraInfo *JiraInfo) (string, error) {
-	// Determine vault subdirectory - use configured subdir or fall back to defaults
+	// Use configured vault subdirectory (should be set via SetVaultSubdir)
 	vaultSubdir := nm.VaultSubdir
-	if vaultSubdir == "" {
-		switch ticketType {
-		case "incident":
-			vaultSubdir = "Incidents"
-		case "hack":
-			vaultSubdir = "Hacks"
-		default:
-			vaultSubdir = "Jira"
-		}
-	}
 
 	// Create full note path
 	notePath := filepath.Join(nm.VaultPath, nm.AreasDir, vaultSubdir, ticketType, ticket+".md")
@@ -91,8 +81,8 @@ func (nm *NoteManager) CreateTicketNote(ticketType, ticket string, jiraInfo *Jir
 		return "", fmt.Errorf("failed to create note content: %w", err)
 	}
 
-	// Write the note
-	if err := os.WriteFile(notePath, []byte(content), 0644); err != nil {
+	// Write the note with restricted permissions (may contain command history)
+	if err := os.WriteFile(notePath, []byte(content), 0600); err != nil {
 		return "", fmt.Errorf("failed to write note: %w", err)
 	}
 
@@ -263,7 +253,7 @@ func (nm *NoteManager) createDefaultJiraNote(ticket string, jiraInfo *JiraInfo) 
 	return content.String()
 }
 
-// UpdateDailyNote adds an entry to the daily note
+// UpdateDailyNote adds an entry to the daily note, creating it if necessary
 func (nm *NoteManager) UpdateDailyNote(ticket string) error {
 	today := time.Now().Format("2006-01-02")
 	currentTime := time.Now().Format("15:04")
@@ -273,18 +263,28 @@ func (nm *NoteManager) UpdateDailyNote(ticket string) error {
 		fmt.Printf("Updating daily note at: %s\n", dailyNotePath)
 	}
 
-	// Check if daily note exists
-	if _, err := os.Stat(dailyNotePath); os.IsNotExist(err) {
-		if nm.Verbose {
-			fmt.Printf("Daily note for %s not found, skipping update\n", today)
-		}
-		return nil // Don't fail if daily note doesn't exist
-	}
+	var content []byte
 
-	// Read existing content
-	content, err := os.ReadFile(dailyNotePath)
-	if err != nil {
-		return fmt.Errorf("failed to read daily note: %w", err)
+	// Check if daily note exists, create if not
+	if _, statErr := os.Stat(dailyNotePath); os.IsNotExist(statErr) {
+		// Create the daily directory if needed
+		dailyDir := filepath.Dir(dailyNotePath)
+		if err := os.MkdirAll(dailyDir, 0755); err != nil {
+			return fmt.Errorf("failed to create daily notes directory: %w", err)
+		}
+
+		// Create default daily note
+		content = []byte(nm.createDefaultDailyNote(today))
+		if nm.Verbose {
+			fmt.Printf("Creating new daily note for %s\n", today)
+		}
+	} else {
+		// Read existing content
+		var err error
+		content, err = os.ReadFile(dailyNotePath)
+		if err != nil {
+			return fmt.Errorf("failed to read daily note: %w", err)
+		}
 	}
 
 	// Create log entry
@@ -293,8 +293,8 @@ func (nm *NoteManager) UpdateDailyNote(ticket string) error {
 	// Update the daily note
 	updatedContent := nm.insertLogEntry(string(content), logEntry)
 
-	// Write back to file
-	if err := os.WriteFile(dailyNotePath, []byte(updatedContent), 0644); err != nil {
+	// Write back to file with restricted permissions
+	if err := os.WriteFile(dailyNotePath, []byte(updatedContent), 0600); err != nil {
 		return fmt.Errorf("failed to update daily note: %w", err)
 	}
 
@@ -334,6 +334,18 @@ func (nm *NoteManager) insertLogEntry(content, logEntry string) string {
 
 	// If no ## Log section found, add it at the end
 	return content + "\n\n## Log\n" + logEntry
+}
+
+// createDefaultDailyNote creates a basic daily note structure
+func (nm *NoteManager) createDefaultDailyNote(date string) string {
+	return fmt.Sprintf(`# %s
+
+## Notes
+
+
+## Log
+
+`, date)
 }
 
 // vaultExists checks if the Obsidian vault exists

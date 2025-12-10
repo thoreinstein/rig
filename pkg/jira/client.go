@@ -10,18 +10,26 @@ import (
 	"thoreinstein.com/sre/pkg/obsidian"
 )
 
+// validCliCommandPattern validates CLI command names to prevent injection.
+// Allows alphanumeric characters, hyphens, underscores, and forward slashes (for paths).
+var validCliCommandPattern = regexp.MustCompile(`^[a-zA-Z0-9_\-/]+$`)
+
 // Client handles JIRA integration via CLI tool
 type Client struct {
 	CliCommand string
 	Verbose    bool
 }
 
-// NewClient creates a new JIRA client
-func NewClient(cliCommand string, verbose bool) *Client {
+// NewClient creates a new JIRA client.
+// Returns an error if the CLI command contains invalid characters.
+func NewClient(cliCommand string, verbose bool) (*Client, error) {
+	if !validCliCommandPattern.MatchString(cliCommand) {
+		return nil, fmt.Errorf("invalid CLI command %q: must contain only alphanumeric characters, hyphens, underscores, or forward slashes", cliCommand)
+	}
 	return &Client{
 		CliCommand: cliCommand,
 		Verbose:    verbose,
-	}
+	}, nil
 }
 
 // IsAvailable checks if the JIRA CLI command is available
@@ -40,6 +48,7 @@ func (c *Client) FetchTicketDetails(ticket string) (*obsidian.JiraInfo, error) {
 	}
 
 	// Execute the CLI command
+	//nolint:gosec // G204: ticket validated by parseTicket regex, CliCommand from config
 	cmd := exec.Command(c.CliCommand, "jira", "workitem", "view", ticket)
 	output, err := cmd.Output()
 	if err != nil {

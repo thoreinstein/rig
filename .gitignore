@@ -1,0 +1,32 @@
+# Binary
+sre
+
+# Test artifacts
+*.test
+coverage.out
+coverage.html
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Go
+vendor/
+
+# Credentials (safety net)
+*.env
+.env.*
+credentials*
+*.pem
+*.key
+
+# Temporary files
+*.tmp
+*.bak

@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
+	"regexp"
 
 	"github.com/spf13/cobra"
 	"thoreinstein.com/sre/pkg/config"
@@ -42,7 +44,26 @@ func init() {
 	hackCmd.Flags().StringVar(&hackRepo, "repo", "", "Repository to use (defaults to default_repo or first configured repo)")
 }
 
+// hackNameRegex validates hack names: must start with letter, contain only alphanumeric/hyphen/underscore, max 64 chars
+var hackNameRegex = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_-]{0,63}$`)
+
+// validateHackName validates the hack name parameter to prevent path traversal and injection attacks
+func validateHackName(name string) error {
+	if name == "" {
+		return errors.New("hack name cannot be empty")
+	}
+	if !hackNameRegex.MatchString(name) {
+		return errors.New("invalid hack name: must start with a letter and contain only alphanumeric characters, hyphens, and underscores (max 64 characters)")
+	}
+	return nil
+}
+
 func runHackCommand(name string) error {
+	// Validate hack name first
+	if err := validateHackName(name); err != nil {
+		return err
+	}
+
 	// Load configuration
 	cfg, err := config.Load()
 	if err != nil {
@@ -93,7 +114,7 @@ func runHackCommand(name string) error {
 			cfg.Vault.DailyDir,
 			verbose,
 		)
-		noteManager.SetVaultSubdir("Hacks")
+		noteManager.SetVaultSubdir(cfg.Vault.HackSubdir)
 		notePath, err = noteManager.CreateTicketNote("hack", name, nil)
 		if err != nil {
 			// Don't fail if note creation fails

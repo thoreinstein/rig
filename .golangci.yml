@@ -143,8 +143,7 @@ linters:
         text: G102 # Bind to all network interfaces
       - path: (.+)\.go$
         text: G115 # integer overflow conversion uint64 -> int
-      - path: (.+)\.go$
-        text: G204 # Subprocess launched with a potential tainted input or cmd arguments
+      # G204 removed - use targeted //nolint:gosec comments instead
       - path: (.+)\.go$
         text: G306 # Expect WriteFile permissions to be 0600 or less
       - path: (.+)\.go$

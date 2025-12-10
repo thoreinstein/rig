@@ -29,10 +29,13 @@ type TicketTypeConfig struct {
 
 // VaultConfig holds Obsidian vault configuration
 type VaultConfig struct {
-	Path         string `mapstructure:"path"`
-	TemplatesDir string `mapstructure:"templates_dir"`
-	AreasDir     string `mapstructure:"areas_dir"`
-	DailyDir     string `mapstructure:"daily_dir"`
+	Path           string `mapstructure:"path"`
+	TemplatesDir   string `mapstructure:"templates_dir"`
+	AreasDir       string `mapstructure:"areas_dir"`
+	DailyDir       string `mapstructure:"daily_dir"`
+	DefaultSubdir  string `mapstructure:"default_subdir"`  // Default subdir for tickets not in ticket_types
+	IncidentSubdir string `mapstructure:"incident_subdir"` // Subdir for incident tickets
+	HackSubdir     string `mapstructure:"hack_subdir"`     // Subdir for hack sessions
 }
 
 // RepositoryConfig holds Git repository configuration
@@ -99,8 +102,11 @@ func setDefaults() {
 	// Vault defaults
 	viper.SetDefault("vault.path", filepath.Join(homeDir, "Documents", "Second Brain"))
 	viper.SetDefault("vault.templates_dir", "templates")
-	viper.SetDefault("vault.areas_dir", "Areas/Ping Identity")
+	viper.SetDefault("vault.areas_dir", "Areas/Work")
 	viper.SetDefault("vault.daily_dir", "Daily")
+	viper.SetDefault("vault.default_subdir", "Tickets")
+	viper.SetDefault("vault.incident_subdir", "Incidents")
+	viper.SetDefault("vault.hack_subdir", "Hacks")
 
 	// Repository defaults
 	viper.SetDefault("repository.owner", "test")
@@ -194,14 +200,14 @@ func (c *Config) GetVaultSubdir(ticketType string) string {
 		return typeConfig.VaultSubdir
 	}
 
-	// Fall back to default mapping
+	// Fall back to configured defaults
 	switch ticketType {
 	case "incident":
-		return "Incidents"
+		return c.Vault.IncidentSubdir
 	case "hack":
-		return "Hacks"
+		return c.Vault.HackSubdir
 	default:
-		return "Jira"
+		return c.Vault.DefaultSubdir
 	}
 }
 
