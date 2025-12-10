@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 )
 
 // DatabaseManager handles SQLite history database operations
@@ -59,7 +59,7 @@ func (dm *DatabaseManager) IsAvailable() bool {
 	}
 
 	// Try to open and query the database
-	db, err := sql.Open("sqlite3", dm.DatabasePath)
+	db, err := sql.Open("sqlite", dm.DatabasePath)
 	if err != nil {
 		if dm.Verbose {
 			fmt.Printf("Failed to open history database: %v\n", err)
@@ -87,7 +87,7 @@ func (dm *DatabaseManager) QueryCommands(options QueryOptions) ([]Command, error
 		return nil, errors.New("history database not available")
 	}
 
-	db, err := sql.Open("sqlite3", dm.DatabasePath)
+	db, err := sql.Open("sqlite", dm.DatabasePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
@@ -362,7 +362,7 @@ func (dm *DatabaseManager) GetDatabaseInfo() (map[string]interface{}, error) {
 	info["modified"] = fileInfo.ModTime()
 
 	// Open database and get more info
-	db, err := sql.Open("sqlite3", dm.DatabasePath)
+	db, err := sql.Open("sqlite", dm.DatabasePath)
 	if err != nil {
 		info["error"] = err.Error()
 		return info, nil
