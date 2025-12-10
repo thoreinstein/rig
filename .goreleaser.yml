@@ -12,7 +12,7 @@ builds:
     main: .
     binary: sre
     env:
-      - CGO_ENABLED=1
+      - CGO_ENABLED=0
     flags:
       - -trimpath
     ldflags:
@@ -31,32 +31,7 @@ builds:
       # Windows ARM64 is less common and harder to cross-compile
       - goos: windows
         goarch: arm64
-    overrides:
-      - goos: linux
-        goarch: amd64
-        env:
-          - CC=zig cc -target x86_64-linux-gnu
-          - CXX=zig c++ -target x86_64-linux-gnu
-      - goos: linux
-        goarch: arm64
-        env:
-          - CC=zig cc -target aarch64-linux-gnu
-          - CXX=zig c++ -target aarch64-linux-gnu
-      - goos: darwin
-        goarch: amd64
-        env:
-          - CC=zig cc -target x86_64-macos
-          - CXX=zig c++ -target x86_64-macos
-      - goos: darwin
-        goarch: arm64
-        env:
-          - CC=zig cc -target aarch64-macos
-          - CXX=zig c++ -target aarch64-macos
-      - goos: windows
-        goarch: amd64
-        env:
-          - CC=zig cc -target x86_64-windows-gnu
-          - CXX=zig c++ -target x86_64-windows-gnu
+    
 
 archives:
   - id: default
