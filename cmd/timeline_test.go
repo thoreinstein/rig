@@ -313,3 +313,117 @@ func containsSubstring(s, substr string) bool {
 	}
 	return false
 }
+
+func TestValidateOutputPath(t *testing.T) {
+	tests := []struct {
+		name    string
+		path    string
+		wantErr bool
+		errMsg  string
+	}{
+		// Valid cases
+		{
+			name:    "valid relative path",
+			path:    "output.md",
+			wantErr: false,
+		},
+		{
+			name:    "valid nested relative path",
+			path:    "reports/timeline.md",
+			wantErr: false,
+		},
+		{
+			name:    "valid .txt extension",
+			path:    "timeline.txt",
+			wantErr: false,
+		},
+		{
+			name:    "valid .json extension",
+			path:    "timeline.json",
+			wantErr: false,
+		},
+		{
+			name:    "no extension allowed",
+			path:    "timeline",
+			wantErr: false,
+		},
+		// Invalid cases
+		{
+			name:    "empty path",
+			path:    "",
+			wantErr: true,
+			errMsg:  "cannot be empty",
+		},
+		{
+			name:    "path traversal with ..",
+			path:    "../../../etc/passwd",
+			wantErr: true,
+			errMsg:  "path traversal",
+		},
+		{
+			name:    "path traversal hidden in middle",
+			path:    "foo/../../../etc/passwd",
+			wantErr: true,
+			errMsg:  "path traversal",
+		},
+		{
+			name:    "absolute path outside home",
+			path:    "/etc/cron.d/malicious",
+			wantErr: true,
+			errMsg:  "must be within home directory",
+		},
+		{
+			name:    "sensitive file .ssh",
+			path:    ".ssh/authorized_keys",
+			wantErr: true,
+			errMsg:  "sensitive file",
+		},
+		{
+			name:    "sensitive file .env",
+			path:    "config/.env",
+			wantErr: true,
+			errMsg:  "sensitive file",
+		},
+		{
+			name:    "sensitive file credentials",
+			path:    "credentials.json",
+			wantErr: true,
+			errMsg:  "sensitive file",
+		},
+		{
+			name:    "dangerous extension .sh",
+			path:    "script.sh",
+			wantErr: true,
+			errMsg:  "safe extension",
+		},
+		{
+			name:    "dangerous extension .exe",
+			path:    "program.exe",
+			wantErr: true,
+			errMsg:  "safe extension",
+		},
+		{
+			name:    "dangerous extension .py",
+			path:    "script.py",
+			wantErr: true,
+			errMsg:  "safe extension",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateOutputPath(tt.path)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("validateOutputPath(%q) should have returned an error", tt.path)
+					return
+				}
+				if !containsSubstring(err.Error(), tt.errMsg) {
+					t.Errorf("validateOutputPath(%q) error = %q, should contain %q", tt.path, err.Error(), tt.errMsg)
+				}
+			} else if err != nil {
+				t.Errorf("validateOutputPath(%q) returned unexpected error: %v", tt.path, err)
+			}
+		})
+	}
+}

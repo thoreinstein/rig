@@ -25,10 +25,10 @@ This command can:
 - Sync multiple tickets at once
 
 Examples:
-  sre sync                      # Interactive mode - prompts for ticket
-  sre sync fraas-25857         # Sync specific ticket
-  sre sync fraas-25857 --jira  # Force JIRA refresh
-  sre sync --daily             # Update today's daily note`,
+  sre sync                    # Interactive mode - prompts for ticket
+  sre sync proj-123           # Sync specific ticket
+  sre sync proj-123 --jira    # Force JIRA refresh
+  sre sync --daily            # Update today's daily note`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ticket := ""
@@ -112,20 +112,26 @@ func syncTicketNote(cfg *config.Config, ticket string) error {
 				fmt.Println("Refreshing JIRA information...")
 			}
 
-			jiraClient := jira.NewClient(cfg.Jira.CliCommand, verbose)
-			jiraInfo, err := jiraClient.FetchTicketDetails(ticketInfo.Full)
+			jiraClient, err := jira.NewClient(cfg.Jira.CliCommand, verbose)
 			if err != nil {
 				if verbose {
-					fmt.Printf("Warning: Could not fetch JIRA details: %v\n", err)
+					fmt.Printf("Warning: Invalid JIRA CLI command: %v\n", err)
 				}
 			} else {
-				// Update note with fresh JIRA info
-				err = updateNoteWithJiraInfo(notePath, jiraInfo)
+				jiraInfo, err := jiraClient.FetchTicketDetails(ticketInfo.Full)
 				if err != nil {
-					return fmt.Errorf("failed to update note with JIRA info: %w", err)
+					if verbose {
+						fmt.Printf("Warning: Could not fetch JIRA details: %v\n", err)
+					}
+				} else {
+					// Update note with fresh JIRA info
+					err = updateNoteWithJiraInfo(notePath, jiraInfo)
+					if err != nil {
+						return fmt.Errorf("failed to update note with JIRA info: %w", err)
+					}
+					fmt.Println("✓ JIRA information updated")
+					updated = true
 				}
-				fmt.Println("✓ JIRA information updated")
-				updated = true
 			}
 		}
 	}
@@ -204,8 +210,8 @@ func updateNoteWithJiraInfo(notePath string, jiraInfo *obsidian.JiraInfo) error 
 	// Update or add JIRA details section
 	noteContent = updateJiraDetailsSection(noteContent, jiraInfo)
 
-	// Write back to file
-	err = os.WriteFile(notePath, []byte(noteContent), 0644)
+	// Write back to file with restricted permissions
+	err = os.WriteFile(notePath, []byte(noteContent), 0600)
 	if err != nil {
 		return fmt.Errorf("failed to write updated note: %w", err)
 	}

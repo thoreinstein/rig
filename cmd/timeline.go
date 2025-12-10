@@ -1,8 +1,10 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -23,11 +25,11 @@ related to the specified ticket and generates a formatted timeline that can be
 inserted into the ticket's Obsidian note.
 
 Examples:
-  sre timeline fraas-25857
-  sre timeline fraas-25857 --since "2025-08-10 09:00"
-  sre timeline fraas-25857 --until "2025-08-10 18:00" 
-  sre timeline fraas-25857 --failed-only
-  sre timeline fraas-25857 --directory /path/to/worktree`,
+  sre timeline proj-123
+  sre timeline proj-123 --since "2025-08-10 09:00"
+  sre timeline proj-123 --until "2025-08-10 18:00"
+  sre timeline proj-123 --failed-only
+  sre timeline proj-123 --directory /path/to/worktree`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runTimelineCommand(args[0])
@@ -142,6 +144,11 @@ func runTimelineCommand(ticket string) error {
 	}
 
 	if timelineOutput != "" {
+		// Validate output path before writing
+		if err := validateOutputPath(timelineOutput); err != nil {
+			return fmt.Errorf("invalid output path: %w", err)
+		}
+
 		// Write to specified file
 		err = writeTimelineToFile(timeline, timelineOutput)
 		if err != nil {
@@ -241,9 +248,82 @@ func generateTimelineMarkdown(commands []history.Command, ticket string) string 
 	return timeline.String()
 }
 
+// validateOutputPath validates that the output path is safe to write to.
+// It ensures the path:
+// - Does not contain path traversal sequences
+// - Is not an absolute path outside the user's home directory or temp directory
+// - Does not point to sensitive system files
+// - Has a safe file extension
+func validateOutputPath(path string) error {
+	if path == "" {
+		return errors.New("output path cannot be empty")
+	}
+
+	// Clean the path and check for traversal
+	cleanPath := filepath.Clean(path)
+
+	// Reject paths containing .. after cleaning (prevents traversal)
+	if strings.Contains(cleanPath, "..") {
+		return errors.New("output path cannot contain path traversal sequences")
+	}
+
+	// If absolute path, validate it's in a safe location
+	if filepath.IsAbs(cleanPath) {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return fmt.Errorf("cannot determine home directory: %w", err)
+		}
+
+		// Allow paths within home directory or temp directory
+		tempDir := os.TempDir()
+		if !strings.HasPrefix(cleanPath, homeDir) && !strings.HasPrefix(cleanPath, tempDir) {
+			return fmt.Errorf("absolute output path must be within home directory (%s) or temp directory (%s)", homeDir, tempDir)
+		}
+	}
+
+	// Check for sensitive file patterns
+	base := filepath.Base(cleanPath)
+	sensitivePatterns := []string{
+		".ssh",
+		".gnupg",
+		".bashrc",
+		".zshrc",
+		".profile",
+		"authorized_keys",
+		"known_hosts",
+		"id_rsa",
+		"id_ed25519",
+		".env",
+		"credentials",
+	}
+
+	lowerBase := strings.ToLower(base)
+	for _, pattern := range sensitivePatterns {
+		if strings.Contains(lowerBase, pattern) {
+			return fmt.Errorf("output path cannot target sensitive file: %s", base)
+		}
+	}
+
+	// Enforce safe file extensions
+	ext := strings.ToLower(filepath.Ext(cleanPath))
+	allowedExtensions := map[string]bool{
+		".md":   true,
+		".txt":  true,
+		".json": true,
+		"":      true, // Allow no extension
+	}
+
+	if !allowedExtensions[ext] {
+		return fmt.Errorf("output file must have a safe extension (.md, .txt, .json), got: %s", ext)
+	}
+
+	return nil
+}
+
 // writeTimelineToFile writes the timeline to a specified file
 func writeTimelineToFile(timeline, filename string) error {
-	return os.WriteFile(filename, []byte(timeline), 0644)
+	// Use restricted permissions as timeline may contain sensitive command history
+	return os.WriteFile(filename, []byte(timeline), 0600)
 }
 
 // updateTicketNoteWithTimeline updates the ticket's Obsidian note with the timeline

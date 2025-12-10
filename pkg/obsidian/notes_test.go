@@ -28,47 +28,39 @@ func TestCreateTicketNote_SubdirSelection(t *testing.T) {
 	tests := []struct {
 		name           string
 		ticketType     string
-		configuredDir  string
+		vaultSubdir    string
 		expectedSubdir string
 	}{
 		{
-			name:           "default jira ticket type",
-			ticketType:     "fraas",
-			configuredDir:  "",
-			expectedSubdir: "Jira",
+			name:           "tickets subdir",
+			ticketType:     "proj",
+			vaultSubdir:    "Tickets",
+			expectedSubdir: "Tickets",
 		},
 		{
-			name:           "incident ticket type",
+			name:           "incident subdir",
 			ticketType:     "incident",
-			configuredDir:  "",
+			vaultSubdir:    "Incidents",
 			expectedSubdir: "Incidents",
 		},
 		{
-			name:           "hack ticket type",
+			name:           "hack subdir",
 			ticketType:     "hack",
-			configuredDir:  "",
+			vaultSubdir:    "Hacks",
 			expectedSubdir: "Hacks",
 		},
 		{
-			name:           "configured subdir overrides default",
-			ticketType:     "fraas",
-			configuredDir:  "CustomJira",
-			expectedSubdir: "CustomJira",
-		},
-		{
-			name:           "configured subdir overrides hack default",
-			ticketType:     "hack",
-			configuredDir:  "MyHacks",
-			expectedSubdir: "MyHacks",
+			name:           "custom subdir",
+			ticketType:     "proj",
+			vaultSubdir:    "CustomTickets",
+			expectedSubdir: "CustomTickets",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			nm := NewNoteManager(tmpDir, "templates", "Areas", "Daily", false)
-			if tt.configuredDir != "" {
-				nm.SetVaultSubdir(tt.configuredDir)
-			}
+			nm.SetVaultSubdir(tt.vaultSubdir)
 
 			notePath, err := nm.CreateTicketNote(tt.ticketType, "TEST-123", nil)
 			if err != nil {

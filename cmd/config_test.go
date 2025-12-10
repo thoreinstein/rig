@@ -126,23 +126,23 @@ func TestCreateDefaultConfig(t *testing.T) {
 	}
 
 	// Verify config file was created
-	configPath := filepath.Join(tmpDir, ".config", "sre", "config.yaml")
+	configPath := filepath.Join(tmpDir, ".config", "sre", "config.toml")
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		t.Errorf("Config file not created at %s", configPath)
 	}
 
-	// Verify config content has expected sections
+	// Verify config content has expected sections (TOML format)
 	content, err := os.ReadFile(configPath)
 	if err != nil {
 		t.Fatalf("Failed to read config file: %v", err)
 	}
 
 	expectedSections := []string{
-		"vault:",
-		"repository:",
-		"history:",
-		"jira:",
-		"tmux:",
+		"[vault]",
+		"[repository]",
+		"[history]",
+		"[jira]",
+		"[tmux]",
 	}
 
 	for _, section := range expectedSections {
@@ -165,8 +165,8 @@ func TestCreateDefaultConfig_AlreadyExists(t *testing.T) {
 		t.Fatalf("Failed to create config dir: %v", err)
 	}
 
-	configPath := filepath.Join(configDir, "config.yaml")
-	existingContent := "# Existing config\nvault:\n  path: /existing/path"
+	configPath := filepath.Join(configDir, "config.toml")
+	existingContent := "# Existing config\n[vault]\npath = \"/existing/path\""
 	if err := os.WriteFile(configPath, []byte(existingContent), 0644); err != nil {
 		t.Fatalf("Failed to write existing config: %v", err)
 	}
@@ -188,61 +188,70 @@ func TestCreateDefaultConfig_AlreadyExists(t *testing.T) {
 }
 
 func TestDefaultConfigContent(t *testing.T) {
-	// Verify the default config has all necessary fields
+	// Verify the default config has all necessary fields (TOML format)
 	defaultConfig := `# SRE CLI Configuration
-vault:
-  path: "~/Documents/Second Brain"
-  templates_dir: "templates"
-  areas_dir: "Areas/Ping Identity"
-  daily_dir: "Daily"
 
-repository:
-  owner: "test"
-  name: "test"
-  base_path: "~/src"
-  base_branch: "main"
+[vault]
+path = "~/Documents/Second Brain"
+templates_dir = "templates"
+areas_dir = "Areas/Work"
+daily_dir = "Daily"
+default_subdir = "Tickets"
+incident_subdir = "Incidents"
+hack_subdir = "Hacks"
 
-history:
-  database_path: "~/.histdb/zsh-history.db"
-  ignore_patterns: ["ls", "cd", "pwd", "clear"]
+[repository]
+owner = "your-org"
+name = "your-repo"
+base_path = "~/src"
+base_branch = "main"
 
-jira:
-  enabled: true
-  cli_command: "acli"
+[history]
+database_path = "~/.histdb/zsh-history.db"
+ignore_patterns = ["ls", "cd", "pwd", "clear"]
 
-tmux:
-  session_prefix: ""
-  windows:
-    - name: "note"
-      command: "nvim {note_path}"
-    - name: "code"
-      command: "nvim"
-      working_dir: "{worktree_path}"
-    - name: "term"
-      working_dir: "{worktree_path}"
+[jira]
+enabled = true
+cli_command = "acli"
+
+[tmux]
+session_prefix = ""
+
+[[tmux.windows]]
+name = "note"
+command = "nvim {note_path}"
+
+[[tmux.windows]]
+name = "code"
+command = "nvim"
+working_dir = "{worktree_path}"
+
+[[tmux.windows]]
+name = "term"
+working_dir = "{worktree_path}"
 `
 
-	// Verify all required sections are present
+	// Verify all required sections are present (TOML format)
 	requiredFields := []string{
-		"vault:",
-		"path:",
-		"templates_dir:",
-		"areas_dir:",
-		"daily_dir:",
-		"repository:",
-		"owner:",
-		"name:",
-		"base_path:",
-		"base_branch:",
-		"history:",
-		"database_path:",
-		"ignore_patterns:",
-		"jira:",
-		"enabled:",
-		"cli_command:",
-		"tmux:",
-		"session_prefix:",
-		"windows:",
+		"[vault]",
+		"path =",
+		"templates_dir =",
+		"areas_dir =",
+		"daily_dir =",
+		"[repository]",
+		"owner =",
+		"name =",
+		"base_path =",
+		"base_branch =",
+		"[history]",
+		"database_path =",
+		"ignore_patterns =",
+		"[jira]",
+		"enabled =",
+		"cli_command =",
+		"[tmux]",
+		"session_prefix =",
+		"[[tmux.windows]]",
 	}
 
 	for _, field := range requiredFields {

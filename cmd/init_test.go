@@ -317,7 +317,7 @@ func TestParseTicketErrorMessages(t *testing.T) {
 	}
 
 	// Error should give an example
-	if !containsSubstring(errorMsg, "fraas-25857") {
-		t.Error("Error message should include an example like 'fraas-25857'")
+	if !containsSubstring(errorMsg, "proj-123") {
+		t.Error("Error message should include an example like 'proj-123'")
 	}
 }
