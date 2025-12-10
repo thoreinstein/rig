@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode"
 )
 
 // NoteManager handles Obsidian note operations
@@ -149,7 +150,7 @@ func (nm *NoteManager) createJiraNote(ticket string, jiraInfo *JiraInfo) (string
 // createBasicNote creates a basic note without template
 func (nm *NoteManager) createBasicNote(ticket, ticketType string) (string, error) {
 	today := time.Now().Format("2006-01-02")
-	
+
 	content := fmt.Sprintf(`# %s
 
 ## Summary
@@ -162,9 +163,19 @@ Work on %s ticket: %s
 
 ## Log
 
-`, ticket, strings.Title(ticketType), ticket, today)
-	
+`, ticket, titleCase(ticketType), ticket, today)
+
 	return content, nil
+}
+
+// titleCase capitalizes the first letter of a string (replacement for deprecated strings.Title)
+func titleCase(s string) string {
+	if s == "" {
+		return s
+	}
+	r := []rune(s)
+	r[0] = unicode.ToUpper(r[0])
+	return string(r)
 }
 
 // buildJiraSection creates the JIRA details section
