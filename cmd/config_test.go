@@ -114,19 +114,13 @@ func TestRunConfigCommand_FlagRouting(t *testing.T) {
 
 func TestCreateDefaultConfig(t *testing.T) {
 	// Create a temporary home directory
-	tmpDir, err := os.MkdirTemp("", "config-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
-	// Save original home dir and restore after test
-	originalHome := os.Getenv("HOME")
-	defer os.Setenv("HOME", originalHome)
-	os.Setenv("HOME", tmpDir)
+	// Set HOME to temp dir for this test
+	t.Setenv("HOME", tmpDir)
 
 	// Run createDefaultConfig
-	err = createDefaultConfig()
+	err := createDefaultConfig()
 	if err != nil {
 		t.Fatalf("createDefaultConfig() error: %v", err)
 	}
@@ -160,16 +154,10 @@ func TestCreateDefaultConfig(t *testing.T) {
 
 func TestCreateDefaultConfig_AlreadyExists(t *testing.T) {
 	// Create a temporary home directory
-	tmpDir, err := os.MkdirTemp("", "config-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
-	// Save original home dir and restore after test
-	originalHome := os.Getenv("HOME")
-	defer os.Setenv("HOME", originalHome)
-	os.Setenv("HOME", tmpDir)
+	// Set HOME to temp dir for this test
+	t.Setenv("HOME", tmpDir)
 
 	// Create config directory and file
 	configDir := filepath.Join(tmpDir, ".config", "sre")
@@ -184,8 +172,7 @@ func TestCreateDefaultConfig_AlreadyExists(t *testing.T) {
 	}
 
 	// Run createDefaultConfig - should not overwrite
-	err = createDefaultConfig()
-	if err != nil {
+	if err := createDefaultConfig(); err != nil {
 		t.Fatalf("createDefaultConfig() error: %v", err)
 	}
 

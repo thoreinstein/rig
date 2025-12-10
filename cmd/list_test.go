@@ -81,11 +81,7 @@ func TestGetWorktreeDetails(t *testing.T) {
 	}
 
 	// Create a temporary git repository
-	tmpDir, err := os.MkdirTemp("", "list-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	repoDir := filepath.Join(tmpDir, "repo")
 	if err := os.MkdirAll(repoDir, 0755); err != nil {
@@ -100,10 +96,10 @@ func TestGetWorktreeDetails(t *testing.T) {
 	}
 
 	// Configure git user
-	cmd = exec.Command("git", "-C", repoDir, "config", "user.email", "test@example.com")
-	cmd.Run()
-	cmd = exec.Command("git", "-C", repoDir, "config", "user.name", "Test User")
-	cmd.Run()
+	configEmail := exec.Command("git", "-C", repoDir, "config", "user.email", "test@example.com")
+	_ = configEmail.Run()
+	configName := exec.Command("git", "-C", repoDir, "config", "user.name", "Test User")
+	_ = configName.Run()
 
 	// Create initial commit
 	cmd = exec.Command("git", "commit", "--allow-empty", "-m", "Initial commit")
@@ -142,11 +138,7 @@ func TestGetWorktreeDetails_WithWorktree(t *testing.T) {
 	}
 
 	// Create a temporary git repository
-	tmpDir, err := os.MkdirTemp("", "list-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	repoDir := filepath.Join(tmpDir, "repo")
 	if err := os.MkdirAll(repoDir, 0755); err != nil {
@@ -161,10 +153,10 @@ func TestGetWorktreeDetails_WithWorktree(t *testing.T) {
 	}
 
 	// Configure git user
-	cmd = exec.Command("git", "-C", repoDir, "config", "user.email", "test@example.com")
-	cmd.Run()
-	cmd = exec.Command("git", "-C", repoDir, "config", "user.name", "Test User")
-	cmd.Run()
+	configEmail := exec.Command("git", "-C", repoDir, "config", "user.email", "test@example.com")
+	_ = configEmail.Run()
+	configName := exec.Command("git", "-C", repoDir, "config", "user.name", "Test User")
+	_ = configName.Run()
 
 	// Create initial commit
 	cmd = exec.Command("git", "commit", "--allow-empty", "-m", "Initial commit")
@@ -254,7 +246,7 @@ HEAD def456abc789
 branch refs/heads/FRAAS-123
 `,
 			expected: map[string]string{
-				"/home/user/repo":                "main",
+				"/home/user/repo":                 "main",
 				"/home/user/repo/fraas/FRAAS-123": "FRAAS-123",
 			},
 		},

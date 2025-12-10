@@ -11,14 +11,14 @@ import (
 
 // Config represents the application configuration
 type Config struct {
-	Vault        VaultConfig                  `mapstructure:"vault"`
-	Repository   RepositoryConfig             `mapstructure:"repository"`    // Legacy single-repo config
-	Repositories map[string]RepositoryConfig  `mapstructure:"repositories"`  // Multi-repo config
-	DefaultRepo  string                       `mapstructure:"default_repo"`  // Default repo name for multi-repo
-	TicketTypes  map[string]TicketTypeConfig  `mapstructure:"ticket_types"`  // Maps ticket prefix to repo
-	History      HistoryConfig                `mapstructure:"history"`
-	Jira         JiraConfig                   `mapstructure:"jira"`
-	Tmux         TmuxConfig                   `mapstructure:"tmux"`
+	Vault        VaultConfig                 `mapstructure:"vault"`
+	Repository   RepositoryConfig            `mapstructure:"repository"`   // Legacy single-repo config
+	Repositories map[string]RepositoryConfig `mapstructure:"repositories"` // Multi-repo config
+	DefaultRepo  string                      `mapstructure:"default_repo"` // Default repo name for multi-repo
+	TicketTypes  map[string]TicketTypeConfig `mapstructure:"ticket_types"` // Maps ticket prefix to repo
+	History      HistoryConfig               `mapstructure:"history"`
+	Jira         JiraConfig                  `mapstructure:"jira"`
+	Tmux         TmuxConfig                  `mapstructure:"tmux"`
 }
 
 // TicketTypeConfig maps a ticket type to a repository and vault subdirectory
@@ -71,20 +71,20 @@ type TmuxConfig struct {
 // Load loads the configuration from file and environment variables
 func Load() (*Config, error) {
 	config := &Config{}
-	
+
 	// Set defaults
 	setDefaults()
-	
+
 	// Unmarshal the config
 	if err := viper.Unmarshal(config); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
-	
+
 	// Expand paths
 	if err := expandPaths(config); err != nil {
 		return nil, fmt.Errorf("failed to expand paths: %w", err)
 	}
-	
+
 	return config, nil
 }
 
@@ -101,21 +101,21 @@ func setDefaults() {
 	viper.SetDefault("vault.templates_dir", "templates")
 	viper.SetDefault("vault.areas_dir", "Areas/Ping Identity")
 	viper.SetDefault("vault.daily_dir", "Daily")
-	
+
 	// Repository defaults
 	viper.SetDefault("repository.owner", "test")
 	viper.SetDefault("repository.name", "test")
 	viper.SetDefault("repository.base_path", filepath.Join(homeDir, "src"))
 	viper.SetDefault("repository.base_branch", "main")
-	
+
 	// History defaults
 	viper.SetDefault("history.database_path", filepath.Join(homeDir, ".histdb", "zsh-history.db"))
 	viper.SetDefault("history.ignore_patterns", []string{"ls", "cd", "pwd", "clear"})
-	
+
 	// JIRA defaults
 	viper.SetDefault("jira.enabled", true)
 	viper.SetDefault("jira.cli_command", "acli")
-	
+
 	// Tmux defaults
 	viper.SetDefault("tmux.session_prefix", "")
 	viper.SetDefault("tmux.windows", []map[string]string{
@@ -162,12 +162,12 @@ func expandPath(path string) (string, error) {
 	if len(path) == 0 || path[0] != '~' {
 		return path, nil
 	}
-	
+
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
-	
+
 	return filepath.Join(homeDir, path[1:]), nil
 }
 

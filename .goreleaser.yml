@@ -1,0 +1,117 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+version: 2
+
+project_name: sre
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: sre
+    main: .
+    binary: sre
+    env:
+      - CGO_ENABLED=1
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X thoreinstein.com/sre/cmd.version={{.Version}}
+      - -X thoreinstein.com/sre/cmd.commit={{.Commit}}
+      - -X thoreinstein.com/sre/cmd.date={{.Date}}
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      # Windows ARM64 is less common and harder to cross-compile
+      - goos: windows
+        goarch: arm64
+    overrides:
+      - goos: linux
+        goarch: amd64
+        env:
+          - CC=zig cc -target x86_64-linux-gnu
+          - CXX=zig c++ -target x86_64-linux-gnu
+      - goos: linux
+        goarch: arm64
+        env:
+          - CC=zig cc -target aarch64-linux-gnu
+          - CXX=zig c++ -target aarch64-linux-gnu
+      - goos: darwin
+        goarch: amd64
+        env:
+          - CC=zig cc -target x86_64-macos
+          - CXX=zig c++ -target x86_64-macos
+      - goos: darwin
+        goarch: arm64
+        env:
+          - CC=zig cc -target aarch64-macos
+          - CXX=zig c++ -target aarch64-macos
+      - goos: windows
+        goarch: amd64
+        env:
+          - CC=zig cc -target x86_64-windows-gnu
+          - CXX=zig c++ -target x86_64-windows-gnu
+
+archives:
+  - id: default
+    format: tar.gz
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- .Version }}_
+      {{- .Os }}_
+      {{- .Arch }}
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - README.md
+      - LICENSE*
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+      - "^chore:"
+      - Merge pull request
+      - Merge branch
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+      order: 0
+    - title: Bug Fixes
+      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+      order: 1
+    - title: Other
+      order: 999
+
+release:
+  github:
+    owner: thoreinstein
+    name: sre
+  draft: false
+  prerelease: auto
+  mode: replace
+  header: |
+    ## SRE CLI {{ .Version }}
+
+    SRE workflow automation CLI for Git worktrees, Tmux, and Obsidian integration.
+  footer: |
+    **Full Changelog**: https://github.com/thoreinstein/sre/compare/{{ .PreviousTag }}...{{ .Tag }}
+  name_template: "v{{ .Version }}"

@@ -115,9 +115,9 @@ func TestHistoryCommandDescription(t *testing.T) {
 func TestDurationFormatting(t *testing.T) {
 	// Test the duration formatting logic used in runHistoryQueryCommand
 	tests := []struct {
-		name        string
-		durationMs  int
-		expected    string
+		name       string
+		durationMs int
+		expected   string
 	}{
 		{
 			name:       "milliseconds - under 1000",
@@ -155,13 +155,7 @@ func TestDurationFormatting(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var result string
 			if tt.durationMs > 0 {
-				if tt.durationMs < 1000 {
-					result = string(rune(tt.durationMs)) + "ms"
-					// Actually format it properly
-					result = formatDuration(tt.durationMs)
-				} else {
-					result = formatDuration(tt.durationMs)
-				}
+				result = formatDuration(tt.durationMs)
 			}
 
 			if result != tt.expected {
@@ -295,28 +289,28 @@ func TestDirectoryTruncation(t *testing.T) {
 func TestStatusIconSelection(t *testing.T) {
 	// Test the status icon selection logic used in runHistoryQueryCommand
 	tests := []struct {
-		name       string
-		exitCode   int
+		name         string
+		exitCode     int
 		expectedIcon string
 	}{
 		{
-			name:       "success - exit code 0",
-			exitCode:   0,
+			name:         "success - exit code 0",
+			exitCode:     0,
 			expectedIcon: "✓",
 		},
 		{
-			name:       "failure - exit code 1",
-			exitCode:   1,
+			name:         "failure - exit code 1",
+			exitCode:     1,
 			expectedIcon: "✗",
 		},
 		{
-			name:       "failure - exit code 127",
-			exitCode:   127,
+			name:         "failure - exit code 127",
+			exitCode:     127,
 			expectedIcon: "✗",
 		},
 		{
-			name:       "failure - negative exit code",
-			exitCode:   -1,
+			name:         "failure - negative exit code",
+			exitCode:     -1,
 			expectedIcon: "✗",
 		},
 	}

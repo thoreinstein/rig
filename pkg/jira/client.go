@@ -1,6 +1,7 @@
 package jira
 
 import (
+	"errors"
 	"fmt"
 	"os/exec"
 	"regexp"
@@ -35,9 +36,9 @@ func (c *Client) FetchTicketDetails(ticket string) (*obsidian.JiraInfo, error) {
 		if c.Verbose {
 			fmt.Printf("JIRA CLI command '%s' not found, skipping JIRA details fetch\n", c.CliCommand)
 		}
-		return nil, fmt.Errorf("JIRA CLI command not available")
+		return nil, errors.New("JIRA CLI command not available")
 	}
-	
+
 	// Execute the CLI command
 	cmd := exec.Command(c.CliCommand, "jira", "workitem", "view", ticket)
 	output, err := cmd.Output()
@@ -47,28 +48,28 @@ func (c *Client) FetchTicketDetails(ticket string) (*obsidian.JiraInfo, error) {
 		}
 		return nil, fmt.Errorf("failed to fetch JIRA details: %w", err)
 	}
-	
+
 	// Parse the output
 	jiraInfo := c.parseJiraOutput(string(output))
-	
+
 	if c.Verbose {
 		fmt.Printf("Fetched JIRA details for %s: %s\n", ticket, jiraInfo.Summary)
 	}
-	
+
 	return jiraInfo, nil
 }
 
 // parseJiraOutput parses the output from the JIRA CLI command
 func (c *Client) parseJiraOutput(output string) *obsidian.JiraInfo {
 	jiraInfo := &obsidian.JiraInfo{}
-	
+
 	lines := strings.Split(output, "\n")
 	descriptionStarted := false
 	var descriptionLines []string
-	
+
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		
+
 		if strings.HasPrefix(line, "Type:") {
 			jiraInfo.Type = strings.TrimSpace(strings.TrimPrefix(line, "Type:"))
 		} else if strings.HasPrefix(line, "Summary:") {
@@ -89,7 +90,7 @@ func (c *Client) parseJiraOutput(output string) *obsidian.JiraInfo {
 			}
 		}
 	}
-	
+
 	if len(descriptionLines) > 0 {
 		// Trim trailing empty lines
 		for len(descriptionLines) > 0 && descriptionLines[len(descriptionLines)-1] == "" {
@@ -97,7 +98,7 @@ func (c *Client) parseJiraOutput(output string) *obsidian.JiraInfo {
 		}
 		jiraInfo.Description = strings.Join(descriptionLines, "\n")
 	}
-	
+
 	return jiraInfo
 }
 

@@ -1,0 +1,175 @@
+version: "2"
+run:
+  tests: true
+linters:
+  default: none
+  enable:
+    - bidichk
+    - errcheck
+    - ginkgolinter
+    - gomodguard
+    - gosec
+    - govet
+    - ineffassign
+    - misspell
+    - nolintlint
+    - staticcheck
+    - unused
+    - whitespace
+    - depguard
+    - gocritic
+    - perfsprint
+    - copyloopvar
+    - intrange
+    - usetesting
+  settings:
+    ginkgolinter:
+      forbid-focus-container: true
+      validate-async-intervals: true
+      forbid-spec-pollution: true
+    gomodguard:
+      blocked:
+        modules:
+          - gopkg.in/ldap.v2:
+              recommendations:
+                - github.com/go-ldap/ldap/v3
+              reason: LDAP v2 package is outdated, use github.com/go-ldap/ldap/v3
+          - gopkg.in/ldap.v3:
+              recommendations:
+                - github.com/go-ldap/ldap/v3
+              reason: LDAP v3 package has moved to github.com/go-ldap/ldap/v3
+          - gopkg.in/yaml.v2:
+              recommendations:
+                - go.yaml.in/yaml/v3
+              reason: Use go.yaml.in/yaml/v3 for improved security and features
+          - gopkg.in/yaml.v3:
+              recommendations:
+                - go.yaml.in/yaml/v3
+              reason: Use go.yaml.in/yaml/v3 or higher for improved security and features. gopkg.in/yaml.v3 is EOL'ed
+          - github.com/golang/protobuf:
+              recommendations:
+                - google.golang.org/protobuf
+              reason: Legacy protobuf package, use google.golang.org/protobuf instead
+          - golang.org/x/net/context:
+              recommendations:
+                - context
+              reason: Use the standard library context package
+          - github.com/pkg/errors:
+              recommendations:
+                - github.com/cockroachdb/errors
+              reason: Provides automatic stack traces while maintaining compatibility with standard library errors handling
+          - github.com/gogo/protobuf:
+              recommendations:
+                - google.golang.org/protobuf
+              reason: Unmaintained, use google.golang.org/protobuf instead
+          - github.com/jinzhu/gorm:
+              recommendations:
+                - gorm.io/gorm
+              reason: Legacy GORM v1, use gorm.io/gorm for v2
+          - golang.org/x/exp:
+              recommendations:
+                - maps
+                - slices
+                - math/rand/v2
+                - crypto/rand
+              reason: Use standard library packages or our common datautils package instead of golang.org/x/exp
+    depguard:
+      rules:
+        stdlib:
+          list-mode: original
+          deny:
+            - pkg: "math/rand$"
+              desc: use math/rand/v2
+    govet:
+      disable:
+        - fieldalignment
+        - shadow
+      enable-all: true
+    gocritic:
+      disabled-checks:
+        - assignOp
+        - exitAfterDefer
+        - appendAssign
+        - ifElseChain
+        - valSwap
+    usetesting:
+      os-create-temp: true
+      os-mkdir-temp: true
+      os-temp-dir: true
+      os-chdir: true
+      context-background: true
+      context-todo: true
+
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      # allow dot imports for gomega tests
+      - linters:
+          - staticcheck
+        source: . "github.com/onsi/gomega"
+      - linters:
+          - staticcheck
+        source: . "github.com/onsi/ginkgo/v2"
+      - linters:
+          - staticcheck
+        source: . "github.com/onsi/gomega/gstruct"
+      # This rule targets only staticcheck's SA1019 warnings that mention the pubsub package.
+      # FIXME: remove when everyone has moved to the v2 package
+      - linters:
+        - staticcheck
+        text: "SA1019:.*cloud.google.com/go/pubsub" # SA1019 is the linter code for "using deprecated code"
+      # pointless 'copylock' checks in go vet in test suites
+      - linters:
+          - govet
+        source: func \(\w+ \w+Suite\)
+      # weird false positive
+      - linters:
+          - unused
+        path: tests/infra/ds_test_util
+      # weird false positive
+      - linters:
+          - unused
+        path: tests/infra/load.go
+      # URLs can't all be constants...
+      - path: (.+)\.go$
+        text: G107 # Potential HTTP request made with variable url
+      ## FIXMEs below
+      - path: (.+)\.go$
+        text: G102 # Bind to all network interfaces
+      - path: (.+)\.go$
+        text: G115 # integer overflow conversion uint64 -> int
+      - path: (.+)\.go$
+        text: G204 # Subprocess launched with a potential tainted input or cmd arguments
+      - path: (.+)\.go$
+        text: G306 # Expect WriteFile permissions to be 0600 or less
+      - path: (.+)\.go$
+        text: G402 # TLS InsecureSkipVerify set true
+      - path: (.+)\.go$
+        text: G404 # Insecure Random Number Source
+issues:
+  max-same-issues: 0
+  max-issues-per-linter: 0
+formatters:
+  enable:
+    - gofmt
+    - gci
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(github.com/ForgeCloud/saas)
+      custom-order: true
+  exclusions:
+    paths:
+      - ".*mock.*\\.go$"
+      - ".*/mocks/.*\\.go$"
+      - "mock_.*\\.go$"
+      - ".*_mock\\.go$"
+      - ".*_Mock\\.go$"
+      - ".*Mock.*\\.go$"

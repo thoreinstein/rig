@@ -23,11 +23,7 @@ func TestSetVaultSubdir(t *testing.T) {
 
 func TestCreateTicketNote_SubdirSelection(t *testing.T) {
 	// Create a temporary vault directory
-	tmpDir, err := os.MkdirTemp("", "obsidian-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	tests := []struct {
 		name           string
@@ -98,11 +94,7 @@ func TestCreateTicketNote_SubdirSelection(t *testing.T) {
 
 func TestCreateTicketNote_ExistingNote(t *testing.T) {
 	// Create a temporary vault directory
-	tmpDir, err := os.MkdirTemp("", "obsidian-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	nm := NewNoteManager(tmpDir, "templates", "Areas", "Daily", false)
 
@@ -208,7 +200,7 @@ Some notes here.`
 			summaryIdx, jiraIdx, notesIdx)
 	}
 
-	if !(summaryIdx < jiraIdx && jiraIdx < notesIdx) {
+	if summaryIdx >= jiraIdx || jiraIdx >= notesIdx {
 		t.Errorf("insertAfterSummary() wrong order: summary=%d, jira=%d, notes=%d",
 			summaryIdx, jiraIdx, notesIdx)
 	}
@@ -262,11 +254,7 @@ func TestInsertLogEntry(t *testing.T) {
 
 func TestVaultExists(t *testing.T) {
 	// Create a temporary directory
-	tmpDir, err := os.MkdirTemp("", "vault-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	tests := []struct {
 		name      string
@@ -298,11 +286,7 @@ func TestVaultExists(t *testing.T) {
 
 func TestUpdateDailyNote_ExistingNote(t *testing.T) {
 	// Create a temporary vault directory
-	tmpDir, err := os.MkdirTemp("", "obsidian-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	// Create Daily directory
 	dailyDir := filepath.Join(tmpDir, "Daily")
@@ -330,8 +314,7 @@ func TestUpdateDailyNote_ExistingNote(t *testing.T) {
 
 	nm := NewNoteManager(tmpDir, "templates", "Areas", "Daily", false)
 
-	err = nm.UpdateDailyNote("FRAAS-123")
-	if err != nil {
+	if err := nm.UpdateDailyNote("FRAAS-123"); err != nil {
 		t.Fatalf("UpdateDailyNote() error: %v", err)
 	}
 
@@ -354,11 +337,7 @@ func TestUpdateDailyNote_ExistingNote(t *testing.T) {
 
 func TestUpdateDailyNote_NonExistentNote(t *testing.T) {
 	// Create a temporary vault directory
-	tmpDir, err := os.MkdirTemp("", "obsidian-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	// Create Daily directory but no daily note
 	dailyDir := filepath.Join(tmpDir, "Daily")
@@ -369,19 +348,14 @@ func TestUpdateDailyNote_NonExistentNote(t *testing.T) {
 	nm := NewNoteManager(tmpDir, "templates", "Areas", "Daily", false)
 
 	// Should not error when daily note doesn't exist
-	err = nm.UpdateDailyNote("FRAAS-456")
-	if err != nil {
+	if err := nm.UpdateDailyNote("FRAAS-456"); err != nil {
 		t.Errorf("UpdateDailyNote() should not error for non-existent daily note: %v", err)
 	}
 }
 
 func TestUpdateDailyNote_NoLogSection(t *testing.T) {
 	// Create a temporary vault directory
-	tmpDir, err := os.MkdirTemp("", "obsidian-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	// Create Daily directory
 	dailyDir := filepath.Join(tmpDir, "Daily")
@@ -405,8 +379,7 @@ func TestUpdateDailyNote_NoLogSection(t *testing.T) {
 
 	nm := NewNoteManager(tmpDir, "templates", "Areas", "Daily", false)
 
-	err = nm.UpdateDailyNote("FRAAS-789")
-	if err != nil {
+	if err := nm.UpdateDailyNote("FRAAS-789"); err != nil {
 		t.Fatalf("UpdateDailyNote() error: %v", err)
 	}
 
@@ -429,11 +402,7 @@ func TestUpdateDailyNote_NoLogSection(t *testing.T) {
 
 func TestCreateJiraNote_WithTemplate(t *testing.T) {
 	// Create a temporary vault directory
-	tmpDir, err := os.MkdirTemp("", "obsidian-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	// Create templates directory
 	templatesDir := filepath.Join(tmpDir, "templates")
@@ -485,11 +454,7 @@ Write summary here.
 
 func TestCreateJiraNote_WithoutTemplate(t *testing.T) {
 	// Create a temporary vault directory with no template
-	tmpDir, err := os.MkdirTemp("", "obsidian-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	nm := NewNoteManager(tmpDir, "templates", "Areas", "Daily", false)
 

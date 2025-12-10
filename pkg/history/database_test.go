@@ -2,7 +2,6 @@ package history
 
 import (
 	"database/sql"
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -31,11 +30,7 @@ func TestIsAvailable_NonExistent(t *testing.T) {
 
 func TestIsAvailable_ValidZshHistdb(t *testing.T) {
 	// Create a temporary database with zsh-histdb schema
-	tmpDir, err := os.MkdirTemp("", "history-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	dbPath := filepath.Join(tmpDir, "test.db")
 	db, err := sql.Open("sqlite3", dbPath)
@@ -77,11 +72,7 @@ func TestIsAvailable_ValidZshHistdb(t *testing.T) {
 
 func TestIsAvailable_ValidAtuin(t *testing.T) {
 	// Create a temporary database with atuin schema
-	tmpDir, err := os.MkdirTemp("", "history-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	dbPath := filepath.Join(tmpDir, "test.db")
 	db, err := sql.Open("sqlite3", dbPath)
@@ -114,11 +105,7 @@ func TestIsAvailable_ValidAtuin(t *testing.T) {
 }
 
 func TestDetectSchema_ZshHistdb(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "history-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	dbPath := filepath.Join(tmpDir, "test.db")
 	db, err := sql.Open("sqlite3", dbPath)
@@ -148,11 +135,7 @@ func TestDetectSchema_ZshHistdb(t *testing.T) {
 }
 
 func TestDetectSchema_Atuin(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "history-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	dbPath := filepath.Join(tmpDir, "test.db")
 	db, err := sql.Open("sqlite3", dbPath)
@@ -178,11 +161,7 @@ func TestDetectSchema_Atuin(t *testing.T) {
 }
 
 func TestDetectSchema_Unknown(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "history-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	dbPath := filepath.Join(tmpDir, "test.db")
 	db, err := sql.Open("sqlite3", dbPath)
@@ -401,11 +380,7 @@ func TestBuildQuery_SchemaRouting(t *testing.T) {
 }
 
 func TestQueryCommands_ZshHistdb(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "history-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	dbPath := filepath.Join(tmpDir, "test.db")
 	db, err := sql.Open("sqlite3", dbPath)
@@ -478,11 +453,7 @@ func TestQueryCommands_ZshHistdb(t *testing.T) {
 }
 
 func TestQueryCommands_Atuin(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "history-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	dbPath := filepath.Join(tmpDir, "test.db")
 	db, err := sql.Open("sqlite3", dbPath)
@@ -533,11 +504,7 @@ func TestQueryCommands_Atuin(t *testing.T) {
 }
 
 func TestQueryCommands_EmptyResult(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "history-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	dbPath := filepath.Join(tmpDir, "test.db")
 	db, err := sql.Open("sqlite3", dbPath)
@@ -596,11 +563,7 @@ func TestGetDatabaseInfo_NonExistent(t *testing.T) {
 }
 
 func TestGetDatabaseInfo_ValidDatabase(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "history-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	dbPath := filepath.Join(tmpDir, "test.db")
 	db, err := sql.Open("sqlite3", dbPath)

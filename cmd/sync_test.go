@@ -296,11 +296,7 @@ These notes should stay intact.
 
 func TestUpdateNoteWithJiraInfo(t *testing.T) {
 	// Create a temporary directory
-	tmpDir, err := os.MkdirTemp("", "sync-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	// Create a test note file
 	notePath := filepath.Join(tmpDir, "test-note.md")
@@ -325,8 +321,7 @@ Some notes here.`
 		Description: "Bug description here.",
 	}
 
-	err = updateNoteWithJiraInfo(notePath, jiraInfo)
-	if err != nil {
+	if err := updateNoteWithJiraInfo(notePath, jiraInfo); err != nil {
 		t.Fatalf("updateNoteWithJiraInfo() error: %v", err)
 	}
 
@@ -364,11 +359,7 @@ Some notes here.`
 
 func TestUpdateNoteWithJiraInfo_NoSummary(t *testing.T) {
 	// Create a temporary directory
-	tmpDir, err := os.MkdirTemp("", "sync-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	// Create a test note file
 	notePath := filepath.Join(tmpDir, "test-note.md")
@@ -388,8 +379,7 @@ Content here.`
 		Status: "Open",
 	}
 
-	err = updateNoteWithJiraInfo(notePath, jiraInfo)
-	if err != nil {
+	if err := updateNoteWithJiraInfo(notePath, jiraInfo); err != nil {
 		t.Fatalf("updateNoteWithJiraInfo() error: %v", err)
 	}
 

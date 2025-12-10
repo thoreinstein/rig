@@ -153,11 +153,7 @@ func TestCreateAndKillSession_Integration(t *testing.T) {
 	}
 
 	// Create a temporary worktree directory
-	tmpDir, err := os.MkdirTemp("", "tmux-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	// Simple windows config for testing
 	windows := []WindowConfig{
@@ -168,7 +164,7 @@ func TestCreateAndKillSession_Integration(t *testing.T) {
 	sessionName := sm.GetSessionName("integration-test")
 
 	// Clean up any existing session first
-	exec.Command("tmux", "kill-session", "-t", sessionName).Run()
+	_ = exec.Command("tmux", "kill-session", "-t", sessionName).Run()
 
 	// Create a detached session for testing (we can't attach in test)
 	cmd := exec.Command("tmux", "new-session", "-d", "-s", sessionName, "-c", tmpDir)
@@ -182,8 +178,7 @@ func TestCreateAndKillSession_Integration(t *testing.T) {
 	}
 
 	// Kill the session
-	err = sm.KillSession("integration-test")
-	if err != nil {
+	if err := sm.KillSession("integration-test"); err != nil {
 		t.Fatalf("KillSession() error: %v", err)
 	}
 

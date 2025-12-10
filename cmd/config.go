@@ -17,9 +17,7 @@ var configCmd = &cobra.Command{
 
 This command shows the current configuration values and can help with 
 initial setup by creating a default configuration file.`,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return runConfigCommand(cmd, args)
-	},
+	RunE: runConfigCommand,
 }
 
 var (
@@ -29,7 +27,7 @@ var (
 
 func init() {
 	rootCmd.AddCommand(configCmd)
-	
+
 	configCmd.Flags().BoolVar(&configInit, "init", false, "create default configuration file")
 	configCmd.Flags().BoolVar(&configShow, "show", false, "show current configuration")
 }
@@ -38,11 +36,11 @@ func runConfigCommand(cmd *cobra.Command, args []string) error {
 	if configInit {
 		return createDefaultConfig()
 	}
-	
+
 	if configShow || (!configInit && !configShow) {
 		return showConfig()
 	}
-	
+
 	return nil
 }
 
@@ -51,21 +49,21 @@ func createDefaultConfig() error {
 	if err != nil {
 		return fmt.Errorf("failed to get home directory: %w", err)
 	}
-	
+
 	configDir := filepath.Join(homeDir, ".config", "sre")
 	configFile := filepath.Join(configDir, "config.yaml")
-	
+
 	// Check if config file already exists
 	if _, err := os.Stat(configFile); err == nil {
 		fmt.Printf("Configuration file already exists at: %s\n", configFile)
 		return nil
 	}
-	
+
 	// Create config directory
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
-	
+
 	// Default configuration content
 	defaultConfig := `# SRE CLI Configuration
 vault:
@@ -99,15 +97,15 @@ tmux:
     - name: "term"
       working_dir: "{worktree_path}"
 `
-	
+
 	// Write the default configuration
 	if err := os.WriteFile(configFile, []byte(defaultConfig), 0644); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
-	
+
 	fmt.Printf("Default configuration created at: %s\n", configFile)
 	fmt.Println("Edit this file to customize your SRE CLI settings.")
-	
+
 	return nil
 }
 
@@ -116,21 +114,21 @@ func showConfig() error {
 	if err != nil {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
-	
+
 	fmt.Println("Current SRE CLI Configuration:")
 	fmt.Println("==============================")
-	
+
 	fmt.Printf("Vault Path:          %s\n", cfg.Vault.Path)
 	fmt.Printf("Repository:          %s/%s\n", cfg.Repository.Owner, cfg.Repository.Name)
 	fmt.Printf("Repository Path:     %s\n", cfg.GetRepositoryPath())
 	fmt.Printf("Base Branch:         %s\n", cfg.Repository.BaseBranch)
 	fmt.Printf("History Database:    %s\n", cfg.History.DatabasePath)
 	fmt.Printf("JIRA Enabled:        %t\n", cfg.Jira.Enabled)
-	
+
 	if cfg.Jira.Enabled {
 		fmt.Printf("JIRA CLI Command:    %s\n", cfg.Jira.CliCommand)
 	}
-	
+
 	fmt.Printf("Tmux Windows:        %d configured\n", len(cfg.Tmux.Windows))
 	for i, window := range cfg.Tmux.Windows {
 		fmt.Printf("  %d. %s", i+1, window.Name)
@@ -139,6 +137,6 @@ func showConfig() error {
 		}
 		fmt.Println()
 	}
-	
+
 	return nil
 }

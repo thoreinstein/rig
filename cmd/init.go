@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -52,11 +53,11 @@ func parseTicket(ticket string) (*TicketInfo, error) {
 	// Match pattern: TYPE-NUMBER (e.g., fraas-25857, cre-123)
 	re := regexp.MustCompile(`^([a-zA-Z]+)-([0-9]+)$`)
 	matches := re.FindStringSubmatch(ticket)
-	
+
 	if len(matches) != 3 {
-		return nil, fmt.Errorf("invalid ticket format. Expected format: TYPE-NUMBER (e.g., fraas-25857)")
+		return nil, errors.New("invalid ticket format. Expected format: TYPE-NUMBER (e.g., fraas-25857)")
 	}
-	
+
 	return &TicketInfo{
 		Full:   ticket,
 		Type:   strings.ToLower(matches[1]),
@@ -98,7 +99,7 @@ func runInitCommand(ticket string) error {
 		return fmt.Errorf("failed to create git worktree: %w", err)
 	}
 	fmt.Printf("✓ Git worktree created at: %s\n", worktreePath)
-	
+
 	// Step 2: Fetch JIRA details (if enabled)
 	var jiraInfo *obsidian.JiraInfo
 	if cfg.Jira.Enabled {
@@ -117,7 +118,7 @@ func runInitCommand(ticket string) error {
 			fmt.Println("✓ JIRA details fetched successfully")
 		}
 	}
-	
+
 	// Step 3: Create/update Obsidian note
 	if verbose {
 		fmt.Println("Creating Obsidian note...")
@@ -136,7 +137,7 @@ func runInitCommand(ticket string) error {
 		return fmt.Errorf("failed to create Obsidian note: %w", err)
 	}
 	fmt.Printf("✓ Obsidian note created at: %s\n", notePath)
-	
+
 	// Step 4: Update daily note
 	if verbose {
 		fmt.Println("Updating daily note...")
@@ -150,12 +151,12 @@ func runInitCommand(ticket string) error {
 	} else {
 		fmt.Println("✓ Daily note updated")
 	}
-	
+
 	// Step 5: Create tmux session
 	if verbose {
 		fmt.Println("Creating tmux session...")
 	}
-	
+
 	// Convert config windows to tmux windows
 	var tmuxWindows []tmux.WindowConfig
 	for _, window := range cfg.Tmux.Windows {
@@ -165,7 +166,7 @@ func runInitCommand(ticket string) error {
 			WorkingDir: window.WorkingDir,
 		})
 	}
-	
+
 	sessionManager := tmux.NewSessionManager(cfg.Tmux.SessionPrefix, tmuxWindows, verbose)
 	err = sessionManager.CreateSession(ticketInfo.Full, worktreePath, notePath)
 	if err != nil {
@@ -177,10 +178,10 @@ func runInitCommand(ticket string) error {
 	} else {
 		fmt.Println("✓ Tmux session created successfully")
 	}
-	
+
 	fmt.Printf("\n🎉 Workflow initialization for %s completed successfully!\n", ticketInfo.Full)
 	fmt.Printf("Worktree: %s\n", worktreePath)
 	fmt.Printf("Note: %s\n", notePath)
-	
+
 	return nil
 }

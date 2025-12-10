@@ -35,18 +35,18 @@ Examples:
 }
 
 var (
-	timelineSince     string
-	timelineUntil     string
-	timelineDirectory string
+	timelineSince      string
+	timelineUntil      string
+	timelineDirectory  string
 	timelineFailedOnly bool
-	timelineLimit     int
-	timelineOutput    string
-	timelineNoUpdate  bool
+	timelineLimit      int
+	timelineOutput     string
+	timelineNoUpdate   bool
 )
 
 func init() {
 	rootCmd.AddCommand(timelineCmd)
-	
+
 	timelineCmd.Flags().StringVar(&timelineSince, "since", "", "Start time (YYYY-MM-DD HH:MM or YYYY-MM-DD)")
 	timelineCmd.Flags().StringVar(&timelineUntil, "until", "", "End time (YYYY-MM-DD HH:MM or YYYY-MM-DD)")
 	timelineCmd.Flags().StringVar(&timelineDirectory, "directory", "", "Filter by directory path")
@@ -62,27 +62,27 @@ func runTimelineCommand(ticket string) error {
 	if err != nil {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
-	
+
 	// Parse ticket
 	ticketInfo, err := parseTicket(ticket)
 	if err != nil {
 		return err
 	}
-	
+
 	if verbose {
 		fmt.Printf("Generating timeline for ticket: %s\n", ticketInfo.Full)
 	}
-	
+
 	// Initialize history database manager
 	dbManager := history.NewDatabaseManager(cfg.History.DatabasePath, verbose)
-	
+
 	if !dbManager.IsAvailable() {
 		return fmt.Errorf("history database not available at: %s", cfg.History.DatabasePath)
 	}
-	
+
 	// Parse time options
 	var since, until *time.Time
-	
+
 	if timelineSince != "" {
 		parsedSince, err := parseTimeString(timelineSince)
 		if err != nil {
@@ -90,7 +90,7 @@ func runTimelineCommand(ticket string) error {
 		}
 		since = &parsedSince
 	}
-	
+
 	if timelineUntil != "" {
 		parsedUntil, err := parseTimeString(timelineUntil)
 		if err != nil {
@@ -98,7 +98,7 @@ func runTimelineCommand(ticket string) error {
 		}
 		until = &parsedUntil
 	}
-	
+
 	// Build query options
 	options := history.QueryOptions{
 		Since:     since,
@@ -107,40 +107,40 @@ func runTimelineCommand(ticket string) error {
 		Ticket:    ticketInfo.Full,
 		Limit:     timelineLimit,
 	}
-	
+
 	if timelineFailedOnly {
 		failedExitCode := 1
 		options.ExitCode = &failedExitCode
 	}
-	
+
 	// Query commands
 	if verbose {
 		fmt.Println("Querying command history...")
 	}
-	
+
 	commands, err := dbManager.QueryCommands(options)
 	if err != nil {
 		return fmt.Errorf("failed to query commands: %w", err)
 	}
-	
+
 	if len(commands) == 0 {
 		fmt.Printf("No commands found for ticket: %s\n", ticketInfo.Full)
 		return nil
 	}
-	
+
 	if verbose {
 		fmt.Printf("Found %d commands\n", len(commands))
 	}
-	
+
 	// Generate timeline markdown
 	timeline := generateTimelineMarkdown(commands, ticketInfo.Full)
-	
+
 	// Output timeline
 	if timelineNoUpdate {
 		fmt.Println(timeline)
 		return nil
 	}
-	
+
 	if timelineOutput != "" {
 		// Write to specified file
 		err = writeTimelineToFile(timeline, timelineOutput)
@@ -156,7 +156,7 @@ func runTimelineCommand(ticket string) error {
 		}
 		fmt.Printf("Timeline added to ticket note for: %s\n", ticketInfo.Full)
 	}
-	
+
 	return nil
 }
 
@@ -168,59 +168,59 @@ func parseTimeString(timeStr string) (time.Time, error) {
 		"2006-01-02",
 		time.RFC3339,
 	}
-	
+
 	for _, format := range formats {
 		if t, err := time.Parse(format, timeStr); err == nil {
 			return t, nil
 		}
 	}
-	
+
 	return time.Time{}, fmt.Errorf("unable to parse time: %s", timeStr)
 }
 
 // generateTimelineMarkdown generates a markdown timeline from commands
 func generateTimelineMarkdown(commands []history.Command, ticket string) string {
 	var timeline strings.Builder
-	
+
 	timeline.WriteString(fmt.Sprintf("## Command Timeline - %s\n\n", ticket))
 	timeline.WriteString(fmt.Sprintf("Generated: %s\n", time.Now().Format("2006-01-02 15:04:05")))
 	timeline.WriteString(fmt.Sprintf("Commands: %d\n\n", len(commands)))
-	
+
 	// Group commands by day
 	dayGroups := make(map[string][]history.Command)
-	
+
 	for _, cmd := range commands {
 		day := cmd.Timestamp.Format("2006-01-02")
 		dayGroups[day] = append(dayGroups[day], cmd)
 	}
-	
+
 	// Sort days and output
 	var days []string
 	for day := range dayGroups {
 		days = append(days, day)
 	}
 	sort.Strings(days)
-	
+
 	for _, day := range days {
 		dayCommands := dayGroups[day]
 		timeline.WriteString(fmt.Sprintf("### %s\n\n", day))
-		
+
 		for _, cmd := range dayCommands {
 			// Format timestamp
 			timeStr := cmd.Timestamp.Format("15:04:05")
-			
+
 			// Format duration if available
 			var durationStr string
 			if cmd.Duration > 0 {
 				durationStr = fmt.Sprintf(" (%dms)", cmd.Duration)
 			}
-			
+
 			// Format exit code
 			var exitStr string
 			if cmd.ExitCode != 0 {
 				exitStr = fmt.Sprintf(" [Exit: %d]", cmd.ExitCode)
 			}
-			
+
 			// Format directory (show only basename if it's long)
 			var dirStr string
 			if cmd.Directory != "" {
@@ -230,14 +230,14 @@ func generateTimelineMarkdown(commands []history.Command, ticket string) string 
 					dirStr = fmt.Sprintf(" `%s`", cmd.Directory)
 				}
 			}
-			
-			timeline.WriteString(fmt.Sprintf("- **%s**%s%s%s: `%s`\n", 
+
+			timeline.WriteString(fmt.Sprintf("- **%s**%s%s%s: `%s`\n",
 				timeStr, durationStr, exitStr, dirStr, cmd.Command))
 		}
-		
+
 		timeline.WriteString("\n")
 	}
-	
+
 	return timeline.String()
 }
 
@@ -250,32 +250,32 @@ func writeTimelineToFile(timeline, filename string) error {
 func updateTicketNoteWithTimeline(cfg *config.Config, ticketInfo *TicketInfo, timeline string) error {
 	// Get note path
 	notePath := cfg.GetNotePath(ticketInfo.Type, ticketInfo.Full)
-	
+
 	// Check if note exists
 	if _, err := os.Stat(notePath); os.IsNotExist(err) {
 		return fmt.Errorf("ticket note not found: %s", notePath)
 	}
-	
+
 	// Read existing note content
 	content, err := os.ReadFile(notePath)
 	if err != nil {
 		return fmt.Errorf("failed to read note: %w", err)
 	}
-	
+
 	noteContent := string(content)
-	
+
 	// Remove existing timeline section if present
 	noteContent = removeExistingTimeline(noteContent)
-	
+
 	// Add new timeline at the end
 	updatedContent := noteContent + "\n" + timeline
-	
+
 	// Write back to file
 	err = os.WriteFile(notePath, []byte(updatedContent), 0644)
 	if err != nil {
 		return fmt.Errorf("failed to write updated note: %w", err)
 	}
-	
+
 	return nil
 }
 

@@ -78,28 +78,28 @@ func TestSessionKillErrorParsing(t *testing.T) {
 	// Test the error message parsing logic in runSessionKillCommand
 	// The function checks if error contains "does not exist"
 	tests := []struct {
-		name           string
-		errorMsg       string
+		name             string
+		errorMsg         string
 		shouldBeGraceful bool
 	}{
 		{
-			name:           "session does not exist",
-			errorMsg:       "session 'test' does not exist",
+			name:             "session does not exist",
+			errorMsg:         "session 'test' does not exist",
 			shouldBeGraceful: true,
 		},
 		{
-			name:           "session does not exist - different format",
-			errorMsg:       "error: does not exist: test-session",
+			name:             "session does not exist - different format",
+			errorMsg:         "error: does not exist: test-session",
 			shouldBeGraceful: true,
 		},
 		{
-			name:           "different error",
-			errorMsg:       "failed to connect to tmux server",
+			name:             "different error",
+			errorMsg:         "failed to connect to tmux server",
 			shouldBeGraceful: false,
 		},
 		{
-			name:           "permission denied",
-			errorMsg:       "permission denied",
+			name:             "permission denied",
+			errorMsg:         "permission denied",
 			shouldBeGraceful: false,
 		},
 	}

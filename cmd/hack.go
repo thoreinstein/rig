@@ -74,7 +74,7 @@ func runHackCommand(name string) error {
 	gitManager := git.NewWorktreeManager(repoPath, repoConfig.BaseBranch, verbose)
 
 	// For hacks, use "hack" as the type directory and "hack/{name}" as the branch name
-	worktreePath, err := gitManager.CreateWorktreeWithBranch("hack", name, fmt.Sprintf("hack/%s", name))
+	worktreePath, err := gitManager.CreateWorktreeWithBranch("hack", name, "hack/"+name)
 	if err != nil {
 		return fmt.Errorf("failed to create git worktree: %w", err)
 	}

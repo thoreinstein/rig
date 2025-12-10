@@ -10,26 +10,26 @@ import (
 
 func TestGetVaultSubdir(t *testing.T) {
 	tests := []struct {
-		name        string
-		config      *Config
-		ticketType  string
-		expected    string
+		name       string
+		config     *Config
+		ticketType string
+		expected   string
 	}{
 		{
-			name: "default jira ticket type",
-			config: &Config{},
+			name:       "default jira ticket type",
+			config:     &Config{},
 			ticketType: "fraas",
 			expected:   "Jira",
 		},
 		{
-			name: "incident ticket type",
-			config: &Config{},
+			name:       "incident ticket type",
+			config:     &Config{},
 			ticketType: "incident",
 			expected:   "Incidents",
 		},
 		{
-			name: "hack ticket type",
-			config: &Config{},
+			name:       "hack ticket type",
+			config:     &Config{},
 			ticketType: "hack",
 			expected:   "Hacks",
 		},
@@ -513,11 +513,7 @@ func TestLoad_WithDefaults(t *testing.T) {
 
 func TestLoad_WithConfigFile(t *testing.T) {
 	// Create a temporary config file
-	tmpDir, err := os.MkdirTemp("", "config-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	configContent := `
 vault:

@@ -34,7 +34,7 @@ func NewSessionManager(sessionPrefix string, windows []WindowConfig, verbose boo
 // CreateSession creates a new tmux session for a ticket
 func (sm *SessionManager) CreateSession(ticket, worktreePath, notePath string) error {
 	sessionName := sm.getSessionName(ticket)
-	
+
 	// Check if session already exists
 	if sm.sessionExists(sessionName) {
 		if sm.Verbose {
@@ -42,40 +42,40 @@ func (sm *SessionManager) CreateSession(ticket, worktreePath, notePath string) e
 		}
 		return sm.attachToSession(sessionName)
 	}
-	
+
 	if sm.Verbose {
 		fmt.Printf("Creating tmux session '%s'...\n", sessionName)
 	}
-	
+
 	// Verify worktree directory exists
 	if _, err := os.Stat(worktreePath); os.IsNotExist(err) {
 		return fmt.Errorf("worktree path does not exist: %s", worktreePath)
 	}
-	
+
 	// Create session with first window
 	err := sm.createInitialSession(sessionName, worktreePath)
 	if err != nil {
 		return fmt.Errorf("failed to create initial session: %w", err)
 	}
-	
+
 	// Create additional windows
 	err = sm.createWindows(sessionName, worktreePath, notePath)
 	if err != nil {
 		return fmt.Errorf("failed to create windows: %w", err)
 	}
-	
+
 	// Set environment variables for the session
 	err = sm.setEnvironmentVars(sessionName, ticket, worktreePath)
 	if err != nil {
 		return fmt.Errorf("failed to set environment variables: %w", err)
 	}
-	
+
 	// Start on the first window (note)
 	err = sm.selectWindow(sessionName, 1)
 	if err != nil {
 		return fmt.Errorf("failed to select first window: %w", err)
 	}
-	
+
 	// Attach to the session if we're in a tmux session, otherwise switch
 	return sm.attachToSession(sessionName)
 }
@@ -113,14 +113,14 @@ func (sm *SessionManager) createInitialSession(sessionName, worktreePath string)
 	} else {
 		initialDir = worktreePath
 	}
-	
+
 	cmd := exec.Command("tmux", "new-session", "-d", "-s", sessionName, "-c", initialDir)
-	
+
 	if sm.Verbose {
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 	}
-	
+
 	return cmd.Run()
 }
 
@@ -128,7 +128,7 @@ func (sm *SessionManager) createInitialSession(sessionName, worktreePath string)
 func (sm *SessionManager) createWindows(sessionName, worktreePath, notePath string) error {
 	for i, window := range sm.Windows {
 		windowTarget := fmt.Sprintf("%s:%d", sessionName, i+1)
-		
+
 		if i == 0 {
 			// Rename the first window that was created with the session
 			err := sm.renameWindow(windowTarget, window.Name)
@@ -141,13 +141,13 @@ func (sm *SessionManager) createWindows(sessionName, worktreePath, notePath stri
 			if workingDir == "" {
 				workingDir = worktreePath
 			}
-			
+
 			err := sm.createWindow(sessionName, i+1, window.Name, workingDir)
 			if err != nil {
 				return fmt.Errorf("failed to create window %d: %w", i+1, err)
 			}
 		}
-		
+
 		// Send command to window if specified
 		if window.Command != "" {
 			command := sm.expandPath(window.Command, worktreePath, notePath)
@@ -157,7 +157,7 @@ func (sm *SessionManager) createWindows(sessionName, worktreePath, notePath stri
 			}
 		}
 	}
-	
+
 	return nil
 }
 
@@ -166,7 +166,7 @@ func (sm *SessionManager) expandPath(template, worktreePath, notePath string) st
 	result := template
 	result = strings.ReplaceAll(result, "{worktree_path}", worktreePath)
 	result = strings.ReplaceAll(result, "{note_path}", notePath)
-	
+
 	// Expand ~ to home directory
 	if strings.HasPrefix(result, "~/") {
 		homeDir, err := os.UserHomeDir()
@@ -174,45 +174,45 @@ func (sm *SessionManager) expandPath(template, worktreePath, notePath string) st
 			result = filepath.Join(homeDir, result[2:])
 		}
 	}
-	
+
 	return result
 }
 
 // renameWindow renames a tmux window
 func (sm *SessionManager) renameWindow(windowTarget, name string) error {
 	cmd := exec.Command("tmux", "rename-window", "-t", windowTarget, name)
-	
+
 	if sm.Verbose {
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 	}
-	
+
 	return cmd.Run()
 }
 
 // createWindow creates a new tmux window
 func (sm *SessionManager) createWindow(sessionName string, windowNum int, name, workingDir string) error {
 	windowTarget := fmt.Sprintf("%s:%d", sessionName, windowNum)
-	
+
 	cmd := exec.Command("tmux", "new-window", "-t", windowTarget, "-n", name, "-c", workingDir)
-	
+
 	if sm.Verbose {
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 	}
-	
+
 	return cmd.Run()
 }
 
 // sendCommand sends a command to a tmux window
 func (sm *SessionManager) sendCommand(windowTarget, command string) error {
 	cmd := exec.Command("tmux", "send-keys", "-t", windowTarget, command, "Enter")
-	
+
 	if sm.Verbose {
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 	}
-	
+
 	return cmd.Run()
 }
 
@@ -222,35 +222,35 @@ func (sm *SessionManager) setEnvironmentVars(sessionName, ticket, worktreePath s
 		"SRE_TICKET":   ticket,
 		"SRE_WORKTREE": worktreePath,
 	}
-	
+
 	for key, value := range vars {
 		cmd := exec.Command("tmux", "set-environment", "-t", sessionName, key, value)
-		
+
 		if sm.Verbose {
 			fmt.Printf("Setting %s=%s\n", key, value)
 			cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stderr
 		}
-		
+
 		if err := cmd.Run(); err != nil {
 			return fmt.Errorf("failed to set %s: %w", key, err)
 		}
 	}
-	
+
 	return nil
 }
 
 // selectWindow selects a specific window in the session
 func (sm *SessionManager) selectWindow(sessionName string, windowNum int) error {
 	windowTarget := fmt.Sprintf("%s:%d", sessionName, windowNum)
-	
+
 	cmd := exec.Command("tmux", "select-window", "-t", windowTarget)
-	
+
 	if sm.Verbose {
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 	}
-	
+
 	return cmd.Run()
 }
 
@@ -260,13 +260,13 @@ func (sm *SessionManager) AttachToSession(sessionName string) error {
 	if os.Getenv("TMUX") != "" {
 		// We're in tmux, switch to the session
 		cmd := exec.Command("tmux", "switch-client", "-t", sessionName)
-		
+
 		if sm.Verbose {
 			fmt.Printf("Switching to session: %s\n", sessionName)
 			cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stderr
 		}
-		
+
 		return cmd.Run()
 	} else {
 		// We're not in tmux, attach to the session
@@ -274,11 +274,11 @@ func (sm *SessionManager) AttachToSession(sessionName string) error {
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
-		
+
 		if sm.Verbose {
 			fmt.Printf("Attaching to session: %s\n", sessionName)
 		}
-		
+
 		return cmd.Run()
 	}
 }
@@ -295,9 +295,9 @@ func (sm *SessionManager) ListSessions() ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to list sessions: %w", err)
 	}
-	
+
 	sessions := strings.Split(strings.TrimSpace(string(output)), "\n")
-	
+
 	// Filter out empty strings
 	var result []string
 	for _, session := range sessions {
@@ -305,25 +305,25 @@ func (sm *SessionManager) ListSessions() ([]string, error) {
 			result = append(result, session)
 		}
 	}
-	
+
 	return result, nil
 }
 
 // KillSession kills a tmux session
 func (sm *SessionManager) KillSession(ticket string) error {
 	sessionName := sm.getSessionName(ticket)
-	
+
 	if !sm.sessionExists(sessionName) {
 		return fmt.Errorf("session does not exist: %s", sessionName)
 	}
-	
+
 	cmd := exec.Command("tmux", "kill-session", "-t", sessionName)
-	
+
 	if sm.Verbose {
 		fmt.Printf("Killing session: %s\n", sessionName)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 	}
-	
+
 	return cmd.Run()
 }

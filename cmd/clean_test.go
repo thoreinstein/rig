@@ -14,11 +14,7 @@ func TestIsBranchMerged(t *testing.T) {
 	}
 
 	// Create a temporary git repository
-	tmpDir, err := os.MkdirTemp("", "clean-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	repoDir := filepath.Join(tmpDir, "repo")
 	if err := os.MkdirAll(repoDir, 0755); err != nil {
@@ -33,8 +29,10 @@ func TestIsBranchMerged(t *testing.T) {
 	}
 
 	// Configure git user
-	exec.Command("git", "config", "user.email", "test@example.com").Run()
-	exec.Command("git", "config", "user.name", "Test User").Run()
+	configEmail := exec.Command("git", "-C", repoDir, "config", "user.email", "test@example.com")
+	_ = configEmail.Run()
+	configName := exec.Command("git", "-C", repoDir, "config", "user.name", "Test User")
+	_ = configName.Run()
 
 	// Create initial commit on main
 	cmd = exec.Command("git", "commit", "--allow-empty", "-m", "Initial commit")
@@ -60,10 +58,10 @@ func TestIsBranchMerged(t *testing.T) {
 	// Go back to main
 	cmd = exec.Command("git", "checkout", "main")
 	cmd.Dir = repoDir
-	cmd.Run() // Might fail if default branch is master
+	_ = cmd.Run() // Might fail if default branch is master
 	cmd = exec.Command("git", "checkout", "master")
 	cmd.Dir = repoDir
-	cmd.Run()
+	_ = cmd.Run()
 
 	// Get current branch name
 	cmd = exec.Command("git", "branch", "--show-current")
@@ -123,11 +121,7 @@ func TestIsBranchMerged_MergedBranch(t *testing.T) {
 	}
 
 	// Create a temporary git repository
-	tmpDir, err := os.MkdirTemp("", "clean-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	repoDir := filepath.Join(tmpDir, "repo")
 	if err := os.MkdirAll(repoDir, 0755); err != nil {
@@ -142,10 +136,10 @@ func TestIsBranchMerged_MergedBranch(t *testing.T) {
 	}
 
 	// Configure git user
-	cmd = exec.Command("git", "-C", repoDir, "config", "user.email", "test@example.com")
-	cmd.Run()
-	cmd = exec.Command("git", "-C", repoDir, "config", "user.name", "Test User")
-	cmd.Run()
+	configEmail := exec.Command("git", "-C", repoDir, "config", "user.email", "test@example.com")
+	_ = configEmail.Run()
+	configName := exec.Command("git", "-C", repoDir, "config", "user.name", "Test User")
+	_ = configName.Run()
 
 	// Create initial commit
 	cmd = exec.Command("git", "commit", "--allow-empty", "-m", "Initial commit")
@@ -203,11 +197,7 @@ func TestGetWorktreeDetailsForClean(t *testing.T) {
 	}
 
 	// Create a temporary git repository
-	tmpDir, err := os.MkdirTemp("", "clean-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	repoDir := filepath.Join(tmpDir, "repo")
 	if err := os.MkdirAll(repoDir, 0755); err != nil {
@@ -222,10 +212,10 @@ func TestGetWorktreeDetailsForClean(t *testing.T) {
 	}
 
 	// Configure git user
-	cmd = exec.Command("git", "-C", repoDir, "config", "user.email", "test@example.com")
-	cmd.Run()
-	cmd = exec.Command("git", "-C", repoDir, "config", "user.name", "Test User")
-	cmd.Run()
+	configEmail := exec.Command("git", "-C", repoDir, "config", "user.email", "test@example.com")
+	_ = configEmail.Run()
+	configName := exec.Command("git", "-C", repoDir, "config", "user.name", "Test User")
+	_ = configName.Run()
 
 	// Create initial commit
 	cmd = exec.Command("git", "commit", "--allow-empty", "-m", "Initial commit")
@@ -265,8 +255,6 @@ func TestCleanupCandidate(t *testing.T) {
 	candidate := CleanupCandidate{
 		Path:       "/home/user/repo/fraas/FRAAS-123",
 		Branch:     "FRAAS-123",
-		RepoName:   "main",
-		RepoPath:   "/home/user/repo",
 		IsMerged:   true,
 		HasSession: true,
 	}
@@ -330,11 +318,7 @@ func TestForceRemoveWorktree(t *testing.T) {
 	}
 
 	// Create a temporary git repository
-	tmpDir, err := os.MkdirTemp("", "clean-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	repoDir := filepath.Join(tmpDir, "repo")
 	if err := os.MkdirAll(repoDir, 0755); err != nil {
@@ -349,10 +333,10 @@ func TestForceRemoveWorktree(t *testing.T) {
 	}
 
 	// Configure git user
-	cmd = exec.Command("git", "-C", repoDir, "config", "user.email", "test@example.com")
-	cmd.Run()
-	cmd = exec.Command("git", "-C", repoDir, "config", "user.name", "Test User")
-	cmd.Run()
+	configEmail := exec.Command("git", "-C", repoDir, "config", "user.email", "test@example.com")
+	_ = configEmail.Run()
+	configName := exec.Command("git", "-C", repoDir, "config", "user.name", "Test User")
+	_ = configName.Run()
 
 	// Create initial commit
 	cmd = exec.Command("git", "commit", "--allow-empty", "-m", "Initial commit")
@@ -375,8 +359,7 @@ func TestForceRemoveWorktree(t *testing.T) {
 	}
 
 	// Force remove the worktree
-	err = forceRemoveWorktree(repoDir, worktreePath)
-	if err != nil {
+	if err := forceRemoveWorktree(repoDir, worktreePath); err != nil {
 		t.Fatalf("forceRemoveWorktree() error: %v", err)
 	}
 
@@ -393,11 +376,7 @@ func TestForceRemoveWorktree_NonExistent(t *testing.T) {
 	}
 
 	// Create a temporary git repository
-	tmpDir, err := os.MkdirTemp("", "clean-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	repoDir := filepath.Join(tmpDir, "repo")
 	if err := os.MkdirAll(repoDir, 0755); err != nil {
@@ -412,10 +391,10 @@ func TestForceRemoveWorktree_NonExistent(t *testing.T) {
 	}
 
 	// Configure git user
-	cmd = exec.Command("git", "-C", repoDir, "config", "user.email", "test@example.com")
-	cmd.Run()
-	cmd = exec.Command("git", "-C", repoDir, "config", "user.name", "Test User")
-	cmd.Run()
+	configEmail := exec.Command("git", "-C", repoDir, "config", "user.email", "test@example.com")
+	_ = configEmail.Run()
+	configName := exec.Command("git", "-C", repoDir, "config", "user.name", "Test User")
+	_ = configName.Run()
 
 	// Create initial commit
 	cmd = exec.Command("git", "commit", "--allow-empty", "-m", "Initial commit")
@@ -425,9 +404,8 @@ func TestForceRemoveWorktree_NonExistent(t *testing.T) {
 	}
 
 	// Try to remove non-existent worktree
-	err = forceRemoveWorktree(repoDir, "/nonexistent/worktree/path")
 	// Should return an error for non-existent worktree
-	if err == nil {
+	if err := forceRemoveWorktree(repoDir, "/nonexistent/worktree/path"); err == nil {
 		t.Error("forceRemoveWorktree() should error for non-existent worktree")
 	}
 }
@@ -439,11 +417,7 @@ func TestGetWorktreeDetailsForClean_WithWorktree(t *testing.T) {
 	}
 
 	// Create a temporary git repository
-	tmpDir, err := os.MkdirTemp("", "clean-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	repoDir := filepath.Join(tmpDir, "repo")
 	if err := os.MkdirAll(repoDir, 0755); err != nil {
@@ -458,10 +432,10 @@ func TestGetWorktreeDetailsForClean_WithWorktree(t *testing.T) {
 	}
 
 	// Configure git user
-	cmd = exec.Command("git", "-C", repoDir, "config", "user.email", "test@example.com")
-	cmd.Run()
-	cmd = exec.Command("git", "-C", repoDir, "config", "user.name", "Test User")
-	cmd.Run()
+	configEmail := exec.Command("git", "-C", repoDir, "config", "user.email", "test@example.com")
+	_ = configEmail.Run()
+	configName := exec.Command("git", "-C", repoDir, "config", "user.name", "Test User")
+	_ = configName.Run()
 
 	// Create initial commit
 	cmd = exec.Command("git", "commit", "--allow-empty", "-m", "Initial commit")

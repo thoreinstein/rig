@@ -1,6 +1,6 @@
 module thoreinstein.com/sre
 
-go 1.24.4
+go 1.25.4
 
 require (
 	github.com/fsnotify/fsnotify v1.8.0 // indirect

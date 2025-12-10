@@ -1,6 +1,7 @@
 package git
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -127,38 +128,38 @@ func (wm *WorktreeManager) repoExists() bool {
 	if _, err := os.Stat(wm.RepoPath); os.IsNotExist(err) {
 		return false
 	}
-	
+
 	// Check if it's a git repository
 	gitDir := filepath.Join(wm.RepoPath, ".git")
 	if _, err := os.Stat(gitDir); err == nil {
 		return true
 	}
-	
+
 	// Check if it's a bare repository
 	if _, err := os.Stat(filepath.Join(wm.RepoPath, "refs")); err == nil {
 		return true
 	}
-	
+
 	return false
 }
 
 // getBaseBranch determines which base branch to use
 func (wm *WorktreeManager) getBaseBranch() (string, error) {
 	branches := []string{wm.BaseBranch, "master", "main"}
-	
+
 	for _, branch := range branches {
 		if wm.branchExists(branch) {
 			return branch, nil
 		}
 	}
-	
+
 	// If no standard branches exist, get the first available branch
 	branch, err := wm.getFirstBranch()
 	if err != nil {
 		// If no branches exist, create initial commit
 		return wm.createInitialBranch()
 	}
-	
+
 	return branch, nil
 }
 
@@ -187,7 +188,7 @@ func (wm *WorktreeManager) fetchAndPull(baseBranch string) error {
 
 // branchExists checks if a branch exists in the repository
 func (wm *WorktreeManager) branchExists(branch string) bool {
-	err := wm.runner.Run(wm.RepoPath, "git", "show-ref", "--verify", "--quiet", fmt.Sprintf("refs/heads/%s", branch))
+	err := wm.runner.Run(wm.RepoPath, "git", "show-ref", "--verify", "--quiet", "refs/heads/"+branch)
 	return err == nil
 }
 
@@ -209,7 +210,7 @@ func (wm *WorktreeManager) getFirstBranch() (string, error) {
 		}
 	}
 
-	return "", fmt.Errorf("no branches found")
+	return "", errors.New("no branches found")
 }
 
 // createInitialBranch creates an initial branch with empty commit
@@ -229,12 +230,6 @@ func (wm *WorktreeManager) createInitialBranch() (string, error) {
 	}
 
 	return "main", nil
-}
-
-// createWorktreeFromBranch creates a worktree from the specified base branch
-// Uses the ticket name as both the directory name and branch name
-func (wm *WorktreeManager) createWorktreeFromBranch(ticketType, ticket, baseBranch string) error {
-	return wm.createWorktreeFromBranchWithName(ticketType, ticket, ticket, baseBranch)
 }
 
 // createWorktreeFromBranchWithName creates a worktree with a custom branch name

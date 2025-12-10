@@ -63,18 +63,18 @@ func runSessionListCommand() error {
 	if err != nil {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
-	
+
 	sessionManager := tmux.NewSessionManager(cfg.Tmux.SessionPrefix, nil, verbose)
 	sessions, err := sessionManager.ListSessions()
 	if err != nil {
 		return fmt.Errorf("failed to list sessions: %w", err)
 	}
-	
+
 	if len(sessions) == 0 {
 		fmt.Println("No tmux sessions found.")
 		return nil
 	}
-	
+
 	fmt.Println("Active tmux sessions:")
 	for i, session := range sessions {
 		prefix := "  "
@@ -83,7 +83,7 @@ func runSessionListCommand() error {
 		}
 		fmt.Printf("%s%s\n", prefix, session)
 	}
-	
+
 	return nil
 }
 
@@ -92,19 +92,19 @@ func runSessionAttachCommand(ticket string) error {
 	if err != nil {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
-	
+
 	sessionManager := tmux.NewSessionManager(cfg.Tmux.SessionPrefix, nil, verbose)
 	sessionName := sessionManager.GetSessionName(ticket)
-	
+
 	// Check if session exists
 	if !sessionManager.SessionExists(sessionName) {
 		return fmt.Errorf("tmux session '%s' does not exist for ticket '%s'", sessionName, ticket)
 	}
-	
+
 	if verbose {
 		fmt.Printf("Attaching to session: %s\n", sessionName)
 	}
-	
+
 	return sessionManager.AttachToSession(sessionName)
 }
 
@@ -113,13 +113,13 @@ func runSessionKillCommand(ticket string) error {
 	if err != nil {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
-	
+
 	sessionManager := tmux.NewSessionManager(cfg.Tmux.SessionPrefix, nil, verbose)
-	
+
 	if verbose {
 		fmt.Printf("Killing session for ticket: %s\n", ticket)
 	}
-	
+
 	err = sessionManager.KillSession(ticket)
 	if err != nil {
 		if strings.Contains(err.Error(), "does not exist") {
@@ -128,7 +128,7 @@ func runSessionKillCommand(ticket string) error {
 		}
 		return fmt.Errorf("failed to kill session: %w", err)
 	}
-	
+
 	fmt.Printf("✓ Session for ticket '%s' killed successfully.\n", ticket)
 	return nil
 }
