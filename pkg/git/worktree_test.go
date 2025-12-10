@@ -1,466 +1,574 @@
 package git
 
 import (
-	"os"
-	"os/exec"
-	"path/filepath"
+	"errors"
 	"strings"
 	"testing"
 )
 
-func TestNewWorktreeManager(t *testing.T) {
-	wm := NewWorktreeManager("/path/to/repo", "main", true)
+// MockCommandRunner is a mock implementation of CommandRunner for testing
+type MockCommandRunner struct {
+	// RunFunc is called for Run() - returns error
+	RunFunc func(dir string, name string, args ...string) error
+	// OutputFunc is called for Output() - returns output and error
+	OutputFunc func(dir string, name string, args ...string) ([]byte, error)
+	// Calls records all calls made
+	Calls []MockCall
+}
 
-	if wm.RepoPath != "/path/to/repo" {
-		t.Errorf("RepoPath = %q, want %q", wm.RepoPath, "/path/to/repo")
+// MockCall represents a single call to the mock
+type MockCall struct {
+	Method string
+	Dir    string
+	Name   string
+	Args   []string
+}
+
+func (m *MockCommandRunner) Run(dir string, name string, args ...string) error {
+	m.Calls = append(m.Calls, MockCall{Method: "Run", Dir: dir, Name: name, Args: args})
+	if m.RunFunc != nil {
+		return m.RunFunc(dir, name, args...)
 	}
-	if wm.BaseBranch != "main" {
-		t.Errorf("BaseBranch = %q, want %q", wm.BaseBranch, "main")
+	return nil
+}
+
+func (m *MockCommandRunner) Output(dir string, name string, args ...string) ([]byte, error) {
+	m.Calls = append(m.Calls, MockCall{Method: "Output", Dir: dir, Name: name, Args: args})
+	if m.OutputFunc != nil {
+		return m.OutputFunc(dir, name, args...)
 	}
-	if !wm.Verbose {
-		t.Error("Verbose should be true")
+	return []byte{}, nil
+}
+
+func TestFetchAndPull_Success(t *testing.T) {
+	mock := &MockCommandRunner{}
+	wm := NewWorktreeManagerWithRunner("/repo", "main", false, mock)
+
+	err := wm.fetchAndPull("main")
+	if err != nil {
+		t.Fatalf("fetchAndPull() error = %v, want nil", err)
+	}
+
+	// Verify correct commands were called
+	if len(mock.Calls) != 2 {
+		t.Fatalf("Expected 2 calls, got %d", len(mock.Calls))
+	}
+
+	// First call: git fetch origin
+	if mock.Calls[0].Name != "git" {
+		t.Errorf("Call 0: Name = %q, want %q", mock.Calls[0].Name, "git")
+	}
+	if len(mock.Calls[0].Args) < 2 || mock.Calls[0].Args[0] != "fetch" || mock.Calls[0].Args[1] != "origin" {
+		t.Errorf("Call 0: Args = %v, want [fetch origin]", mock.Calls[0].Args)
+	}
+
+	// Second call: git pull origin main
+	if mock.Calls[1].Name != "git" {
+		t.Errorf("Call 1: Name = %q, want %q", mock.Calls[1].Name, "git")
+	}
+	if len(mock.Calls[1].Args) < 3 || mock.Calls[1].Args[0] != "pull" || mock.Calls[1].Args[1] != "origin" || mock.Calls[1].Args[2] != "main" {
+		t.Errorf("Call 1: Args = %v, want [pull origin main]", mock.Calls[1].Args)
 	}
 }
 
-func TestRepoExists(t *testing.T) {
-	// Create a temporary directory for tests
-	tmpDir, err := os.MkdirTemp("", "git-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
+func TestFetchAndPull_FetchError(t *testing.T) {
+	mock := &MockCommandRunner{
+		RunFunc: func(dir string, name string, args ...string) error {
+			if len(args) > 0 && args[0] == "fetch" {
+				return errors.New("network error")
+			}
+			return nil
+		},
 	}
-	defer os.RemoveAll(tmpDir)
+	wm := NewWorktreeManagerWithRunner("/repo", "main", false, mock)
 
+	err := wm.fetchAndPull("main")
+	if err == nil {
+		t.Fatal("fetchAndPull() expected error, got nil")
+	}
+
+	if !strings.Contains(err.Error(), "git fetch failed") {
+		t.Errorf("Error = %q, want to contain 'git fetch failed'", err.Error())
+	}
+
+	// Should have only called fetch (failed before pull)
+	if len(mock.Calls) != 1 {
+		t.Errorf("Expected 1 call (fetch only), got %d", len(mock.Calls))
+	}
+}
+
+func TestFetchAndPull_PullError(t *testing.T) {
+	mock := &MockCommandRunner{
+		RunFunc: func(dir string, name string, args ...string) error {
+			if len(args) > 0 && args[0] == "pull" {
+				return errors.New("merge conflict")
+			}
+			return nil
+		},
+	}
+	wm := NewWorktreeManagerWithRunner("/repo", "main", false, mock)
+
+	err := wm.fetchAndPull("main")
+	if err == nil {
+		t.Fatal("fetchAndPull() expected error, got nil")
+	}
+
+	if !strings.Contains(err.Error(), "git pull failed") {
+		t.Errorf("Error = %q, want to contain 'git pull failed'", err.Error())
+	}
+
+	// Should have called both fetch and pull
+	if len(mock.Calls) != 2 {
+		t.Errorf("Expected 2 calls, got %d", len(mock.Calls))
+	}
+}
+
+func TestFetchAndPull_DifferentBranch(t *testing.T) {
+	mock := &MockCommandRunner{}
+	wm := NewWorktreeManagerWithRunner("/repo", "develop", false, mock)
+
+	err := wm.fetchAndPull("develop")
+	if err != nil {
+		t.Fatalf("fetchAndPull() error = %v, want nil", err)
+	}
+
+	// Verify pull uses correct branch
+	if len(mock.Calls) < 2 {
+		t.Fatalf("Expected at least 2 calls, got %d", len(mock.Calls))
+	}
+
+	if mock.Calls[1].Args[2] != "develop" {
+		t.Errorf("Pull branch = %q, want %q", mock.Calls[1].Args[2], "develop")
+	}
+}
+
+func TestBranchExists_True(t *testing.T) {
+	mock := &MockCommandRunner{
+		RunFunc: func(dir string, name string, args ...string) error {
+			// git show-ref returns 0 when branch exists
+			return nil
+		},
+	}
+	wm := NewWorktreeManagerWithRunner("/repo", "main", false, mock)
+
+	result := wm.branchExists("main")
+	if !result {
+		t.Error("branchExists() = false, want true")
+	}
+
+	// Verify correct command
+	if len(mock.Calls) != 1 {
+		t.Fatalf("Expected 1 call, got %d", len(mock.Calls))
+	}
+
+	call := mock.Calls[0]
+	if call.Name != "git" {
+		t.Errorf("Name = %q, want %q", call.Name, "git")
+	}
+	if len(call.Args) < 4 || call.Args[0] != "show-ref" || call.Args[1] != "--verify" || call.Args[2] != "--quiet" {
+		t.Errorf("Args = %v, want [show-ref --verify --quiet refs/heads/main]", call.Args)
+	}
+	if !strings.Contains(call.Args[3], "refs/heads/main") {
+		t.Errorf("Branch ref = %q, want to contain 'refs/heads/main'", call.Args[3])
+	}
+}
+
+func TestBranchExists_False(t *testing.T) {
+	mock := &MockCommandRunner{
+		RunFunc: func(dir string, name string, args ...string) error {
+			// git show-ref returns non-zero when branch doesn't exist
+			return errors.New("exit status 1")
+		},
+	}
+	wm := NewWorktreeManagerWithRunner("/repo", "main", false, mock)
+
+	result := wm.branchExists("nonexistent")
+	if result {
+		t.Error("branchExists() = true, want false")
+	}
+}
+
+func TestBranchExists_DifferentBranches(t *testing.T) {
 	tests := []struct {
-		name     string
-		setup    func(dir string) string
-		expected bool
+		name   string
+		branch string
 	}{
-		{
-			name: "nonexistent directory",
-			setup: func(dir string) string {
-				return filepath.Join(dir, "nonexistent")
-			},
-			expected: false,
-		},
-		{
-			name: "empty directory (not a git repo)",
-			setup: func(dir string) string {
-				emptyDir := filepath.Join(dir, "empty")
-				os.MkdirAll(emptyDir, 0755)
-				return emptyDir
-			},
-			expected: false,
-		},
-		{
-			name: "directory with .git folder",
-			setup: func(dir string) string {
-				repoDir := filepath.Join(dir, "repo-with-git")
-				os.MkdirAll(filepath.Join(repoDir, ".git"), 0755)
-				return repoDir
-			},
-			expected: true,
-		},
-		{
-			name: "bare repository (has refs directory)",
-			setup: func(dir string) string {
-				bareDir := filepath.Join(dir, "bare-repo")
-				os.MkdirAll(filepath.Join(bareDir, "refs"), 0755)
-				return bareDir
-			},
-			expected: true,
-		},
+		{"main branch", "main"},
+		{"master branch", "master"},
+		{"feature branch", "feature/test"},
+		{"release branch", "release-1.0"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			repoPath := tt.setup(tmpDir)
-			wm := NewWorktreeManager(repoPath, "main", false)
-			result := wm.repoExists()
-			if result != tt.expected {
-				t.Errorf("repoExists() = %v, want %v", result, tt.expected)
+			mock := &MockCommandRunner{}
+			wm := NewWorktreeManagerWithRunner("/repo", "main", false, mock)
+
+			wm.branchExists(tt.branch)
+
+			if len(mock.Calls) != 1 {
+				t.Fatalf("Expected 1 call, got %d", len(mock.Calls))
+			}
+
+			expectedRef := "refs/heads/" + tt.branch
+			if !strings.Contains(mock.Calls[0].Args[3], expectedRef) {
+				t.Errorf("Branch ref = %q, want to contain %q", mock.Calls[0].Args[3], expectedRef)
 			}
 		})
 	}
 }
 
-// TestCreateWorktreeWithBranch_Integration tests actual git worktree creation
-// This is an integration test that requires git to be installed
-func TestCreateWorktreeWithBranch_Integration(t *testing.T) {
-	// Skip if git is not available
-	if _, err := exec.LookPath("git"); err != nil {
-		t.Skip("git not found in PATH, skipping integration test")
+func TestGetFirstBranch_Success(t *testing.T) {
+	mock := &MockCommandRunner{
+		OutputFunc: func(dir string, name string, args ...string) ([]byte, error) {
+			return []byte("  origin/HEAD -> origin/main\n  origin/main\n  origin/develop\n"), nil
+		},
 	}
+	wm := NewWorktreeManagerWithRunner("/repo", "main", false, mock)
 
-	// Create a temporary directory
-	tmpDir, err := os.MkdirTemp("", "git-worktree-test-*")
+	branch, err := wm.getFirstBranch()
 	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
-
-	// Initialize a git repository
-	repoDir := filepath.Join(tmpDir, "repo")
-	if err := os.MkdirAll(repoDir, 0755); err != nil {
-		t.Fatalf("Failed to create repo dir: %v", err)
+		t.Fatalf("getFirstBranch() error = %v, want nil", err)
 	}
 
-	// git init
-	cmd := exec.Command("git", "init")
-	cmd.Dir = repoDir
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("git init failed: %v", err)
-	}
-
-	// Configure git user for the test repo
-	cmd = exec.Command("git", "config", "user.email", "test@example.com")
-	cmd.Dir = repoDir
-	cmd.Run()
-
-	cmd = exec.Command("git", "config", "user.name", "Test User")
-	cmd.Dir = repoDir
-	cmd.Run()
-
-	// Create an initial commit
-	cmd = exec.Command("git", "commit", "--allow-empty", "-m", "Initial commit")
-	cmd.Dir = repoDir
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("git commit failed: %v", err)
-	}
-
-	// Test creating a worktree with custom branch name
-	wm := NewWorktreeManager(repoDir, "main", false)
-
-	// Test CreateWorktree (which delegates to CreateWorktreeWithBranch)
-	worktreePath, err := wm.CreateWorktree("fraas", "FRAAS-123")
-	if err != nil {
-		t.Fatalf("CreateWorktree() error: %v", err)
-	}
-
-	expectedPath := filepath.Join(repoDir, "fraas", "FRAAS-123")
-	if worktreePath != expectedPath {
-		t.Errorf("CreateWorktree() = %q, want %q", worktreePath, expectedPath)
-	}
-
-	// Verify worktree was created
-	if _, err := os.Stat(worktreePath); os.IsNotExist(err) {
-		t.Errorf("Worktree directory not created at %q", worktreePath)
-	}
-
-	// Verify branch was created with the ticket name
-	cmd = exec.Command("git", "branch", "--list", "FRAAS-123")
-	cmd.Dir = repoDir
-	output, err := cmd.Output()
-	if err != nil {
-		t.Fatalf("git branch --list failed: %v", err)
-	}
-	if len(output) == 0 {
-		t.Error("Branch FRAAS-123 was not created")
+	if branch != "main" {
+		t.Errorf("getFirstBranch() = %q, want %q", branch, "main")
 	}
 }
 
-// TestCreateWorktreeWithBranch_CustomBranch tests custom branch naming
-func TestCreateWorktreeWithBranch_CustomBranch(t *testing.T) {
-	// Skip if git is not available
-	if _, err := exec.LookPath("git"); err != nil {
-		t.Skip("git not found in PATH, skipping integration test")
+func TestGetFirstBranch_SkipsHEAD(t *testing.T) {
+	mock := &MockCommandRunner{
+		OutputFunc: func(dir string, name string, args ...string) ([]byte, error) {
+			// HEAD -> line should be skipped
+			return []byte("  origin/HEAD -> origin/main\n  origin/develop\n"), nil
+		},
 	}
+	wm := NewWorktreeManagerWithRunner("/repo", "main", false, mock)
 
-	// Create a temporary directory
-	tmpDir, err := os.MkdirTemp("", "git-worktree-test-*")
+	branch, err := wm.getFirstBranch()
 	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
-
-	// Initialize a git repository
-	repoDir := filepath.Join(tmpDir, "repo")
-	if err := os.MkdirAll(repoDir, 0755); err != nil {
-		t.Fatalf("Failed to create repo dir: %v", err)
+		t.Fatalf("getFirstBranch() error = %v, want nil", err)
 	}
 
-	// git init
-	cmd := exec.Command("git", "init")
-	cmd.Dir = repoDir
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("git init failed: %v", err)
-	}
-
-	// Configure git user for the test repo
-	cmd = exec.Command("git", "config", "user.email", "test@example.com")
-	cmd.Dir = repoDir
-	cmd.Run()
-
-	cmd = exec.Command("git", "config", "user.name", "Test User")
-	cmd.Dir = repoDir
-	cmd.Run()
-
-	// Create an initial commit
-	cmd = exec.Command("git", "commit", "--allow-empty", "-m", "Initial commit")
-	cmd.Dir = repoDir
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("git commit failed: %v", err)
-	}
-
-	// Test creating a worktree with custom branch name (like hack command does)
-	wm := NewWorktreeManager(repoDir, "main", false)
-
-	// Create worktree with custom branch name: hack/winter-2025
-	worktreePath, err := wm.CreateWorktreeWithBranch("hack", "winter-2025", "hack/winter-2025")
-	if err != nil {
-		t.Fatalf("CreateWorktreeWithBranch() error: %v", err)
-	}
-
-	expectedPath := filepath.Join(repoDir, "hack", "winter-2025")
-	if worktreePath != expectedPath {
-		t.Errorf("CreateWorktreeWithBranch() = %q, want %q", worktreePath, expectedPath)
-	}
-
-	// Verify worktree was created
-	if _, err := os.Stat(worktreePath); os.IsNotExist(err) {
-		t.Errorf("Worktree directory not created at %q", worktreePath)
-	}
-
-	// Verify branch was created with the custom name
-	cmd = exec.Command("git", "branch", "--list", "hack/winter-2025")
-	cmd.Dir = repoDir
-	output, err := cmd.Output()
-	if err != nil {
-		t.Fatalf("git branch --list failed: %v", err)
-	}
-	if len(output) == 0 {
-		t.Error("Branch hack/winter-2025 was not created")
+	if branch != "develop" {
+		t.Errorf("getFirstBranch() = %q, want %q", branch, "develop")
 	}
 }
 
-func TestCreateWorktree_ExistingWorktree(t *testing.T) {
-	// Skip if git is not available
-	if _, err := exec.LookPath("git"); err != nil {
-		t.Skip("git not found in PATH, skipping integration test")
+func TestGetFirstBranch_NoBranches(t *testing.T) {
+	mock := &MockCommandRunner{
+		OutputFunc: func(dir string, name string, args ...string) ([]byte, error) {
+			return []byte(""), nil
+		},
+	}
+	wm := NewWorktreeManagerWithRunner("/repo", "main", false, mock)
+
+	_, err := wm.getFirstBranch()
+	if err == nil {
+		t.Fatal("getFirstBranch() expected error for empty branches, got nil")
 	}
 
-	// Create a temporary directory
-	tmpDir, err := os.MkdirTemp("", "git-worktree-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
-
-	// Initialize a git repository
-	repoDir := filepath.Join(tmpDir, "repo")
-	if err := os.MkdirAll(repoDir, 0755); err != nil {
-		t.Fatalf("Failed to create repo dir: %v", err)
-	}
-
-	// git init
-	cmd := exec.Command("git", "init")
-	cmd.Dir = repoDir
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("git init failed: %v", err)
-	}
-
-	// Configure git user for the test repo
-	cmd = exec.Command("git", "config", "user.email", "test@example.com")
-	cmd.Dir = repoDir
-	cmd.Run()
-
-	cmd = exec.Command("git", "config", "user.name", "Test User")
-	cmd.Dir = repoDir
-	cmd.Run()
-
-	// Create an initial commit
-	cmd = exec.Command("git", "commit", "--allow-empty", "-m", "Initial commit")
-	cmd.Dir = repoDir
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("git commit failed: %v", err)
-	}
-
-	wm := NewWorktreeManager(repoDir, "main", false)
-
-	// Create worktree first time
-	path1, err := wm.CreateWorktree("fraas", "TEST-001")
-	if err != nil {
-		t.Fatalf("First CreateWorktree() error: %v", err)
-	}
-
-	// Create same worktree second time (should return existing path without error)
-	path2, err := wm.CreateWorktree("fraas", "TEST-001")
-	if err != nil {
-		t.Fatalf("Second CreateWorktree() error: %v", err)
-	}
-
-	if path1 != path2 {
-		t.Errorf("CreateWorktree() returned different paths: %q vs %q", path1, path2)
+	if !strings.Contains(err.Error(), "no branches found") {
+		t.Errorf("Error = %q, want to contain 'no branches found'", err.Error())
 	}
 }
 
-func TestListWorktrees(t *testing.T) {
-	// Skip if git is not available
-	if _, err := exec.LookPath("git"); err != nil {
-		t.Skip("git not found in PATH, skipping integration test")
+func TestGetFirstBranch_GitError(t *testing.T) {
+	mock := &MockCommandRunner{
+		OutputFunc: func(dir string, name string, args ...string) ([]byte, error) {
+			return nil, errors.New("fatal: not a git repository")
+		},
 	}
+	wm := NewWorktreeManagerWithRunner("/repo", "main", false, mock)
 
-	// Create a temporary directory
-	tmpDir, err := os.MkdirTemp("", "git-worktree-test-*")
+	_, err := wm.getFirstBranch()
+	if err == nil {
+		t.Fatal("getFirstBranch() expected error, got nil")
+	}
+}
+
+func TestGetFirstBranch_OnlyHEAD(t *testing.T) {
+	mock := &MockCommandRunner{
+		OutputFunc: func(dir string, name string, args ...string) ([]byte, error) {
+			// Only HEAD line, no actual branches
+			return []byte("  origin/HEAD -> origin/main\n"), nil
+		},
+	}
+	wm := NewWorktreeManagerWithRunner("/repo", "main", false, mock)
+
+	_, err := wm.getFirstBranch()
+	if err == nil {
+		t.Fatal("getFirstBranch() expected error when only HEAD exists, got nil")
+	}
+}
+
+func TestCreateInitialBranch_Success(t *testing.T) {
+	mock := &MockCommandRunner{}
+	wm := NewWorktreeManagerWithRunner("/repo", "main", false, mock)
+
+	branch, err := wm.createInitialBranch()
 	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
-
-	// Initialize a git repository
-	repoDir := filepath.Join(tmpDir, "repo")
-	if err := os.MkdirAll(repoDir, 0755); err != nil {
-		t.Fatalf("Failed to create repo dir: %v", err)
+		t.Fatalf("createInitialBranch() error = %v, want nil", err)
 	}
 
-	// git init
-	cmd := exec.Command("git", "init")
-	cmd.Dir = repoDir
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("git init failed: %v", err)
+	if branch != "main" {
+		t.Errorf("createInitialBranch() = %q, want %q", branch, "main")
 	}
 
-	// Configure git user for the test repo
-	cmd = exec.Command("git", "config", "user.email", "test@example.com")
-	cmd.Dir = repoDir
-	cmd.Run()
-
-	cmd = exec.Command("git", "config", "user.name", "Test User")
-	cmd.Dir = repoDir
-	cmd.Run()
-
-	// Create an initial commit
-	cmd = exec.Command("git", "commit", "--allow-empty", "-m", "Initial commit")
-	cmd.Dir = repoDir
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("git commit failed: %v", err)
+	// Should call: git switch -c main, then git commit --allow-empty
+	if len(mock.Calls) != 2 {
+		t.Fatalf("Expected 2 calls, got %d", len(mock.Calls))
 	}
 
-	wm := NewWorktreeManager(repoDir, "main", false)
+	// First call: git switch -c main
+	if mock.Calls[0].Args[0] != "switch" || mock.Calls[0].Args[1] != "-c" || mock.Calls[0].Args[2] != "main" {
+		t.Errorf("Call 0 Args = %v, want [switch -c main]", mock.Calls[0].Args)
+	}
 
-	// List worktrees before creating any (should include main repo)
+	// Second call: git commit --allow-empty -m "Initial commit"
+	if mock.Calls[1].Args[0] != "commit" {
+		t.Errorf("Call 1 Args[0] = %q, want %q", mock.Calls[1].Args[0], "commit")
+	}
+	if mock.Calls[1].Args[1] != "--allow-empty" {
+		t.Errorf("Call 1 Args[1] = %q, want %q", mock.Calls[1].Args[1], "--allow-empty")
+	}
+}
+
+func TestCreateInitialBranch_SwitchError(t *testing.T) {
+	mock := &MockCommandRunner{
+		RunFunc: func(dir string, name string, args ...string) error {
+			if len(args) > 0 && args[0] == "switch" {
+				return errors.New("branch already exists")
+			}
+			return nil
+		},
+	}
+	wm := NewWorktreeManagerWithRunner("/repo", "main", false, mock)
+
+	_, err := wm.createInitialBranch()
+	if err == nil {
+		t.Fatal("createInitialBranch() expected error, got nil")
+	}
+
+	if !strings.Contains(err.Error(), "failed to create main branch") {
+		t.Errorf("Error = %q, want to contain 'failed to create main branch'", err.Error())
+	}
+}
+
+func TestCreateInitialBranch_CommitError(t *testing.T) {
+	mock := &MockCommandRunner{
+		RunFunc: func(dir string, name string, args ...string) error {
+			if len(args) > 0 && args[0] == "commit" {
+				return errors.New("commit failed")
+			}
+			return nil
+		},
+	}
+	wm := NewWorktreeManagerWithRunner("/repo", "main", false, mock)
+
+	_, err := wm.createInitialBranch()
+	if err == nil {
+		t.Fatal("createInitialBranch() expected error, got nil")
+	}
+
+	if !strings.Contains(err.Error(), "failed to create initial commit") {
+		t.Errorf("Error = %q, want to contain 'failed to create initial commit'", err.Error())
+	}
+}
+
+func TestGetBaseBranch_PreferredBranchExists(t *testing.T) {
+	mock := &MockCommandRunner{
+		RunFunc: func(dir string, name string, args ...string) error {
+			// Only "develop" exists
+			if len(args) > 3 && strings.Contains(args[3], "refs/heads/develop") {
+				return nil
+			}
+			return errors.New("not found")
+		},
+	}
+	wm := NewWorktreeManagerWithRunner("/repo", "develop", false, mock)
+
+	branch, err := wm.getBaseBranch()
+	if err != nil {
+		t.Fatalf("getBaseBranch() error = %v, want nil", err)
+	}
+
+	if branch != "develop" {
+		t.Errorf("getBaseBranch() = %q, want %q", branch, "develop")
+	}
+}
+
+func TestGetBaseBranch_FallbackToMaster(t *testing.T) {
+	mock := &MockCommandRunner{
+		RunFunc: func(dir string, name string, args ...string) error {
+			// Only "master" exists
+			if len(args) > 3 && strings.Contains(args[3], "refs/heads/master") {
+				return nil
+			}
+			return errors.New("not found")
+		},
+	}
+	wm := NewWorktreeManagerWithRunner("/repo", "nonexistent", false, mock)
+
+	branch, err := wm.getBaseBranch()
+	if err != nil {
+		t.Fatalf("getBaseBranch() error = %v, want nil", err)
+	}
+
+	if branch != "master" {
+		t.Errorf("getBaseBranch() = %q, want %q", branch, "master")
+	}
+}
+
+func TestGetBaseBranch_FallbackToMain(t *testing.T) {
+	mock := &MockCommandRunner{
+		RunFunc: func(dir string, name string, args ...string) error {
+			// Only "main" exists
+			if len(args) > 3 && strings.Contains(args[3], "refs/heads/main") {
+				return nil
+			}
+			return errors.New("not found")
+		},
+	}
+	wm := NewWorktreeManagerWithRunner("/repo", "nonexistent", false, mock)
+
+	branch, err := wm.getBaseBranch()
+	if err != nil {
+		t.Fatalf("getBaseBranch() error = %v, want nil", err)
+	}
+
+	if branch != "main" {
+		t.Errorf("getBaseBranch() = %q, want %q", branch, "main")
+	}
+}
+
+func TestListWorktrees_Success(t *testing.T) {
+	mock := &MockCommandRunner{
+		OutputFunc: func(dir string, name string, args ...string) ([]byte, error) {
+			return []byte("worktree /home/user/repo\nHEAD abc123\nbranch refs/heads/main\n\nworktree /home/user/repo/fraas/FRAAS-123\nHEAD def456\nbranch refs/heads/FRAAS-123\n"), nil
+		},
+	}
+	wm := NewWorktreeManagerWithRunner("/repo", "main", false, mock)
+
 	worktrees, err := wm.ListWorktrees()
 	if err != nil {
-		t.Fatalf("ListWorktrees() error: %v", err)
+		t.Fatalf("ListWorktrees() error = %v, want nil", err)
 	}
 
-	// Should have at least the main repo
-	if len(worktrees) < 1 {
-		t.Error("ListWorktrees() should return at least the main repo")
+	if len(worktrees) != 2 {
+		t.Fatalf("ListWorktrees() returned %d worktrees, want 2", len(worktrees))
 	}
 
-	// Create a worktree
-	_, err = wm.CreateWorktree("fraas", "TEST-LIST")
+	if worktrees[0] != "/home/user/repo" {
+		t.Errorf("worktrees[0] = %q, want %q", worktrees[0], "/home/user/repo")
+	}
+	if worktrees[1] != "/home/user/repo/fraas/FRAAS-123" {
+		t.Errorf("worktrees[1] = %q, want %q", worktrees[1], "/home/user/repo/fraas/FRAAS-123")
+	}
+}
+
+func TestListWorktrees_Empty(t *testing.T) {
+	mock := &MockCommandRunner{
+		OutputFunc: func(dir string, name string, args ...string) ([]byte, error) {
+			return []byte(""), nil
+		},
+	}
+	wm := NewWorktreeManagerWithRunner("/repo", "main", false, mock)
+
+	worktrees, err := wm.ListWorktrees()
 	if err != nil {
-		t.Fatalf("CreateWorktree() error: %v", err)
+		t.Fatalf("ListWorktrees() error = %v, want nil", err)
 	}
 
-	// List worktrees again
-	worktrees, err = wm.ListWorktrees()
+	if len(worktrees) != 0 {
+		t.Errorf("ListWorktrees() returned %d worktrees, want 0", len(worktrees))
+	}
+}
+
+func TestListWorktrees_Error(t *testing.T) {
+	mock := &MockCommandRunner{
+		OutputFunc: func(dir string, name string, args ...string) ([]byte, error) {
+			return nil, errors.New("not a git repository")
+		},
+	}
+	wm := NewWorktreeManagerWithRunner("/repo", "main", false, mock)
+
+	_, err := wm.ListWorktrees()
+	if err == nil {
+		t.Fatal("ListWorktrees() expected error, got nil")
+	}
+
+	if !strings.Contains(err.Error(), "failed to list worktrees") {
+		t.Errorf("Error = %q, want to contain 'failed to list worktrees'", err.Error())
+	}
+}
+
+func TestCreateWorktreeFromBranchWithName_Success(t *testing.T) {
+	mock := &MockCommandRunner{}
+	wm := NewWorktreeManagerWithRunner("/repo", "main", false, mock)
+
+	err := wm.createWorktreeFromBranchWithName("fraas", "FRAAS-123", "feature-branch", "main")
 	if err != nil {
-		t.Fatalf("ListWorktrees() error: %v", err)
+		t.Fatalf("createWorktreeFromBranchWithName() error = %v, want nil", err)
 	}
 
-	// Should have main repo + new worktree
-	if len(worktrees) < 2 {
-		t.Errorf("ListWorktrees() returned %d worktrees, want at least 2", len(worktrees))
+	if len(mock.Calls) != 1 {
+		t.Fatalf("Expected 1 call, got %d", len(mock.Calls))
 	}
 
-	// Verify the new worktree is in the list
-	// Note: On macOS, /var is a symlink to /private/var, so we need to compare
-	// using the base name or resolve real paths
-	expectedSuffix := filepath.Join("fraas", "TEST-LIST")
-	found := false
-	for _, wt := range worktrees {
-		if strings.HasSuffix(wt, expectedSuffix) {
-			found = true
-			break
+	// Verify: git worktree add fraas/FRAAS-123 -b feature-branch main
+	call := mock.Calls[0]
+	if call.Name != "git" {
+		t.Errorf("Name = %q, want %q", call.Name, "git")
+	}
+
+	expectedArgs := []string{"worktree", "add", "fraas/FRAAS-123", "-b", "feature-branch", "main"}
+	if len(call.Args) != len(expectedArgs) {
+		t.Fatalf("Args length = %d, want %d", len(call.Args), len(expectedArgs))
+	}
+	for i, arg := range expectedArgs {
+		if call.Args[i] != arg {
+			t.Errorf("Args[%d] = %q, want %q", i, call.Args[i], arg)
 		}
 	}
-	if !found {
-		t.Errorf("ListWorktrees() missing expected worktree ending with %q in %v", expectedSuffix, worktrees)
+}
+
+func TestNewWorktreeManager(t *testing.T) {
+	wm := NewWorktreeManager("/repo", "main", true)
+
+	if wm.RepoPath != "/repo" {
+		t.Errorf("RepoPath = %q, want %q", wm.RepoPath, "/repo")
+	}
+	if wm.BaseBranch != "main" {
+		t.Errorf("BaseBranch = %q, want %q", wm.BaseBranch, "main")
+	}
+	if !wm.Verbose {
+		t.Error("Verbose = false, want true")
+	}
+	if wm.runner == nil {
+		t.Error("runner should not be nil")
 	}
 }
 
-func TestRemoveWorktree(t *testing.T) {
-	// Skip if git is not available
-	if _, err := exec.LookPath("git"); err != nil {
-		t.Skip("git not found in PATH, skipping integration test")
+func TestNewWorktreeManagerWithRunner(t *testing.T) {
+	mock := &MockCommandRunner{}
+	wm := NewWorktreeManagerWithRunner("/repo", "develop", false, mock)
+
+	if wm.RepoPath != "/repo" {
+		t.Errorf("RepoPath = %q, want %q", wm.RepoPath, "/repo")
 	}
-
-	// Create a temporary directory
-	tmpDir, err := os.MkdirTemp("", "git-worktree-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
+	if wm.BaseBranch != "develop" {
+		t.Errorf("BaseBranch = %q, want %q", wm.BaseBranch, "develop")
 	}
-	defer os.RemoveAll(tmpDir)
-
-	// Initialize a git repository
-	repoDir := filepath.Join(tmpDir, "repo")
-	if err := os.MkdirAll(repoDir, 0755); err != nil {
-		t.Fatalf("Failed to create repo dir: %v", err)
+	if wm.Verbose {
+		t.Error("Verbose = true, want false")
 	}
-
-	// git init
-	cmd := exec.Command("git", "init")
-	cmd.Dir = repoDir
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("git init failed: %v", err)
-	}
-
-	// Configure git user for the test repo
-	cmd = exec.Command("git", "config", "user.email", "test@example.com")
-	cmd.Dir = repoDir
-	cmd.Run()
-
-	cmd = exec.Command("git", "config", "user.name", "Test User")
-	cmd.Dir = repoDir
-	cmd.Run()
-
-	// Create an initial commit
-	cmd = exec.Command("git", "commit", "--allow-empty", "-m", "Initial commit")
-	cmd.Dir = repoDir
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("git commit failed: %v", err)
-	}
-
-	wm := NewWorktreeManager(repoDir, "main", false)
-
-	// Create a worktree
-	worktreePath, err := wm.CreateWorktree("fraas", "TEST-REMOVE")
-	if err != nil {
-		t.Fatalf("CreateWorktree() error: %v", err)
-	}
-
-	// Verify it exists
-	if _, err := os.Stat(worktreePath); os.IsNotExist(err) {
-		t.Fatalf("Worktree was not created at %q", worktreePath)
-	}
-
-	// Remove the worktree
-	err = wm.RemoveWorktree("fraas", "TEST-REMOVE")
-	if err != nil {
-		t.Fatalf("RemoveWorktree() error: %v", err)
-	}
-
-	// Verify it's gone
-	if _, err := os.Stat(worktreePath); !os.IsNotExist(err) {
-		t.Errorf("Worktree still exists at %q after removal", worktreePath)
+	if wm.runner != mock {
+		t.Error("runner should be the provided mock")
 	}
 }
 
-func TestRemoveWorktree_NonExistent(t *testing.T) {
-	// Create a temporary directory
-	tmpDir, err := os.MkdirTemp("", "git-worktree-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
-
-	wm := NewWorktreeManager(tmpDir, "main", false)
-
-	// Try to remove non-existent worktree
-	err = wm.RemoveWorktree("fraas", "NONEXISTENT")
-	if err == nil {
-		t.Error("RemoveWorktree() expected error for non-existent worktree, got nil")
-	}
+func TestRealCommandRunner_Interface(t *testing.T) {
+	// Verify RealCommandRunner implements CommandRunner
+	var _ CommandRunner = &RealCommandRunner{}
 }
