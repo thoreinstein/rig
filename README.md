@@ -66,113 +66,129 @@ sre config --show/--init       # Manage configuration
 
 1. **Start working on a ticket**:
    ```bash
-   ./sre init fraas-25857
+   ./sre init proj-123
    ```
    This creates:
-   - Git worktree at `~/src/your-org/your-repo/fraas/fraas-25857`
+   - Git worktree at `~/src/your-org/your-repo/proj/proj-123`
    - Obsidian note with JIRA details
    - Tmux session with note/code/terminal windows
    - Daily note entry with timestamp
 
 2. **Export your work timeline**:
    ```bash
-   ./sre timeline fraas-25857
+   ./sre timeline proj-123
    ```
 
 3. **Sync latest information**:
    ```bash
-   ./sre sync fraas-25857
+   ./sre sync proj-123
    ```
 
 ## Configuration
 
-The CLI uses YAML configuration at `~/.config/sre/config.yaml`:
+The CLI uses TOML configuration at `~/.config/sre/config.toml`:
 
 ### Single Repository Configuration
-```yaml
-vault:
-  path: "~/Documents/Second Brain"
-  templates_dir: "templates"
-  areas_dir: "Areas/Ping Identity"
-  daily_dir: "Daily"
+```toml
+[vault]
+path = "~/Documents/Second Brain"
+templates_dir = "templates"
+areas_dir = "Areas/Work"
+daily_dir = "Daily"
+default_subdir = "Tickets"    # Default subdir for ticket notes
+incident_subdir = "Incidents" # Subdir for incident tickets
+hack_subdir = "Hacks"         # Subdir for hack sessions
 
-repository:
-  owner: "myorg"
-  name: "myrepo"
-  base_path: "~/src"
-  base_branch: "main"
+[repository]
+owner = "myorg"
+name = "myrepo"
+base_path = "~/src"
+base_branch = "main"
 
-history:
-  database_path: "~/.histdb/zsh-history.db"
-  ignore_patterns: ["ls", "cd", "pwd", "clear"]
+[history]
+database_path = "~/.histdb/zsh-history.db"
+ignore_patterns = ["ls", "cd", "pwd", "clear"]
 
-jira:
-  enabled: true
-  cli_command: "acli"
+[jira]
+enabled = true
+cli_command = "acli"
 
-tmux:
-  session_prefix: ""
-  windows:
-    - name: "note"
-      command: "nvim {note_path}"
-    - name: "code"
-      command: "nvim"
-      working_dir: "{worktree_path}"
-    - name: "term"
-      working_dir: "{worktree_path}"
+[tmux]
+session_prefix = ""
+
+[[tmux.windows]]
+name = "note"
+command = "nvim {note_path}"
+
+[[tmux.windows]]
+name = "code"
+command = "nvim"
+working_dir = "{worktree_path}"
+
+[[tmux.windows]]
+name = "term"
+working_dir = "{worktree_path}"
 ```
 
 ### Multi-Repository Configuration
-For working with multiple repositories, use the `repositories` map with `ticket_types` to route tickets:
+For working with multiple repositories, use the `repositories` table with `ticket_types` to route tickets:
 
-```yaml
-vault:
-  path: "~/Documents/Second Brain"
-  templates_dir: "templates"
-  areas_dir: "Areas/Ping Identity"
-  daily_dir: "Daily"
+```toml
+[vault]
+path = "~/Documents/Second Brain"
+templates_dir = "templates"
+areas_dir = "Areas/Work"
+daily_dir = "Daily"
+default_subdir = "Tickets"
+incident_subdir = "Incidents"
+hack_subdir = "Hacks"
 
 # Define multiple repositories
-repositories:
-  main-repo:
-    owner: "myorg"
-    name: "main-service"
-    base_path: "~/src/myorg"
-    base_branch: "main"
-  infra-repo:
-    owner: "myorg"
-    name: "infrastructure"
-    base_path: "~/src/myorg"
-    base_branch: "main"
+[repositories.main-repo]
+owner = "myorg"
+name = "main-service"
+base_path = "~/src/myorg"
+base_branch = "main"
+
+[repositories.infra-repo]
+owner = "myorg"
+name = "infrastructure"
+base_path = "~/src/myorg"
+base_branch = "main"
 
 # Map ticket prefixes to repositories
-ticket_types:
-  fraas: "main-repo"
-  cre: "main-repo"
-  ops: "infra-repo"
-  infra: "infra-repo"
+[ticket_types]
+proj = "main-repo"
+feat = "main-repo"
+ops = "infra-repo"
+infra = "infra-repo"
 
-history:
-  database_path: "~/.histdb/zsh-history.db"
-  ignore_patterns: ["ls", "cd", "pwd", "clear"]
+[history]
+database_path = "~/.histdb/zsh-history.db"
+ignore_patterns = ["ls", "cd", "pwd", "clear"]
 
-jira:
-  enabled: true
-  cli_command: "acli"
+[jira]
+enabled = true
+cli_command = "acli"
 
-tmux:
-  session_prefix: ""
-  windows:
-    - name: "note"
-      command: "nvim {note_path}"
-    - name: "code"
-      command: "nvim"
-      working_dir: "{worktree_path}"
-    - name: "term"
-      working_dir: "{worktree_path}"
+[tmux]
+session_prefix = ""
+
+[[tmux.windows]]
+name = "note"
+command = "nvim {note_path}"
+
+[[tmux.windows]]
+name = "code"
+command = "nvim"
+working_dir = "{worktree_path}"
+
+[[tmux.windows]]
+name = "term"
+working_dir = "{worktree_path}"
 ```
 
-With multi-repo config, `sre init fraas-123` routes to `main-repo` while `sre init ops-456` routes to `infra-repo`.
+With multi-repo config, `sre init proj-123` routes to `main-repo` while `sre init ops-456` routes to `infra-repo`.
 
 ## Commands Reference
 
@@ -183,7 +199,7 @@ Initialize complete workflow for a ticket.
 
 **Example:**
 ```bash
-sre init fraas-25857
+sre init proj-123
 ```
 
 **What it does:**
@@ -239,9 +255,9 @@ Generate and export command timeline to Obsidian.
 
 **Examples:**
 ```bash
-sre timeline fraas-25857
-sre timeline fraas-25857 --since "2025-08-10" --failed-only
-sre timeline fraas-25857 --output /tmp/timeline.md
+sre timeline proj-123
+sre timeline proj-123 --since "2025-08-10" --failed-only
+sre timeline proj-123 --output /tmp/timeline.md
 ```
 
 ### Session Management
@@ -312,15 +328,16 @@ Create default configuration file.
 - **Obsidian**: For note management and templates
 
 ### Directory Structure
-Your Obsidian vault should have this structure:
+Your Obsidian vault should have this structure (subdirs are configurable):
 ```
 Second Brain/
 ├── templates/
-│   └── Jira.md              # Template for JIRA tickets
-├── Areas/Ping Identity/
-│   ├── Jira/               # Generated ticket notes
-│   └── Incidents/          # Incident notes
-└── Daily/                  # Daily notes (YYYY-MM-DD.md)
+│   └── Jira.md              # Template for tickets
+├── Areas/Work/              # Configurable via areas_dir
+│   ├── Tickets/             # Configurable via default_subdir
+│   ├── Incidents/           # Configurable via incident_subdir
+│   └── Hacks/               # Configurable via hack_subdir
+└── Daily/                   # Daily notes (YYYY-MM-DD.md)
 ```
 
 ## Architecture

@@ -5,7 +5,10 @@ import (
 )
 
 func TestNewClient(t *testing.T) {
-	client := NewClient("acli", true)
+	client, err := NewClient("acli", true)
+	if err != nil {
+		t.Fatalf("NewClient() error = %v, want nil", err)
+	}
 
 	if client.CliCommand != "acli" {
 		t.Errorf("CliCommand = %q, want %q", client.CliCommand, "acli")
@@ -15,8 +18,60 @@ func TestNewClient(t *testing.T) {
 	}
 }
 
+func TestNewClient_InvalidCommand(t *testing.T) {
+	tests := []struct {
+		name    string
+		command string
+	}{
+		{"semicolon", "acli; rm -rf /"},
+		{"pipe", "acli | cat"},
+		{"backtick", "acli`whoami`"},
+		{"dollar", "acli$(whoami)"},
+		{"ampersand", "acli && rm -rf /"},
+		{"space", "acli foo"},
+		{"quotes", "acli\"test\""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := NewClient(tt.command, false)
+			if err == nil {
+				t.Errorf("NewClient(%q) should return error for invalid command", tt.command)
+			}
+		})
+	}
+}
+
+func TestNewClient_ValidCommands(t *testing.T) {
+	tests := []struct {
+		name    string
+		command string
+	}{
+		{"simple", "acli"},
+		{"with hyphen", "my-cli"},
+		{"with underscore", "my_cli"},
+		{"with path", "/usr/local/bin/acli"},
+		{"relative path", "bin/acli"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client, err := NewClient(tt.command, false)
+			if err != nil {
+				t.Errorf("NewClient(%q) error = %v, want nil", tt.command, err)
+			}
+			if client == nil {
+				t.Errorf("NewClient(%q) returned nil client", tt.command)
+			}
+		})
+	}
+}
+
 func TestIsAvailable_NonExistent(t *testing.T) {
-	client := NewClient("nonexistent-command-xyz-123", false)
+	client, err := NewClient("nonexistent-command-xyz-123", false)
+	if err != nil {
+		t.Fatalf("NewClient() error = %v, want nil", err)
+	}
 
 	if client.IsAvailable() {
 		t.Error("IsAvailable() should return false for non-existent command")
@@ -25,7 +80,10 @@ func TestIsAvailable_NonExistent(t *testing.T) {
 
 func TestIsAvailable_Existing(t *testing.T) {
 	// Test with a command that definitely exists on all systems
-	client := NewClient("ls", false)
+	client, err := NewClient("ls", false)
+	if err != nil {
+		t.Fatalf("NewClient() error = %v, want nil", err)
+	}
 
 	if !client.IsAvailable() {
 		t.Error("IsAvailable() should return true for 'ls' command")
@@ -33,7 +91,10 @@ func TestIsAvailable_Existing(t *testing.T) {
 }
 
 func TestParseJiraOutput_FullOutput(t *testing.T) {
-	client := NewClient("acli", false)
+	client, err := NewClient("acli", false)
+	if err != nil {
+		t.Fatalf("NewClient() error = %v, want nil", err)
+	}
 
 	// Note: The parser stops description collection when it hits a new field
 	// "Priority:" is recognized as a new field, so description stops there
@@ -66,7 +127,10 @@ The issue appears to be related to token validation.`
 }
 
 func TestParseJiraOutput_MinimalOutput(t *testing.T) {
-	client := NewClient("acli", false)
+	client, err := NewClient("acli", false)
+	if err != nil {
+		t.Fatalf("NewClient() error = %v, want nil", err)
+	}
 
 	output := `Summary: Quick fix
 Status: Done`
@@ -88,7 +152,10 @@ Status: Done`
 }
 
 func TestParseJiraOutput_EmptyOutput(t *testing.T) {
-	client := NewClient("acli", false)
+	client, err := NewClient("acli", false)
+	if err != nil {
+		t.Fatalf("NewClient() error = %v, want nil", err)
+	}
 
 	info := client.parseJiraOutput("")
 
@@ -107,7 +174,10 @@ func TestParseJiraOutput_EmptyOutput(t *testing.T) {
 }
 
 func TestParseJiraOutput_DescriptionOnly(t *testing.T) {
-	client := NewClient("acli", false)
+	client, err := NewClient("acli", false)
+	if err != nil {
+		t.Fatalf("NewClient() error = %v, want nil", err)
+	}
 
 	output := `Type: Story
 Description:
@@ -130,7 +200,10 @@ and has no other fields after it.`
 }
 
 func TestParseJiraOutput_ExtraWhitespace(t *testing.T) {
-	client := NewClient("acli", false)
+	client, err := NewClient("acli", false)
+	if err != nil {
+		t.Fatalf("NewClient() error = %v, want nil", err)
+	}
 
 	output := `  Type:   Task
   Summary:   Implement feature
@@ -150,7 +223,10 @@ func TestParseJiraOutput_ExtraWhitespace(t *testing.T) {
 }
 
 func TestParseJiraOutput_DescriptionWithFieldLikeContent(t *testing.T) {
-	client := NewClient("acli", false)
+	client, err := NewClient("acli", false)
+	if err != nil {
+		t.Fatalf("NewClient() error = %v, want nil", err)
+	}
 
 	// Note: The current parser matches fields at any position in the line
 	// after trimming whitespace. Lines like "Type: this is not a field"
@@ -181,7 +257,10 @@ More details here.`
 }
 
 func TestIsNewField(t *testing.T) {
-	client := NewClient("acli", false)
+	client, err := NewClient("acli", false)
+	if err != nil {
+		t.Fatalf("NewClient() error = %v, want nil", err)
+	}
 
 	tests := []struct {
 		name     string
@@ -261,9 +340,12 @@ func TestIsNewField(t *testing.T) {
 }
 
 func TestFetchTicketDetails_UnavailableClient(t *testing.T) {
-	client := NewClient("nonexistent-command-xyz", false)
+	client, err := NewClient("nonexistent-command-xyz", false)
+	if err != nil {
+		t.Fatalf("NewClient() error = %v, want nil", err)
+	}
 
-	_, err := client.FetchTicketDetails("FRAAS-123")
+	_, err = client.FetchTicketDetails("FRAAS-123")
 	if err == nil {
 		t.Error("FetchTicketDetails() should return error when CLI is unavailable")
 	}

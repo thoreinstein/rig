@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -123,6 +124,120 @@ func TestHackWorktreePath(t *testing.T) {
 			// Hack worktrees should always be under "hack" type directory
 			if tt.expectedType != "hack" {
 				t.Errorf("Hack worktree type should always be 'hack', got %q", tt.expectedType)
+			}
+		})
+	}
+}
+
+func TestValidateHackName(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+		errMsg  string
+	}{
+		// Valid cases
+		{
+			name:    "simple name",
+			input:   "winter-2025",
+			wantErr: false,
+		},
+		{
+			name:    "underscore name",
+			input:   "experiment_auth",
+			wantErr: false,
+		},
+		{
+			name:    "camelCase name",
+			input:   "quickFix",
+			wantErr: false,
+		},
+		{
+			name:    "single letter",
+			input:   "a",
+			wantErr: false,
+		},
+		{
+			name:    "max length 64 chars",
+			input:   "a" + strings.Repeat("b", 63),
+			wantErr: false,
+		},
+		// Invalid cases
+		{
+			name:    "empty string",
+			input:   "",
+			wantErr: true,
+			errMsg:  "cannot be empty",
+		},
+		{
+			name:    "starts with number",
+			input:   "123-test",
+			wantErr: true,
+			errMsg:  "must start with a letter",
+		},
+		{
+			name:    "starts with dot",
+			input:   ".hidden",
+			wantErr: true,
+			errMsg:  "must start with a letter",
+		},
+		{
+			name:    "path traversal",
+			input:   "../../../etc/passwd",
+			wantErr: true,
+			errMsg:  "must start with a letter",
+		},
+		{
+			name:    "contains slash",
+			input:   "test/path",
+			wantErr: true,
+			errMsg:  "must start with a letter",
+		},
+		{
+			name:    "shell injection attempt",
+			input:   "test;rm -rf /",
+			wantErr: true,
+			errMsg:  "must start with a letter",
+		},
+		{
+			name:    "contains spaces",
+			input:   "my hack",
+			wantErr: true,
+			errMsg:  "must start with a letter",
+		},
+		{
+			name:    "exceeds max length",
+			input:   "a" + strings.Repeat("b", 64),
+			wantErr: true,
+			errMsg:  "max 64 characters",
+		},
+		{
+			name:    "starts with hyphen",
+			input:   "-test",
+			wantErr: true,
+			errMsg:  "must start with a letter",
+		},
+		{
+			name:    "starts with underscore",
+			input:   "_test",
+			wantErr: true,
+			errMsg:  "must start with a letter",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateHackName(tt.input)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("validateHackName(%q) should have returned an error", tt.input)
+					return
+				}
+				if !strings.Contains(err.Error(), tt.errMsg) {
+					t.Errorf("validateHackName(%q) error = %q, should contain %q", tt.input, err.Error(), tt.errMsg)
+				}
+			} else if err != nil {
+				t.Errorf("validateHackName(%q) returned unexpected error: %v", tt.input, err)
 			}
 		})
 	}

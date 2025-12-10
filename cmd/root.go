@@ -41,7 +41,7 @@ func init() {
 	// Cobra supports persistent flags, which, if defined here,
 	// will be global for your application.
 
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.config/sre/config.yaml)")
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.config/sre/config.toml)")
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "verbose output")
 
 	// Remove the example toggle flag
@@ -60,7 +60,7 @@ func initConfig() {
 
 		// Search config in home directory with name ".config/sre" (without extension).
 		viper.AddConfigPath(home + "/.config/sre")
-		viper.SetConfigType("yaml")
+		viper.SetConfigType("toml")
 		viper.SetConfigName("config")
 	}
 

@@ -268,19 +268,19 @@ func (sm *SessionManager) AttachToSession(sessionName string) error {
 		}
 
 		return cmd.Run()
-	} else {
-		// We're not in tmux, attach to the session
-		cmd := exec.Command("tmux", "attach-session", "-t", sessionName)
-		cmd.Stdin = os.Stdin
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-
-		if sm.Verbose {
-			fmt.Printf("Attaching to session: %s\n", sessionName)
-		}
-
-		return cmd.Run()
 	}
+
+	// We're not in tmux, attach to the session
+	cmd := exec.Command("tmux", "attach-session", "-t", sessionName)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if sm.Verbose {
+		fmt.Printf("Attaching to session: %s\n", sessionName)
+	}
+
+	return cmd.Run()
 }
 
 // attachToSession is a private helper method

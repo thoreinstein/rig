@@ -378,6 +378,9 @@ func (dm *DatabaseManager) GetDatabaseInfo() (map[string]interface{}, error) {
 		info["schema"] = string(schema)
 
 		// Get command count
+		// Note: tableName is safe for SQL concatenation because it can only be one of two
+		// hardcoded string literals ("history" or "commands") determined by internal schema
+		// detection logic. This is not user-controlled input.
 		var count int64
 		tableName := "history"
 		if schema == SchemaZshHistdb {

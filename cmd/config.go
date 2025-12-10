@@ -51,7 +51,7 @@ func createDefaultConfig() error {
 	}
 
 	configDir := filepath.Join(homeDir, ".config", "sre")
-	configFile := filepath.Join(configDir, "config.yaml")
+	configFile := filepath.Join(configDir, "config.toml")
 
 	// Check if config file already exists
 	if _, err := os.Stat(configFile); err == nil {
@@ -66,40 +66,50 @@ func createDefaultConfig() error {
 
 	// Default configuration content
 	defaultConfig := `# SRE CLI Configuration
-vault:
-  path: "~/Documents/Second Brain"
-  templates_dir: "templates"
-  areas_dir: "Areas/Ping Identity"
-  daily_dir: "Daily"
 
-repository:
-  owner: "test"
-  name: "test"
-  base_path: "~/src"
-  base_branch: "main"
+[vault]
+path = "~/Documents/Second Brain"
+templates_dir = "templates"
+areas_dir = "Areas/Work"
+daily_dir = "Daily"
+default_subdir = "Tickets"    # Default subdir for ticket notes
+incident_subdir = "Incidents" # Subdir for incident tickets
+hack_subdir = "Hacks"         # Subdir for hack sessions
 
-history:
-  database_path: "~/.histdb/zsh-history.db"
-  ignore_patterns: ["ls", "cd", "pwd", "clear"]
+[repository]
+owner = "your-org"
+name = "your-repo"
+base_path = "~/src"
+base_branch = "main"
 
-jira:
-  enabled: true
-  cli_command: "acli"
+[history]
+database_path = "~/.histdb/zsh-history.db"
+ignore_patterns = ["ls", "cd", "pwd", "clear"]
 
-tmux:
-  session_prefix: ""
-  windows:
-    - name: "note"
-      command: "nvim {note_path}"
-    - name: "code"
-      command: "nvim"
-      working_dir: "{worktree_path}"
-    - name: "term"
-      working_dir: "{worktree_path}"
+[jira]
+enabled = true
+cli_command = "acli"
+
+[tmux]
+session_prefix = ""
+
+[[tmux.windows]]
+name = "note"
+command = "nvim {note_path}"
+
+[[tmux.windows]]
+name = "code"
+command = "nvim"
+working_dir = "{worktree_path}"
+
+[[tmux.windows]]
+name = "term"
+working_dir = "{worktree_path}"
 `
 
-	// Write the default configuration
-	if err := os.WriteFile(configFile, []byte(defaultConfig), 0644); err != nil {
+	// Write the default configuration with restricted permissions (owner read/write only)
+	// Config files may contain sensitive paths and can execute arbitrary commands via tmux
+	if err := os.WriteFile(configFile, []byte(defaultConfig), 0600); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 

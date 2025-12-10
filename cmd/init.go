@@ -28,9 +28,9 @@ This command performs the following actions:
 - Creates tmux session with configured windows
 
 Examples:
-  sre init fraas-25857
-  sre init cre-123
-  sre init incident-456`,
+  sre init proj-123
+  sre init ops-456
+  sre init incident-789`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runInitCommand(args[0])
@@ -50,12 +50,12 @@ type TicketInfo struct {
 
 // parseTicket parses a ticket string into type and number components
 func parseTicket(ticket string) (*TicketInfo, error) {
-	// Match pattern: TYPE-NUMBER (e.g., fraas-25857, cre-123)
+	// Match pattern: TYPE-NUMBER (e.g., proj-123, ops-456)
 	re := regexp.MustCompile(`^([a-zA-Z]+)-([0-9]+)$`)
 	matches := re.FindStringSubmatch(ticket)
 
 	if len(matches) != 3 {
-		return nil, errors.New("invalid ticket format. Expected format: TYPE-NUMBER (e.g., fraas-25857)")
+		return nil, errors.New("invalid ticket format. Expected format: TYPE-NUMBER (e.g., proj-123)")
 	}
 
 	return &TicketInfo{
@@ -106,16 +106,22 @@ func runInitCommand(ticket string) error {
 		if verbose {
 			fmt.Println("Fetching JIRA details...")
 		}
-		jiraClient := jira.NewClient(cfg.Jira.CliCommand, verbose)
-		jiraInfo, err = jiraClient.FetchTicketDetails(ticketInfo.Full)
+		jiraClient, err := jira.NewClient(cfg.Jira.CliCommand, verbose)
 		if err != nil {
 			if verbose {
-				fmt.Printf("Warning: Could not fetch JIRA details: %v\n", err)
+				fmt.Printf("Warning: Invalid JIRA CLI command: %v\n", err)
 			}
-			// Don't fail the entire process if JIRA fetch fails
-			jiraInfo = nil
 		} else {
-			fmt.Println("✓ JIRA details fetched successfully")
+			jiraInfo, err = jiraClient.FetchTicketDetails(ticketInfo.Full)
+			if err != nil {
+				if verbose {
+					fmt.Printf("Warning: Could not fetch JIRA details: %v\n", err)
+				}
+				// Don't fail the entire process if JIRA fetch fails
+				jiraInfo = nil
+			} else {
+				fmt.Println("✓ JIRA details fetched successfully")
+			}
 		}
 	}
 

@@ -9,6 +9,18 @@ import (
 )
 
 func TestGetVaultSubdir(t *testing.T) {
+	// Helper to create config with default vault subdirs
+	makeConfig := func(ticketTypes map[string]TicketTypeConfig) *Config {
+		return &Config{
+			Vault: VaultConfig{
+				DefaultSubdir:  "Tickets",
+				IncidentSubdir: "Incidents",
+				HackSubdir:     "Hacks",
+			},
+			TicketTypes: ticketTypes,
+		}
+	}
+
 	tests := []struct {
 		name       string
 		config     *Config
@@ -16,42 +28,38 @@ func TestGetVaultSubdir(t *testing.T) {
 		expected   string
 	}{
 		{
-			name:       "default jira ticket type",
-			config:     &Config{},
-			ticketType: "fraas",
-			expected:   "Jira",
+			name:       "default ticket type",
+			config:     makeConfig(nil),
+			ticketType: "proj",
+			expected:   "Tickets",
 		},
 		{
 			name:       "incident ticket type",
-			config:     &Config{},
+			config:     makeConfig(nil),
 			ticketType: "incident",
 			expected:   "Incidents",
 		},
 		{
 			name:       "hack ticket type",
-			config:     &Config{},
+			config:     makeConfig(nil),
 			ticketType: "hack",
 			expected:   "Hacks",
 		},
 		{
 			name: "configured ticket type overrides default",
-			config: &Config{
-				TicketTypes: map[string]TicketTypeConfig{
-					"fraas": {Repo: "main", VaultSubdir: "CustomJira"},
-				},
-			},
-			ticketType: "fraas",
-			expected:   "CustomJira",
+			config: makeConfig(map[string]TicketTypeConfig{
+				"proj": {Repo: "main", VaultSubdir: "CustomTickets"},
+			}),
+			ticketType: "proj",
+			expected:   "CustomTickets",
 		},
 		{
 			name: "configured ticket type with empty subdir uses default",
-			config: &Config{
-				TicketTypes: map[string]TicketTypeConfig{
-					"fraas": {Repo: "main", VaultSubdir: ""},
-				},
-			},
-			ticketType: "fraas",
-			expected:   "Jira",
+			config: makeConfig(map[string]TicketTypeConfig{
+				"proj": {Repo: "main", VaultSubdir: ""},
+			}),
+			ticketType: "proj",
+			expected:   "Tickets",
 		},
 	}
 
@@ -453,14 +461,15 @@ func TestGetWorktreePath(t *testing.T) {
 func TestGetNotePath(t *testing.T) {
 	config := &Config{
 		Vault: VaultConfig{
-			Path:     "/home/user/vault",
-			AreasDir: "Areas/Work",
+			Path:          "/home/user/vault",
+			AreasDir:      "Areas/Work",
+			DefaultSubdir: "Tickets",
 		},
 	}
 
-	result := config.GetNotePath("fraas", "FRAAS-123")
-	// GetNotePath uses GetVaultSubdir which returns "Jira" by default
-	expected := "/home/user/vault/Areas/Work/Jira/fraas/FRAAS-123.md"
+	result := config.GetNotePath("proj", "PROJ-123")
+	// GetNotePath uses GetVaultSubdir which returns DefaultSubdir
+	expected := "/home/user/vault/Areas/Work/Tickets/proj/PROJ-123.md"
 
 	if result != expected {
 		t.Errorf("GetNotePath() = %q, want %q", result, expected)
@@ -470,16 +479,17 @@ func TestGetNotePath(t *testing.T) {
 func TestGetNotePath_WithConfiguredSubdir(t *testing.T) {
 	config := &Config{
 		Vault: VaultConfig{
-			Path:     "/home/user/vault",
-			AreasDir: "Areas/Work",
+			Path:          "/home/user/vault",
+			AreasDir:      "Areas/Work",
+			DefaultSubdir: "Tickets",
 		},
 		TicketTypes: map[string]TicketTypeConfig{
-			"fraas": {VaultSubdir: "CustomJira"},
+			"proj": {VaultSubdir: "CustomTickets"},
 		},
 	}
 
-	result := config.GetNotePath("fraas", "FRAAS-123")
-	expected := "/home/user/vault/Areas/Work/CustomJira/fraas/FRAAS-123.md"
+	result := config.GetNotePath("proj", "PROJ-123")
+	expected := "/home/user/vault/Areas/Work/CustomTickets/proj/PROJ-123.md"
 
 	if result != expected {
 		t.Errorf("GetNotePath() = %q, want %q", result, expected)
