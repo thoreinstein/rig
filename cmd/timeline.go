@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -198,15 +199,7 @@ func generateTimelineMarkdown(commands []history.Command, ticket string) string 
 	for day := range dayGroups {
 		days = append(days, day)
 	}
-	
-	// Simple sort for days
-	for i := 0; i < len(days); i++ {
-		for j := i + 1; j < len(days); j++ {
-			if days[i] > days[j] {
-				days[i], days[j] = days[j], days[i]
-			}
-		}
-	}
+	sort.Strings(days)
 	
 	for _, day := range days {
 		dayCommands := dayGroups[day]
@@ -290,25 +283,30 @@ func updateTicketNoteWithTimeline(cfg *config.Config, ticketInfo *TicketInfo, ti
 func removeExistingTimeline(content string) string {
 	lines := strings.Split(content, "\n")
 	var result []string
-	skipUntilNextSection := false
-	
+	inTimelineSection := false
+
 	for _, line := range lines {
 		// Check if this is a timeline section header
 		if strings.HasPrefix(line, "## Command Timeline") {
-			skipUntilNextSection = true
+			inTimelineSection = true
 			continue
 		}
-		
-		// Check if we've reached another section
-		if skipUntilNextSection && strings.HasPrefix(line, "## ") && !strings.HasPrefix(line, "## Command Timeline") {
-			skipUntilNextSection = false
+
+		// Check if we've reached another section (ends the timeline section)
+		if inTimelineSection && strings.HasPrefix(line, "## ") {
+			inTimelineSection = false
+			// Fall through to include this line (the new section header)
 		}
-		
-		// Include line if we're not skipping
-		if !skipUntilNextSection {
+
+		// Include line if we're not in the timeline section
+		if !inTimelineSection {
 			result = append(result, line)
 		}
 	}
-	
+
+	// Note: If timeline was the last section, we simply don't include it.
+	// Content after it (if any) that isn't a section header is also skipped,
+	// but that's the expected behavior - it was part of the timeline section.
+
 	return strings.Join(result, "\n")
 }
