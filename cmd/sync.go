@@ -231,12 +231,15 @@ func updateNoteTitle(content, summary string) string {
 func updateJiraDetailsSection(content string, jiraInfo *obsidian.JiraInfo) string {
 	lines := strings.Split(content, "\n")
 	var result []string
-	
+
 	jiraSection := buildJiraDetailsSection(jiraInfo)
 	jiraSectionFound := false
 	inJiraSection := false
-	
-	for i, line := range lines {
+
+	// Use index-based loop so we can skip ahead when needed
+	for i := 0; i < len(lines); i++ {
+		line := lines[i]
+
 		// Check if we're entering the JIRA Details section
 		if strings.HasPrefix(line, "## JIRA Details") {
 			jiraSectionFound = true
@@ -247,19 +250,19 @@ func updateJiraDetailsSection(content string, jiraInfo *obsidian.JiraInfo) strin
 			result = append(result, strings.Split(jiraSection, "\n")...)
 			continue
 		}
-		
+
 		// Check if we're leaving the JIRA Details section
 		if inJiraSection && strings.HasPrefix(line, "## ") && !strings.HasPrefix(line, "## JIRA Details") {
 			inJiraSection = false
 		}
-		
+
 		// Skip lines that are part of the old JIRA section (except the header)
 		if inJiraSection {
 			continue
 		}
-		
+
 		result = append(result, line)
-		
+
 		// If we haven't found a JIRA section and we're at the end of Summary section, insert it
 		if !jiraSectionFound && strings.HasPrefix(line, "## Summary") {
 			// Look ahead to find the end of the summary section
@@ -268,15 +271,15 @@ func updateJiraDetailsSection(content string, jiraInfo *obsidian.JiraInfo) strin
 				result = append(result, lines[j])
 				j++
 			}
-			
+
 			// Insert JIRA section
 			result = append(result, "")
 			result = append(result, "## JIRA Details")
 			result = append(result, "")
 			result = append(result, strings.Split(jiraSection, "\n")...)
 			result = append(result, "")
-			
-			// Skip the lines we already processed
+
+			// Skip the lines we already processed (now this actually works!)
 			i = j - 1
 			jiraSectionFound = true
 		}

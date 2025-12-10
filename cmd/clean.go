@@ -134,7 +134,10 @@ func findCleanupCandidates(cfg *config.Config) ([]CleanupCandidate, error) {
 
 	repos := cfg.GetAllRepos()
 	sessionManager := tmux.NewSessionManager(cfg.Tmux.SessionPrefix, nil, verbose)
-	sessions, _ := sessionManager.ListSessions()
+	sessions, err := sessionManager.ListSessions()
+	if err != nil && verbose {
+		fmt.Printf("Warning: Could not list tmux sessions: %v\n", err)
+	}
 	sessionSet := make(map[string]bool)
 	for _, s := range sessions {
 		sessionSet[s] = true
@@ -267,15 +270,17 @@ func removeWorktree(cfg *config.Config, candidate CleanupCandidate) error {
 	gitManager := git.NewWorktreeManager(candidate.RepoPath, "", verbose)
 
 	// Extract type and name from path
+	// Path structure: repoPath/type/ticket or repoPath/type/.../ticket
 	relPath := strings.TrimPrefix(candidate.Path, candidate.RepoPath+"/")
 	parts := strings.Split(relPath, string(filepath.Separator))
 	if len(parts) < 2 {
-		// Try force remove if we can't parse the path structure
+		// Single-level path or unusual structure - use force remove
 		return forceRemoveWorktree(candidate.RepoPath, candidate.Path)
 	}
 
+	// First part is always the ticket type, last part is the ticket name
 	ticketType := parts[0]
-	ticketName := parts[1]
+	ticketName := parts[len(parts)-1]
 
 	return gitManager.RemoveWorktree(ticketType, ticketName)
 }

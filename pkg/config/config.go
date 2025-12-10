@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 
 	"github.com/spf13/viper"
 )
@@ -89,8 +90,12 @@ func Load() (*Config, error) {
 
 // setDefaults sets default configuration values
 func setDefaults() {
-	homeDir, _ := os.UserHomeDir()
-	
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		// Fall back to current directory if home dir can't be determined
+		homeDir = "."
+	}
+
 	// Vault defaults
 	viper.SetDefault("vault.path", filepath.Join(homeDir, "Documents", "Second Brain"))
 	viper.SetDefault("vault.templates_dir", "templates")
@@ -224,10 +229,15 @@ func (c *Config) GetRepoForTicketType(ticketType string) *RepositoryConfig {
 			}
 		}
 
-		// Fall back to first repo in map
-		for _, repo := range c.Repositories {
-			repoCopy := repo
-			return &repoCopy
+		// Fall back to first repo alphabetically (deterministic)
+		var names []string
+		for name := range c.Repositories {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		if len(names) > 0 {
+			repo := c.Repositories[names[0]]
+			return &repo
 		}
 	}
 
@@ -259,10 +269,15 @@ func (c *Config) GetDefaultRepo() *RepositoryConfig {
 				return &repo
 			}
 		}
-		// Return first repo if no default set
-		for _, repo := range c.Repositories {
-			repoCopy := repo
-			return &repoCopy
+		// Return first repo alphabetically if no default set (deterministic)
+		var names []string
+		for name := range c.Repositories {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		if len(names) > 0 {
+			repo := c.Repositories[names[0]]
+			return &repo
 		}
 	}
 	return &c.Repository
