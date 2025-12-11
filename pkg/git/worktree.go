@@ -40,31 +40,96 @@ func (r *RealCommandRunner) Output(dir string, name string, args ...string) ([]b
 }
 
 // WorktreeManager handles Git worktree operations
+// Repository information is derived from git itself, not configuration
 type WorktreeManager struct {
-	RepoPath   string
-	BaseBranch string
-	Verbose    bool
-	runner     CommandRunner
+	Verbose          bool
+	BaseBranchConfig string // Optional config override for base branch
+	runner           CommandRunner
 }
 
 // NewWorktreeManager creates a new WorktreeManager
-func NewWorktreeManager(repoPath, baseBranch string, verbose bool) *WorktreeManager {
+func NewWorktreeManager(baseBranchConfig string, verbose bool) *WorktreeManager {
 	return &WorktreeManager{
-		RepoPath:   repoPath,
-		BaseBranch: baseBranch,
-		Verbose:    verbose,
-		runner:     &RealCommandRunner{Verbose: verbose},
+		Verbose:          verbose,
+		BaseBranchConfig: baseBranchConfig,
+		runner:           &RealCommandRunner{Verbose: verbose},
 	}
 }
 
 // NewWorktreeManagerWithRunner creates a WorktreeManager with a custom CommandRunner (for testing)
-func NewWorktreeManagerWithRunner(repoPath, baseBranch string, verbose bool, runner CommandRunner) *WorktreeManager {
+func NewWorktreeManagerWithRunner(baseBranchConfig string, verbose bool, runner CommandRunner) *WorktreeManager {
 	return &WorktreeManager{
-		RepoPath:   repoPath,
-		BaseBranch: baseBranch,
-		Verbose:    verbose,
-		runner:     runner,
+		Verbose:          verbose,
+		BaseBranchConfig: baseBranchConfig,
+		runner:           runner,
 	}
+}
+
+// GetRepoRoot returns the repository root from the current working directory
+func (wm *WorktreeManager) GetRepoRoot() (string, error) {
+	output, err := wm.runner.Output(".", "git", "rev-parse", "--show-toplevel")
+	if err != nil {
+		return "", errors.New("not inside a git repository. Run this command from within your repo")
+	}
+	return strings.TrimSpace(string(output)), nil
+}
+
+// GetRepoName returns the repository name (basename of repo root)
+func (wm *WorktreeManager) GetRepoName() (string, error) {
+	root, err := wm.GetRepoRoot()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Base(root), nil
+}
+
+// GetDefaultBranch determines the default branch to use for new worktrees
+// Priority: config override > remote HEAD > main > master > first remote branch
+func (wm *WorktreeManager) GetDefaultBranch() (string, error) {
+	repoRoot, err := wm.GetRepoRoot()
+	if err != nil {
+		return "", err
+	}
+
+	// 1. Use config override if provided
+	if wm.BaseBranchConfig != "" {
+		if wm.branchExists(repoRoot, wm.BaseBranchConfig) {
+			return wm.BaseBranchConfig, nil
+		}
+		// Config specified but branch doesn't exist - warn but continue
+		if wm.Verbose {
+			fmt.Printf("Warning: configured base branch %q not found, auto-detecting...\n", wm.BaseBranchConfig)
+		}
+	}
+
+	// 2. Try to get default branch from remote HEAD
+	output, err := wm.runner.Output(repoRoot, "git", "symbolic-ref", "refs/remotes/origin/HEAD")
+	if err == nil {
+		ref := strings.TrimSpace(string(output))
+		// Format: refs/remotes/origin/main -> main
+		if strings.HasPrefix(ref, "refs/remotes/origin/") {
+			branch := strings.TrimPrefix(ref, "refs/remotes/origin/")
+			if wm.branchExists(repoRoot, branch) {
+				return branch, nil
+			}
+		}
+	}
+
+	// 3. Check for common default branch names
+	for _, branch := range []string{"main", "master"} {
+		if wm.branchExists(repoRoot, branch) {
+			return branch, nil
+		}
+	}
+
+	// 4. Try to get first available remote branch
+	branch, err := wm.getFirstRemoteBranch(repoRoot)
+	if err == nil {
+		return branch, nil
+	}
+
+	// 5. No branches exist - create initial branch
+	return wm.createInitialBranch(repoRoot)
 }
 
 // CreateWorktree creates a new git worktree for the given ticket
@@ -75,15 +140,15 @@ func (wm *WorktreeManager) CreateWorktree(ticketType, ticket string) (string, er
 
 // CreateWorktreeWithBranch creates a new git worktree with a custom branch name
 func (wm *WorktreeManager) CreateWorktreeWithBranch(ticketType, name, branchName string) (string, error) {
-	worktreePath := filepath.Join(wm.RepoPath, ticketType, name)
-
-	// Check if bare repo exists
-	if !wm.repoExists() {
-		return "", fmt.Errorf("bare repository not found at %s", wm.RepoPath)
+	repoRoot, err := wm.GetRepoRoot()
+	if err != nil {
+		return "", err
 	}
 
+	worktreePath := filepath.Join(repoRoot, ticketType, name)
+
 	// Create type directory if it doesn't exist
-	typeDir := filepath.Join(wm.RepoPath, ticketType)
+	typeDir := filepath.Join(repoRoot, ticketType)
 	if err := os.MkdirAll(typeDir, 0755); err != nil {
 		return "", fmt.Errorf("failed to create type directory: %w", err)
 	}
@@ -97,13 +162,13 @@ func (wm *WorktreeManager) CreateWorktreeWithBranch(ticketType, name, branchName
 	}
 
 	// Determine base branch to use
-	baseBranch, err := wm.getBaseBranch()
+	baseBranch, err := wm.GetDefaultBranch()
 	if err != nil {
 		return "", fmt.Errorf("failed to determine base branch: %w", err)
 	}
 
 	// Fetch and pull latest changes before creating worktree
-	if err := wm.fetchAndPull(baseBranch); err != nil {
+	if err := wm.fetchAndPull(repoRoot, baseBranch); err != nil {
 		// Log warning but don't fail - repo might be offline or have no remote
 		if wm.Verbose {
 			fmt.Printf("Warning: Could not fetch/pull latest changes: %v\n", err)
@@ -115,7 +180,8 @@ func (wm *WorktreeManager) CreateWorktreeWithBranch(ticketType, name, branchName
 	}
 
 	// Create the worktree with custom branch name
-	err = wm.createWorktreeFromBranchWithName(ticketType, name, branchName, baseBranch)
+	relativePath := filepath.Join(ticketType, name)
+	err = wm.runner.Run(repoRoot, "git", "worktree", "add", relativePath, "-b", branchName, baseBranch)
 	if err != nil {
 		return "", fmt.Errorf("failed to create worktree: %w", err)
 	}
@@ -123,54 +189,14 @@ func (wm *WorktreeManager) CreateWorktreeWithBranch(ticketType, name, branchName
 	return worktreePath, nil
 }
 
-// repoExists checks if the repository exists and is a git repository
-func (wm *WorktreeManager) repoExists() bool {
-	if _, err := os.Stat(wm.RepoPath); os.IsNotExist(err) {
-		return false
-	}
-
-	// Check if it's a git repository
-	gitDir := filepath.Join(wm.RepoPath, ".git")
-	if _, err := os.Stat(gitDir); err == nil {
-		return true
-	}
-
-	// Check if it's a bare repository
-	if _, err := os.Stat(filepath.Join(wm.RepoPath, "refs")); err == nil {
-		return true
-	}
-
-	return false
-}
-
-// getBaseBranch determines which base branch to use
-func (wm *WorktreeManager) getBaseBranch() (string, error) {
-	branches := []string{wm.BaseBranch, "master", "main"}
-
-	for _, branch := range branches {
-		if wm.branchExists(branch) {
-			return branch, nil
-		}
-	}
-
-	// If no standard branches exist, get the first available branch
-	branch, err := wm.getFirstBranch()
-	if err != nil {
-		// If no branches exist, create initial commit
-		return wm.createInitialBranch()
-	}
-
-	return branch, nil
-}
-
 // fetchAndPull fetches from origin and pulls the latest changes for the base branch
-func (wm *WorktreeManager) fetchAndPull(baseBranch string) error {
+func (wm *WorktreeManager) fetchAndPull(repoRoot, baseBranch string) error {
 	if wm.Verbose {
 		fmt.Println("Fetching latest changes from origin...")
 	}
 
 	// git fetch origin
-	if err := wm.runner.Run(wm.RepoPath, "git", "fetch", "origin"); err != nil {
+	if err := wm.runner.Run(repoRoot, "git", "fetch", "origin"); err != nil {
 		return fmt.Errorf("git fetch failed: %w", err)
 	}
 
@@ -179,7 +205,7 @@ func (wm *WorktreeManager) fetchAndPull(baseBranch string) error {
 	}
 
 	// git pull origin <baseBranch>
-	if err := wm.runner.Run(wm.RepoPath, "git", "pull", "origin", baseBranch); err != nil {
+	if err := wm.runner.Run(repoRoot, "git", "pull", "origin", baseBranch); err != nil {
 		return fmt.Errorf("git pull failed: %w", err)
 	}
 
@@ -187,14 +213,14 @@ func (wm *WorktreeManager) fetchAndPull(baseBranch string) error {
 }
 
 // branchExists checks if a branch exists in the repository
-func (wm *WorktreeManager) branchExists(branch string) bool {
-	err := wm.runner.Run(wm.RepoPath, "git", "show-ref", "--verify", "--quiet", "refs/heads/"+branch)
+func (wm *WorktreeManager) branchExists(repoRoot, branch string) bool {
+	err := wm.runner.Run(repoRoot, "git", "show-ref", "--verify", "--quiet", "refs/heads/"+branch)
 	return err == nil
 }
 
-// getFirstBranch gets the first available branch
-func (wm *WorktreeManager) getFirstBranch() (string, error) {
-	output, err := wm.runner.Output(wm.RepoPath, "git", "branch", "-r")
+// getFirstRemoteBranch gets the first available remote branch
+func (wm *WorktreeManager) getFirstRemoteBranch(repoRoot string) (string, error) {
+	output, err := wm.runner.Output(repoRoot, "git", "branch", "-r")
 	if err != nil {
 		return "", err
 	}
@@ -214,33 +240,32 @@ func (wm *WorktreeManager) getFirstBranch() (string, error) {
 }
 
 // createInitialBranch creates an initial branch with empty commit
-func (wm *WorktreeManager) createInitialBranch() (string, error) {
+func (wm *WorktreeManager) createInitialBranch(repoRoot string) (string, error) {
 	if wm.Verbose {
 		fmt.Println("Creating initial commit on main branch...")
 	}
 
 	// Switch to main branch
-	if err := wm.runner.Run(wm.RepoPath, "git", "switch", "-c", "main"); err != nil {
+	if err := wm.runner.Run(repoRoot, "git", "switch", "-c", "main"); err != nil {
 		return "", fmt.Errorf("failed to create main branch: %w", err)
 	}
 
 	// Create empty commit
-	if err := wm.runner.Run(wm.RepoPath, "git", "commit", "--allow-empty", "-m", "Initial commit"); err != nil {
+	if err := wm.runner.Run(repoRoot, "git", "commit", "--allow-empty", "-m", "Initial commit"); err != nil {
 		return "", fmt.Errorf("failed to create initial commit: %w", err)
 	}
 
 	return "main", nil
 }
 
-// createWorktreeFromBranchWithName creates a worktree with a custom branch name
-func (wm *WorktreeManager) createWorktreeFromBranchWithName(ticketType, name, branchName, baseBranch string) error {
-	relativePath := filepath.Join(ticketType, name)
-	return wm.runner.Run(wm.RepoPath, "git", "worktree", "add", relativePath, "-b", branchName, baseBranch)
-}
-
 // ListWorktrees returns a list of all existing worktrees
 func (wm *WorktreeManager) ListWorktrees() ([]string, error) {
-	output, err := wm.runner.Output(wm.RepoPath, "git", "worktree", "list", "--porcelain")
+	repoRoot, err := wm.GetRepoRoot()
+	if err != nil {
+		return nil, err
+	}
+
+	output, err := wm.runner.Output(repoRoot, "git", "worktree", "list", "--porcelain")
 	if err != nil {
 		return nil, fmt.Errorf("failed to list worktrees: %w", err)
 	}
@@ -260,7 +285,12 @@ func (wm *WorktreeManager) ListWorktrees() ([]string, error) {
 
 // RemoveWorktree removes a worktree
 func (wm *WorktreeManager) RemoveWorktree(ticketType, ticket string) error {
-	worktreePath := filepath.Join(wm.RepoPath, ticketType, ticket)
+	repoRoot, err := wm.GetRepoRoot()
+	if err != nil {
+		return err
+	}
+
+	worktreePath := filepath.Join(repoRoot, ticketType, ticket)
 
 	// Check if worktree exists
 	if _, err := os.Stat(worktreePath); os.IsNotExist(err) {
@@ -268,5 +298,5 @@ func (wm *WorktreeManager) RemoveWorktree(ticketType, ticket string) error {
 	}
 
 	relativePath := filepath.Join(ticketType, ticket)
-	return wm.runner.Run(wm.RepoPath, "git", "worktree", "remove", relativePath)
+	return wm.runner.Run(repoRoot, "git", "worktree", "remove", relativePath)
 }

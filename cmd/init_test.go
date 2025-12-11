@@ -198,8 +198,8 @@ func TestInitCommandDescription(t *testing.T) {
 		t.Error("init command Long description should mention 'worktree'")
 	}
 
-	if !containsSubstring(cmd.Long, "Obsidian") {
-		t.Error("init command Long description should mention 'Obsidian'")
+	if !containsSubstring(cmd.Long, "note") {
+		t.Error("init command Long description should mention 'note'")
 	}
 
 	if !containsSubstring(cmd.Long, "tmux") {

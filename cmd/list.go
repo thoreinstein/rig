@@ -57,7 +57,7 @@ func runListCommand() error {
 	showSessions := listSessions || (!listWorktrees && !listSessions)
 
 	if showWorktrees {
-		if err := listAllWorktrees(cfg); err != nil {
+		if err := listCurrentRepoWorktrees(cfg); err != nil {
 			// Don't fail completely if worktrees can't be listed
 			if verbose {
 				fmt.Printf("Warning: Could not list worktrees: %v\n", err)
@@ -80,61 +80,63 @@ func runListCommand() error {
 	return nil
 }
 
-func listAllWorktrees(cfg *config.Config) error {
+func listCurrentRepoWorktrees(cfg *config.Config) error {
 	fmt.Println("=== Git Worktrees ===")
 	fmt.Println()
 
-	repos := cfg.GetAllRepos()
-	totalWorktrees := 0
+	gitManager := git.NewWorktreeManager(cfg.Git.BaseBranch, verbose)
 
-	for repoName, repoConfig := range repos {
-		repoPath := cfg.GetRepositoryPathForRepo(repoConfig)
-		gitManager := git.NewWorktreeManager(repoPath, repoConfig.BaseBranch, verbose)
-
-		worktrees, err := gitManager.ListWorktrees()
-		if err != nil {
-			if verbose {
-				fmt.Printf("  [%s] Error: %v\n", repoName, err)
-			}
-			continue
-		}
-
-		if len(worktrees) == 0 {
-			continue
-		}
-
-		// Get branch info for each worktree
-		worktreeInfos := getWorktreeDetails(repoPath)
-
-		fmt.Printf("[%s] %s/%s\n", repoName, repoConfig.Owner, repoConfig.Name)
-
-		for _, wt := range worktrees {
-			// Skip the main repo path itself
-			if wt == repoPath {
-				continue
-			}
-
-			// Get relative path from repo
-			relPath := strings.TrimPrefix(wt, repoPath+"/")
-			if relPath == wt {
-				relPath = wt // Couldn't make relative, use full path
-			}
-
-			// Find branch info
-			branch := ""
-			if info, ok := worktreeInfos[wt]; ok {
-				branch = info.Branch
-			}
-
-			if branch != "" {
-				fmt.Printf("  %-40s [%s]\n", relPath, branch)
-			} else {
-				fmt.Printf("  %s\n", relPath)
-			}
-			totalWorktrees++
-		}
-		fmt.Println()
+	repoRoot, err := gitManager.GetRepoRoot()
+	if err != nil {
+		return err
 	}
+	repoName, err := gitManager.GetRepoName()
+	if err != nil {
+		return err
+	}
+
+	worktrees, err := gitManager.ListWorktrees()
+	if err != nil {
+		return fmt.Errorf("failed to list worktrees: %w", err)
+	}
+
+	if len(worktrees) == 0 {
+		fmt.Println("  No worktrees found")
+		return nil
+	}
+
+	// Get branch info for each worktree
+	worktreeInfos := getWorktreeDetails(repoRoot)
+
+	fmt.Printf("[%s]\n", repoName)
+
+	totalWorktrees := 0
+	for _, wt := range worktrees {
+		// Skip the main repo path itself
+		if wt == repoRoot {
+			continue
+		}
+
+		// Get relative path from repo
+		relPath := strings.TrimPrefix(wt, repoRoot+"/")
+		if relPath == wt {
+			relPath = wt // Couldn't make relative, use full path
+		}
+
+		// Find branch info
+		branch := ""
+		if info, ok := worktreeInfos[wt]; ok {
+			branch = info.Branch
+		}
+
+		if branch != "" {
+			fmt.Printf("  %-40s [%s]\n", relPath, branch)
+		} else {
+			fmt.Printf("  %s\n", relPath)
+		}
+		totalWorktrees++
+	}
+	fmt.Println()
 
 	if totalWorktrees == 0 {
 		fmt.Println("  No worktrees found")

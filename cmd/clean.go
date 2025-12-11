@@ -118,9 +118,9 @@ func runCleanCommand() error {
 	for _, candidate := range candidates {
 		err := removeWorktree(cfg, candidate)
 		if err != nil {
-			fmt.Printf("  ✗ Failed to remove %s: %v\n", candidate.Path, err)
+			fmt.Printf("  Failed to remove %s: %v\n", candidate.Path, err)
 		} else {
-			fmt.Printf("  ✓ Removed %s\n", candidate.Path)
+			fmt.Printf("  Removed %s\n", candidate.Path)
 			removed++
 		}
 	}
@@ -132,7 +132,17 @@ func runCleanCommand() error {
 func findCleanupCandidates(cfg *config.Config) ([]CleanupCandidate, error) {
 	var candidates []CleanupCandidate
 
-	repos := cfg.GetAllRepos()
+	gitManager := git.NewWorktreeManager(cfg.Git.BaseBranch, verbose)
+
+	repoRoot, err := gitManager.GetRepoRoot()
+	if err != nil {
+		return nil, err
+	}
+	repoName, err := gitManager.GetRepoName()
+	if err != nil {
+		return nil, err
+	}
+
 	sessionManager := tmux.NewSessionManager(cfg.Tmux.SessionPrefix, nil, verbose)
 	sessions, err := sessionManager.ListSessions()
 	if err != nil && verbose {
@@ -143,52 +153,50 @@ func findCleanupCandidates(cfg *config.Config) ([]CleanupCandidate, error) {
 		sessionSet[s] = true
 	}
 
-	for repoName, repoConfig := range repos {
-		repoPath := cfg.GetRepositoryPathForRepo(repoConfig)
-		gitManager := git.NewWorktreeManager(repoPath, repoConfig.BaseBranch, verbose)
+	worktrees, err := gitManager.ListWorktrees()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list worktrees: %w", err)
+	}
 
-		worktrees, err := gitManager.ListWorktrees()
-		if err != nil {
-			if verbose {
-				fmt.Printf("Warning: Could not list worktrees for %s: %v\n", repoName, err)
-			}
+	worktreeDetails := getWorktreeDetailsForClean(repoRoot)
+
+	// Determine base branch for merge checking
+	baseBranch, err := gitManager.GetDefaultBranch()
+	if err != nil {
+		baseBranch = "main" // fallback
+	}
+
+	for _, wt := range worktrees {
+		// Skip the main repo path
+		if wt == repoRoot {
 			continue
 		}
 
-		worktreeDetails := getWorktreeDetailsForClean(repoPath)
-
-		for _, wt := range worktrees {
-			// Skip the main repo path
-			if wt == repoPath {
-				continue
-			}
-
-			// Get branch info
-			branch := ""
-			if info, ok := worktreeDetails[wt]; ok {
-				branch = info.Branch
-			}
-
-			// Determine session name from worktree path
-			sessionName := filepath.Base(wt)
-			if cfg.Tmux.SessionPrefix != "" {
-				sessionName = cfg.Tmux.SessionPrefix + sessionName
-			}
-
-			// Check if branch is merged
-			isMerged := isBranchMerged(repoPath, branch, repoConfig.BaseBranch)
-
-			candidate := CleanupCandidate{
-				Path:       wt,
-				Branch:     branch,
-				RepoName:   repoName,
-				RepoPath:   repoPath,
-				IsMerged:   isMerged,
-				HasSession: sessionSet[sessionName],
-			}
-
-			candidates = append(candidates, candidate)
+		// Get branch info
+		branch := ""
+		if info, ok := worktreeDetails[wt]; ok {
+			branch = info.Branch
 		}
+
+		// Determine session name from worktree path
+		sessionName := filepath.Base(wt)
+		if cfg.Tmux.SessionPrefix != "" {
+			sessionName = cfg.Tmux.SessionPrefix + sessionName
+		}
+
+		// Check if branch is merged
+		isMerged := isBranchMerged(repoRoot, branch, baseBranch)
+
+		candidate := CleanupCandidate{
+			Path:       wt,
+			Branch:     branch,
+			RepoName:   repoName,
+			RepoPath:   repoRoot,
+			IsMerged:   isMerged,
+			HasSession: sessionSet[sessionName],
+		}
+
+		candidates = append(candidates, candidate)
 	}
 
 	return candidates, nil
@@ -267,7 +275,7 @@ func removeWorktree(cfg *config.Config, candidate CleanupCandidate) error {
 	}
 
 	// Remove the worktree
-	gitManager := git.NewWorktreeManager(candidate.RepoPath, "", verbose)
+	gitManager := git.NewWorktreeManager(cfg.Git.BaseBranch, verbose)
 
 	// Extract type and name from path
 	// Path structure: repoPath/type/ticket or repoPath/type/.../ticket

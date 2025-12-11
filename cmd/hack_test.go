@@ -18,14 +18,7 @@ func TestHackCommandFlags(t *testing.T) {
 		t.Errorf("--notes default should be false, got %s", notesFlag.DefValue)
 	}
 
-	// Check --repo flag exists
-	repoFlag := cmd.Flags().Lookup("repo")
-	if repoFlag == nil {
-		t.Error("hack command should have --repo flag")
-	}
-	if repoFlag != nil && repoFlag.DefValue != "" {
-		t.Errorf("--repo default should be empty, got %s", repoFlag.DefValue)
-	}
+	// Note: --repo flag was removed - repo is now detected from CWD
 }
 
 func TestHackCommandArgs(t *testing.T) {

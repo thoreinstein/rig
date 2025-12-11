@@ -1,8 +1,10 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 
 	"github.com/spf13/cobra"
@@ -20,6 +22,18 @@ initial setup by creating a default configuration file.`,
 	RunE: runConfigCommand,
 }
 
+// configEditCmd represents the config edit subcommand
+var configEditCmd = &cobra.Command{
+	Use:   "edit",
+	Short: "Open configuration file in $EDITOR",
+	Long: `Open the SRE CLI configuration file in your preferred editor.
+
+Uses $EDITOR environment variable, falls back to $VISUAL, then common editors (vim, vi, nano).`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return editConfig()
+	},
+}
+
 var (
 	configInit bool
 	configShow bool
@@ -27,6 +41,7 @@ var (
 
 func init() {
 	rootCmd.AddCommand(configCmd)
+	configCmd.AddCommand(configEditCmd)
 
 	configCmd.Flags().BoolVar(&configInit, "init", false, "create default configuration file")
 	configCmd.Flags().BoolVar(&configShow, "show", false, "show current configuration")
@@ -67,20 +82,14 @@ func createDefaultConfig() error {
 	// Default configuration content
 	defaultConfig := `# SRE CLI Configuration
 
-[vault]
-path = "~/Documents/Second Brain"
-templates_dir = "templates"
-areas_dir = "Areas/Work"
-daily_dir = "Daily"
-default_subdir = "Tickets"    # Default subdir for ticket notes
-incident_subdir = "Incidents" # Subdir for incident tickets
-hack_subdir = "Hacks"         # Subdir for hack sessions
+[notes]
+path = "~/Documents/Notes"
+daily_dir = "daily"
+template_dir = "~/.config/sre/templates"
 
-[repository]
-owner = "your-org"
-name = "your-repo"
-base_path = "~/src"
-base_branch = "main"
+[git]
+# Optional: override auto-detected default branch
+# base_branch = "main"
 
 [history]
 database_path = "~/.histdb/zsh-history.db"
@@ -128,10 +137,16 @@ func showConfig() error {
 	fmt.Println("Current SRE CLI Configuration:")
 	fmt.Println("==============================")
 
-	fmt.Printf("Vault Path:          %s\n", cfg.Vault.Path)
-	fmt.Printf("Repository:          %s/%s\n", cfg.Repository.Owner, cfg.Repository.Name)
-	fmt.Printf("Repository Path:     %s\n", cfg.GetRepositoryPath())
-	fmt.Printf("Base Branch:         %s\n", cfg.Repository.BaseBranch)
+	fmt.Printf("Notes Path:          %s\n", cfg.Notes.Path)
+	fmt.Printf("Daily Notes Dir:     %s\n", cfg.Notes.DailyDir)
+	fmt.Printf("Template Dir:        %s\n", cfg.Notes.TemplateDir)
+
+	if cfg.Git.BaseBranch != "" {
+		fmt.Printf("Git Base Branch:     %s (override)\n", cfg.Git.BaseBranch)
+	} else {
+		fmt.Printf("Git Base Branch:     (auto-detect)\n")
+	}
+
 	fmt.Printf("History Database:    %s\n", cfg.History.DatabasePath)
 	fmt.Printf("JIRA Enabled:        %t\n", cfg.Jira.Enabled)
 
@@ -149,4 +164,47 @@ func showConfig() error {
 	}
 
 	return nil
+}
+
+func editConfig() error {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("failed to get home directory: %w", err)
+	}
+
+	configFile := filepath.Join(homeDir, ".config", "sre", "config.toml")
+
+	// Create default config if it doesn't exist
+	if _, err := os.Stat(configFile); os.IsNotExist(err) {
+		fmt.Println("Config file does not exist, creating default...")
+		if err := createDefaultConfig(); err != nil {
+			return err
+		}
+	}
+
+	// Get editor from environment, with fallbacks
+	editor := os.Getenv("EDITOR")
+	if editor == "" {
+		editor = os.Getenv("VISUAL")
+	}
+	if editor == "" {
+		// Check for common editors
+		for _, e := range []string{"vim", "vi", "nano"} {
+			if _, err := exec.LookPath(e); err == nil {
+				editor = e
+				break
+			}
+		}
+	}
+	if editor == "" {
+		return errors.New("no editor found: set $EDITOR environment variable")
+	}
+
+	// Execute editor
+	cmd := exec.Command(editor, configFile)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	return cmd.Run()
 }

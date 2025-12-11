@@ -10,14 +10,14 @@ import (
 	"github.com/spf13/cobra"
 	"thoreinstein.com/sre/pkg/config"
 	"thoreinstein.com/sre/pkg/jira"
-	"thoreinstein.com/sre/pkg/obsidian"
+	"thoreinstein.com/sre/pkg/notes"
 )
 
 // syncCmd represents the sync command
 var syncCmd = &cobra.Command{
 	Use:   "sync [ticket]",
-	Short: "Sync and update Obsidian notes",
-	Long: `Sync and update Obsidian notes with latest information.
+	Short: "Sync and update notes",
+	Long: `Sync and update notes with latest information.
 
 This command can:
 - Update a specific ticket note with fresh JIRA information
@@ -84,8 +84,16 @@ func syncTicketNote(cfg *config.Config, ticket string) error {
 		fmt.Printf("Syncing note for ticket: %s\n", ticketInfo.Full)
 	}
 
+	// Initialize note manager
+	noteManager := notes.NewManager(
+		cfg.Notes.Path,
+		cfg.Notes.DailyDir,
+		cfg.Notes.TemplateDir,
+		verbose,
+	)
+
 	// Get note path
-	notePath := cfg.GetNotePath(ticketInfo.Type, ticketInfo.Full)
+	notePath := noteManager.GetNotePath(ticketInfo.Type, ticketInfo.Full)
 
 	// Check if note exists
 	if _, err := os.Stat(notePath); os.IsNotExist(err) {
@@ -93,15 +101,6 @@ func syncTicketNote(cfg *config.Config, ticket string) error {
 		fmt.Println("Use 'sre init' to create the note first.")
 		return nil
 	}
-
-	// Initialize note manager
-	noteManager := obsidian.NewNoteManager(
-		cfg.Vault.Path,
-		cfg.Vault.TemplatesDir,
-		cfg.Vault.AreasDir,
-		cfg.Vault.DailyDir,
-		verbose,
-	)
 
 	var updated bool
 
@@ -129,7 +128,7 @@ func syncTicketNote(cfg *config.Config, ticket string) error {
 					if err != nil {
 						return fmt.Errorf("failed to update note with JIRA info: %w", err)
 					}
-					fmt.Println("✓ JIRA information updated")
+					fmt.Println("JIRA information updated")
 					updated = true
 				}
 			}
@@ -141,20 +140,20 @@ func syncTicketNote(cfg *config.Config, ticket string) error {
 		fmt.Println("Updating daily note entry...")
 	}
 
-	err = noteManager.UpdateDailyNote(ticketInfo.Full)
+	err = noteManager.UpdateDailyNote(ticketInfo.Full, ticketInfo.Type)
 	if err != nil {
 		if verbose {
 			fmt.Printf("Warning: Could not update daily note: %v\n", err)
 		}
 	} else {
-		fmt.Println("✓ Daily note updated")
+		fmt.Println("Daily note updated")
 		updated = true
 	}
 
 	if !updated {
 		fmt.Println("No updates were made.")
 	} else {
-		fmt.Printf("✅ Sync completed for: %s\n", ticketInfo.Full)
+		fmt.Printf("Sync completed for: %s\n", ticketInfo.Full)
 	}
 
 	return nil
@@ -165,35 +164,34 @@ func syncDailyNote(cfg *config.Config) error {
 		fmt.Println("Syncing today's daily note...")
 	}
 
-	noteManager := obsidian.NewNoteManager(
-		cfg.Vault.Path,
-		cfg.Vault.TemplatesDir,
-		cfg.Vault.AreasDir,
-		cfg.Vault.DailyDir,
+	noteManager := notes.NewManager(
+		cfg.Notes.Path,
+		cfg.Notes.DailyDir,
+		cfg.Notes.TemplateDir,
 		verbose,
 	)
 
 	// For now, just verify the daily note exists
 	today := time.Now().Format("2006-01-02")
-	dailyNotePath := fmt.Sprintf("%s/%s/%s.md", cfg.Vault.Path, cfg.Vault.DailyDir, today)
+	dailyNotePath := noteManager.GetDailyNotePath()
 
 	// Use the noteManager for any future daily note operations
-	_ = noteManager
+	_ = today
 
 	if _, err := os.Stat(dailyNotePath); os.IsNotExist(err) {
 		fmt.Printf("Daily note not found: %s\n", dailyNotePath)
-		fmt.Println("Create the daily note in Obsidian first.")
+		fmt.Println("Create the daily note first or use 'sre init' to create a ticket.")
 		return nil
 	}
 
-	fmt.Printf("✓ Daily note exists: %s\n", dailyNotePath)
+	fmt.Printf("Daily note exists: %s\n", dailyNotePath)
 	fmt.Println("Daily note sync completed.")
 
 	return nil
 }
 
 // updateNoteWithJiraInfo updates a note file with fresh JIRA information
-func updateNoteWithJiraInfo(notePath string, jiraInfo *obsidian.JiraInfo) error {
+func updateNoteWithJiraInfo(notePath string, jiraInfo *jira.TicketInfo) error {
 	// Read existing content
 	content, err := os.ReadFile(notePath)
 	if err != nil {
@@ -235,7 +233,7 @@ func updateNoteTitle(content, summary string) string {
 }
 
 // updateJiraDetailsSection updates or creates the JIRA Details section
-func updateJiraDetailsSection(content string, jiraInfo *obsidian.JiraInfo) string {
+func updateJiraDetailsSection(content string, jiraInfo *jira.TicketInfo) string {
 	lines := strings.Split(content, "\n")
 	var result []string
 
@@ -304,7 +302,7 @@ func updateJiraDetailsSection(content string, jiraInfo *obsidian.JiraInfo) strin
 }
 
 // buildJiraDetailsSection builds the JIRA details section content
-func buildJiraDetailsSection(jiraInfo *obsidian.JiraInfo) string {
+func buildJiraDetailsSection(jiraInfo *jira.TicketInfo) string {
 	var section strings.Builder
 
 	if jiraInfo.Type != "" {

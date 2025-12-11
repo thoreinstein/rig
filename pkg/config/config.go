@@ -4,46 +4,30 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 
 	"github.com/spf13/viper"
 )
 
 // Config represents the application configuration
+// Repository information is derived from git, not configuration
 type Config struct {
-	Vault        VaultConfig                 `mapstructure:"vault"`
-	Repository   RepositoryConfig            `mapstructure:"repository"`   // Legacy single-repo config
-	Repositories map[string]RepositoryConfig `mapstructure:"repositories"` // Multi-repo config
-	DefaultRepo  string                      `mapstructure:"default_repo"` // Default repo name for multi-repo
-	TicketTypes  map[string]TicketTypeConfig `mapstructure:"ticket_types"` // Maps ticket prefix to repo
-	History      HistoryConfig               `mapstructure:"history"`
-	Jira         JiraConfig                  `mapstructure:"jira"`
-	Tmux         TmuxConfig                  `mapstructure:"tmux"`
+	Notes   NotesConfig   `mapstructure:"notes"`
+	Git     GitConfig     `mapstructure:"git"`
+	History HistoryConfig `mapstructure:"history"`
+	Jira    JiraConfig    `mapstructure:"jira"`
+	Tmux    TmuxConfig    `mapstructure:"tmux"`
 }
 
-// TicketTypeConfig maps a ticket type to a repository and vault subdirectory
-type TicketTypeConfig struct {
-	Repo        string `mapstructure:"repo"`         // References key in Repositories map
-	VaultSubdir string `mapstructure:"vault_subdir"` // e.g., "Jira", "Incidents", "Hacks"
+// NotesConfig holds markdown notes configuration
+type NotesConfig struct {
+	Path        string `mapstructure:"path"`         // Base directory for notes
+	DailyDir    string `mapstructure:"daily_dir"`    // Subdirectory for daily notes
+	TemplateDir string `mapstructure:"template_dir"` // Optional user template directory
 }
 
-// VaultConfig holds Obsidian vault configuration
-type VaultConfig struct {
-	Path           string `mapstructure:"path"`
-	TemplatesDir   string `mapstructure:"templates_dir"`
-	AreasDir       string `mapstructure:"areas_dir"`
-	DailyDir       string `mapstructure:"daily_dir"`
-	DefaultSubdir  string `mapstructure:"default_subdir"`  // Default subdir for tickets not in ticket_types
-	IncidentSubdir string `mapstructure:"incident_subdir"` // Subdir for incident tickets
-	HackSubdir     string `mapstructure:"hack_subdir"`     // Subdir for hack sessions
-}
-
-// RepositoryConfig holds Git repository configuration
-type RepositoryConfig struct {
-	Owner      string `mapstructure:"owner"`
-	Name       string `mapstructure:"name"`
-	BasePath   string `mapstructure:"base_path"`
-	BaseBranch string `mapstructure:"base_branch"`
+// GitConfig holds optional git configuration overrides
+type GitConfig struct {
+	BaseBranch string `mapstructure:"base_branch"` // Optional override for default branch
 }
 
 // HistoryConfig holds command history configuration
@@ -99,20 +83,13 @@ func setDefaults() {
 		homeDir = "."
 	}
 
-	// Vault defaults
-	viper.SetDefault("vault.path", filepath.Join(homeDir, "Documents", "Second Brain"))
-	viper.SetDefault("vault.templates_dir", "templates")
-	viper.SetDefault("vault.areas_dir", "Areas/Work")
-	viper.SetDefault("vault.daily_dir", "Daily")
-	viper.SetDefault("vault.default_subdir", "Tickets")
-	viper.SetDefault("vault.incident_subdir", "Incidents")
-	viper.SetDefault("vault.hack_subdir", "Hacks")
+	// Notes defaults
+	viper.SetDefault("notes.path", filepath.Join(homeDir, "Documents", "Notes"))
+	viper.SetDefault("notes.daily_dir", "daily")
+	viper.SetDefault("notes.template_dir", filepath.Join(homeDir, ".config", "sre", "templates"))
 
-	// Repository defaults
-	viper.SetDefault("repository.owner", "test")
-	viper.SetDefault("repository.name", "test")
-	viper.SetDefault("repository.base_path", filepath.Join(homeDir, "src"))
-	viper.SetDefault("repository.base_branch", "main")
+	// Git defaults (empty means auto-detect)
+	viper.SetDefault("git.base_branch", "")
 
 	// History defaults
 	viper.SetDefault("history.database_path", filepath.Join(homeDir, ".histdb", "zsh-history.db"))
@@ -135,24 +112,14 @@ func setDefaults() {
 func expandPaths(config *Config) error {
 	var err error
 
-	config.Vault.Path, err = expandPath(config.Vault.Path)
+	config.Notes.Path, err = expandPath(config.Notes.Path)
 	if err != nil {
 		return err
 	}
 
-	// Expand legacy single repo path
-	config.Repository.BasePath, err = expandPath(config.Repository.BasePath)
+	config.Notes.TemplateDir, err = expandPath(config.Notes.TemplateDir)
 	if err != nil {
 		return err
-	}
-
-	// Expand multi-repo paths
-	for name, repo := range config.Repositories {
-		repo.BasePath, err = expandPath(repo.BasePath)
-		if err != nil {
-			return err
-		}
-		config.Repositories[name] = repo
 	}
 
 	config.History.DatabasePath, err = expandPath(config.History.DatabasePath)
@@ -175,142 +142,4 @@ func expandPath(path string) (string, error) {
 	}
 
 	return filepath.Join(homeDir, path[1:]), nil
-}
-
-// GetRepositoryPath returns the full path to the repository
-func (c *Config) GetRepositoryPath() string {
-	return filepath.Join(c.Repository.BasePath, c.Repository.Owner, c.Repository.Name)
-}
-
-// GetWorktreePath returns the path for a specific ticket's worktree
-func (c *Config) GetWorktreePath(ticketType, ticket string) string {
-	return filepath.Join(c.GetRepositoryPath(), ticketType, ticket)
-}
-
-// GetNotePath returns the path for a ticket's Obsidian note
-func (c *Config) GetNotePath(ticketType, ticket string) string {
-	subdir := c.GetVaultSubdir(ticketType)
-	return filepath.Join(c.Vault.Path, c.Vault.AreasDir, subdir, ticketType, ticket+".md")
-}
-
-// GetVaultSubdir returns the vault subdirectory for a ticket type
-func (c *Config) GetVaultSubdir(ticketType string) string {
-	// Check ticket_types config first
-	if typeConfig, ok := c.TicketTypes[ticketType]; ok && typeConfig.VaultSubdir != "" {
-		return typeConfig.VaultSubdir
-	}
-
-	// Fall back to configured defaults
-	switch ticketType {
-	case "incident":
-		return c.Vault.IncidentSubdir
-	case "hack":
-		return c.Vault.HackSubdir
-	default:
-		return c.Vault.DefaultSubdir
-	}
-}
-
-// IsMultiRepo returns true if multi-repo configuration is being used
-func (c *Config) IsMultiRepo() bool {
-	return len(c.Repositories) > 0
-}
-
-// GetRepoForTicketType returns the repository config for a given ticket type
-// Falls back to default repo or legacy single repo config
-func (c *Config) GetRepoForTicketType(ticketType string) *RepositoryConfig {
-	// If multi-repo is configured
-	if c.IsMultiRepo() {
-		// Check if ticket type has a specific repo mapping
-		if typeConfig, ok := c.TicketTypes[ticketType]; ok && typeConfig.Repo != "" {
-			if repo, ok := c.Repositories[typeConfig.Repo]; ok {
-				return &repo
-			}
-		}
-
-		// Fall back to default repo
-		if c.DefaultRepo != "" {
-			if repo, ok := c.Repositories[c.DefaultRepo]; ok {
-				return &repo
-			}
-		}
-
-		// Fall back to first repo alphabetically (deterministic)
-		var names []string
-		for name := range c.Repositories {
-			names = append(names, name)
-		}
-		sort.Strings(names)
-		if len(names) > 0 {
-			repo := c.Repositories[names[0]]
-			return &repo
-		}
-	}
-
-	// Fall back to legacy single repo config
-	return &c.Repository
-}
-
-// GetRepoByName returns a repository config by name
-func (c *Config) GetRepoByName(name string) (*RepositoryConfig, error) {
-	if c.IsMultiRepo() {
-		if repo, ok := c.Repositories[name]; ok {
-			return &repo, nil
-		}
-		return nil, fmt.Errorf("repository %q not found in configuration", name)
-	}
-
-	// If not multi-repo, return legacy config if name matches or is empty
-	if name == "" || name == c.Repository.Name {
-		return &c.Repository, nil
-	}
-	return nil, fmt.Errorf("repository %q not found in configuration", name)
-}
-
-// GetDefaultRepo returns the default repository config
-func (c *Config) GetDefaultRepo() *RepositoryConfig {
-	if c.IsMultiRepo() {
-		if c.DefaultRepo != "" {
-			if repo, ok := c.Repositories[c.DefaultRepo]; ok {
-				return &repo
-			}
-		}
-		// Return first repo alphabetically if no default set (deterministic)
-		var names []string
-		for name := range c.Repositories {
-			names = append(names, name)
-		}
-		sort.Strings(names)
-		if len(names) > 0 {
-			repo := c.Repositories[names[0]]
-			return &repo
-		}
-	}
-	return &c.Repository
-}
-
-// GetAllRepos returns all configured repositories
-func (c *Config) GetAllRepos() map[string]*RepositoryConfig {
-	repos := make(map[string]*RepositoryConfig)
-
-	if c.IsMultiRepo() {
-		for name, repo := range c.Repositories {
-			repoCopy := repo
-			repos[name] = &repoCopy
-		}
-	} else {
-		// Legacy single repo - use name as key, or "default" if empty
-		key := c.Repository.Name
-		if key == "" {
-			key = "default"
-		}
-		repos[key] = &c.Repository
-	}
-
-	return repos
-}
-
-// GetRepositoryPathForRepo returns the full path to a specific repository
-func (c *Config) GetRepositoryPathForRepo(repo *RepositoryConfig) string {
-	return filepath.Join(repo.BasePath, repo.Owner, repo.Name)
 }

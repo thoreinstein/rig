@@ -138,8 +138,8 @@ func TestCreateDefaultConfig(t *testing.T) {
 	}
 
 	expectedSections := []string{
-		"[vault]",
-		"[repository]",
+		"[notes]",
+		"[git]",
 		"[history]",
 		"[jira]",
 		"[tmux]",
@@ -187,24 +187,52 @@ func TestCreateDefaultConfig_AlreadyExists(t *testing.T) {
 	}
 }
 
+func TestConfigEditSubcommand(t *testing.T) {
+	// Verify the edit subcommand is registered
+	cmd := configEditCmd
+
+	if cmd.Use != "edit" {
+		t.Errorf("config edit command Use = %q, want %q", cmd.Use, "edit")
+	}
+
+	if cmd.Short == "" {
+		t.Error("config edit command should have Short description")
+	}
+
+	if cmd.Long == "" {
+		t.Error("config edit command should have Long description")
+	}
+
+	// Verify key information is in the description
+	if !strings.Contains(cmd.Long, "EDITOR") {
+		t.Error("config edit command Long description should mention 'EDITOR'")
+	}
+
+	// Verify subcommand is registered under configCmd
+	found := false
+	for _, subcmd := range configCmd.Commands() {
+		if subcmd.Use == "edit" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("edit subcommand should be registered under config command")
+	}
+}
+
 func TestDefaultConfigContent(t *testing.T) {
 	// Verify the default config has all necessary fields (TOML format)
 	defaultConfig := `# SRE CLI Configuration
 
-[vault]
-path = "~/Documents/Second Brain"
-templates_dir = "templates"
-areas_dir = "Areas/Work"
-daily_dir = "Daily"
-default_subdir = "Tickets"
-incident_subdir = "Incidents"
-hack_subdir = "Hacks"
+[notes]
+path = "~/Documents/Notes"
+daily_dir = "daily"
+template_dir = "~/.config/sre/templates"
 
-[repository]
-owner = "your-org"
-name = "your-repo"
-base_path = "~/src"
-base_branch = "main"
+[git]
+# Optional: override auto-detected default branch
+# base_branch = "main"
 
 [history]
 database_path = "~/.histdb/zsh-history.db"
@@ -233,16 +261,11 @@ working_dir = "{worktree_path}"
 
 	// Verify all required sections are present (TOML format)
 	requiredFields := []string{
-		"[vault]",
+		"[notes]",
 		"path =",
-		"templates_dir =",
-		"areas_dir =",
 		"daily_dir =",
-		"[repository]",
-		"owner =",
-		"name =",
-		"base_path =",
-		"base_branch =",
+		"template_dir =",
+		"[git]",
 		"[history]",
 		"database_path =",
 		"ignore_patterns =",

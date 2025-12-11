@@ -6,13 +6,19 @@ import (
 	"os/exec"
 	"regexp"
 	"strings"
-
-	"thoreinstein.com/sre/pkg/obsidian"
 )
 
 // validCliCommandPattern validates CLI command names to prevent injection.
 // Allows alphanumeric characters, hyphens, underscores, and forward slashes (for paths).
 var validCliCommandPattern = regexp.MustCompile(`^[a-zA-Z0-9_\-/]+$`)
+
+// TicketInfo holds JIRA ticket information
+type TicketInfo struct {
+	Type        string
+	Summary     string
+	Status      string
+	Description string
+}
 
 // Client handles JIRA integration via CLI tool
 type Client struct {
@@ -39,7 +45,7 @@ func (c *Client) IsAvailable() bool {
 }
 
 // FetchTicketDetails fetches JIRA ticket details using the CLI
-func (c *Client) FetchTicketDetails(ticket string) (*obsidian.JiraInfo, error) {
+func (c *Client) FetchTicketDetails(ticket string) (*TicketInfo, error) {
 	if !c.IsAvailable() {
 		if c.Verbose {
 			fmt.Printf("JIRA CLI command '%s' not found, skipping JIRA details fetch\n", c.CliCommand)
@@ -69,8 +75,8 @@ func (c *Client) FetchTicketDetails(ticket string) (*obsidian.JiraInfo, error) {
 }
 
 // parseJiraOutput parses the output from the JIRA CLI command
-func (c *Client) parseJiraOutput(output string) *obsidian.JiraInfo {
-	jiraInfo := &obsidian.JiraInfo{}
+func (c *Client) parseJiraOutput(output string) *TicketInfo {
+	jiraInfo := &TicketInfo{}
 
 	lines := strings.Split(output, "\n")
 	descriptionStarted := false
