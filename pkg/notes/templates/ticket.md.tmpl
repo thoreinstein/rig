@@ -1,0 +1,19 @@
+# {{.Ticket}}
+
+## Summary
+
+{{if .Summary}}{{.Summary}}{{else}}Work on {{.TicketType}} ticket: {{.Ticket}}{{end}}
+
+{{if .Status}}**Status:** {{.Status}}
+
+{{end}}{{if .Description}}## Description
+
+{{.Description}}
+
+{{end}}## Notes
+
+- Created: {{.Date}}
+- Worktree: `{{.WorktreePath}}`
+
+## Log
+

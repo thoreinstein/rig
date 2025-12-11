@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 	"thoreinstein.com/sre/pkg/config"
 	"thoreinstein.com/sre/pkg/history"
+	"thoreinstein.com/sre/pkg/notes"
 )
 
 // timelineCmd represents the timeline command
@@ -326,10 +327,11 @@ func writeTimelineToFile(timeline, filename string) error {
 	return os.WriteFile(filename, []byte(timeline), 0600)
 }
 
-// updateTicketNoteWithTimeline updates the ticket's Obsidian note with the timeline
+// updateTicketNoteWithTimeline updates the ticket's note with the timeline
 func updateTicketNoteWithTimeline(cfg *config.Config, ticketInfo *TicketInfo, timeline string) error {
-	// Get note path
-	notePath := cfg.GetNotePath(ticketInfo.Type, ticketInfo.Full)
+	// Get note path using notes manager
+	notesMgr := notes.NewManager(cfg.Notes.Path, cfg.Notes.DailyDir, cfg.Notes.TemplateDir, verbose)
+	notePath := notesMgr.GetNotePath(ticketInfo.Type, ticketInfo.Full)
 
 	// Check if note exists
 	if _, err := os.Stat(notePath); os.IsNotExist(err) {

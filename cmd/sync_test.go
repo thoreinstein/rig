@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"thoreinstein.com/sre/pkg/obsidian"
+	"thoreinstein.com/sre/pkg/jira"
 )
 
 func TestUpdateNoteTitle(t *testing.T) {
@@ -73,13 +73,13 @@ func TestUpdateNoteTitle(t *testing.T) {
 func TestBuildJiraDetailsSection(t *testing.T) {
 	tests := []struct {
 		name     string
-		jiraInfo *obsidian.JiraInfo
+		jiraInfo *jira.TicketInfo
 		contains []string
 		missing  []string
 	}{
 		{
 			name: "all fields present",
-			jiraInfo: &obsidian.JiraInfo{
+			jiraInfo: &jira.TicketInfo{
 				Type:        "Bug",
 				Status:      "In Progress",
 				Description: "This is a bug description.",
@@ -94,7 +94,7 @@ func TestBuildJiraDetailsSection(t *testing.T) {
 		},
 		{
 			name: "only type",
-			jiraInfo: &obsidian.JiraInfo{
+			jiraInfo: &jira.TicketInfo{
 				Type: "Story",
 			},
 			contains: []string{"**Type:** Story"},
@@ -102,7 +102,7 @@ func TestBuildJiraDetailsSection(t *testing.T) {
 		},
 		{
 			name: "only status",
-			jiraInfo: &obsidian.JiraInfo{
+			jiraInfo: &jira.TicketInfo{
 				Status: "Done",
 			},
 			contains: []string{"**Status:** Done"},
@@ -110,7 +110,7 @@ func TestBuildJiraDetailsSection(t *testing.T) {
 		},
 		{
 			name: "only description",
-			jiraInfo: &obsidian.JiraInfo{
+			jiraInfo: &jira.TicketInfo{
 				Description: "Just a description",
 			},
 			contains: []string{"**Description:**", "Just a description"},
@@ -118,13 +118,13 @@ func TestBuildJiraDetailsSection(t *testing.T) {
 		},
 		{
 			name:     "empty info",
-			jiraInfo: &obsidian.JiraInfo{},
+			jiraInfo: &jira.TicketInfo{},
 			contains: []string{},
 			missing:  []string{"**Type:**", "**Status:**", "**Description:**"},
 		},
 		{
 			name: "multiline description",
-			jiraInfo: &obsidian.JiraInfo{
+			jiraInfo: &jira.TicketInfo{
 				Type:        "Task",
 				Description: "Line 1\nLine 2\nLine 3",
 			},
@@ -158,7 +158,7 @@ func TestUpdateJiraDetailsSection(t *testing.T) {
 	tests := []struct {
 		name     string
 		content  string
-		jiraInfo *obsidian.JiraInfo
+		jiraInfo *jira.TicketInfo
 		contains []string
 	}{
 		{
@@ -177,7 +177,7 @@ Some summary.
 ## Notes
 
 Some notes.`,
-			jiraInfo: &obsidian.JiraInfo{
+			jiraInfo: &jira.TicketInfo{
 				Type:   "New Type",
 				Status: "New Status",
 			},
@@ -200,7 +200,7 @@ Some summary here.
 ## Notes
 
 Some notes.`,
-			jiraInfo: &obsidian.JiraInfo{
+			jiraInfo: &jira.TicketInfo{
 				Type:   "Bug",
 				Status: "Open",
 			},
@@ -217,7 +217,7 @@ Some notes.`,
 			content: `# Ticket Title
 
 Just some content without Summary section.`,
-			jiraInfo: &obsidian.JiraInfo{
+			jiraInfo: &jira.TicketInfo{
 				Type: "Task",
 			},
 			contains: []string{
@@ -229,7 +229,7 @@ Just some content without Summary section.`,
 		{
 			name:    "empty content",
 			content: "",
-			jiraInfo: &obsidian.JiraInfo{
+			jiraInfo: &jira.TicketInfo{
 				Type: "Story",
 			},
 			contains: []string{
@@ -268,7 +268,7 @@ These notes should stay intact.
 - Entry 1
 - Entry 2`
 
-	jiraInfo := &obsidian.JiraInfo{
+	jiraInfo := &jira.TicketInfo{
 		Type:   "Bug",
 		Status: "In Progress",
 	}
@@ -314,7 +314,7 @@ Some notes here.`
 		t.Fatalf("Failed to write test note: %v", err)
 	}
 
-	jiraInfo := &obsidian.JiraInfo{
+	jiraInfo := &jira.TicketInfo{
 		Summary:     "New JIRA Summary",
 		Type:        "Bug",
 		Status:      "In Progress",
@@ -374,7 +374,7 @@ Content here.`
 	}
 
 	// JIRA info without summary - title should not change
-	jiraInfo := &obsidian.JiraInfo{
+	jiraInfo := &jira.TicketInfo{
 		Type:   "Task",
 		Status: "Open",
 	}
@@ -395,7 +395,7 @@ Content here.`
 }
 
 func TestUpdateNoteWithJiraInfo_NonExistentFile(t *testing.T) {
-	err := updateNoteWithJiraInfo("/nonexistent/path/note.md", &obsidian.JiraInfo{})
+	err := updateNoteWithJiraInfo("/nonexistent/path/note.md", &jira.TicketInfo{})
 	if err == nil {
 		t.Error("updateNoteWithJiraInfo() should error for non-existent file")
 	}
