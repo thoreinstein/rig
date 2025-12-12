@@ -22,7 +22,7 @@ var hackCmd = &cobra.Command{
 
 This command creates a simplified workflow without JIRA integration:
 - Creates git worktree at {repo}/hack/{name}
-- Creates branch hack/{name}
+- Creates branch {name}
 - Optionally creates markdown note with --notes flag
 - Creates tmux session
 
@@ -88,8 +88,8 @@ func runHackCommand(name string) error {
 		return err
 	}
 
-	// For hacks, use "hack" as the type directory and "hack/{name}" as the branch name
-	worktreePath, err := gitManager.CreateWorktreeWithBranch("hack", name, "hack/"+name)
+	// For hacks, use "hack" as the type directory
+	worktreePath, err := gitManager.CreateWorktreeWithBranch("hack", name, name)
 	if err != nil {
 		return fmt.Errorf("failed to create git worktree: %w", err)
 	}

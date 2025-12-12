@@ -57,7 +57,7 @@ func TestHackCommandDescription(t *testing.T) {
 }
 
 func TestHackBranchNaming(t *testing.T) {
-	// The hack command creates branches with "hack/" prefix
+	// The hack command creates branches without prefix (just the name)
 	// Test that the expected branch name format is documented
 	tests := []struct {
 		name           string
@@ -67,26 +67,25 @@ func TestHackBranchNaming(t *testing.T) {
 		{
 			name:           "simple name",
 			hackName:       "experiment",
-			expectedBranch: "hack/experiment",
+			expectedBranch: "experiment",
 		},
 		{
 			name:           "name with dashes",
 			hackName:       "winter-2025",
-			expectedBranch: "hack/winter-2025",
+			expectedBranch: "winter-2025",
 		},
 		{
 			name:           "name with numbers",
 			hackName:       "test123",
-			expectedBranch: "hack/test123",
+			expectedBranch: "test123",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Verify expected branch format
-			expectedBranch := "hack/" + tt.hackName
-			if expectedBranch != tt.expectedBranch {
-				t.Errorf("Branch format = %q, want %q", expectedBranch, tt.expectedBranch)
+			// Verify expected branch format (no prefix)
+			if tt.hackName != tt.expectedBranch {
+				t.Errorf("Branch format = %q, want %q", tt.hackName, tt.expectedBranch)
 			}
 		})
 	}
