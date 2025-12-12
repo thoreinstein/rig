@@ -43,7 +43,8 @@ func (m *MockCommandRunner) Output(dir string, name string, args ...string) ([]b
 func TestGetRepoRoot_Success(t *testing.T) {
 	mock := &MockCommandRunner{
 		OutputFunc: func(dir string, name string, args ...string) ([]byte, error) {
-			if len(args) > 0 && args[0] == "rev-parse" {
+			if len(args) > 1 && args[0] == "rev-parse" && args[1] == "--git-common-dir" {
+				// Absolute path returned from a worktree
 				return []byte("/home/user/src/myorg/myrepo\n"), nil
 			}
 			return []byte{}, nil
@@ -64,7 +65,7 @@ func TestGetRepoRoot_Success(t *testing.T) {
 func TestGetRepoRoot_NotGitRepo(t *testing.T) {
 	mock := &MockCommandRunner{
 		OutputFunc: func(dir string, name string, args ...string) ([]byte, error) {
-			if len(args) > 0 && args[0] == "rev-parse" {
+			if len(args) > 1 && args[0] == "rev-parse" && args[1] == "--git-common-dir" {
 				return nil, errors.New("fatal: not a git repository")
 			}
 			return []byte{}, nil
@@ -82,10 +83,88 @@ func TestGetRepoRoot_NotGitRepo(t *testing.T) {
 	}
 }
 
+func TestGetRepoRoot_BareRepoRelativePath(t *testing.T) {
+	// In a bare repo, git rev-parse --git-common-dir returns "."
+	mock := &MockCommandRunner{
+		OutputFunc: func(dir string, name string, args ...string) ([]byte, error) {
+			if len(args) > 1 && args[0] == "rev-parse" && args[1] == "--git-common-dir" {
+				return []byte(".\n"), nil
+			}
+			return []byte{}, nil
+		},
+	}
+	wm := NewWorktreeManagerWithRunner("", false, mock)
+	// Override getwd to return a known path
+	wm.getwd = func() (string, error) {
+		return "/home/user/src/myorg/myrepo", nil
+	}
+
+	root, err := wm.GetRepoRoot()
+	if err != nil {
+		t.Fatalf("GetRepoRoot() error = %v, want nil", err)
+	}
+
+	if root != "/home/user/src/myorg/myrepo" {
+		t.Errorf("GetRepoRoot() = %q, want %q", root, "/home/user/src/myorg/myrepo")
+	}
+}
+
+func TestGetRepoRoot_GetwdError(t *testing.T) {
+	// Test error handling when getwd fails
+	mock := &MockCommandRunner{
+		OutputFunc: func(dir string, name string, args ...string) ([]byte, error) {
+			if len(args) > 1 && args[0] == "rev-parse" && args[1] == "--git-common-dir" {
+				return []byte(".\n"), nil
+			}
+			return []byte{}, nil
+		},
+	}
+	wm := NewWorktreeManagerWithRunner("", false, mock)
+	wm.getwd = func() (string, error) {
+		return "", errors.New("permission denied")
+	}
+
+	_, err := wm.GetRepoRoot()
+	if err == nil {
+		t.Fatal("GetRepoRoot() expected error, got nil")
+	}
+
+	if !strings.Contains(err.Error(), "failed to get working directory") {
+		t.Errorf("Error = %q, want to contain 'failed to get working directory'", err.Error())
+	}
+}
+
+func TestGetRepoRoot_PathCleaning(t *testing.T) {
+	// Test that paths with .. components are cleaned properly
+	mock := &MockCommandRunner{
+		OutputFunc: func(dir string, name string, args ...string) ([]byte, error) {
+			if len(args) > 1 && args[0] == "rev-parse" && args[1] == "--git-common-dir" {
+				// Simulate a relative path with parent directory reference
+				return []byte("../myrepo\n"), nil
+			}
+			return []byte{}, nil
+		},
+	}
+	wm := NewWorktreeManagerWithRunner("", false, mock)
+	wm.getwd = func() (string, error) {
+		return "/home/user/src/myorg/worktree", nil
+	}
+
+	root, err := wm.GetRepoRoot()
+	if err != nil {
+		t.Fatalf("GetRepoRoot() error = %v, want nil", err)
+	}
+
+	// /home/user/src/myorg/worktree + ../myrepo -> /home/user/src/myorg/myrepo
+	if root != "/home/user/src/myorg/myrepo" {
+		t.Errorf("GetRepoRoot() = %q, want %q", root, "/home/user/src/myorg/myrepo")
+	}
+}
+
 func TestGetRepoName_Success(t *testing.T) {
 	mock := &MockCommandRunner{
 		OutputFunc: func(dir string, name string, args ...string) ([]byte, error) {
-			if len(args) > 0 && args[0] == "rev-parse" {
+			if len(args) > 1 && args[0] == "rev-parse" && args[1] == "--git-common-dir" {
 				return []byte("/home/user/src/myorg/myrepo\n"), nil
 			}
 			return []byte{}, nil
@@ -106,7 +185,7 @@ func TestGetRepoName_Success(t *testing.T) {
 func TestGetDefaultBranch_ConfigOverride(t *testing.T) {
 	mock := &MockCommandRunner{
 		OutputFunc: func(dir string, name string, args ...string) ([]byte, error) {
-			if len(args) > 0 && args[0] == "rev-parse" {
+			if len(args) > 1 && args[0] == "rev-parse" && args[1] == "--git-common-dir" {
 				return []byte("/repo\n"), nil
 			}
 			return []byte{}, nil
@@ -134,7 +213,7 @@ func TestGetDefaultBranch_ConfigOverride(t *testing.T) {
 func TestGetDefaultBranch_RemoteHEAD(t *testing.T) {
 	mock := &MockCommandRunner{
 		OutputFunc: func(dir string, name string, args ...string) ([]byte, error) {
-			if len(args) > 0 && args[0] == "rev-parse" {
+			if len(args) > 1 && args[0] == "rev-parse" && args[1] == "--git-common-dir" {
 				return []byte("/repo\n"), nil
 			}
 			if len(args) > 0 && args[0] == "symbolic-ref" {
@@ -165,7 +244,7 @@ func TestGetDefaultBranch_RemoteHEAD(t *testing.T) {
 func TestGetDefaultBranch_FallbackToMain(t *testing.T) {
 	mock := &MockCommandRunner{
 		OutputFunc: func(dir string, name string, args ...string) ([]byte, error) {
-			if len(args) > 0 && args[0] == "rev-parse" {
+			if len(args) > 1 && args[0] == "rev-parse" && args[1] == "--git-common-dir" {
 				return []byte("/repo\n"), nil
 			}
 			if len(args) > 0 && args[0] == "symbolic-ref" {
@@ -196,7 +275,7 @@ func TestGetDefaultBranch_FallbackToMain(t *testing.T) {
 func TestGetDefaultBranch_FallbackToMaster(t *testing.T) {
 	mock := &MockCommandRunner{
 		OutputFunc: func(dir string, name string, args ...string) ([]byte, error) {
-			if len(args) > 0 && args[0] == "rev-parse" {
+			if len(args) > 1 && args[0] == "rev-parse" && args[1] == "--git-common-dir" {
 				return []byte("/repo\n"), nil
 			}
 			if len(args) > 0 && args[0] == "symbolic-ref" {
@@ -563,7 +642,7 @@ func TestCreateInitialBranch_CommitError(t *testing.T) {
 func TestListWorktrees_Success(t *testing.T) {
 	mock := &MockCommandRunner{
 		OutputFunc: func(dir string, name string, args ...string) ([]byte, error) {
-			if len(args) > 0 && args[0] == "rev-parse" {
+			if len(args) > 1 && args[0] == "rev-parse" && args[1] == "--git-common-dir" {
 				return []byte("/home/user/repo\n"), nil
 			}
 			if len(args) > 0 && args[0] == "worktree" {
@@ -594,7 +673,7 @@ func TestListWorktrees_Success(t *testing.T) {
 func TestListWorktrees_Empty(t *testing.T) {
 	mock := &MockCommandRunner{
 		OutputFunc: func(dir string, name string, args ...string) ([]byte, error) {
-			if len(args) > 0 && args[0] == "rev-parse" {
+			if len(args) > 1 && args[0] == "rev-parse" && args[1] == "--git-common-dir" {
 				return []byte("/home/user/repo\n"), nil
 			}
 			return []byte(""), nil
@@ -615,7 +694,7 @@ func TestListWorktrees_Empty(t *testing.T) {
 func TestListWorktrees_Error(t *testing.T) {
 	mock := &MockCommandRunner{
 		OutputFunc: func(dir string, name string, args ...string) ([]byte, error) {
-			if len(args) > 0 && args[0] == "rev-parse" {
+			if len(args) > 1 && args[0] == "rev-parse" && args[1] == "--git-common-dir" {
 				return []byte("/home/user/repo\n"), nil
 			}
 			return nil, errors.New("not a git repository")

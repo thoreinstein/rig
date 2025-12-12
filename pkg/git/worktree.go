@@ -45,6 +45,7 @@ type WorktreeManager struct {
 	Verbose          bool
 	BaseBranchConfig string // Optional config override for base branch
 	runner           CommandRunner
+	getwd            func() (string, error) // For testing; defaults to os.Getwd
 }
 
 // NewWorktreeManager creates a new WorktreeManager
@@ -53,6 +54,7 @@ func NewWorktreeManager(baseBranchConfig string, verbose bool) *WorktreeManager 
 		Verbose:          verbose,
 		BaseBranchConfig: baseBranchConfig,
 		runner:           &RealCommandRunner{Verbose: verbose},
+		getwd:            os.Getwd,
 	}
 }
 
@@ -62,16 +64,34 @@ func NewWorktreeManagerWithRunner(baseBranchConfig string, verbose bool, runner 
 		Verbose:          verbose,
 		BaseBranchConfig: baseBranchConfig,
 		runner:           runner,
+		getwd:            os.Getwd,
 	}
 }
 
-// GetRepoRoot returns the repository root from the current working directory
+// GetRepoRoot returns the bare repository root from the current working directory.
+// This works correctly from both bare repositories and worktrees by using
+// --git-common-dir which returns the shared git directory across all worktrees.
 func (wm *WorktreeManager) GetRepoRoot() (string, error) {
-	output, err := wm.runner.Output(".", "git", "rev-parse", "--show-toplevel")
+	// Use --git-common-dir to get the shared git directory
+	// This works from both bare repos and worktrees
+	output, err := wm.runner.Output(".", "git", "rev-parse", "--git-common-dir")
 	if err != nil {
 		return "", errors.New("not inside a git repository. Run this command from within your repo")
 	}
-	return strings.TrimSpace(string(output)), nil
+
+	commonDir := strings.TrimSpace(string(output))
+
+	// If it's a relative path (like "." in bare repos), resolve to absolute
+	if !filepath.IsAbs(commonDir) {
+		cwd, err := wm.getwd()
+		if err != nil {
+			return "", fmt.Errorf("failed to get working directory: %w", err)
+		}
+		commonDir = filepath.Join(cwd, commonDir)
+	}
+
+	// Clean the path to resolve any .. or . components
+	return filepath.Clean(commonDir), nil
 }
 
 // GetRepoName returns the repository name (basename of repo root)
