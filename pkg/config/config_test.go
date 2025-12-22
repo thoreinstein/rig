@@ -74,6 +74,20 @@ func TestLoad_WithDefaults(t *testing.T) {
 	if config.Notes.DailyDir != "daily" {
 		t.Errorf("Expected notes.daily_dir to default to 'daily', got %q", config.Notes.DailyDir)
 	}
+
+	// Verify default tmux windows are properly loaded (regression test for type mismatch bug)
+	if len(config.Tmux.Windows) != 3 {
+		t.Errorf("Expected 3 default tmux windows, got %d", len(config.Tmux.Windows))
+	}
+	if len(config.Tmux.Windows) >= 1 && config.Tmux.Windows[0].Name != "note" {
+		t.Errorf("Expected first window name to be 'note', got %q", config.Tmux.Windows[0].Name)
+	}
+	if len(config.Tmux.Windows) >= 2 && config.Tmux.Windows[1].Name != "code" {
+		t.Errorf("Expected second window name to be 'code', got %q", config.Tmux.Windows[1].Name)
+	}
+	if len(config.Tmux.Windows) >= 3 && config.Tmux.Windows[2].Name != "term" {
+		t.Errorf("Expected third window name to be 'term', got %q", config.Tmux.Windows[2].Name)
+	}
 }
 
 func TestLoad_WithConfigFile(t *testing.T) {
