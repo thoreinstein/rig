@@ -17,7 +17,7 @@ builds:
       - -trimpath
     ldflags:
       - -s -w
-      - -X thoreinstein.com/sre/cmd.version={{.Version}}
+      - -X thoreinstein.com/sre/cmd.Version={{.Version}}
       - -X thoreinstein.com/sre/cmd.commit={{.Commit}}
       - -X thoreinstein.com/sre/cmd.date={{.Date}}
     goos:
