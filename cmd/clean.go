@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+
 	"thoreinstein.com/sre/pkg/config"
 	"thoreinstein.com/sre/pkg/git"
 	"thoreinstein.com/sre/pkg/tmux"
@@ -130,8 +131,6 @@ func runCleanCommand() error {
 }
 
 func findCleanupCandidates(cfg *config.Config) ([]CleanupCandidate, error) {
-	var candidates []CleanupCandidate
-
 	gitManager := git.NewWorktreeManager(cfg.Git.BaseBranch, verbose)
 
 	repoRoot, err := gitManager.GetRepoRoot()
@@ -166,6 +165,7 @@ func findCleanupCandidates(cfg *config.Config) ([]CleanupCandidate, error) {
 		baseBranch = "main" // fallback
 	}
 
+	candidates := make([]CleanupCandidate, 0, len(worktrees))
 	for _, wt := range worktrees {
 		// Skip the main repo path
 		if wt == repoRoot {

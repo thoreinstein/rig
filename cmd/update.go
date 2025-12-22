@@ -88,15 +88,11 @@ func runUpdateCommand(ctx context.Context) error {
 
 	repo := selfupdate.NewRepositorySlug(repoOwner, repoName)
 
-	var latest *selfupdate.Release
-	var found bool
+	// TODO: implement pre-release detection when go-selfupdate supports it
+	// For now, DetectLatest handles both cases the same way
+	_ = updatePre // silence unused warning until pre-release support is added
 
-	if updatePre {
-		// Include pre-releases by getting all releases and finding the latest
-		latest, found, err = updater.DetectLatest(ctx, repo)
-	} else {
-		latest, found, err = updater.DetectLatest(ctx, repo)
-	}
+	latest, found, err := updater.DetectLatest(ctx, repo)
 
 	if err != nil {
 		return fmt.Errorf("failed to detect latest version: %w", err)

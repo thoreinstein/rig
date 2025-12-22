@@ -194,7 +194,7 @@ func (nm *NoteManager) buildJiraSection(jiraInfo *JiraInfo) string {
 // insertAfterSummary inserts content after the ## Summary section
 func (nm *NoteManager) insertAfterSummary(content, insertion string) string {
 	lines := strings.Split(content, "\n")
-	var result []string
+	result := make([]string, 0, len(lines)+1)
 	summaryFound := false
 	insertionDone := false
 

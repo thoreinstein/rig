@@ -6,6 +6,7 @@ import (
 	"regexp"
 
 	"github.com/spf13/cobra"
+
 	"thoreinstein.com/sre/pkg/config"
 	"thoreinstein.com/sre/pkg/git"
 	"thoreinstein.com/sre/pkg/notes"
@@ -133,7 +134,7 @@ func runHackCommand(name string) error {
 	}
 
 	// Convert config windows to tmux windows
-	var tmuxWindows []tmux.WindowConfig
+	tmuxWindows := make([]tmux.WindowConfig, 0, len(cfg.Tmux.Windows))
 	for _, window := range cfg.Tmux.Windows {
 		tmuxWindows = append(tmuxWindows, tmux.WindowConfig{
 			Name:       window.Name,

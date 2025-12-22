@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+
 	"thoreinstein.com/sre/pkg/config"
 	"thoreinstein.com/sre/pkg/history"
 	"thoreinstein.com/sre/pkg/notes"
@@ -203,7 +204,7 @@ func generateTimelineMarkdown(commands []history.Command, ticket string) string 
 	}
 
 	// Sort days and output
-	var days []string
+	days := make([]string, 0, len(dayGroups))
 	for day := range dayGroups {
 		days = append(days, day)
 	}
