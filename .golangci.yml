@@ -5,28 +5,26 @@ linters:
   default: none
   enable:
     - bidichk
+    - bodyclose
+    - copyloopvar
+    - depguard
     - errcheck
-    - ginkgolinter
+    - gocritic
     - gomodguard
     - gosec
     - govet
     - ineffassign
+    - intrange
     - misspell
+    - nilerr
     - nolintlint
+    - perfsprint
+    - prealloc
     - staticcheck
     - unused
-    - whitespace
-    - depguard
-    - gocritic
-    - perfsprint
-    - copyloopvar
-    - intrange
     - usetesting
+    - whitespace
   settings:
-    ginkgolinter:
-      forbid-focus-container: true
-      validate-async-intervals: true
-      forbid-spec-pollution: true
     gomodguard:
       blocked:
         modules:
@@ -108,33 +106,6 @@ linters:
       - legacy
       - std-error-handling
     rules:
-      # allow dot imports for gomega tests
-      - linters:
-          - staticcheck
-        source: . "github.com/onsi/gomega"
-      - linters:
-          - staticcheck
-        source: . "github.com/onsi/ginkgo/v2"
-      - linters:
-          - staticcheck
-        source: . "github.com/onsi/gomega/gstruct"
-      # This rule targets only staticcheck's SA1019 warnings that mention the pubsub package.
-      # FIXME: remove when everyone has moved to the v2 package
-      - linters:
-        - staticcheck
-        text: "SA1019:.*cloud.google.com/go/pubsub" # SA1019 is the linter code for "using deprecated code"
-      # pointless 'copylock' checks in go vet in test suites
-      - linters:
-          - govet
-        source: func \(\w+ \w+Suite\)
-      # weird false positive
-      - linters:
-          - unused
-        path: tests/infra/ds_test_util
-      # weird false positive
-      - linters:
-          - unused
-        path: tests/infra/load.go
       # URLs can't all be constants...
       - path: (.+)\.go$
         text: G107 # Potential HTTP request made with variable url
@@ -162,7 +133,7 @@ formatters:
       sections:
         - standard
         - default
-        - prefix(github.com/ForgeCloud/saas)
+        - prefix(thoreinstein.com/sre)
       custom-order: true
   exclusions:
     paths:
