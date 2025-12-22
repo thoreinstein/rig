@@ -5,7 +5,7 @@ go 1.25.4
 require (
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/viper v1.21.0
-	modernc.org/sqlite v1.40.1
+	modernc.org/sqlite v1.41.0
 )
 
 require (
