@@ -2,12 +2,12 @@ package history
 
 import (
 	"database/sql"
-	"errors"
 	"fmt"
 	"os"
 	"strings"
 	"time"
 
+	"github.com/cockroachdb/errors"
 	_ "modernc.org/sqlite"
 )
 
@@ -89,14 +89,14 @@ func (dm *DatabaseManager) QueryCommands(options QueryOptions) ([]Command, error
 
 	db, err := sql.Open("sqlite", dm.DatabasePath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open database: %w", err)
+		return nil, errors.Wrap(err, "failed to open database")
 	}
 	defer db.Close()
 
 	// Detect database schema (zsh-histdb vs atuin)
 	schema, err := dm.detectSchema(db)
 	if err != nil {
-		return nil, fmt.Errorf("failed to detect database schema: %w", err)
+		return nil, errors.Wrap(err, "failed to detect database schema")
 	}
 
 	query, args := dm.buildQuery(schema, options)
@@ -108,7 +108,7 @@ func (dm *DatabaseManager) QueryCommands(options QueryOptions) ([]Command, error
 
 	rows, err := db.Query(query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to execute query: %w", err)
+		return nil, errors.Wrap(err, "failed to execute query")
 	}
 	defer rows.Close()
 
@@ -116,13 +116,13 @@ func (dm *DatabaseManager) QueryCommands(options QueryOptions) ([]Command, error
 	for rows.Next() {
 		command, err := dm.scanCommand(rows, schema)
 		if err != nil {
-			return nil, fmt.Errorf("failed to scan command: %w", err)
+			return nil, errors.Wrap(err, "failed to scan command")
 		}
 		commands = append(commands, command)
 	}
 
 	if err = rows.Err(); err != nil {
-		return nil, fmt.Errorf("error during row iteration: %w", err)
+		return nil, errors.Wrap(err, "error during row iteration")
 	}
 
 	return commands, nil
@@ -355,7 +355,7 @@ func (dm *DatabaseManager) GetDatabaseInfo() (map[string]interface{}, error) {
 	// Get file info
 	fileInfo, err := os.Stat(dm.DatabasePath)
 	if err != nil {
-		return info, fmt.Errorf("failed to get file info: %w", err)
+		return info, errors.Wrap(err, "failed to get file info")
 	}
 
 	info["size"] = fileInfo.Size()

@@ -1,12 +1,13 @@
 package git
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/cockroachdb/errors"
 )
 
 // CommandRunner executes shell commands and returns output
@@ -85,7 +86,7 @@ func (wm *WorktreeManager) GetRepoRoot() (string, error) {
 	if !filepath.IsAbs(commonDir) {
 		cwd, err := wm.getwd()
 		if err != nil {
-			return "", fmt.Errorf("failed to get working directory: %w", err)
+			return "", errors.Wrap(err, "failed to get working directory")
 		}
 		commonDir = filepath.Join(cwd, commonDir)
 	}
@@ -169,13 +170,13 @@ func (wm *WorktreeManager) CreateWorktreeWithBranch(ticketType, name, branchName
 
 	// Validate path stays within repo root (prevent path traversal)
 	if !strings.HasPrefix(worktreePath, repoRoot+string(filepath.Separator)) {
-		return "", fmt.Errorf("invalid path: worktree path escapes repository root")
+		return "", errors.New("invalid path: worktree path escapes repository root")
 	}
 
 	// Create type directory if it doesn't exist
 	typeDir := filepath.Join(repoRoot, ticketType)
 	if err := os.MkdirAll(typeDir, 0755); err != nil {
-		return "", fmt.Errorf("failed to create type directory: %w", err)
+		return "", errors.Wrap(err, "failed to create type directory")
 	}
 
 	// Check if worktree already exists
@@ -189,7 +190,7 @@ func (wm *WorktreeManager) CreateWorktreeWithBranch(ticketType, name, branchName
 	// Determine base branch to use
 	baseBranch, err := wm.GetDefaultBranch()
 	if err != nil {
-		return "", fmt.Errorf("failed to determine base branch: %w", err)
+		return "", errors.Wrap(err, "failed to determine base branch")
 	}
 
 	// Fetch and pull latest changes before creating worktree
@@ -208,7 +209,7 @@ func (wm *WorktreeManager) CreateWorktreeWithBranch(ticketType, name, branchName
 	relativePath := filepath.Join(ticketType, name)
 	err = wm.runner.Run(repoRoot, "git", "worktree", "add", relativePath, "-b", branchName, baseBranch)
 	if err != nil {
-		return "", fmt.Errorf("failed to create worktree: %w", err)
+		return "", errors.Wrap(err, "failed to create worktree")
 	}
 
 	return worktreePath, nil
@@ -222,7 +223,7 @@ func (wm *WorktreeManager) fetchAndPull(repoRoot, baseBranch string) error {
 
 	// git fetch origin
 	if err := wm.runner.Run(repoRoot, "git", "fetch", "origin"); err != nil {
-		return fmt.Errorf("git fetch failed: %w", err)
+		return errors.Wrap(err, "git fetch failed")
 	}
 
 	if wm.Verbose {
@@ -231,7 +232,7 @@ func (wm *WorktreeManager) fetchAndPull(repoRoot, baseBranch string) error {
 
 	// git pull origin <baseBranch>
 	if err := wm.runner.Run(repoRoot, "git", "pull", "origin", baseBranch); err != nil {
-		return fmt.Errorf("git pull failed: %w", err)
+		return errors.Wrap(err, "git pull failed")
 	}
 
 	return nil
@@ -272,12 +273,12 @@ func (wm *WorktreeManager) createInitialBranch(repoRoot string) (string, error) 
 
 	// Switch to main branch
 	if err := wm.runner.Run(repoRoot, "git", "switch", "-c", "main"); err != nil {
-		return "", fmt.Errorf("failed to create main branch: %w", err)
+		return "", errors.Wrap(err, "failed to create main branch")
 	}
 
 	// Create empty commit
 	if err := wm.runner.Run(repoRoot, "git", "commit", "--allow-empty", "-m", "Initial commit"); err != nil {
-		return "", fmt.Errorf("failed to create initial commit: %w", err)
+		return "", errors.Wrap(err, "failed to create initial commit")
 	}
 
 	return "main", nil
@@ -292,7 +293,7 @@ func (wm *WorktreeManager) ListWorktrees() ([]string, error) {
 
 	output, err := wm.runner.Output(repoRoot, "git", "worktree", "list", "--porcelain")
 	if err != nil {
-		return nil, fmt.Errorf("failed to list worktrees: %w", err)
+		return nil, errors.Wrap(err, "failed to list worktrees")
 	}
 
 	var worktrees []string
@@ -319,12 +320,12 @@ func (wm *WorktreeManager) RemoveWorktree(ticketType, ticket string) error {
 
 	// Validate path stays within repo root (prevent path traversal)
 	if !strings.HasPrefix(worktreePath, repoRoot+string(filepath.Separator)) {
-		return fmt.Errorf("invalid path: worktree path escapes repository root")
+		return errors.New("invalid path: worktree path escapes repository root")
 	}
 
 	// Check if worktree exists
 	if _, err := os.Stat(worktreePath); os.IsNotExist(err) {
-		return fmt.Errorf("worktree does not exist: %s", worktreePath)
+		return errors.Newf("worktree does not exist: %s", worktreePath)
 	}
 
 	relativePath := filepath.Join(ticketType, ticket)

@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/cockroachdb/errors"
 )
 
 // AllowedCommandPatterns defines regex patterns for commands that are allowed to be executed.
@@ -76,31 +78,31 @@ func (sm *SessionManager) CreateSession(ticket, worktreePath, notePath string) e
 
 	// Verify worktree directory exists
 	if _, err := os.Stat(worktreePath); os.IsNotExist(err) {
-		return fmt.Errorf("worktree path does not exist: %s", worktreePath)
+		return errors.Newf("worktree path does not exist: %s", worktreePath)
 	}
 
 	// Create session with first window
 	err := sm.createInitialSession(sessionName, worktreePath)
 	if err != nil {
-		return fmt.Errorf("failed to create initial session: %w", err)
+		return errors.Wrap(err, "failed to create initial session")
 	}
 
 	// Create additional windows
 	err = sm.createWindows(sessionName, worktreePath, notePath)
 	if err != nil {
-		return fmt.Errorf("failed to create windows: %w", err)
+		return errors.Wrap(err, "failed to create windows")
 	}
 
 	// Set environment variables for the session
 	err = sm.setEnvironmentVars(sessionName, ticket, worktreePath)
 	if err != nil {
-		return fmt.Errorf("failed to set environment variables: %w", err)
+		return errors.Wrap(err, "failed to set environment variables")
 	}
 
 	// Start on the first window (note)
 	err = sm.selectWindow(sessionName, 1)
 	if err != nil {
-		return fmt.Errorf("failed to select first window: %w", err)
+		return errors.Wrap(err, "failed to select first window")
 	}
 
 	// Attach to the session if we're in a tmux session, otherwise switch
@@ -160,7 +162,7 @@ func (sm *SessionManager) createWindows(sessionName, worktreePath, notePath stri
 			// Rename the first window that was created with the session
 			err := sm.renameWindow(windowTarget, window.Name)
 			if err != nil {
-				return fmt.Errorf("failed to rename first window: %w", err)
+				return errors.Wrap(err, "failed to rename first window")
 			}
 		} else {
 			// Create new window
@@ -171,7 +173,7 @@ func (sm *SessionManager) createWindows(sessionName, worktreePath, notePath stri
 
 			err := sm.createWindow(sessionName, i+1, window.Name, workingDir)
 			if err != nil {
-				return fmt.Errorf("failed to create window %d: %w", i+1, err)
+				return errors.Wrapf(err, "failed to create window %d", i+1)
 			}
 		}
 
@@ -180,7 +182,7 @@ func (sm *SessionManager) createWindows(sessionName, worktreePath, notePath stri
 			command := sm.expandPath(window.Command, worktreePath, notePath)
 			err := sm.sendCommand(windowTarget, command)
 			if err != nil {
-				return fmt.Errorf("failed to send command to window %s: %w", window.Name, err)
+				return errors.Wrapf(err, "failed to send command to window %s", window.Name)
 			}
 		}
 	}
@@ -237,7 +239,7 @@ func (sm *SessionManager) createWindow(sessionName string, windowNum int, name, 
 func (sm *SessionManager) sendCommand(windowTarget, command string) error {
 	// Validate command against allowlist if enabled
 	if sm.ValidateCommands && !sm.isCommandAllowed(command) {
-		return fmt.Errorf("command not in allowlist: %q (see AllowedCommandPatterns in pkg/tmux/session.go)", command)
+		return errors.Newf("command not in allowlist: %q (see AllowedCommandPatterns in pkg/tmux/session.go)", command)
 	}
 
 	// Warn about command execution if enabled
@@ -287,7 +289,7 @@ func (sm *SessionManager) setEnvironmentVars(sessionName, ticket, worktreePath s
 		}
 
 		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("failed to set %s: %w", key, err)
+			return errors.Wrapf(err, "failed to set %s", key)
 		}
 	}
 
@@ -347,7 +349,7 @@ func (sm *SessionManager) ListSessions() ([]string, error) {
 	cmd := exec.Command("tmux", "list-sessions", "-F", "#{session_name}")
 	output, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("failed to list sessions: %w", err)
+		return nil, errors.Wrap(err, "failed to list sessions")
 	}
 
 	sessions := strings.Split(strings.TrimSpace(string(output)), "\n")
@@ -368,7 +370,7 @@ func (sm *SessionManager) KillSession(ticket string) error {
 	sessionName := sm.getSessionName(ticket)
 
 	if !sm.sessionExists(sessionName) {
-		return fmt.Errorf("session does not exist: %s", sessionName)
+		return errors.Newf("session does not exist: %s", sessionName)
 	}
 
 	cmd := exec.Command("tmux", "kill-session", "-t", sessionName)

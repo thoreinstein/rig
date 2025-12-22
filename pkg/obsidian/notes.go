@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 	"unicode"
+
+	"github.com/cockroachdb/errors"
 )
 
 // NoteManager handles Obsidian note operations
@@ -51,12 +53,12 @@ func (nm *NoteManager) CreateTicketNote(ticketType, ticket string, jiraInfo *Jir
 
 	// Check if vault exists
 	if !nm.vaultExists() {
-		return "", fmt.Errorf("vault path not found at %s", nm.VaultPath)
+		return "", errors.Newf("vault path not found at %s", nm.VaultPath)
 	}
 
 	// Create directory if it doesn't exist
 	if err := os.MkdirAll(noteDir, 0755); err != nil {
-		return "", fmt.Errorf("failed to create note directory: %w", err)
+		return "", errors.Wrap(err, "failed to create note directory")
 	}
 
 	// Check if note already exists
@@ -78,12 +80,12 @@ func (nm *NoteManager) CreateTicketNote(ticketType, ticket string, jiraInfo *Jir
 	}
 
 	if err != nil {
-		return "", fmt.Errorf("failed to create note content: %w", err)
+		return "", errors.Wrap(err, "failed to create note content")
 	}
 
 	// Write the note with restricted permissions (may contain command history)
 	if err := os.WriteFile(notePath, []byte(content), 0600); err != nil {
-		return "", fmt.Errorf("failed to write note: %w", err)
+		return "", errors.Wrap(err, "failed to write note")
 	}
 
 	if nm.Verbose {
@@ -111,7 +113,7 @@ func (nm *NoteManager) createJiraNote(ticket string, jiraInfo *JiraInfo) (string
 	if _, err := os.Stat(templatePath); err == nil {
 		templateBytes, err := os.ReadFile(templatePath)
 		if err != nil {
-			return "", fmt.Errorf("failed to read template: %w", err)
+			return "", errors.Wrap(err, "failed to read template")
 		}
 		content = string(templateBytes)
 
@@ -270,7 +272,7 @@ func (nm *NoteManager) UpdateDailyNote(ticket string) error {
 		// Create the daily directory if needed
 		dailyDir := filepath.Dir(dailyNotePath)
 		if err := os.MkdirAll(dailyDir, 0755); err != nil {
-			return fmt.Errorf("failed to create daily notes directory: %w", err)
+			return errors.Wrap(err, "failed to create daily notes directory")
 		}
 
 		// Create default daily note
@@ -283,7 +285,7 @@ func (nm *NoteManager) UpdateDailyNote(ticket string) error {
 		var err error
 		content, err = os.ReadFile(dailyNotePath)
 		if err != nil {
-			return fmt.Errorf("failed to read daily note: %w", err)
+			return errors.Wrap(err, "failed to read daily note")
 		}
 	}
 
@@ -295,7 +297,7 @@ func (nm *NoteManager) UpdateDailyNote(ticket string) error {
 
 	// Write back to file with restricted permissions
 	if err := os.WriteFile(dailyNotePath, []byte(updatedContent), 0600); err != nil {
-		return fmt.Errorf("failed to update daily note: %w", err)
+		return errors.Wrap(err, "failed to update daily note")
 	}
 
 	if nm.Verbose {
