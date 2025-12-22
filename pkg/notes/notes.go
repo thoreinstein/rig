@@ -71,8 +71,8 @@ func (m *Manager) CreateTicketNote(data TicketData) (string, error) {
 		return "", fmt.Errorf("notes directory does not exist: %s. Create it or update 'notes.path' in config", m.BasePath)
 	}
 
-	// Create directory if it doesn't exist
-	if err := os.MkdirAll(noteDir, 0755); err != nil {
+	// Create directory if it doesn't exist (0700 for user-only access)
+	if err := os.MkdirAll(noteDir, 0700); err != nil {
 		return "", fmt.Errorf("failed to create note directory: %w", err)
 	}
 
@@ -130,9 +130,9 @@ func (m *Manager) UpdateDailyNote(ticket, ticketType string) error {
 
 	// Check if daily note exists, create if not
 	if _, statErr := os.Stat(dailyNotePath); os.IsNotExist(statErr) {
-		// Create the daily directory if needed
+		// Create the daily directory if needed (0700 for user-only access)
 		dailyDir := filepath.Dir(dailyNotePath)
-		if err := os.MkdirAll(dailyDir, 0755); err != nil {
+		if err := os.MkdirAll(dailyDir, 0700); err != nil {
 			return fmt.Errorf("failed to create daily notes directory: %w", err)
 		}
 
