@@ -101,10 +101,10 @@ func setDefaults() {
 
 	// Tmux defaults
 	viper.SetDefault("tmux.session_prefix", "")
-	viper.SetDefault("tmux.windows", []map[string]string{
-		{"name": "note", "command": "nvim {note_path}"},
-		{"name": "code", "command": "nvim", "working_dir": "{worktree_path}"},
-		{"name": "term", "working_dir": "{worktree_path}"},
+	viper.SetDefault("tmux.windows", []TmuxWindow{
+		{Name: "note", Command: "nvim {note_path}"},
+		{Name: "code", Command: "nvim", WorkingDir: "{worktree_path}"},
+		{Name: "term", WorkingDir: "{worktree_path}"},
 	})
 }
 
