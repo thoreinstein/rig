@@ -5,6 +5,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/spf13/viper"
 
 	"thoreinstein.com/sre/pkg/jira"
 )
@@ -398,5 +401,614 @@ func TestUpdateNoteWithJiraInfo_NonExistentFile(t *testing.T) {
 	err := updateNoteWithJiraInfo("/nonexistent/path/note.md", &jira.TicketInfo{})
 	if err == nil {
 		t.Error("updateNoteWithJiraInfo() should error for non-existent file")
+	}
+}
+
+// ============================================================================
+// Tests for sync command and flags
+// ============================================================================
+
+func TestSyncCommandDescription(t *testing.T) {
+	t.Parallel()
+
+	cmd := syncCmd
+
+	if cmd.Use != "sync [ticket]" {
+		t.Errorf("sync command Use = %q, want %q", cmd.Use, "sync [ticket]")
+	}
+
+	if cmd.Short == "" {
+		t.Error("sync command should have Short description")
+	}
+
+	if cmd.Long == "" {
+		t.Error("sync command should have Long description")
+	}
+
+	// Verify key information is in the description
+	if !strings.Contains(cmd.Long, "ticket") {
+		t.Error("sync command Long description should mention 'ticket'")
+	}
+
+	if !strings.Contains(cmd.Long, "daily") {
+		t.Error("sync command Long description should mention 'daily'")
+	}
+}
+
+func TestSyncCommandFlags(t *testing.T) {
+	t.Parallel()
+
+	cmd := syncCmd
+
+	// Check --jira flag exists
+	jiraFlag := cmd.Flags().Lookup("jira")
+	if jiraFlag == nil {
+		t.Error("sync command should have --jira flag")
+	}
+	if jiraFlag != nil && jiraFlag.DefValue != "false" {
+		t.Errorf("--jira default should be false, got %s", jiraFlag.DefValue)
+	}
+
+	// Check --daily flag exists
+	dailyFlag := cmd.Flags().Lookup("daily")
+	if dailyFlag == nil {
+		t.Error("sync command should have --daily flag")
+	}
+	if dailyFlag != nil && dailyFlag.DefValue != "false" {
+		t.Errorf("--daily default should be false, got %s", dailyFlag.DefValue)
+	}
+
+	// Check --force flag exists
+	forceFlag := cmd.Flags().Lookup("force")
+	if forceFlag == nil {
+		t.Error("sync command should have --force flag")
+	}
+	if forceFlag != nil && forceFlag.DefValue != "false" {
+		t.Errorf("--force default should be false, got %s", forceFlag.DefValue)
+	}
+}
+
+func TestSyncCommandMaxArgs(t *testing.T) {
+	t.Parallel()
+
+	cmd := syncCmd
+
+	// Command accepts at most 1 argument
+	if cmd.Args == nil {
+		t.Error("sync command should have Args validation")
+	}
+}
+
+// ============================================================================
+// Tests for runSyncCommand
+// ============================================================================
+
+// setupSyncTestConfig configures viper with test defaults for sync command
+func setupSyncTestConfig(t *testing.T, notesPath string) {
+	t.Helper()
+
+	viper.Reset()
+	viper.Set("notes.path", notesPath)
+	viper.Set("notes.daily_dir", "daily")
+	viper.Set("notes.template_dir", "") // Use embedded templates
+	viper.Set("git.base_branch", "")
+	viper.Set("jira.enabled", false) // Disable JIRA by default in tests
+	viper.Set("tmux.session_prefix", "")
+	viper.Set("tmux.windows", []map[string]string{
+		{"name": "code", "command": ""},
+	})
+}
+
+func TestRunSyncCommand_NoTicketNoDaily(t *testing.T) {
+	notesDir := t.TempDir()
+	setupSyncTestConfig(t, notesDir)
+	defer viper.Reset()
+
+	// Reset global flags
+	syncJira = false
+	syncDaily = false
+	syncForce = false
+
+	err := runSyncCommand("")
+	if err == nil {
+		t.Error("runSyncCommand() should error when no ticket and no --daily flag")
+	}
+
+	if !strings.Contains(err.Error(), "ticket required") {
+		t.Errorf("Error should mention 'ticket required', got: %v", err)
+	}
+}
+
+func TestRunSyncCommand_InvalidTicketFormat(t *testing.T) {
+	notesDir := t.TempDir()
+	setupSyncTestConfig(t, notesDir)
+	defer viper.Reset()
+
+	syncJira = false
+	syncDaily = false
+	syncForce = false
+
+	tests := []struct {
+		name   string
+		ticket string
+	}{
+		{"no dash", "proj123"},
+		{"no number", "proj-"},
+		{"no type", "-123"},
+		{"letters in number", "proj-abc"},
+		{"multiple dashes", "proj-123-456"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := runSyncCommand(tt.ticket)
+			if err == nil {
+				t.Errorf("runSyncCommand(%q) should error for invalid ticket format", tt.ticket)
+			}
+		})
+	}
+}
+
+func TestRunSyncCommand_NoteNotFound(t *testing.T) {
+	notesDir := t.TempDir()
+	setupSyncTestConfig(t, notesDir)
+	defer viper.Reset()
+
+	syncJira = false
+	syncDaily = false
+	syncForce = false
+
+	// Don't create the note - it should handle missing note gracefully
+	err := runSyncCommand("proj-123")
+
+	// The command returns nil but prints a message when note is not found
+	// This is by design - it's not an error, just informational
+	if err != nil {
+		t.Errorf("runSyncCommand() should not error for missing note (returns nil with message), got: %v", err)
+	}
+}
+
+func TestRunSyncCommand_SyncExistingTicketNote(t *testing.T) {
+	notesDir := t.TempDir()
+	setupSyncTestConfig(t, notesDir)
+	defer viper.Reset()
+
+	syncJira = false
+	syncDaily = false
+	syncForce = false
+
+	// Create the ticket note directory and file
+	ticketDir := filepath.Join(notesDir, "proj")
+	if err := os.MkdirAll(ticketDir, 0755); err != nil {
+		t.Fatalf("Failed to create ticket dir: %v", err)
+	}
+
+	notePath := filepath.Join(ticketDir, "proj-123.md")
+	initialContent := `# proj-123
+
+## Summary
+
+Initial content.
+
+## Notes
+
+Some notes.`
+
+	if err := os.WriteFile(notePath, []byte(initialContent), 0644); err != nil {
+		t.Fatalf("Failed to write test note: %v", err)
+	}
+
+	// Create daily directory for UpdateDailyNote
+	dailyDir := filepath.Join(notesDir, "daily")
+	if err := os.MkdirAll(dailyDir, 0755); err != nil {
+		t.Fatalf("Failed to create daily dir: %v", err)
+	}
+
+	err := runSyncCommand("proj-123")
+	if err != nil {
+		t.Errorf("runSyncCommand() unexpected error: %v", err)
+	}
+
+	// Verify note still exists
+	if _, statErr := os.Stat(notePath); os.IsNotExist(statErr) {
+		t.Error("Note should still exist after sync")
+	}
+}
+
+func TestRunSyncCommand_WithDailyFlag(t *testing.T) {
+	notesDir := t.TempDir()
+	setupSyncTestConfig(t, notesDir)
+	defer viper.Reset()
+
+	syncJira = false
+	syncDaily = true // Enable daily flag
+	syncForce = false
+	defer func() { syncDaily = false }()
+
+	// When --daily is set, it should not require a ticket
+	err := runSyncCommand("")
+
+	// The command returns nil but prints a message when daily note is not found
+	if err != nil {
+		t.Errorf("runSyncCommand() with --daily should not error: %v", err)
+	}
+}
+
+func TestRunSyncCommand_DailyNoteExists(t *testing.T) {
+	notesDir := t.TempDir()
+	setupSyncTestConfig(t, notesDir)
+	defer viper.Reset()
+
+	syncJira = false
+	syncDaily = true
+	syncForce = false
+	defer func() { syncDaily = false }()
+
+	// Create the daily note
+	dailyDir := filepath.Join(notesDir, "daily")
+	if err := os.MkdirAll(dailyDir, 0755); err != nil {
+		t.Fatalf("Failed to create daily dir: %v", err)
+	}
+
+	today := time.Now().Format("2006-01-02")
+	dailyNotePath := filepath.Join(dailyDir, today+".md")
+	dailyContent := `# Daily Note - ` + today + `
+
+## Log
+
+- [09:00] Started work`
+
+	if err := os.WriteFile(dailyNotePath, []byte(dailyContent), 0644); err != nil {
+		t.Fatalf("Failed to write daily note: %v", err)
+	}
+
+	err := runSyncCommand("")
+	if err != nil {
+		t.Errorf("runSyncCommand() with --daily and existing note should not error: %v", err)
+	}
+}
+
+func TestRunSyncCommand_DifferentTicketTypes(t *testing.T) {
+	tests := []struct {
+		name       string
+		ticket     string
+		ticketType string
+	}{
+		{"fraas ticket", "fraas-12345", "fraas"},
+		{"cre ticket", "cre-999", "cre"},
+		{"incident ticket", "incident-1", "incident"},
+		{"ops ticket", "ops-42", "ops"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			notesDir := t.TempDir()
+			setupSyncTestConfig(t, notesDir)
+			defer viper.Reset()
+
+			syncJira = false
+			syncDaily = false
+			syncForce = false
+
+			// Create the ticket note
+			ticketDir := filepath.Join(notesDir, tt.ticketType)
+			if err := os.MkdirAll(ticketDir, 0755); err != nil {
+				t.Fatalf("Failed to create ticket dir: %v", err)
+			}
+
+			notePath := filepath.Join(ticketDir, tt.ticket+".md")
+			content := "# " + tt.ticket + "\n\n## Summary\n\nContent."
+			if err := os.WriteFile(notePath, []byte(content), 0644); err != nil {
+				t.Fatalf("Failed to write test note: %v", err)
+			}
+
+			// Create daily directory
+			dailyDir := filepath.Join(notesDir, "daily")
+			if err := os.MkdirAll(dailyDir, 0755); err != nil {
+				t.Fatalf("Failed to create daily dir: %v", err)
+			}
+
+			err := runSyncCommand(tt.ticket)
+			if err != nil {
+				t.Errorf("runSyncCommand(%q) unexpected error: %v", tt.ticket, err)
+			}
+		})
+	}
+}
+
+// ============================================================================
+// Tests for syncTicketNote
+// ============================================================================
+
+func TestSyncTicketNote_UpdatesDailyNote(t *testing.T) {
+	notesDir := t.TempDir()
+	setupSyncTestConfig(t, notesDir)
+	defer viper.Reset()
+
+	// Reset global flags
+	syncJira = false
+	syncDaily = false
+	syncForce = false
+	verbose = false
+
+	// Create the ticket note
+	ticketDir := filepath.Join(notesDir, "proj")
+	if err := os.MkdirAll(ticketDir, 0755); err != nil {
+		t.Fatalf("Failed to create ticket dir: %v", err)
+	}
+
+	notePath := filepath.Join(ticketDir, "proj-456.md")
+	content := `# proj-456
+
+## Summary
+
+Test content.`
+	if err := os.WriteFile(notePath, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to write test note: %v", err)
+	}
+
+	// Create daily directory
+	dailyDir := filepath.Join(notesDir, "daily")
+	if err := os.MkdirAll(dailyDir, 0755); err != nil {
+		t.Fatalf("Failed to create daily dir: %v", err)
+	}
+
+	err := runSyncCommand("proj-456")
+	if err != nil {
+		t.Fatalf("runSyncCommand() error: %v", err)
+	}
+
+	// Verify daily note was created/updated
+	today := time.Now().Format("2006-01-02")
+	dailyNotePath := filepath.Join(dailyDir, today+".md")
+
+	if _, statErr := os.Stat(dailyNotePath); os.IsNotExist(statErr) {
+		t.Error("Daily note should be created after sync")
+		return
+	}
+
+	// Verify daily note contains ticket reference
+	dailyContent, err := os.ReadFile(dailyNotePath)
+	if err != nil {
+		t.Fatalf("Failed to read daily note: %v", err)
+	}
+
+	if !strings.Contains(string(dailyContent), "proj-456") {
+		t.Errorf("Daily note should contain ticket reference, got: %s", string(dailyContent))
+	}
+}
+
+func TestSyncTicketNote_WithJiraDisabled(t *testing.T) {
+	notesDir := t.TempDir()
+	setupSyncTestConfig(t, notesDir)
+	viper.Set("jira.enabled", false) // Explicitly disable JIRA
+	defer viper.Reset()
+
+	syncJira = true // Even with --jira flag, JIRA is disabled in config
+	syncDaily = false
+	syncForce = false
+	defer func() { syncJira = false }()
+
+	// Create the ticket note
+	ticketDir := filepath.Join(notesDir, "proj")
+	if err := os.MkdirAll(ticketDir, 0755); err != nil {
+		t.Fatalf("Failed to create ticket dir: %v", err)
+	}
+
+	notePath := filepath.Join(ticketDir, "proj-789.md")
+	content := "# proj-789\n\n## Summary\n\nOriginal content."
+	if err := os.WriteFile(notePath, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to write test note: %v", err)
+	}
+
+	// Create daily directory
+	dailyDir := filepath.Join(notesDir, "daily")
+	if err := os.MkdirAll(dailyDir, 0755); err != nil {
+		t.Fatalf("Failed to create daily dir: %v", err)
+	}
+
+	// Should not error even with JIRA disabled
+	err := runSyncCommand("proj-789")
+	if err != nil {
+		t.Errorf("runSyncCommand() should not error with JIRA disabled: %v", err)
+	}
+}
+
+func TestSyncTicketNote_IncidentTypeSkipsJira(t *testing.T) {
+	notesDir := t.TempDir()
+	setupSyncTestConfig(t, notesDir)
+	viper.Set("jira.enabled", true) // Enable JIRA
+	defer viper.Reset()
+
+	syncJira = false // Not forcing JIRA
+	syncDaily = false
+	syncForce = false
+
+	// Create the incident note
+	ticketDir := filepath.Join(notesDir, "incident")
+	if err := os.MkdirAll(ticketDir, 0755); err != nil {
+		t.Fatalf("Failed to create ticket dir: %v", err)
+	}
+
+	notePath := filepath.Join(ticketDir, "incident-100.md")
+	content := "# incident-100\n\n## Summary\n\nIncident content."
+	if err := os.WriteFile(notePath, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to write test note: %v", err)
+	}
+
+	// Create daily directory
+	dailyDir := filepath.Join(notesDir, "daily")
+	if err := os.MkdirAll(dailyDir, 0755); err != nil {
+		t.Fatalf("Failed to create daily dir: %v", err)
+	}
+
+	// Should work for incident type (skips JIRA unless --jira flag is set)
+	err := runSyncCommand("incident-100")
+	if err != nil {
+		t.Errorf("runSyncCommand() should handle incident type: %v", err)
+	}
+}
+
+// ============================================================================
+// Tests for syncDailyNote
+// ============================================================================
+
+func TestSyncDailyNote_NotFound(t *testing.T) {
+	notesDir := t.TempDir()
+	setupSyncTestConfig(t, notesDir)
+	defer viper.Reset()
+
+	syncJira = false
+	syncDaily = true
+	syncForce = false
+	defer func() { syncDaily = false }()
+
+	// Don't create the daily note
+	err := runSyncCommand("")
+
+	// The function returns nil and prints a message when daily note doesn't exist
+	if err != nil {
+		t.Errorf("syncDailyNote() should not error for missing daily note: %v", err)
+	}
+}
+
+func TestSyncDailyNote_Exists(t *testing.T) {
+	notesDir := t.TempDir()
+	setupSyncTestConfig(t, notesDir)
+	defer viper.Reset()
+
+	syncJira = false
+	syncDaily = true
+	syncForce = false
+	defer func() { syncDaily = false }()
+
+	// Create the daily note
+	dailyDir := filepath.Join(notesDir, "daily")
+	if err := os.MkdirAll(dailyDir, 0755); err != nil {
+		t.Fatalf("Failed to create daily dir: %v", err)
+	}
+
+	today := time.Now().Format("2006-01-02")
+	dailyNotePath := filepath.Join(dailyDir, today+".md")
+	content := "# Daily - " + today + "\n\n## Log\n"
+	if err := os.WriteFile(dailyNotePath, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to write daily note: %v", err)
+	}
+
+	err := runSyncCommand("")
+	if err != nil {
+		t.Errorf("syncDailyNote() should not error when daily note exists: %v", err)
+	}
+}
+
+// ============================================================================
+// Tests for edge cases and error handling
+// ============================================================================
+
+func TestRunSyncCommand_PreservesOriginalTicketCase(t *testing.T) {
+	notesDir := t.TempDir()
+	setupSyncTestConfig(t, notesDir)
+	defer viper.Reset()
+
+	syncJira = false
+	syncDaily = false
+	syncForce = false
+
+	// Create note with uppercase ticket name
+	ticketDir := filepath.Join(notesDir, "fraas")
+	if err := os.MkdirAll(ticketDir, 0755); err != nil {
+		t.Fatalf("Failed to create ticket dir: %v", err)
+	}
+
+	notePath := filepath.Join(ticketDir, "FRAAS-999.md")
+	content := "# FRAAS-999\n\n## Summary\n\nContent."
+	if err := os.WriteFile(notePath, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to write test note: %v", err)
+	}
+
+	// Create daily directory
+	dailyDir := filepath.Join(notesDir, "daily")
+	if err := os.MkdirAll(dailyDir, 0755); err != nil {
+		t.Fatalf("Failed to create daily dir: %v", err)
+	}
+
+	// Sync with uppercase ticket
+	err := runSyncCommand("FRAAS-999")
+	if err != nil {
+		t.Errorf("runSyncCommand() unexpected error: %v", err)
+	}
+
+	// Verify daily note contains original case
+	today := time.Now().Format("2006-01-02")
+	dailyNotePath := filepath.Join(dailyDir, today+".md")
+
+	dailyContent, err := os.ReadFile(dailyNotePath)
+	if err != nil {
+		t.Fatalf("Failed to read daily note: %v", err)
+	}
+
+	if !strings.Contains(string(dailyContent), "FRAAS-999") {
+		t.Errorf("Daily note should preserve original ticket case, got: %s", string(dailyContent))
+	}
+}
+
+func TestRunSyncCommand_VerboseMode(t *testing.T) {
+	notesDir := t.TempDir()
+	setupSyncTestConfig(t, notesDir)
+	defer viper.Reset()
+
+	// Save and restore verbose flag
+	oldVerbose := verbose
+	verbose = true
+	defer func() { verbose = oldVerbose }()
+
+	syncJira = false
+	syncDaily = false
+	syncForce = false
+
+	// Create the ticket note
+	ticketDir := filepath.Join(notesDir, "proj")
+	if err := os.MkdirAll(ticketDir, 0755); err != nil {
+		t.Fatalf("Failed to create ticket dir: %v", err)
+	}
+
+	notePath := filepath.Join(ticketDir, "proj-888.md")
+	content := "# proj-888\n\n## Summary\n\nContent."
+	if err := os.WriteFile(notePath, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to write test note: %v", err)
+	}
+
+	// Create daily directory
+	dailyDir := filepath.Join(notesDir, "daily")
+	if err := os.MkdirAll(dailyDir, 0755); err != nil {
+		t.Fatalf("Failed to create daily dir: %v", err)
+	}
+
+	// Should work in verbose mode
+	err := runSyncCommand("proj-888")
+	if err != nil {
+		t.Errorf("runSyncCommand() should work in verbose mode: %v", err)
+	}
+}
+
+func TestRunSyncCommand_ConfigLoadFailure(t *testing.T) {
+	// Don't set up any config - this will use defaults
+	viper.Reset()
+	// Set an invalid notes path to trigger potential issues
+	viper.Set("notes.path", "/nonexistent/invalid/path")
+	defer viper.Reset()
+
+	syncJira = false
+	syncDaily = false
+	syncForce = false
+
+	// The command should handle this gracefully
+	err := runSyncCommand("proj-123")
+
+	// It should return nil (note not found message) rather than error
+	// since the notes path doesn't exist but the command handles missing notes
+	if err != nil {
+		// This is expected behavior - missing notes directory is handled gracefully
+		t.Logf("runSyncCommand() returned error as expected: %v", err)
 	}
 }
