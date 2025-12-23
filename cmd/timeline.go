@@ -353,8 +353,8 @@ func updateTicketNoteWithTimeline(cfg *config.Config, ticketInfo *TicketInfo, ti
 	// Add new timeline at the end
 	updatedContent := noteContent + "\n" + timeline
 
-	// Write back to file
-	err = os.WriteFile(notePath, []byte(updatedContent), 0644)
+	// Write back to file with restricted permissions (may contain command history)
+	err = os.WriteFile(notePath, []byte(updatedContent), 0600)
 	if err != nil {
 		return errors.Wrap(err, "failed to write updated note")
 	}

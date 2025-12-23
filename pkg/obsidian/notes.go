@@ -56,8 +56,8 @@ func (nm *NoteManager) CreateTicketNote(ticketType, ticket string, jiraInfo *Jir
 		return "", errors.Newf("vault path not found at %s", nm.VaultPath)
 	}
 
-	// Create directory if it doesn't exist
-	if err := os.MkdirAll(noteDir, 0755); err != nil {
+	// Create directory if it doesn't exist (restricted permissions for user data)
+	if err := os.MkdirAll(noteDir, 0700); err != nil {
 		return "", errors.Wrap(err, "failed to create note directory")
 	}
 
