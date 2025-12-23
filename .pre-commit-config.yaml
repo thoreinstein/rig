@@ -15,6 +15,22 @@ repos:
     hooks:
       - id: go-mod-tidy
 
+  # Go build and test
+  - repo: local
+    hooks:
+      - id: go-build
+        name: go build
+        entry: go build -o /dev/null .
+        language: system
+        pass_filenames: false
+        types: [go]
+      - id: go-test
+        name: go test
+        entry: go test -race -short ./...
+        language: system
+        pass_filenames: false
+        types: [go]
+
   # General file hygiene
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
