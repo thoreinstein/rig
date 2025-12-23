@@ -76,6 +76,22 @@ changelog:
     - title: Other
       order: 999
 
+brews:
+  - name: sre
+    repository:
+      owner: thoreinstein
+      name: homebrew-tap
+      branch: main
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    directory: Formula
+    homepage: https://github.com/thoreinstein/sre
+    description: "SRE workflow automation CLI for Git worktrees, Tmux, and Obsidian integration"
+    license: "Unlicense"
+    install: |
+      bin.install "sre"
+    test: |
+      system "#{bin}/sre", "version"
+
 release:
   github:
     owner: thoreinstein
@@ -87,6 +103,18 @@ release:
     ## SRE CLI {{ .Version }}
 
     SRE workflow automation CLI for Git worktrees, Tmux, and Obsidian integration.
+
+    ### Installation
+
+    **Homebrew (recommended):**
+    ```bash
+    brew install thoreinstein/tap/sre
+    ```
+
+    **Manual download:** After extracting, remove the quarantine attribute:
+    ```bash
+    xattr -d com.apple.quarantine ./sre
+    ```
   footer: |
     **Full Changelog**: https://github.com/thoreinstein/sre/compare/{{ .PreviousTag }}...{{ .Tag }}
   name_template: "v{{ .Version }}"
