@@ -95,11 +95,13 @@ func TestGetWorktreeDetails(t *testing.T) {
 		t.Fatalf("git init failed: %v", err)
 	}
 
-	// Configure git user
+	// Configure git user and disable GPG signing for tests
 	configEmail := exec.Command("git", "-C", repoDir, "config", "user.email", "test@example.com")
 	_ = configEmail.Run()
 	configName := exec.Command("git", "-C", repoDir, "config", "user.name", "Test User")
 	_ = configName.Run()
+	configGpg := exec.Command("git", "-C", repoDir, "config", "commit.gpgsign", "false")
+	_ = configGpg.Run()
 
 	// Create initial commit
 	cmd = exec.Command("git", "commit", "--allow-empty", "-m", "Initial commit")
@@ -152,11 +154,13 @@ func TestGetWorktreeDetails_WithWorktree(t *testing.T) {
 		t.Fatalf("git init failed: %v", err)
 	}
 
-	// Configure git user
+	// Configure git user and disable GPG signing for tests
 	configEmail := exec.Command("git", "-C", repoDir, "config", "user.email", "test@example.com")
 	_ = configEmail.Run()
 	configName := exec.Command("git", "-C", repoDir, "config", "user.name", "Test User")
 	_ = configName.Run()
+	configGpg := exec.Command("git", "-C", repoDir, "config", "commit.gpgsign", "false")
+	_ = configGpg.Run()
 
 	// Create initial commit
 	cmd = exec.Command("git", "commit", "--allow-empty", "-m", "Initial commit")
