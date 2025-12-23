@@ -745,3 +745,270 @@ func TestRealCommandRunner_Interface(t *testing.T) {
 	// Verify RealCommandRunner implements CommandRunner
 	var _ CommandRunner = &RealCommandRunner{}
 }
+
+// =============================================================================
+// Path Traversal Prevention Tests (Security-Critical)
+// =============================================================================
+
+// TestCreateWorktreeWithBranch_PathTraversal tests that path traversal attacks are blocked.
+// This is defense-in-depth against malicious ticket names from user input or config tampering.
+func TestCreateWorktreeWithBranch_PathTraversal(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		ticketType string
+		ticketName string
+		branchName string
+		wantErr    bool
+		errContain string
+	}{
+		// Path traversal attacks - MUST BE REJECTED
+		{
+			name:       "dotdot in ticket name",
+			ticketType: "fraas",
+			ticketName: "../../../etc/passwd",
+			branchName: "malicious",
+			wantErr:    true,
+			errContain: "escapes repository root",
+		},
+		{
+			name:       "dotdot in ticket type",
+			ticketType: "../../../tmp",
+			ticketName: "exploit",
+			branchName: "malicious",
+			wantErr:    true,
+			errContain: "escapes repository root",
+		},
+		{
+			name:       "simple parent escape",
+			ticketType: "..",
+			ticketName: "escape",
+			branchName: "malicious",
+			wantErr:    true,
+			errContain: "escapes repository root",
+		},
+		{
+			name:       "hidden dotdot with dots",
+			ticketType: "fraas",
+			ticketName: "foo/../../../etc",
+			branchName: "malicious",
+			wantErr:    true,
+			errContain: "escapes repository root",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			// Track whether worktree creation was attempted
+			worktreeCreated := false
+
+			mock := &MockCommandRunner{
+				OutputFunc: func(dir string, name string, args ...string) ([]byte, error) {
+					if len(args) > 1 && args[0] == "rev-parse" && args[1] == "--git-common-dir" {
+						return []byte("/home/user/repo\n"), nil
+					}
+					if len(args) > 0 && args[0] == "symbolic-ref" {
+						return []byte("refs/remotes/origin/main\n"), nil
+					}
+					return []byte{}, nil
+				},
+				RunFunc: func(dir string, name string, args ...string) error {
+					// Track if worktree add was called
+					if len(args) > 0 && args[0] == "worktree" && len(args) > 1 && args[1] == "add" {
+						worktreeCreated = true
+					}
+					// Branch exists check
+					if len(args) > 0 && args[0] == "show-ref" {
+						return nil
+					}
+					return nil
+				},
+			}
+
+			wm := NewWorktreeManagerWithRunner("main", false, mock)
+
+			_, err := wm.CreateWorktreeWithBranch(tt.ticketType, tt.ticketName, tt.branchName)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("CreateWorktreeWithBranch() should have returned error for path traversal attempt")
+				} else if tt.errContain != "" && !strings.Contains(err.Error(), tt.errContain) {
+					t.Errorf("Error = %q, want to contain %q", err.Error(), tt.errContain)
+				}
+				// CRITICAL: Verify git worktree add was NOT called
+				if worktreeCreated {
+					t.Errorf("SECURITY VIOLATION: git worktree add was called despite path traversal detection")
+				}
+			} else {
+				if err != nil {
+					t.Errorf("CreateWorktreeWithBranch() unexpected error = %v", err)
+				}
+			}
+		})
+	}
+}
+
+// TestCreateWorktree_PathTraversal tests the convenience wrapper
+func TestCreateWorktree_PathTraversal(t *testing.T) {
+	t.Parallel()
+
+	mock := &MockCommandRunner{
+		OutputFunc: func(dir string, name string, args ...string) ([]byte, error) {
+			if len(args) > 1 && args[0] == "rev-parse" && args[1] == "--git-common-dir" {
+				return []byte("/home/user/repo\n"), nil
+			}
+			return []byte{}, nil
+		},
+	}
+
+	wm := NewWorktreeManagerWithRunner("main", false, mock)
+
+	_, err := wm.CreateWorktree("../../../tmp", "exploit")
+	if err == nil {
+		t.Error("CreateWorktree() should reject path traversal in ticketType")
+	}
+	if !strings.Contains(err.Error(), "escapes repository root") {
+		t.Errorf("Error = %q, want to contain 'escapes repository root'", err.Error())
+	}
+}
+
+// TestRemoveWorktree_PathTraversal tests that RemoveWorktree rejects path traversal
+func TestRemoveWorktree_PathTraversal(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		ticketType string
+		ticket     string
+		wantErr    bool
+		errContain string
+	}{
+		// Valid removal
+		{
+			name:       "normal removal",
+			ticketType: "fraas",
+			ticket:     "FRAAS-123",
+			wantErr:    true, // Will error because worktree doesn't exist in test
+			errContain: "worktree does not exist",
+		},
+
+		// Path traversal attacks - MUST BE REJECTED BEFORE filesystem check
+		{
+			name:       "dotdot escape in ticket",
+			ticketType: "fraas",
+			ticket:     "../../../etc/passwd",
+			wantErr:    true,
+			errContain: "escapes repository root",
+		},
+		{
+			name:       "dotdot escape in type",
+			ticketType: "../../../tmp",
+			ticket:     "evil",
+			wantErr:    true,
+			errContain: "escapes repository root",
+		},
+		{
+			name:       "complex traversal",
+			ticketType: "fraas",
+			ticket:     "safe/../../../etc/passwd",
+			wantErr:    true,
+			errContain: "escapes repository root",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			worktreeRemoved := false
+
+			mock := &MockCommandRunner{
+				OutputFunc: func(dir string, name string, args ...string) ([]byte, error) {
+					if len(args) > 1 && args[0] == "rev-parse" && args[1] == "--git-common-dir" {
+						return []byte("/home/user/repo\n"), nil
+					}
+					return []byte{}, nil
+				},
+				RunFunc: func(dir string, name string, args ...string) error {
+					if len(args) > 0 && args[0] == "worktree" && len(args) > 1 && args[1] == "remove" {
+						worktreeRemoved = true
+					}
+					return nil
+				},
+			}
+
+			wm := NewWorktreeManagerWithRunner("main", false, mock)
+
+			err := wm.RemoveWorktree(tt.ticketType, tt.ticket)
+
+			if !tt.wantErr {
+				t.Fatal("Test setup error: all test cases should expect errors")
+			}
+
+			if err == nil {
+				t.Error("RemoveWorktree() should have returned error")
+			} else if !strings.Contains(err.Error(), tt.errContain) {
+				t.Errorf("Error = %q, want to contain %q", err.Error(), tt.errContain)
+			}
+
+			// For path traversal cases, verify git worktree remove was NOT called
+			if strings.Contains(tt.errContain, "escapes") && worktreeRemoved {
+				t.Error("SECURITY VIOLATION: git worktree remove was called despite path traversal detection")
+			}
+		})
+	}
+}
+
+// TestPathTraversalEdgeCases tests edge cases in path validation
+func TestPathTraversalEdgeCases(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		ticketType string
+		ticketName string
+		shouldFail bool
+	}{
+		// These should fail (escape attempts)
+		{"parent dir", "..", "anything", true},
+		{"deep escape", "fraas", "a/b/c/../../../../../etc", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			mock := &MockCommandRunner{
+				OutputFunc: func(dir string, name string, args ...string) ([]byte, error) {
+					if len(args) > 1 && args[0] == "rev-parse" && args[1] == "--git-common-dir" {
+						return []byte("/home/user/repo\n"), nil
+					}
+					if len(args) > 0 && args[0] == "symbolic-ref" {
+						return []byte("refs/remotes/origin/main\n"), nil
+					}
+					return []byte{}, nil
+				},
+				RunFunc: func(dir string, name string, args ...string) error {
+					if len(args) > 0 && args[0] == "show-ref" {
+						return nil
+					}
+					return nil
+				},
+			}
+
+			wm := NewWorktreeManagerWithRunner("main", false, mock)
+
+			_, err := wm.CreateWorktreeWithBranch(tt.ticketType, tt.ticketName, "branch")
+
+			if tt.shouldFail && err == nil {
+				t.Errorf("Expected error for path traversal, got nil")
+			}
+			if tt.shouldFail && err != nil && !strings.Contains(err.Error(), "escapes repository root") {
+				t.Errorf("Error = %q, want to contain 'escapes repository root'", err.Error())
+			}
+		})
+	}
+}
