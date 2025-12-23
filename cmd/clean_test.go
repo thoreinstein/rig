@@ -5,6 +5,10 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
+
+	"github.com/spf13/viper"
+
+	"thoreinstein.com/sre/pkg/config"
 )
 
 func TestIsBranchMerged(t *testing.T) {
@@ -28,11 +32,13 @@ func TestIsBranchMerged(t *testing.T) {
 		t.Fatalf("git init failed: %v", err)
 	}
 
-	// Configure git user
+	// Configure git user and disable GPG signing for tests
 	configEmail := exec.Command("git", "-C", repoDir, "config", "user.email", "test@example.com")
 	_ = configEmail.Run()
 	configName := exec.Command("git", "-C", repoDir, "config", "user.name", "Test User")
 	_ = configName.Run()
+	configGpg := exec.Command("git", "-C", repoDir, "config", "commit.gpgsign", "false")
+	_ = configGpg.Run()
 
 	// Create initial commit on main
 	cmd = exec.Command("git", "commit", "--allow-empty", "-m", "Initial commit")
@@ -135,11 +141,13 @@ func TestIsBranchMerged_MergedBranch(t *testing.T) {
 		t.Fatalf("git init failed: %v", err)
 	}
 
-	// Configure git user
+	// Configure git user and disable GPG signing for tests
 	configEmail := exec.Command("git", "-C", repoDir, "config", "user.email", "test@example.com")
 	_ = configEmail.Run()
 	configName := exec.Command("git", "-C", repoDir, "config", "user.name", "Test User")
 	_ = configName.Run()
+	configGpg := exec.Command("git", "-C", repoDir, "config", "commit.gpgsign", "false")
+	_ = configGpg.Run()
 
 	// Create initial commit
 	cmd = exec.Command("git", "commit", "--allow-empty", "-m", "Initial commit")
@@ -190,6 +198,75 @@ func TestIsBranchMerged_MergedBranch(t *testing.T) {
 	}
 }
 
+func TestIsBranchMerged_WorktreeCheckedOut(t *testing.T) {
+	// Skip if git is not available
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not found in PATH, skipping test")
+	}
+
+	// This test verifies that branches checked out in worktrees (prefixed with '+')
+	// are correctly detected as merged
+	tmpDir := t.TempDir()
+	repoDir := filepath.Join(tmpDir, "repo")
+
+	// Initialize as bare repo
+	cmd := exec.Command("git", "init", "--bare", repoDir)
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("git init --bare failed: %v", err)
+	}
+
+	for _, args := range [][]string{
+		{"config", "user.email", "test@example.com"},
+		{"config", "user.name", "Test User"},
+		{"config", "commit.gpgsign", "false"},
+	} {
+		cmd = exec.Command("git", args...)
+		cmd.Dir = repoDir
+		_ = cmd.Run()
+	}
+
+	// Create main worktree
+	mainWorktree := filepath.Join(tmpDir, "main-wt")
+	cmd = exec.Command("git", "worktree", "add", "-b", "main", mainWorktree)
+	cmd.Dir = repoDir
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("git worktree add main failed: %v", err)
+	}
+
+	cmd = exec.Command("git", "commit", "--allow-empty", "-m", "Initial commit")
+	cmd.Dir = mainWorktree
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("git commit failed: %v", err)
+	}
+
+	// Create feature worktree
+	featureWorktree := filepath.Join(tmpDir, "feature-wt")
+	cmd = exec.Command("git", "worktree", "add", "-b", "feature-branch", featureWorktree, "main")
+	cmd.Dir = repoDir
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("git worktree add feature failed: %v", err)
+	}
+
+	cmd = exec.Command("git", "commit", "--allow-empty", "-m", "Feature commit")
+	cmd.Dir = featureWorktree
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("git commit on feature failed: %v", err)
+	}
+
+	// Merge feature into main
+	cmd = exec.Command("git", "merge", "feature-branch", "-m", "Merge feature")
+	cmd.Dir = mainWorktree
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("git merge failed: %v", err)
+	}
+
+	// The feature branch is still checked out in its worktree, so git branch --merged
+	// will show it with a '+' prefix. Test that isBranchMerged handles this correctly.
+	if !isBranchMerged(repoDir, "feature-branch", "main") {
+		t.Error("isBranchMerged() should return true for merged branch checked out in worktree (with '+' prefix)")
+	}
+}
+
 func TestGetWorktreeDetailsForClean(t *testing.T) {
 	// Skip if git is not available
 	if _, err := exec.LookPath("git"); err != nil {
@@ -211,11 +288,13 @@ func TestGetWorktreeDetailsForClean(t *testing.T) {
 		t.Fatalf("git init failed: %v", err)
 	}
 
-	// Configure git user
+	// Configure git user and disable GPG signing for tests
 	configEmail := exec.Command("git", "-C", repoDir, "config", "user.email", "test@example.com")
 	_ = configEmail.Run()
 	configName := exec.Command("git", "-C", repoDir, "config", "user.name", "Test User")
 	_ = configName.Run()
+	configGpg := exec.Command("git", "-C", repoDir, "config", "commit.gpgsign", "false")
+	_ = configGpg.Run()
 
 	// Create initial commit
 	cmd = exec.Command("git", "commit", "--allow-empty", "-m", "Initial commit")
@@ -332,11 +411,13 @@ func TestForceRemoveWorktree(t *testing.T) {
 		t.Fatalf("git init failed: %v", err)
 	}
 
-	// Configure git user
+	// Configure git user and disable GPG signing for tests
 	configEmail := exec.Command("git", "-C", repoDir, "config", "user.email", "test@example.com")
 	_ = configEmail.Run()
 	configName := exec.Command("git", "-C", repoDir, "config", "user.name", "Test User")
 	_ = configName.Run()
+	configGpg := exec.Command("git", "-C", repoDir, "config", "commit.gpgsign", "false")
+	_ = configGpg.Run()
 
 	// Create initial commit
 	cmd = exec.Command("git", "commit", "--allow-empty", "-m", "Initial commit")
@@ -390,11 +471,13 @@ func TestForceRemoveWorktree_NonExistent(t *testing.T) {
 		t.Fatalf("git init failed: %v", err)
 	}
 
-	// Configure git user
+	// Configure git user and disable GPG signing for tests
 	configEmail := exec.Command("git", "-C", repoDir, "config", "user.email", "test@example.com")
 	_ = configEmail.Run()
 	configName := exec.Command("git", "-C", repoDir, "config", "user.name", "Test User")
 	_ = configName.Run()
+	configGpg := exec.Command("git", "-C", repoDir, "config", "commit.gpgsign", "false")
+	_ = configGpg.Run()
 
 	// Create initial commit
 	cmd = exec.Command("git", "commit", "--allow-empty", "-m", "Initial commit")
@@ -431,11 +514,13 @@ func TestGetWorktreeDetailsForClean_WithWorktree(t *testing.T) {
 		t.Fatalf("git init failed: %v", err)
 	}
 
-	// Configure git user
+	// Configure git user and disable GPG signing for tests
 	configEmail := exec.Command("git", "-C", repoDir, "config", "user.email", "test@example.com")
 	_ = configEmail.Run()
 	configName := exec.Command("git", "-C", repoDir, "config", "user.name", "Test User")
 	_ = configName.Run()
+	configGpg := exec.Command("git", "-C", repoDir, "config", "commit.gpgsign", "false")
+	_ = configGpg.Run()
 
 	// Create initial commit
 	cmd = exec.Command("git", "commit", "--allow-empty", "-m", "Initial commit")
@@ -532,4 +617,377 @@ func TestCleanupCandidateStatusString(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Integration tests for runCleanCommand
+
+// setupCleanTestGitRepo creates a bare git repo with worktrees for clean command testing
+func setupCleanTestGitRepo(t *testing.T) (repoDir string, worktreePaths []string) {
+	t.Helper()
+
+	tmpDir := t.TempDir()
+	repoDir = filepath.Join(tmpDir, "repo")
+
+	// Initialize as bare repo to match production setup
+	cmd := exec.Command("git", "init", "--bare", repoDir)
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("git init --bare failed: %v", err)
+	}
+
+	// Configure git user and disable GPG signing for tests
+	for _, args := range [][]string{
+		{"config", "user.email", "test@example.com"},
+		{"config", "user.name", "Test User"},
+		{"config", "commit.gpgsign", "false"},
+	} {
+		cmd = exec.Command("git", args...)
+		cmd.Dir = repoDir
+		_ = cmd.Run()
+	}
+
+	// Create a main worktree to make initial commit
+	mainWorktree := filepath.Join(tmpDir, "main-worktree")
+	cmd = exec.Command("git", "worktree", "add", "-b", "main", mainWorktree)
+	cmd.Dir = repoDir
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("git worktree add main failed: %v", err)
+	}
+
+	// Create initial commit in main worktree
+	cmd = exec.Command("git", "commit", "--allow-empty", "-m", "Initial commit")
+	cmd.Dir = mainWorktree
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("git commit failed: %v", err)
+	}
+
+	// Remove the temp main worktree
+	cmd = exec.Command("git", "worktree", "remove", mainWorktree)
+	cmd.Dir = repoDir
+	_ = cmd.Run()
+
+	// Create worktrees for testing under the bare repo
+	worktreeNames := []string{"feature-1", "feature-2"}
+	for _, name := range worktreeNames {
+		worktreePath := filepath.Join(repoDir, "fraas", name)
+
+		cmd = exec.Command("git", "worktree", "add", "-b", name, worktreePath, "main")
+		cmd.Dir = repoDir
+		if err := cmd.Run(); err != nil {
+			t.Fatalf("git worktree add failed: %v", err)
+		}
+		worktreePaths = append(worktreePaths, worktreePath)
+	}
+
+	return repoDir, worktreePaths
+}
+
+func TestFindCleanupCandidates(t *testing.T) {
+	// Skip if git is not available
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not found in PATH, skipping test")
+	}
+
+	repoDir, worktreePaths := setupCleanTestGitRepo(t)
+
+	// Setup minimal config for test
+	notesDir := t.TempDir()
+	setupCleanTestConfig(t, notesDir)
+	defer viper.Reset()
+
+	t.Chdir(repoDir)
+
+	cfg, err := loadTestConfig()
+	if err != nil {
+		t.Fatalf("Failed to load config: %v", err)
+	}
+
+	candidates, err := findCleanupCandidates(cfg)
+	if err != nil {
+		t.Fatalf("findCleanupCandidates() error: %v", err)
+	}
+
+	// Should find 2 worktrees (not including main)
+	if len(candidates) != 2 {
+		t.Errorf("findCleanupCandidates() found %d candidates, expected 2", len(candidates))
+	}
+
+	// Verify worktrees are in candidates
+	foundPaths := make(map[string]bool)
+	for _, c := range candidates {
+		foundPaths[c.Path] = true
+	}
+
+	for _, expectedPath := range worktreePaths {
+		// Handle symlink resolution for comparison
+		realExpected, _ := filepath.EvalSymlinks(expectedPath)
+		found := false
+		for path := range foundPaths {
+			realPath, _ := filepath.EvalSymlinks(path)
+			if path == expectedPath || realPath == realExpected {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("Expected worktree %q not found in candidates", expectedPath)
+		}
+	}
+}
+
+func TestRunCleanCommand_DryRun(t *testing.T) {
+	// Skip if git is not available
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not found in PATH, skipping test")
+	}
+
+	repoDir, worktreePaths := setupCleanTestGitRepo(t)
+
+	notesDir := t.TempDir()
+	setupCleanTestConfig(t, notesDir)
+	defer func() {
+		cleanDryRun = false
+		cleanForce = false
+		viper.Reset()
+	}()
+
+	t.Chdir(repoDir)
+
+	// Set dry-run mode
+	cleanDryRun = true
+	cleanForce = false
+
+	// Capture output (command runs synchronously)
+	err := runCleanCommand()
+	if err != nil {
+		t.Fatalf("runCleanCommand() with --dry-run error: %v", err)
+	}
+
+	// Verify worktrees still exist (dry-run should NOT remove them)
+	for _, path := range worktreePaths {
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			t.Errorf("Worktree %q should still exist after dry-run", path)
+		}
+	}
+}
+
+func TestRunCleanCommand_Force(t *testing.T) {
+	// Skip if git is not available
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not found in PATH, skipping test")
+	}
+
+	repoDir, worktreePaths := setupCleanTestGitRepo(t)
+
+	notesDir := t.TempDir()
+	setupCleanTestConfig(t, notesDir)
+	defer func() {
+		cleanDryRun = false
+		cleanForce = false
+		viper.Reset()
+	}()
+
+	t.Chdir(repoDir)
+
+	// Set force mode (skip confirmation)
+	cleanDryRun = false
+	cleanForce = true
+
+	err := runCleanCommand()
+	if err != nil {
+		t.Fatalf("runCleanCommand() with --force error: %v", err)
+	}
+
+	// Verify worktrees were removed
+	for _, path := range worktreePaths {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Errorf("Worktree %q should be removed after --force clean", path)
+		}
+	}
+}
+
+func TestRunCleanCommand_NoWorktrees(t *testing.T) {
+	// Skip if git is not available
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not found in PATH, skipping test")
+	}
+
+	// Create a bare repo with no extra worktrees
+	tmpDir := t.TempDir()
+	repoDir := filepath.Join(tmpDir, "repo")
+
+	cmd := exec.Command("git", "init", "--bare", repoDir)
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("git init --bare failed: %v", err)
+	}
+
+	for _, args := range [][]string{
+		{"config", "user.email", "test@example.com"},
+		{"config", "user.name", "Test User"},
+		{"config", "commit.gpgsign", "false"},
+	} {
+		cmd = exec.Command("git", args...)
+		cmd.Dir = repoDir
+		_ = cmd.Run()
+	}
+
+	// Create main worktree for initial commit
+	mainWorktree := filepath.Join(tmpDir, "main-worktree")
+	cmd = exec.Command("git", "worktree", "add", "-b", "main", mainWorktree)
+	cmd.Dir = repoDir
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("git worktree add main failed: %v", err)
+	}
+
+	cmd = exec.Command("git", "commit", "--allow-empty", "-m", "Initial commit")
+	cmd.Dir = mainWorktree
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("git commit failed: %v", err)
+	}
+
+	// Remove temp worktree
+	cmd = exec.Command("git", "worktree", "remove", mainWorktree)
+	cmd.Dir = repoDir
+	_ = cmd.Run()
+
+	notesDir := t.TempDir()
+	setupCleanTestConfig(t, notesDir)
+	defer func() {
+		cleanDryRun = false
+		cleanForce = false
+		viper.Reset()
+	}()
+
+	t.Chdir(repoDir)
+
+	cleanDryRun = false
+	cleanForce = true
+
+	// Should not error when no worktrees to clean
+	err := runCleanCommand()
+	if err != nil {
+		t.Errorf("runCleanCommand() should not error with no worktrees: %v", err)
+	}
+}
+
+func TestRunCleanCommand_MergedBranchDetection(t *testing.T) {
+	// Skip if git is not available
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not found in PATH, skipping test")
+	}
+
+	tmpDir := t.TempDir()
+	repoDir := filepath.Join(tmpDir, "repo")
+
+	// Initialize bare repo
+	cmd := exec.Command("git", "init", "--bare", repoDir)
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("git init --bare failed: %v", err)
+	}
+
+	for _, args := range [][]string{
+		{"config", "user.email", "test@example.com"},
+		{"config", "user.name", "Test User"},
+		{"config", "commit.gpgsign", "false"},
+	} {
+		cmd = exec.Command("git", args...)
+		cmd.Dir = repoDir
+		_ = cmd.Run()
+	}
+
+	// Create main worktree for initial commit
+	mainWorktree := filepath.Join(tmpDir, "main-worktree")
+	cmd = exec.Command("git", "worktree", "add", "-b", "main", mainWorktree)
+	cmd.Dir = repoDir
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("git worktree add main failed: %v", err)
+	}
+
+	cmd = exec.Command("git", "commit", "--allow-empty", "-m", "Initial commit")
+	cmd.Dir = mainWorktree
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("git commit failed: %v", err)
+	}
+
+	// Create a worktree with a branch that will be merged
+	mergedWorktreePath := filepath.Join(repoDir, "fraas", "merged-feature")
+	cmd = exec.Command("git", "worktree", "add", "-b", "merged-feature", mergedWorktreePath, "main")
+	cmd.Dir = repoDir
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("git worktree add failed: %v", err)
+	}
+
+	// Add commit on the feature branch
+	cmd = exec.Command("git", "commit", "--allow-empty", "-m", "Feature commit")
+	cmd.Dir = mergedWorktreePath
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("git commit on feature failed: %v", err)
+	}
+
+	// Merge the feature branch into main from the main worktree
+	cmd = exec.Command("git", "merge", "merged-feature", "-m", "Merge merged-feature")
+	cmd.Dir = mainWorktree
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("git merge failed: %v", err)
+	}
+
+	// Remove the main worktree (no longer needed)
+	cmd = exec.Command("git", "worktree", "remove", mainWorktree)
+	cmd.Dir = repoDir
+	_ = cmd.Run()
+
+	notesDir := t.TempDir()
+	setupCleanTestConfig(t, notesDir)
+	defer viper.Reset()
+
+	t.Chdir(repoDir)
+
+	cfg, err := loadTestConfig()
+	if err != nil {
+		t.Fatalf("Failed to load config: %v", err)
+	}
+
+	candidates, err := findCleanupCandidates(cfg)
+	if err != nil {
+		t.Fatalf("findCleanupCandidates() error: %v", err)
+	}
+
+	// Find the merged worktree candidate
+	var mergedCandidate *CleanupCandidate
+	for i, c := range candidates {
+		realPath, _ := filepath.EvalSymlinks(c.Path)
+		realMergedPath, _ := filepath.EvalSymlinks(mergedWorktreePath)
+		if c.Path == mergedWorktreePath || realPath == realMergedPath {
+			mergedCandidate = &candidates[i]
+			break
+		}
+	}
+
+	if mergedCandidate == nil {
+		t.Fatal("Merged worktree should be in candidates")
+	}
+
+	if !mergedCandidate.IsMerged {
+		t.Errorf("Merged branch should be detected as IsMerged=true")
+	}
+}
+
+// Helper functions for clean tests
+
+func setupCleanTestConfig(t *testing.T, notesPath string) {
+	t.Helper()
+
+	viper.Reset()
+	viper.Set("notes.path", notesPath)
+	viper.Set("notes.daily_dir", "daily")
+	viper.Set("notes.template_dir", filepath.Join(notesPath, "templates"))
+	viper.Set("git.base_branch", "")
+	viper.Set("jira.enabled", false)
+	viper.Set("tmux.session_prefix", "")
+	viper.Set("tmux.windows", []map[string]string{
+		{"name": "code", "command": ""},
+	})
+}
+
+func loadTestConfig() (*config.Config, error) {
+	return config.Load()
 }
