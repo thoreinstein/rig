@@ -168,8 +168,10 @@ func findCleanupCandidates(cfg *config.Config) ([]CleanupCandidate, error) {
 
 	candidates := make([]CleanupCandidate, 0, len(worktrees))
 	for _, wt := range worktrees {
-		// Skip the main repo path
-		if wt == repoRoot {
+		// Skip the main repo path (handle symlink resolution for comparison)
+		realWt, _ := filepath.EvalSymlinks(wt)
+		realRepoRoot, _ := filepath.EvalSymlinks(repoRoot)
+		if wt == repoRoot || realWt == realRepoRoot {
 			continue
 		}
 
@@ -249,6 +251,7 @@ func isBranchMerged(repoPath, branch, baseBranch string) bool {
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		line = strings.TrimPrefix(line, "* ") // Current branch marker
+		line = strings.TrimPrefix(line, "+ ") // Worktree branch marker
 		if line == branch {
 			return true
 		}
@@ -280,7 +283,17 @@ func removeWorktree(cfg *config.Config, candidate CleanupCandidate) error {
 
 	// Extract type and name from path
 	// Path structure: repoPath/type/ticket or repoPath/type/.../ticket
-	relPath := strings.TrimPrefix(candidate.Path, candidate.RepoPath+"/")
+	// Normalize paths to handle symlink differences (e.g., /var vs /private/var on macOS)
+	candidatePath, _ := filepath.EvalSymlinks(candidate.Path)
+	repoPath, _ := filepath.EvalSymlinks(candidate.RepoPath)
+	if candidatePath == "" {
+		candidatePath = candidate.Path
+	}
+	if repoPath == "" {
+		repoPath = candidate.RepoPath
+	}
+
+	relPath := strings.TrimPrefix(candidatePath, repoPath+"/")
 	parts := strings.Split(relPath, string(filepath.Separator))
 	if len(parts) < 2 {
 		// Single-level path or unusual structure - use force remove
