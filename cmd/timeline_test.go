@@ -1,13 +1,91 @@
 package cmd
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"thoreinstein.com/sre/pkg/history"
 )
 
+func TestTimelineCommandStructure(t *testing.T) {
+	t.Parallel()
+
+	cmd := timelineCmd
+
+	if cmd.Use != "timeline <ticket>" {
+		t.Errorf("timeline command Use = %q, want %q", cmd.Use, "timeline <ticket>")
+	}
+
+	if cmd.Short == "" {
+		t.Error("timeline command should have Short description")
+	}
+
+	if cmd.Long == "" {
+		t.Error("timeline command should have Long description")
+	}
+
+	// Verify key information is in the description
+	if !strings.Contains(cmd.Long, "timeline") {
+		t.Error("timeline command Long description should mention 'timeline'")
+	}
+
+	if !strings.Contains(cmd.Long, "history") {
+		t.Error("timeline command Long description should mention 'history'")
+	}
+
+	// Verify examples are in the description
+	if !strings.Contains(cmd.Long, "sre timeline") {
+		t.Error("timeline command Long description should contain usage examples")
+	}
+}
+
+func TestTimelineCommandFlags(t *testing.T) {
+	t.Parallel()
+
+	cmd := timelineCmd
+
+	expectedFlags := []struct {
+		name     string
+		defValue string
+	}{
+		{"since", ""},
+		{"until", ""},
+		{"directory", ""},
+		{"failed-only", "false"},
+		{"limit", "1000"},
+		{"output", ""},
+		{"no-update", "false"},
+	}
+
+	for _, expected := range expectedFlags {
+		flag := cmd.Flags().Lookup(expected.name)
+		if flag == nil {
+			t.Errorf("timeline command should have --%s flag", expected.name)
+			continue
+		}
+		if flag.DefValue != expected.defValue {
+			t.Errorf("--%s default = %q, want %q", expected.name, flag.DefValue, expected.defValue)
+		}
+	}
+}
+
+func TestTimelineCommandArgs(t *testing.T) {
+	t.Parallel()
+
+	cmd := timelineCmd
+
+	// Command should require exactly 1 argument
+	if cmd.Args == nil {
+		t.Error("timeline command should have Args validation")
+	}
+}
+
 func TestParseTimeString(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name        string
 		input       string
@@ -68,6 +146,8 @@ func TestParseTimeString(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			result, err := parseTimeString(tt.input)
 
 			if tt.expectError {
@@ -95,6 +175,8 @@ func TestParseTimeString(t *testing.T) {
 }
 
 func TestGenerateTimelineMarkdown(t *testing.T) {
+	t.Parallel()
+
 	commands := []history.Command{
 		{
 			ID:        1,
@@ -157,6 +239,8 @@ func TestGenerateTimelineMarkdown(t *testing.T) {
 }
 
 func TestGenerateTimelineMarkdown_EmptyCommands(t *testing.T) {
+	t.Parallel()
+
 	result := generateTimelineMarkdown([]history.Command{}, "FRAAS-456")
 
 	if !containsSubstring(result, "## Command Timeline - FRAAS-456") {
@@ -168,6 +252,8 @@ func TestGenerateTimelineMarkdown_EmptyCommands(t *testing.T) {
 }
 
 func TestGenerateTimelineMarkdown_MultipleDays(t *testing.T) {
+	t.Parallel()
+
 	commands := []history.Command{
 		{
 			Command:   "command1",
@@ -198,6 +284,8 @@ func TestGenerateTimelineMarkdown_MultipleDays(t *testing.T) {
 }
 
 func TestRemoveExistingTimeline(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name     string
 		content  string
@@ -279,6 +367,8 @@ Summary.
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			result := removeExistingTimeline(tt.content)
 			if result != tt.expected {
 				t.Errorf("removeExistingTimeline() = %q, want %q", result, tt.expected)
@@ -288,6 +378,8 @@ Summary.
 }
 
 func TestGenerateTimelineMarkdown_LongDirectory(t *testing.T) {
+	t.Parallel()
+
 	commands := []history.Command{
 		{
 			Command:   "ls",
@@ -315,6 +407,8 @@ func containsSubstring(s, substr string) bool {
 }
 
 func TestValidateOutputPath(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name    string
 		path    string
@@ -412,6 +506,8 @@ func TestValidateOutputPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := validateOutputPath(tt.path)
 			if tt.wantErr {
 				if err == nil {
@@ -425,5 +521,315 @@ func TestValidateOutputPath(t *testing.T) {
 				t.Errorf("validateOutputPath(%q) returned unexpected error: %v", tt.path, err)
 			}
 		})
+	}
+}
+
+func TestValidateOutputPath_AbsolutePathInHome(t *testing.T) {
+	t.Parallel()
+
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		t.Skip("cannot determine home directory")
+	}
+
+	// Path within home directory should be valid
+	validPath := filepath.Join(homeDir, "Documents", "timeline.md")
+	if err := validateOutputPath(validPath); err != nil {
+		t.Errorf("validateOutputPath(%q) should be valid for path in home dir: %v", validPath, err)
+	}
+}
+
+func TestValidateOutputPath_AbsolutePathInTemp(t *testing.T) {
+	t.Parallel()
+
+	// Using os.TempDir() intentionally - we're testing that validateOutputPath
+	// accepts paths in the system temp directory, not creating test files
+	tempDir := os.TempDir() //nolint:usetesting // need actual system temp path for validation test
+
+	// Path within temp directory should be valid
+	validPath := filepath.Join(tempDir, "timeline.md")
+	if err := validateOutputPath(validPath); err != nil {
+		t.Errorf("validateOutputPath(%q) should be valid for path in temp dir: %v", validPath, err)
+	}
+}
+
+func TestWriteTimelineToFile(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "timeline.md")
+	content := "## Command Timeline - TEST-123\n\nCommands: 5\n"
+
+	err := writeTimelineToFile(content, testFile)
+	if err != nil {
+		t.Fatalf("writeTimelineToFile() unexpected error: %v", err)
+	}
+
+	// Verify file was created
+	if _, statErr := os.Stat(testFile); os.IsNotExist(statErr) {
+		t.Error("writeTimelineToFile() should create the file")
+	}
+
+	// Verify content
+	readContent, err := os.ReadFile(testFile)
+	if err != nil {
+		t.Fatalf("Failed to read written file: %v", err)
+	}
+
+	if string(readContent) != content {
+		t.Errorf("writeTimelineToFile() content = %q, want %q", string(readContent), content)
+	}
+
+	// Verify permissions (0600)
+	info, err := os.Stat(testFile)
+	if err != nil {
+		t.Fatalf("Failed to stat written file: %v", err)
+	}
+
+	// Check that file is not world-readable (owner read/write only)
+	perm := info.Mode().Perm()
+	if perm&0077 != 0 {
+		t.Errorf("writeTimelineToFile() permissions = %o, want 0600 (no group/world access)", perm)
+	}
+}
+
+func TestWriteTimelineToFile_NestedDirectory(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	nestedDir := filepath.Join(tmpDir, "reports", "timelines")
+	testFile := filepath.Join(nestedDir, "timeline.md")
+	content := "## Timeline\n"
+
+	// Create nested directory first
+	if err := os.MkdirAll(nestedDir, 0755); err != nil {
+		t.Fatalf("Failed to create nested directory: %v", err)
+	}
+
+	err := writeTimelineToFile(content, testFile)
+	if err != nil {
+		t.Fatalf("writeTimelineToFile() unexpected error: %v", err)
+	}
+
+	// Verify file was created
+	if _, statErr := os.Stat(testFile); os.IsNotExist(statErr) {
+		t.Error("writeTimelineToFile() should create the file in nested directory")
+	}
+}
+
+func TestWriteTimelineToFile_OverwritesExisting(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "timeline.md")
+
+	// Write initial content
+	initialContent := "Old content"
+	if err := os.WriteFile(testFile, []byte(initialContent), 0644); err != nil {
+		t.Fatalf("Failed to create initial file: %v", err)
+	}
+
+	// Overwrite with new content
+	newContent := "New timeline content"
+	err := writeTimelineToFile(newContent, testFile)
+	if err != nil {
+		t.Fatalf("writeTimelineToFile() unexpected error: %v", err)
+	}
+
+	// Verify new content
+	readContent, err := os.ReadFile(testFile)
+	if err != nil {
+		t.Fatalf("Failed to read written file: %v", err)
+	}
+
+	if string(readContent) != newContent {
+		t.Errorf("writeTimelineToFile() should overwrite, got %q, want %q", string(readContent), newContent)
+	}
+}
+
+func TestRemoveExistingTimeline_MultipleTimelineSections(t *testing.T) {
+	t.Parallel()
+
+	// Edge case: multiple timeline sections (shouldn't happen, but test behavior)
+	content := `# Note
+
+## Command Timeline - TICKET-1
+
+First timeline content
+
+## Command Timeline - TICKET-2
+
+Second timeline content
+
+## Summary
+
+Actual content`
+
+	result := removeExistingTimeline(content)
+
+	// Should remove first timeline section but keep Summary
+	if !strings.Contains(result, "## Summary") {
+		t.Error("removeExistingTimeline() should preserve Summary section")
+	}
+	if !strings.Contains(result, "Actual content") {
+		t.Error("removeExistingTimeline() should preserve content after Summary")
+	}
+}
+
+func TestRemoveExistingTimeline_TimelineWithSubsections(t *testing.T) {
+	t.Parallel()
+
+	content := `# Note
+
+## Summary
+
+Some summary.
+
+## Command Timeline - TEST-123
+
+Commands: 10
+
+### 2025-08-10
+
+- command 1
+- command 2
+
+### 2025-08-11
+
+- command 3
+
+## Notes
+
+Final notes.`
+
+	result := removeExistingTimeline(content)
+
+	// Timeline and its subsections should be removed
+	if strings.Contains(result, "Command Timeline") {
+		t.Error("removeExistingTimeline() should remove timeline header")
+	}
+	if strings.Contains(result, "### 2025-08-10") {
+		t.Error("removeExistingTimeline() should remove timeline day subsections")
+	}
+	if strings.Contains(result, "command 1") {
+		t.Error("removeExistingTimeline() should remove timeline commands")
+	}
+
+	// Other sections should remain
+	if !strings.Contains(result, "## Summary") {
+		t.Error("removeExistingTimeline() should preserve Summary")
+	}
+	if !strings.Contains(result, "## Notes") {
+		t.Error("removeExistingTimeline() should preserve Notes")
+	}
+	if !strings.Contains(result, "Final notes") {
+		t.Error("removeExistingTimeline() should preserve Notes content")
+	}
+}
+
+func TestGenerateTimelineMarkdown_DurationFormatting(t *testing.T) {
+	t.Parallel()
+
+	commands := []history.Command{
+		{
+			Command:   "quick command",
+			Timestamp: time.Date(2025, 8, 10, 9, 0, 0, 0, time.UTC),
+			Duration:  50, // 50ms
+		},
+		{
+			Command:   "slow command",
+			Timestamp: time.Date(2025, 8, 10, 9, 1, 0, 0, time.UTC),
+			Duration:  5000, // 5000ms
+		},
+	}
+
+	result := generateTimelineMarkdown(commands, "TEST")
+
+	// Check duration formatting
+	if !strings.Contains(result, "(50ms)") {
+		t.Error("Timeline should show duration in milliseconds for quick command")
+	}
+	if !strings.Contains(result, "(5000ms)") {
+		t.Error("Timeline should show duration for slow command")
+	}
+}
+
+func TestGenerateTimelineMarkdown_ZeroDuration(t *testing.T) {
+	t.Parallel()
+
+	commands := []history.Command{
+		{
+			Command:   "instant command",
+			Timestamp: time.Date(2025, 8, 10, 9, 0, 0, 0, time.UTC),
+			Duration:  0, // No duration recorded
+		},
+	}
+
+	result := generateTimelineMarkdown(commands, "TEST")
+
+	// Zero duration should not show duration string
+	if strings.Contains(result, "(0ms)") {
+		t.Error("Timeline should not show (0ms) for zero duration")
+	}
+}
+
+func TestGenerateTimelineMarkdown_SuccessfulExitCode(t *testing.T) {
+	t.Parallel()
+
+	commands := []history.Command{
+		{
+			Command:   "successful command",
+			Timestamp: time.Date(2025, 8, 10, 9, 0, 0, 0, time.UTC),
+			ExitCode:  0,
+		},
+	}
+
+	result := generateTimelineMarkdown(commands, "TEST")
+
+	// Exit code 0 should not show [Exit: 0]
+	if strings.Contains(result, "[Exit: 0]") {
+		t.Error("Timeline should not show exit code for successful commands")
+	}
+}
+
+func TestGenerateTimelineMarkdown_ShortDirectory(t *testing.T) {
+	t.Parallel()
+
+	commands := []history.Command{
+		{
+			Command:   "ls",
+			Timestamp: time.Date(2025, 8, 10, 9, 0, 0, 0, time.UTC),
+			Directory: "/home/user",
+		},
+	}
+
+	result := generateTimelineMarkdown(commands, "TEST")
+
+	// Short directory should be shown fully
+	if !strings.Contains(result, "`/home/user`") {
+		t.Error("Timeline should show short directory path fully")
+	}
+	// Should not be truncated
+	if strings.Contains(result, "...") {
+		t.Error("Short directory should not be truncated")
+	}
+}
+
+func TestGenerateTimelineMarkdown_EmptyDirectory(t *testing.T) {
+	t.Parallel()
+
+	commands := []history.Command{
+		{
+			Command:   "echo hello",
+			Timestamp: time.Date(2025, 8, 10, 9, 0, 0, 0, time.UTC),
+			Directory: "",
+		},
+	}
+
+	result := generateTimelineMarkdown(commands, "TEST")
+
+	// Should not have backticks for empty directory
+	if strings.Contains(result, "`` `") || strings.Contains(result, "`: `echo") {
+		t.Error("Timeline should not show empty directory backticks")
 	}
 }
