@@ -1,10 +1,10 @@
 package config
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 
+	"github.com/cockroachdb/errors"
 	"github.com/spf13/viper"
 )
 
@@ -64,12 +64,12 @@ func Load() (*Config, error) {
 
 	// Unmarshal the config
 	if err := viper.Unmarshal(config); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
+		return nil, errors.Wrap(err, "failed to unmarshal config")
 	}
 
 	// Expand paths
 	if err := expandPaths(config); err != nil {
-		return nil, fmt.Errorf("failed to expand paths: %w", err)
+		return nil, errors.Wrap(err, "failed to expand paths")
 	}
 
 	return config, nil

@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,7 +8,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cockroachdb/errors"
 	"github.com/spf13/cobra"
+
 	"thoreinstein.com/sre/pkg/config"
 	"thoreinstein.com/sre/pkg/history"
 	"thoreinstein.com/sre/pkg/notes"
@@ -63,7 +64,7 @@ func runTimelineCommand(ticket string) error {
 	// Load configuration
 	cfg, err := config.Load()
 	if err != nil {
-		return fmt.Errorf("failed to load configuration: %w", err)
+		return errors.Wrap(err, "failed to load configuration")
 	}
 
 	// Parse ticket
@@ -80,7 +81,7 @@ func runTimelineCommand(ticket string) error {
 	dbManager := history.NewDatabaseManager(cfg.History.DatabasePath, verbose)
 
 	if !dbManager.IsAvailable() {
-		return fmt.Errorf("history database not available at: %s", cfg.History.DatabasePath)
+		return errors.Newf("history database not available at: %s", cfg.History.DatabasePath)
 	}
 
 	// Parse time options
@@ -89,7 +90,7 @@ func runTimelineCommand(ticket string) error {
 	if timelineSince != "" {
 		parsedSince, err := parseTimeString(timelineSince)
 		if err != nil {
-			return fmt.Errorf("invalid --since time: %w", err)
+			return errors.Wrap(err, "invalid --since time")
 		}
 		since = &parsedSince
 	}
@@ -97,7 +98,7 @@ func runTimelineCommand(ticket string) error {
 	if timelineUntil != "" {
 		parsedUntil, err := parseTimeString(timelineUntil)
 		if err != nil {
-			return fmt.Errorf("invalid --until time: %w", err)
+			return errors.Wrap(err, "invalid --until time")
 		}
 		until = &parsedUntil
 	}
@@ -123,7 +124,7 @@ func runTimelineCommand(ticket string) error {
 
 	commands, err := dbManager.QueryCommands(options)
 	if err != nil {
-		return fmt.Errorf("failed to query commands: %w", err)
+		return errors.Wrap(err, "failed to query commands")
 	}
 
 	if len(commands) == 0 {
@@ -147,20 +148,20 @@ func runTimelineCommand(ticket string) error {
 	if timelineOutput != "" {
 		// Validate output path before writing
 		if err := validateOutputPath(timelineOutput); err != nil {
-			return fmt.Errorf("invalid output path: %w", err)
+			return errors.Wrap(err, "invalid output path")
 		}
 
 		// Write to specified file
 		err = writeTimelineToFile(timeline, timelineOutput)
 		if err != nil {
-			return fmt.Errorf("failed to write timeline to file: %w", err)
+			return errors.Wrap(err, "failed to write timeline to file")
 		}
 		fmt.Printf("Timeline written to: %s\n", timelineOutput)
 	} else {
 		// Update ticket note
 		err = updateTicketNoteWithTimeline(cfg, ticketInfo, timeline)
 		if err != nil {
-			return fmt.Errorf("failed to update ticket note: %w", err)
+			return errors.Wrap(err, "failed to update ticket note")
 		}
 		fmt.Printf("Timeline added to ticket note for: %s\n", ticketInfo.Full)
 	}
@@ -183,7 +184,7 @@ func parseTimeString(timeStr string) (time.Time, error) {
 		}
 	}
 
-	return time.Time{}, fmt.Errorf("unable to parse time: %s", timeStr)
+	return time.Time{}, errors.Newf("unable to parse time: %s", timeStr)
 }
 
 // generateTimelineMarkdown generates a markdown timeline from commands
@@ -203,7 +204,7 @@ func generateTimelineMarkdown(commands []history.Command, ticket string) string 
 	}
 
 	// Sort days and output
-	var days []string
+	days := make([]string, 0, len(dayGroups))
 	for day := range dayGroups {
 		days = append(days, day)
 	}
@@ -272,13 +273,13 @@ func validateOutputPath(path string) error {
 	if filepath.IsAbs(cleanPath) {
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
-			return fmt.Errorf("cannot determine home directory: %w", err)
+			return errors.Wrap(err, "cannot determine home directory")
 		}
 
 		// Allow paths within home directory or temp directory
 		tempDir := os.TempDir()
 		if !strings.HasPrefix(cleanPath, homeDir) && !strings.HasPrefix(cleanPath, tempDir) {
-			return fmt.Errorf("absolute output path must be within home directory (%s) or temp directory (%s)", homeDir, tempDir)
+			return errors.Newf("absolute output path must be within home directory (%s) or temp directory (%s)", homeDir, tempDir)
 		}
 	}
 
@@ -301,7 +302,7 @@ func validateOutputPath(path string) error {
 	lowerBase := strings.ToLower(base)
 	for _, pattern := range sensitivePatterns {
 		if strings.Contains(lowerBase, pattern) {
-			return fmt.Errorf("output path cannot target sensitive file: %s", base)
+			return errors.Newf("output path cannot target sensitive file: %s", base)
 		}
 	}
 
@@ -315,7 +316,7 @@ func validateOutputPath(path string) error {
 	}
 
 	if !allowedExtensions[ext] {
-		return fmt.Errorf("output file must have a safe extension (.md, .txt, .json), got: %s", ext)
+		return errors.Newf("output file must have a safe extension (.md, .txt, .json), got: %s", ext)
 	}
 
 	return nil
@@ -335,13 +336,13 @@ func updateTicketNoteWithTimeline(cfg *config.Config, ticketInfo *TicketInfo, ti
 
 	// Check if note exists
 	if _, err := os.Stat(notePath); os.IsNotExist(err) {
-		return fmt.Errorf("ticket note not found: %s", notePath)
+		return errors.Newf("ticket note not found: %s", notePath)
 	}
 
 	// Read existing note content
 	content, err := os.ReadFile(notePath)
 	if err != nil {
-		return fmt.Errorf("failed to read note: %w", err)
+		return errors.Wrap(err, "failed to read note")
 	}
 
 	noteContent := string(content)
@@ -355,7 +356,7 @@ func updateTicketNoteWithTimeline(cfg *config.Config, ticketInfo *TicketInfo, ti
 	// Write back to file
 	err = os.WriteFile(notePath, []byte(updatedContent), 0644)
 	if err != nil {
-		return fmt.Errorf("failed to write updated note: %w", err)
+		return errors.Wrap(err, "failed to write updated note")
 	}
 
 	return nil

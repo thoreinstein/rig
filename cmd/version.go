@@ -8,17 +8,24 @@ import (
 
 // Version information set via ldflags at build time.
 var (
-	version = "dev"
+	// Version is the current version of sre, set via ldflags at build time.
+	// Exported for use by the update command.
+	Version = "dev"
 	commit  = "none"
 	date    = "unknown"
 )
+
+// GetVersion returns the current version string.
+func GetVersion() string {
+	return Version
+}
 
 var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print version information",
 	Long:  `Display the version, commit hash, and build date of the sre CLI.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Printf("sre version %s\n", version)
+		fmt.Printf("sre version %s\n", Version)
 		fmt.Printf("  commit: %s\n", commit)
 		fmt.Printf("  built:  %s\n", date)
 	},

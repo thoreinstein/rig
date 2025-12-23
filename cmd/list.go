@@ -5,7 +5,9 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/cockroachdb/errors"
 	"github.com/spf13/cobra"
+
 	"thoreinstein.com/sre/pkg/config"
 	"thoreinstein.com/sre/pkg/git"
 	"thoreinstein.com/sre/pkg/tmux"
@@ -49,7 +51,7 @@ func runListCommand() error {
 	// Load configuration
 	cfg, err := config.Load()
 	if err != nil {
-		return fmt.Errorf("failed to load configuration: %w", err)
+		return errors.Wrap(err, "failed to load configuration")
 	}
 
 	// If neither flag is set, show both
@@ -97,7 +99,7 @@ func listCurrentRepoWorktrees(cfg *config.Config) error {
 
 	worktrees, err := gitManager.ListWorktrees()
 	if err != nil {
-		return fmt.Errorf("failed to list worktrees: %w", err)
+		return errors.Wrap(err, "failed to list worktrees")
 	}
 
 	if len(worktrees) == 0 {
@@ -189,7 +191,7 @@ func listAllSessions(cfg *config.Config) error {
 	sessionManager := tmux.NewSessionManager(cfg.Tmux.SessionPrefix, nil, verbose)
 	sessions, err := sessionManager.ListSessions()
 	if err != nil {
-		return fmt.Errorf("failed to list sessions: %w", err)
+		return errors.Wrap(err, "failed to list sessions")
 	}
 
 	if len(sessions) == 0 {

@@ -5,14 +5,41 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
+
+	"github.com/cockroachdb/errors"
 )
+
+// AllowedCommandPatterns defines regex patterns for commands that are allowed to be executed.
+// Commands from config that don't match any pattern will be rejected.
+// This provides defense-in-depth against config file tampering.
+//
+// SECURITY: The config file is user-controlled and trusted. This allowlist exists as
+// defense-in-depth to limit blast radius if a config file is somehow compromised.
+// Users who need additional commands should add patterns here.
+var AllowedCommandPatterns = []*regexp.Regexp{
+	// Editor commands
+	regexp.MustCompile(`^(nvim|vim|vi|emacs|nano|code|hx)(\s|$)`),
+	// Shell navigation
+	regexp.MustCompile(`^(cd|ls|pwd|cat|less|more|head|tail|grep|find|tree)(\s|$)`),
+	// Git operations
+	regexp.MustCompile(`^git(\s|$)`),
+	// Go tooling
+	regexp.MustCompile(`^(go|make|task)(\s|$)`),
+	// Common dev tools
+	regexp.MustCompile(`^(docker|kubectl|helm|terraform|gcloud|aws)(\s|$)`),
+	// Package managers
+	regexp.MustCompile(`^(npm|yarn|pnpm|pip|cargo|bundle)(\s|$)`),
+}
 
 // SessionManager handles Tmux session operations
 type SessionManager struct {
-	SessionPrefix string
-	Windows       []WindowConfig
-	Verbose       bool
+	SessionPrefix    string
+	Windows          []WindowConfig
+	Verbose          bool
+	WarnOnCommand    bool // Warn when executing commands from config
+	ValidateCommands bool // Validate commands against allowlist
 }
 
 // WindowConfig represents a tmux window configuration
@@ -25,9 +52,11 @@ type WindowConfig struct {
 // NewSessionManager creates a new SessionManager
 func NewSessionManager(sessionPrefix string, windows []WindowConfig, verbose bool) *SessionManager {
 	return &SessionManager{
-		SessionPrefix: sessionPrefix,
-		Windows:       windows,
-		Verbose:       verbose,
+		SessionPrefix:    sessionPrefix,
+		Windows:          windows,
+		Verbose:          verbose,
+		WarnOnCommand:    true, // Default: warn when executing config commands
+		ValidateCommands: true, // Default: validate commands against allowlist
 	}
 }
 
@@ -49,31 +78,31 @@ func (sm *SessionManager) CreateSession(ticket, worktreePath, notePath string) e
 
 	// Verify worktree directory exists
 	if _, err := os.Stat(worktreePath); os.IsNotExist(err) {
-		return fmt.Errorf("worktree path does not exist: %s", worktreePath)
+		return errors.Newf("worktree path does not exist: %s", worktreePath)
 	}
 
 	// Create session with first window
 	err := sm.createInitialSession(sessionName, worktreePath)
 	if err != nil {
-		return fmt.Errorf("failed to create initial session: %w", err)
+		return errors.Wrap(err, "failed to create initial session")
 	}
 
 	// Create additional windows
 	err = sm.createWindows(sessionName, worktreePath, notePath)
 	if err != nil {
-		return fmt.Errorf("failed to create windows: %w", err)
+		return errors.Wrap(err, "failed to create windows")
 	}
 
 	// Set environment variables for the session
 	err = sm.setEnvironmentVars(sessionName, ticket, worktreePath)
 	if err != nil {
-		return fmt.Errorf("failed to set environment variables: %w", err)
+		return errors.Wrap(err, "failed to set environment variables")
 	}
 
 	// Start on the first window (note)
 	err = sm.selectWindow(sessionName, 1)
 	if err != nil {
-		return fmt.Errorf("failed to select first window: %w", err)
+		return errors.Wrap(err, "failed to select first window")
 	}
 
 	// Attach to the session if we're in a tmux session, otherwise switch
@@ -133,7 +162,7 @@ func (sm *SessionManager) createWindows(sessionName, worktreePath, notePath stri
 			// Rename the first window that was created with the session
 			err := sm.renameWindow(windowTarget, window.Name)
 			if err != nil {
-				return fmt.Errorf("failed to rename first window: %w", err)
+				return errors.Wrap(err, "failed to rename first window")
 			}
 		} else {
 			// Create new window
@@ -144,7 +173,7 @@ func (sm *SessionManager) createWindows(sessionName, worktreePath, notePath stri
 
 			err := sm.createWindow(sessionName, i+1, window.Name, workingDir)
 			if err != nil {
-				return fmt.Errorf("failed to create window %d: %w", i+1, err)
+				return errors.Wrapf(err, "failed to create window %d", i+1)
 			}
 		}
 
@@ -153,7 +182,7 @@ func (sm *SessionManager) createWindows(sessionName, worktreePath, notePath stri
 			command := sm.expandPath(window.Command, worktreePath, notePath)
 			err := sm.sendCommand(windowTarget, command)
 			if err != nil {
-				return fmt.Errorf("failed to send command to window %s: %w", window.Name, err)
+				return errors.Wrapf(err, "failed to send command to window %s", window.Name)
 			}
 		}
 	}
@@ -205,7 +234,19 @@ func (sm *SessionManager) createWindow(sessionName string, windowNum int, name, 
 }
 
 // sendCommand sends a command to a tmux window
+// SECURITY: Commands come from user-controlled config files. While the config
+// is trusted (user creates it), we validate against an allowlist as defense-in-depth.
 func (sm *SessionManager) sendCommand(windowTarget, command string) error {
+	// Validate command against allowlist if enabled
+	if sm.ValidateCommands && !sm.isCommandAllowed(command) {
+		return errors.Newf("command not in allowlist: %q (see AllowedCommandPatterns in pkg/tmux/session.go)", command)
+	}
+
+	// Warn about command execution if enabled
+	if sm.WarnOnCommand && sm.Verbose {
+		fmt.Printf("⚠️  Executing command from config: %s\n", command)
+	}
+
 	cmd := exec.Command("tmux", "send-keys", "-t", windowTarget, command, "Enter")
 
 	if sm.Verbose {
@@ -214,6 +255,21 @@ func (sm *SessionManager) sendCommand(windowTarget, command string) error {
 	}
 
 	return cmd.Run()
+}
+
+// isCommandAllowed checks if a command matches any allowed pattern
+func (sm *SessionManager) isCommandAllowed(command string) bool {
+	// Empty commands are always allowed (no-op)
+	if strings.TrimSpace(command) == "" {
+		return true
+	}
+
+	for _, pattern := range AllowedCommandPatterns {
+		if pattern.MatchString(command) {
+			return true
+		}
+	}
+	return false
 }
 
 // setEnvironmentVars sets environment variables for the tmux session
@@ -233,7 +289,7 @@ func (sm *SessionManager) setEnvironmentVars(sessionName, ticket, worktreePath s
 		}
 
 		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("failed to set %s: %w", key, err)
+			return errors.Wrapf(err, "failed to set %s", key)
 		}
 	}
 
@@ -293,7 +349,7 @@ func (sm *SessionManager) ListSessions() ([]string, error) {
 	cmd := exec.Command("tmux", "list-sessions", "-F", "#{session_name}")
 	output, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("failed to list sessions: %w", err)
+		return nil, errors.Wrap(err, "failed to list sessions")
 	}
 
 	sessions := strings.Split(strings.TrimSpace(string(output)), "\n")
@@ -314,7 +370,7 @@ func (sm *SessionManager) KillSession(ticket string) error {
 	sessionName := sm.getSessionName(ticket)
 
 	if !sm.sessionExists(sessionName) {
-		return fmt.Errorf("session does not exist: %s", sessionName)
+		return errors.Newf("session does not exist: %s", sessionName)
 	}
 
 	cmd := exec.Command("tmux", "kill-session", "-t", sessionName)
