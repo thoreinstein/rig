@@ -9,6 +9,8 @@ import (
 	"strings"
 	"text/template"
 	"time"
+
+	"github.com/cockroachdb/errors"
 )
 
 //go:embed templates/*.tmpl
@@ -68,12 +70,12 @@ func (m *Manager) CreateTicketNote(data TicketData) (string, error) {
 
 	// Check if base path exists
 	if _, err := os.Stat(m.BasePath); os.IsNotExist(err) {
-		return "", fmt.Errorf("notes directory does not exist: %s. Create it or update 'notes.path' in config", m.BasePath)
+		return "", errors.Newf("notes directory does not exist: %s. Create it or update 'notes.path' in config", m.BasePath)
 	}
 
-	// Create directory if it doesn't exist
-	if err := os.MkdirAll(noteDir, 0755); err != nil {
-		return "", fmt.Errorf("failed to create note directory: %w", err)
+	// Create directory if it doesn't exist (0700 for user-only access)
+	if err := os.MkdirAll(noteDir, 0700); err != nil {
+		return "", errors.Wrap(err, "failed to create note directory")
 	}
 
 	// Check if note already exists
@@ -101,12 +103,12 @@ func (m *Manager) CreateTicketNote(data TicketData) (string, error) {
 	// Render template
 	content, err := m.renderTemplate(templateName, data)
 	if err != nil {
-		return "", fmt.Errorf("failed to render template: %w", err)
+		return "", errors.Wrap(err, "failed to render template")
 	}
 
 	// Write the note with restricted permissions (may contain command history)
 	if err := os.WriteFile(notePath, []byte(content), 0600); err != nil {
-		return "", fmt.Errorf("failed to write note: %w", err)
+		return "", errors.Wrap(err, "failed to write note")
 	}
 
 	if m.Verbose {
@@ -130,17 +132,17 @@ func (m *Manager) UpdateDailyNote(ticket, ticketType string) error {
 
 	// Check if daily note exists, create if not
 	if _, statErr := os.Stat(dailyNotePath); os.IsNotExist(statErr) {
-		// Create the daily directory if needed
+		// Create the daily directory if needed (0700 for user-only access)
 		dailyDir := filepath.Dir(dailyNotePath)
-		if err := os.MkdirAll(dailyDir, 0755); err != nil {
-			return fmt.Errorf("failed to create daily notes directory: %w", err)
+		if err := os.MkdirAll(dailyDir, 0700); err != nil {
+			return errors.Wrap(err, "failed to create daily notes directory")
 		}
 
 		// Render daily template
 		data := TicketData{Date: today}
 		rendered, err := m.renderTemplate("daily.md.tmpl", data)
 		if err != nil {
-			return fmt.Errorf("failed to render daily template: %w", err)
+			return errors.Wrap(err, "failed to render daily template")
 		}
 		content = rendered
 
@@ -151,7 +153,7 @@ func (m *Manager) UpdateDailyNote(ticket, ticketType string) error {
 		// Read existing content
 		contentBytes, err := os.ReadFile(dailyNotePath)
 		if err != nil {
-			return fmt.Errorf("failed to read daily note: %w", err)
+			return errors.Wrap(err, "failed to read daily note")
 		}
 		content = string(contentBytes)
 	}
@@ -170,7 +172,7 @@ func (m *Manager) UpdateDailyNote(ticket, ticketType string) error {
 
 	// Write back to file with restricted permissions
 	if err := os.WriteFile(dailyNotePath, []byte(updatedContent), 0600); err != nil {
-		return fmt.Errorf("failed to update daily note: %w", err)
+		return errors.Wrap(err, "failed to update daily note")
 	}
 
 	if m.Verbose {
@@ -192,7 +194,7 @@ func (m *Manager) renderTemplate(name string, data TicketData) (string, error) {
 		if _, statErr := os.Stat(userTemplatePath); statErr == nil {
 			tmplContent, err = os.ReadFile(userTemplatePath)
 			if err != nil {
-				return "", fmt.Errorf("failed to read user template %s: %w", userTemplatePath, err)
+				return "", errors.Wrapf(err, "failed to read user template %s", userTemplatePath)
 			}
 			if m.Verbose {
 				fmt.Printf("Using user template: %s\n", userTemplatePath)
@@ -204,19 +206,19 @@ func (m *Manager) renderTemplate(name string, data TicketData) (string, error) {
 	if tmplContent == nil {
 		tmplContent, err = defaultTemplates.ReadFile("templates/" + name)
 		if err != nil {
-			return "", fmt.Errorf("failed to read embedded template %s: %w", name, err)
+			return "", errors.Wrapf(err, "failed to read embedded template %s", name)
 		}
 	}
 
 	// Parse and execute template
 	tmpl, err := template.New(name).Parse(string(tmplContent))
 	if err != nil {
-		return "", fmt.Errorf("failed to parse template %s: %w", name, err)
+		return "", errors.Wrapf(err, "failed to parse template %s", name)
 	}
 
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, data); err != nil {
-		return "", fmt.Errorf("failed to execute template %s: %w", name, err)
+		return "", errors.Wrapf(err, "failed to execute template %s", name)
 	}
 
 	return buf.String(), nil

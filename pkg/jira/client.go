@@ -1,11 +1,12 @@
 package jira
 
 import (
-	"errors"
 	"fmt"
 	"os/exec"
 	"regexp"
 	"strings"
+
+	"github.com/cockroachdb/errors"
 )
 
 // validCliCommandPattern validates CLI command names to prevent injection.
@@ -30,7 +31,7 @@ type Client struct {
 // Returns an error if the CLI command contains invalid characters.
 func NewClient(cliCommand string, verbose bool) (*Client, error) {
 	if !validCliCommandPattern.MatchString(cliCommand) {
-		return nil, fmt.Errorf("invalid CLI command %q: must contain only alphanumeric characters, hyphens, underscores, or forward slashes", cliCommand)
+		return nil, errors.Newf("invalid CLI command %q: must contain only alphanumeric characters, hyphens, underscores, or forward slashes", cliCommand)
 	}
 	return &Client{
 		CliCommand: cliCommand,
@@ -61,7 +62,7 @@ func (c *Client) FetchTicketDetails(ticket string) (*TicketInfo, error) {
 		if c.Verbose {
 			fmt.Printf("Failed to fetch JIRA details for %s: %v\n", ticket, err)
 		}
-		return nil, fmt.Errorf("failed to fetch JIRA details: %w", err)
+		return nil, errors.Wrap(err, "failed to fetch JIRA details")
 	}
 
 	// Parse the output

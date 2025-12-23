@@ -8,58 +8,44 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability, please report it by opening a GitHub issue or contacting the maintainers directly.
-
-For sensitive vulnerabilities, please do not open a public issue. Instead, contact the maintainers privately.
+If you discover a security vulnerability, please report it by emailing the maintainer directly.
+Do **not** open a public GitHub issue for security vulnerabilities.
 
 ## Security Model
 
-### Configuration File Trust
+### Trust Boundaries
 
-The SRE CLI configuration file (`~/.config/sre/config.toml`) is a **trusted file**. It has the ability to:
+This CLI tool operates with the following trust assumptions:
 
-1. **Execute arbitrary commands** via tmux window configurations (`tmux.windows[].command`)
-2. **Specify external binaries** to run (e.g., `jira.cli_command`)
-3. **Access file paths** throughout your system
+1. **Config files are user-controlled and trusted**
+   - `~/.config/sre/config.yaml` is created and maintained by the user
+   - Commands specified in config (e.g., tmux window commands) are executed as the user
+   - Defense-in-depth: Command allowlists limit blast radius if config is compromised
 
-**Important**: Only use configuration files from trusted sources. Never copy configuration from untrusted locations or allow untrusted users to modify your config file.
+2. **Git repositories are trusted**
+   - The tool operates on repositories the user has cloned
+   - Worktree paths are validated to prevent path traversal attacks
 
-### Recommended File Permissions
+3. **Shell history databases are trusted**
+   - Reads from user's zsh history or histdb
+   - Uses parameterized queries where applicable
+   - Table names use explicit switch statements (not user input)
 
-The CLI creates configuration files with `0600` permissions (owner read/write only). If you create or modify config files manually, ensure they have appropriate permissions:
+4. **Binary updates use checksum validation**
+   - Downloaded binaries are validated against `checksums.txt`
+   - Checksums are SHA256 hashes published with each GitHub release
 
-```bash
-chmod 600 ~/.config/sre/config.toml
-```
+### Defense-in-Depth Measures
 
-### External Tool Dependencies
+- **Path traversal protection**: Worktree paths are validated to stay within repository root
+- **Restrictive permissions**: Notes directories use 0700 (user-only)
+- **Command allowlists**: Tmux commands are validated against regex patterns
+- **Checksum validation**: Binary updates are verified against published checksums
 
-This tool invokes external binaries:
+## Security Hardening Checklist
 
-- `git` - Git operations
-- `tmux` - Terminal multiplexer session management
-- JIRA CLI (configurable, default: `acli`) - JIRA ticket fetching
+When deploying this tool:
 
-Ensure these tools are installed from trusted sources and your `PATH` is configured securely.
-
-### Input Validation
-
-The CLI validates user input:
-
-- **Ticket IDs**: Must match pattern `^[a-zA-Z]+-[0-9]+$` (e.g., `PROJ-123`)
-- **Hack names**: Must match pattern `^[a-zA-Z][a-zA-Z0-9_-]{0,63}$`
-- **Output paths**: Validated against path traversal and restricted to safe locations
-
-### Database Access
-
-The CLI reads shell history databases (zsh-histdb or atuin) in read-only mode. It uses parameterized SQL queries to prevent injection attacks.
-
-### Notes and Files
-
-Notes and timeline exports may contain:
-
-- Command history (potentially including arguments with sensitive data)
-- File paths from your system
-- JIRA ticket details
-
-Be mindful when sharing these files.
+- [ ] Review `~/.config/sre/config.yaml` permissions (should be 0600)
+- [ ] Verify binary checksum before first run
+- [ ] Keep the tool updated (`sre update`)

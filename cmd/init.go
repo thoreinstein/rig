@@ -1,12 +1,13 @@
 package cmd
 
 import (
-	"errors"
 	"fmt"
 	"regexp"
 	"strings"
 
+	"github.com/cockroachdb/errors"
 	"github.com/spf13/cobra"
+
 	"thoreinstein.com/sre/pkg/config"
 	"thoreinstein.com/sre/pkg/git"
 	"thoreinstein.com/sre/pkg/jira"
@@ -69,7 +70,7 @@ func runInitCommand(ticket string) error {
 	// Load configuration
 	cfg, err := config.Load()
 	if err != nil {
-		return fmt.Errorf("failed to load configuration: %w", err)
+		return errors.Wrap(err, "failed to load configuration")
 	}
 
 	// Parse ticket
@@ -102,7 +103,7 @@ func runInitCommand(ticket string) error {
 
 	worktreePath, err := gitManager.CreateWorktree(ticketInfo.Type, ticketInfo.Full)
 	if err != nil {
-		return fmt.Errorf("failed to create git worktree: %w", err)
+		return errors.Wrap(err, "failed to create git worktree")
 	}
 	fmt.Printf("Git worktree created at: %s\n", worktreePath)
 
@@ -160,7 +161,7 @@ func runInitCommand(ticket string) error {
 
 	notePath, err := noteManager.CreateTicketNote(noteData)
 	if err != nil {
-		return fmt.Errorf("failed to create note: %w", err)
+		return errors.Wrap(err, "failed to create note")
 	}
 	fmt.Printf("Note created at: %s\n", notePath)
 
@@ -184,7 +185,7 @@ func runInitCommand(ticket string) error {
 	}
 
 	// Convert config windows to tmux windows
-	var tmuxWindows []tmux.WindowConfig
+	tmuxWindows := make([]tmux.WindowConfig, 0, len(cfg.Tmux.Windows))
 	for _, window := range cfg.Tmux.Windows {
 		tmuxWindows = append(tmuxWindows, tmux.WindowConfig{
 			Name:       window.Name,

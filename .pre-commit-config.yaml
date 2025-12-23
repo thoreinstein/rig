@@ -1,0 +1,27 @@
+repos:
+  # golangci-lint official hooks
+  - repo: https://github.com/golangci/golangci-lint
+    rev: v2.3.0
+    hooks:
+      - id: golangci-lint
+        name: golangci-lint
+        args: [--timeout=5m]
+      - id: golangci-lint-fmt
+        name: golangci-lint fmt
+
+  # Go module maintenance
+  - repo: https://github.com/dnephin/pre-commit-golang
+    rev: v0.5.1
+    hooks:
+      - id: go-mod-tidy
+
+  # General file hygiene
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+        args: [--maxkb=500]

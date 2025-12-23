@@ -1,13 +1,14 @@
 package cmd
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"strings"
 	"time"
 
+	"github.com/cockroachdb/errors"
 	"github.com/spf13/cobra"
+
 	"thoreinstein.com/sre/pkg/config"
 	"thoreinstein.com/sre/pkg/jira"
 	"thoreinstein.com/sre/pkg/notes"
@@ -57,7 +58,7 @@ func runSyncCommand(ticket string) error {
 	// Load configuration
 	cfg, err := config.Load()
 	if err != nil {
-		return fmt.Errorf("failed to load configuration: %w", err)
+		return errors.Wrap(err, "failed to load configuration")
 	}
 
 	// Handle daily note sync
@@ -126,7 +127,7 @@ func syncTicketNote(cfg *config.Config, ticket string) error {
 					// Update note with fresh JIRA info
 					err = updateNoteWithJiraInfo(notePath, jiraInfo)
 					if err != nil {
-						return fmt.Errorf("failed to update note with JIRA info: %w", err)
+						return errors.Wrap(err, "failed to update note with JIRA info")
 					}
 					fmt.Println("JIRA information updated")
 					updated = true
@@ -195,7 +196,7 @@ func updateNoteWithJiraInfo(notePath string, jiraInfo *jira.TicketInfo) error {
 	// Read existing content
 	content, err := os.ReadFile(notePath)
 	if err != nil {
-		return fmt.Errorf("failed to read note: %w", err)
+		return errors.Wrap(err, "failed to read note")
 	}
 
 	noteContent := string(content)
@@ -211,7 +212,7 @@ func updateNoteWithJiraInfo(notePath string, jiraInfo *jira.TicketInfo) error {
 	// Write back to file with restricted permissions
 	err = os.WriteFile(notePath, []byte(noteContent), 0600)
 	if err != nil {
-		return fmt.Errorf("failed to write updated note: %w", err)
+		return errors.Wrap(err, "failed to write updated note")
 	}
 
 	return nil

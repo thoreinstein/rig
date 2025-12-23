@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/cockroachdb/errors"
 	"github.com/spf13/cobra"
+
 	"thoreinstein.com/sre/pkg/config"
 	"thoreinstein.com/sre/pkg/tmux"
 )
@@ -61,13 +63,13 @@ func init() {
 func runSessionListCommand() error {
 	cfg, err := config.Load()
 	if err != nil {
-		return fmt.Errorf("failed to load configuration: %w", err)
+		return errors.Wrap(err, "failed to load configuration")
 	}
 
 	sessionManager := tmux.NewSessionManager(cfg.Tmux.SessionPrefix, nil, verbose)
 	sessions, err := sessionManager.ListSessions()
 	if err != nil {
-		return fmt.Errorf("failed to list sessions: %w", err)
+		return errors.Wrap(err, "failed to list sessions")
 	}
 
 	if len(sessions) == 0 {
@@ -90,7 +92,7 @@ func runSessionListCommand() error {
 func runSessionAttachCommand(ticket string) error {
 	cfg, err := config.Load()
 	if err != nil {
-		return fmt.Errorf("failed to load configuration: %w", err)
+		return errors.Wrap(err, "failed to load configuration")
 	}
 
 	sessionManager := tmux.NewSessionManager(cfg.Tmux.SessionPrefix, nil, verbose)
@@ -98,7 +100,7 @@ func runSessionAttachCommand(ticket string) error {
 
 	// Check if session exists
 	if !sessionManager.SessionExists(sessionName) {
-		return fmt.Errorf("tmux session '%s' does not exist for ticket '%s'", sessionName, ticket)
+		return errors.Newf("tmux session '%s' does not exist for ticket '%s'", sessionName, ticket)
 	}
 
 	if verbose {
@@ -111,7 +113,7 @@ func runSessionAttachCommand(ticket string) error {
 func runSessionKillCommand(ticket string) error {
 	cfg, err := config.Load()
 	if err != nil {
-		return fmt.Errorf("failed to load configuration: %w", err)
+		return errors.Wrap(err, "failed to load configuration")
 	}
 
 	sessionManager := tmux.NewSessionManager(cfg.Tmux.SessionPrefix, nil, verbose)
@@ -126,7 +128,7 @@ func runSessionKillCommand(ticket string) error {
 			fmt.Printf("Session for ticket '%s' does not exist.\n", ticket)
 			return nil
 		}
-		return fmt.Errorf("failed to kill session: %w", err)
+		return errors.Wrap(err, "failed to kill session")
 	}
 
 	fmt.Printf("✓ Session for ticket '%s' killed successfully.\n", ticket)

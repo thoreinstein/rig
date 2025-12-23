@@ -1,13 +1,14 @@
 package cmd
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 
+	"github.com/cockroachdb/errors"
 	"github.com/spf13/cobra"
+
 	"thoreinstein.com/sre/pkg/config"
 )
 
@@ -62,7 +63,7 @@ func runConfigCommand(cmd *cobra.Command, args []string) error {
 func createDefaultConfig() error {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		return fmt.Errorf("failed to get home directory: %w", err)
+		return errors.Wrap(err, "failed to get home directory")
 	}
 
 	configDir := filepath.Join(homeDir, ".config", "sre")
@@ -76,7 +77,7 @@ func createDefaultConfig() error {
 
 	// Create config directory
 	if err := os.MkdirAll(configDir, 0755); err != nil {
-		return fmt.Errorf("failed to create config directory: %w", err)
+		return errors.Wrap(err, "failed to create config directory")
 	}
 
 	// Default configuration content
@@ -119,7 +120,7 @@ working_dir = "{worktree_path}"
 	// Write the default configuration with restricted permissions (owner read/write only)
 	// Config files may contain sensitive paths and can execute arbitrary commands via tmux
 	if err := os.WriteFile(configFile, []byte(defaultConfig), 0600); err != nil {
-		return fmt.Errorf("failed to write config file: %w", err)
+		return errors.Wrap(err, "failed to write config file")
 	}
 
 	fmt.Printf("Default configuration created at: %s\n", configFile)
@@ -131,7 +132,7 @@ working_dir = "{worktree_path}"
 func showConfig() error {
 	cfg, err := config.Load()
 	if err != nil {
-		return fmt.Errorf("failed to load configuration: %w", err)
+		return errors.Wrap(err, "failed to load configuration")
 	}
 
 	fmt.Println("Current SRE CLI Configuration:")
@@ -169,7 +170,7 @@ func showConfig() error {
 func editConfig() error {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		return fmt.Errorf("failed to get home directory: %w", err)
+		return errors.Wrap(err, "failed to get home directory")
 	}
 
 	configFile := filepath.Join(homeDir, ".config", "sre", "config.toml")
