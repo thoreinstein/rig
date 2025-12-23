@@ -52,6 +52,25 @@ checksum:
   name_template: checksums.txt
   algorithm: sha256
 
+# Keyless signing with Sigstore (no secrets required)
+signs:
+  - cmd: cosign
+    artifacts: checksum
+    certificate: "${artifact}.pem"
+    output: true
+    args:
+      - sign-blob
+      - "--output-certificate=${certificate}"
+      - "--output-signature=${signature}"
+      - "${artifact}"
+      - "--yes"
+
+# Generate Software Bill of Materials for supply chain transparency
+sboms:
+  - artifacts: archive
+    documents:
+      - "${artifact}.sbom.json"
+
 snapshot:
   version_template: "{{ incpatch .Version }}-next"
 
@@ -114,6 +133,20 @@ release:
     **Manual download:** After extracting, remove the quarantine attribute:
     ```bash
     xattr -d com.apple.quarantine ./sre
+    ```
+
+    ### Verifying Release Signatures
+
+    All releases are signed with [keyless Sigstore](https://www.sigstore.dev/). To verify:
+
+    ```bash
+    # Install cosign: https://docs.sigstore.dev/cosign/system_config/installation/
+    cosign verify-blob \
+      --certificate checksums.txt.pem \
+      --signature checksums.txt.sig \
+      --certificate-identity 'https://github.com/thoreinstein/sre/.github/workflows/release.yml@refs/tags/{{ .Tag }}' \
+      --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+      checksums.txt
     ```
   footer: |
     **Full Changelog**: https://github.com/thoreinstein/sre/compare/{{ .PreviousTag }}...{{ .Tag }}
