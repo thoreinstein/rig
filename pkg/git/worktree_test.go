@@ -842,10 +842,8 @@ func TestCreateWorktreeWithBranch_PathTraversal(t *testing.T) {
 				if worktreeCreated {
 					t.Errorf("SECURITY VIOLATION: git worktree add was called despite path traversal detection")
 				}
-			} else {
-				if err != nil {
-					t.Errorf("CreateWorktreeWithBranch() unexpected error = %v", err)
-				}
+			} else if err != nil {
+				t.Errorf("CreateWorktreeWithBranch() unexpected error = %v", err)
 			}
 		})
 	}
