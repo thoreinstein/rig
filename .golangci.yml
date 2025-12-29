@@ -16,7 +16,6 @@ linters:
     - ineffassign
     - intrange
     - misspell
-    - modernize
     - nilerr
     - nolintlint
     - perfsprint
@@ -98,10 +97,6 @@ linters:
       os-chdir: true
       context-background: true
       context-todo: true
-    modernize:
-      disable:
-        - omitzero  # Not needed for this project
-
   exclusions:
     generated: lax
     presets:

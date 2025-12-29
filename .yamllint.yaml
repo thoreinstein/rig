@@ -1,0 +1,24 @@
+---
+extends: default
+
+rules:
+  comments:
+    min-spaces-from-content: 1
+  document-start: disable
+  empty-lines:
+    max-end: 1
+  indentation:
+    spaces: consistent
+    indent-sequences: consistent
+  line-length:
+    max: 275
+    allow-non-breakable-inline-mappings: true
+  truthy:
+    allowed-values:
+      - "true"
+      - "false"
+      - "on"
+
+ignore:
+  - node_modules/
+  - "*.tmpl.yaml"
