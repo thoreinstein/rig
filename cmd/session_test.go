@@ -9,8 +9,7 @@ import (
 )
 
 func TestSessionCommandStructure(t *testing.T) {
-	t.Parallel()
-
+	// Not parallel - accesses global sessionCmd
 	cmd := sessionCmd
 
 	if cmd.Use != "session" {
@@ -33,8 +32,7 @@ func TestSessionCommandStructure(t *testing.T) {
 }
 
 func TestSessionListCommand(t *testing.T) {
-	t.Parallel()
-
+	// Not parallel - accesses global sessionListCmd
 	cmd := sessionListCmd
 
 	if cmd.Use != "list" {
@@ -47,8 +45,7 @@ func TestSessionListCommand(t *testing.T) {
 }
 
 func TestSessionAttachCommand(t *testing.T) {
-	t.Parallel()
-
+	// Not parallel - accesses global sessionAttachCmd
 	cmd := sessionAttachCmd
 
 	if cmd.Use != "attach <ticket>" {
@@ -66,8 +63,7 @@ func TestSessionAttachCommand(t *testing.T) {
 }
 
 func TestSessionKillCommand(t *testing.T) {
-	t.Parallel()
-
+	// Not parallel - accesses global sessionKillCmd
 	cmd := sessionKillCmd
 
 	if cmd.Use != "kill <ticket>" {
@@ -145,9 +141,7 @@ func TestSessionKillErrorParsing(t *testing.T) {
 }
 
 func TestSessionCommandDescriptions(t *testing.T) {
-	t.Parallel()
-
-	// Test sessionCmd
+	// Not parallel - accesses global session commands
 	if sessionCmd.Short == "" {
 		t.Error("sessionCmd should have Short description")
 	}
@@ -259,8 +253,7 @@ func TestSessionListOutputFormatting(t *testing.T) {
 }
 
 func TestSessionAttachArgValidation(t *testing.T) {
-	t.Parallel()
-
+	// Not parallel - accesses global sessionAttachCmd
 	tests := []struct {
 		name        string
 		args        []string
@@ -285,9 +278,7 @@ func TestSessionAttachArgValidation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			// Create a fresh command for testing
+			// Not parallel - accesses global sessionAttachCmd
 			cmd := *sessionAttachCmd
 			cmd.SetArgs(tt.args)
 
@@ -309,8 +300,7 @@ func TestSessionAttachArgValidation(t *testing.T) {
 }
 
 func TestSessionKillArgValidation(t *testing.T) {
-	t.Parallel()
-
+	// Not parallel - accesses global sessionKillCmd
 	tests := []struct {
 		name        string
 		args        []string
@@ -335,9 +325,7 @@ func TestSessionKillArgValidation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			// Create a fresh command for testing
+			// Not parallel - accesses global sessionKillCmd
 			cmd := *sessionKillCmd
 			cmd.SetArgs(tt.args)
 
@@ -462,8 +450,7 @@ func TestSessionAttachVerboseOutput(t *testing.T) {
 }
 
 func TestSessionSubcommandCount(t *testing.T) {
-	t.Parallel()
-
+	// Not parallel - accesses global sessionCmd
 	subcommands := sessionCmd.Commands()
 	expectedCount := 3 // list, attach, kill
 
@@ -473,9 +460,7 @@ func TestSessionSubcommandCount(t *testing.T) {
 }
 
 func TestSessionCommandHierarchy(t *testing.T) {
-	t.Parallel()
-
-	// Verify session command is a child of root
+	// Not parallel - accesses global rootCmd and sessionCmd
 	found := false
 	for _, cmd := range rootCmd.Commands() {
 		if cmd.Use == "session" {
@@ -489,9 +474,7 @@ func TestSessionCommandHierarchy(t *testing.T) {
 }
 
 func TestSessionListCommandHasNoArgs(t *testing.T) {
-	t.Parallel()
-
-	// list command should accept no arguments
+	// Not parallel - accesses global sessionListCmd
 	cmd := sessionListCmd
 
 	// Verify it doesn't have required args set
@@ -606,8 +589,7 @@ func TestSessionAttachErrorFormat(t *testing.T) {
 }
 
 func TestSessionCommandUsageStrings(t *testing.T) {
-	t.Parallel()
-
+	// Not parallel - accesses global session commands
 	tests := []struct {
 		name         string
 		cmd          string
@@ -659,8 +641,7 @@ func TestSessionCommandUsageStrings(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
+			// Not parallel - cmdMap references global session commands
 			cmd := cmdMap[tt.cmd]
 
 			if cmd.use != tt.expectedUse {
@@ -679,7 +660,7 @@ func TestSessionCommandUsageStrings(t *testing.T) {
 }
 
 func TestSessionVerboseKillOutput(t *testing.T) {
-	t.Parallel()
+	t.Parallel() // Safe - tests pure string formatting logic
 
 	tests := []struct {
 		name           string

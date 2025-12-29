@@ -9,8 +9,7 @@ import (
 )
 
 func TestUpdateCommandFlags(t *testing.T) {
-	t.Parallel()
-
+	// Not parallel - accesses global updateCmd
 	cmd := updateCmd
 
 	tests := []struct {
@@ -26,8 +25,7 @@ func TestUpdateCommandFlags(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.flagName, func(t *testing.T) {
-			t.Parallel()
-
+			// Not parallel - accesses global updateCmd
 			flag := cmd.Flags().Lookup(tt.flagName)
 			if flag == nil {
 				t.Errorf("update command should have --%s flag", tt.flagName)
@@ -46,8 +44,7 @@ func TestUpdateCommandFlags(t *testing.T) {
 }
 
 func TestUpdateCommandFlagUsage(t *testing.T) {
-	t.Parallel()
-
+	// Not parallel - accesses global updateCmd
 	cmd := updateCmd
 
 	tests := []struct {
@@ -62,8 +59,7 @@ func TestUpdateCommandFlagUsage(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.flagName, func(t *testing.T) {
-			t.Parallel()
-
+			// Not parallel - accesses global updateCmd
 			flag := cmd.Flags().Lookup(tt.flagName)
 			if flag == nil {
 				t.Fatalf("--%s flag not found", tt.flagName)
@@ -77,8 +73,7 @@ func TestUpdateCommandFlagUsage(t *testing.T) {
 }
 
 func TestUpdateCommandDescription(t *testing.T) {
-	t.Parallel()
-
+	// Not parallel - accesses global updateCmd
 	cmd := updateCmd
 
 	if cmd.Use != "update" {
@@ -110,8 +105,7 @@ func TestUpdateCommandDescription(t *testing.T) {
 }
 
 func TestUpdateCommandLongDescriptionContent(t *testing.T) {
-	t.Parallel()
-
+	// Not parallel - accesses global updateCmd
 	cmd := updateCmd
 
 	// Verify key information is in the long description
@@ -366,9 +360,7 @@ func TestRepoConstants(t *testing.T) {
 }
 
 func TestUpdateCommandRegistered(t *testing.T) {
-	t.Parallel()
-
-	// Verify update command is registered with root
+	// Not parallel - accesses global rootCmd
 	found := false
 	for _, cmd := range rootCmd.Commands() {
 		if cmd.Name() == "update" {
@@ -383,9 +375,7 @@ func TestUpdateCommandRegistered(t *testing.T) {
 }
 
 func TestUpdateCommandHasRunE(t *testing.T) {
-	t.Parallel()
-
-	// Verify the command uses RunE (not Run) for proper error handling
+	// Not parallel - accesses global updateCmd
 	if updateCmd.RunE == nil {
 		t.Error("update command should have RunE set for error handling")
 	}
@@ -524,9 +514,7 @@ func TestUpdateFlagVariables(t *testing.T) {
 }
 
 func TestUpdateCommandInheritsPersistentFlags(t *testing.T) {
-	t.Parallel()
-
-	// Update command should inherit --verbose from root
+	// Not parallel - accesses global updateCmd
 	verboseFlag := updateCmd.Flag("verbose")
 	if verboseFlag == nil {
 		t.Error("update command should inherit --verbose persistent flag from root")
@@ -534,9 +522,7 @@ func TestUpdateCommandInheritsPersistentFlags(t *testing.T) {
 }
 
 func TestUpdateCommandInheritsConfigFlag(t *testing.T) {
-	t.Parallel()
-
-	// Update command should inherit --config from root
+	// Not parallel - accesses global updateCmd
 	configFlag := updateCmd.Flag("config")
 	if configFlag == nil {
 		t.Error("update command should inherit --config persistent flag from root")
