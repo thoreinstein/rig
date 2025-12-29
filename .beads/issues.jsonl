@@ -1,0 +1,1 @@
+{"id":"sre-hui","title":"The command  is improperly named","description":"Rename the sre init command to be sre work, as in \"sre work on ticket \u003carg\u003e\"\n","status":"open","priority":1,"issue_type":"chore","created_at":"2025-12-29T09:04:03.482029-05:00","created_by":"jimmyers","updated_at":"2025-12-29T09:05:19.365765-05:00"}

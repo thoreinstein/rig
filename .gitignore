@@ -31,3 +31,6 @@ credentials*
 *.tmp
 *.bak
 roadmap.json
+
+# bv (beads viewer) local config and caches
+.bv/
