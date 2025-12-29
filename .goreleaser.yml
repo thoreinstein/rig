@@ -61,8 +61,8 @@ signs:
     output: true
     args:
       - sign-blob
-      - "--bundle=${artifact}.bundle"
       - "--yes"
+      - "--bundle=${artifact}.bundle"
       - "${artifact}"
 
 # Generate Software Bill of Materials for supply chain transparency
