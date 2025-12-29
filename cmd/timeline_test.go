@@ -11,8 +11,7 @@ import (
 )
 
 func TestTimelineCommandStructure(t *testing.T) {
-	t.Parallel()
-
+	// Not parallel - accesses global timelineCmd
 	cmd := timelineCmd
 
 	if cmd.Use != "timeline <ticket>" {
@@ -43,8 +42,7 @@ func TestTimelineCommandStructure(t *testing.T) {
 }
 
 func TestTimelineCommandFlags(t *testing.T) {
-	t.Parallel()
-
+	// Not parallel - accesses global timelineCmd
 	cmd := timelineCmd
 
 	expectedFlags := []struct {
@@ -73,8 +71,7 @@ func TestTimelineCommandFlags(t *testing.T) {
 }
 
 func TestTimelineCommandArgs(t *testing.T) {
-	t.Parallel()
-
+	// Not parallel - accesses global timelineCmd
 	cmd := timelineCmd
 
 	// Command should require exactly 1 argument

@@ -11,8 +11,7 @@ import (
 )
 
 func TestHistoryCommandStructure(t *testing.T) {
-	t.Parallel()
-
+	// Not parallel - accesses global historyCmd
 	cmd := historyCmd
 
 	if cmd.Use != "history" {
@@ -38,8 +37,7 @@ func TestHistoryCommandStructure(t *testing.T) {
 }
 
 func TestHistoryQueryCommandFlags(t *testing.T) {
-	t.Parallel()
-
+	// Not parallel - accesses global historyQueryCmd
 	cmd := historyQueryCmd
 
 	// Check all expected flags exist
@@ -68,8 +66,7 @@ func TestHistoryQueryCommandFlags(t *testing.T) {
 }
 
 func TestHistoryQueryCommandDescription(t *testing.T) {
-	t.Parallel()
-
+	// Not parallel - accesses global historyQueryCmd
 	cmd := historyQueryCmd
 
 	if cmd.Short == "" {
@@ -87,8 +84,7 @@ func TestHistoryQueryCommandDescription(t *testing.T) {
 }
 
 func TestHistoryInfoCommandDescription(t *testing.T) {
-	t.Parallel()
-
+	// Not parallel - accesses global historyInfoCmd
 	cmd := historyInfoCmd
 
 	if cmd.Use != "info" {
@@ -105,8 +101,7 @@ func TestHistoryInfoCommandDescription(t *testing.T) {
 }
 
 func TestHistoryCommandDescription(t *testing.T) {
-	t.Parallel()
-
+	// Not parallel - accesses global historyCmd
 	cmd := historyCmd
 
 	if cmd.Short == "" {
@@ -933,8 +928,7 @@ func TestRunHistoryInfoCommand_ValidAtuin(t *testing.T) {
 }
 
 func TestHistoryQueryCommandArgs(t *testing.T) {
-	t.Parallel()
-
+	// Not parallel - accesses global historyQueryCmd
 	cmd := historyQueryCmd
 
 	// The command accepts 0 or 1 arguments
@@ -962,8 +956,7 @@ func TestHistoryQueryCommandArgs(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
+			// Not parallel - accesses global historyQueryCmd
 			err := cmd.Args(cmd, tt.args)
 			if tt.expectErr && err == nil {
 				t.Error("expected error for invalid args, got nil")
@@ -976,9 +969,7 @@ func TestHistoryQueryCommandArgs(t *testing.T) {
 }
 
 func TestHistoryInfoCommandArgs(t *testing.T) {
-	t.Parallel()
-
-	// The info command should not accept any positional arguments
+	// Not parallel - accesses global historyInfoCmd
 	cmd := historyInfoCmd
 
 	// Verify the Args function allows no arguments (nil Args means any)

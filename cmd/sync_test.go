@@ -409,8 +409,7 @@ func TestUpdateNoteWithJiraInfo_NonExistentFile(t *testing.T) {
 // ============================================================================
 
 func TestSyncCommandDescription(t *testing.T) {
-	t.Parallel()
-
+	// Not parallel - accesses global syncCmd
 	cmd := syncCmd
 
 	if cmd.Use != "sync [ticket]" {
@@ -436,8 +435,7 @@ func TestSyncCommandDescription(t *testing.T) {
 }
 
 func TestSyncCommandFlags(t *testing.T) {
-	t.Parallel()
-
+	// Not parallel - accesses global syncCmd
 	cmd := syncCmd
 
 	// Check --jira flag exists
@@ -469,8 +467,7 @@ func TestSyncCommandFlags(t *testing.T) {
 }
 
 func TestSyncCommandMaxArgs(t *testing.T) {
-	t.Parallel()
-
+	// Not parallel - accesses global syncCmd
 	cmd := syncCmd
 
 	// Command accepts at most 1 argument

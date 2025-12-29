@@ -12,8 +12,7 @@ import (
 )
 
 func TestRootCommandStructure(t *testing.T) {
-	t.Parallel()
-
+	// Not parallel - accesses global rootCmd
 	cmd := rootCmd
 
 	if cmd.Use != "sre" {
@@ -38,8 +37,7 @@ func TestRootCommandStructure(t *testing.T) {
 }
 
 func TestRootCommandPersistentFlags(t *testing.T) {
-	t.Parallel()
-
+	// Not parallel - accesses global rootCmd
 	cmd := rootCmd
 
 	// Check --config flag exists
@@ -76,8 +74,7 @@ func TestRootCommandPersistentFlags(t *testing.T) {
 }
 
 func TestRootCommandHasSubcommands(t *testing.T) {
-	t.Parallel()
-
+	// Not parallel - accesses global rootCmd
 	cmd := rootCmd
 	subcommands := cmd.Commands()
 
