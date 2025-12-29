@@ -35,7 +35,8 @@ builds:
 
 archives:
   - id: default
-    format: tar.gz
+    formats:
+      - tar.gz
     name_template: >-
       {{ .ProjectName }}_
       {{- .Version }}_
@@ -43,7 +44,8 @@ archives:
       {{- .Arch }}
     format_overrides:
       - goos: windows
-        format: zip
+        formats:
+          - zip
     files:
       - README.md
       - LICENSE*
@@ -95,21 +97,33 @@ changelog:
     - title: Other
       order: 999
 
-brews:
+homebrew_casks:
   - name: sre
     repository:
       owner: thoreinstein
       name: homebrew-tap
       branch: main
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
-    directory: Formula
+    directory: Casks
     homepage: https://github.com/thoreinstein/sre
     description: "SRE workflow automation CLI for Git worktrees, Tmux, and Obsidian integration"
     license: "Unlicense"
-    install: |
-      bin.install "sre"
-    test: |
-      system "#{bin}/sre", "version"
+    
+    # CLI binaries (replaces install: block)
+    binaries:
+      - sre
+    
+    # Auto-remove macOS quarantine on install
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/sre"]
+          end
+    
+    # URL verification for brew audit
+    url:
+      verified: "github.com/thoreinstein/sre/"
 
 release:
   github:
@@ -121,19 +135,16 @@ release:
   header: |
     ## SRE CLI {{ .Version }}
 
-    SRE workflow automation CLI for Git worktrees, Tmux, and Obsidian integration.
-
-    ### Installation
-
-    **Homebrew (recommended):**
+    **Homebrew Installation (Recommended):**
     ```bash
     brew install thoreinstein/tap/sre
+    sre version  # Should output: sre version {{ .Version }}
     ```
 
-    **Manual download:** After extracting, remove the quarantine attribute:
-    ```bash
-    xattr -d com.apple.quarantine ./sre
-    ```
+    **Manual Download:**
+    Download the appropriate archive below for your platform, extract it, and move the `sre` binary to your PATH.
+
+    Note: Homebrew installation automatically handles macOS code signing. Manual downloads work without additional configuration.
 
     ### Verifying Release Signatures
 

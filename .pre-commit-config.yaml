@@ -1,3 +1,5 @@
+minimum_pre_commit_version: "3.2.0"
+
 repos:
   # golangci-lint official hooks
   - repo: https://github.com/golangci/golangci-lint
@@ -33,7 +35,7 @@ repos:
 
   # General file hygiene
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0
     hooks:
       - id: trailing-whitespace
         args: [--markdown-linebreak-ext=md]
@@ -41,3 +43,24 @@ repos:
       - id: check-yaml
       - id: check-added-large-files
         args: [--maxkb=500]
+      - id: check-case-conflict
+
+  # YAML linting
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.37.1
+    hooks:
+      - id: yamllint
+        args: ["-c", ".yamllint.yaml"]
+
+  # GitHub Actions linting
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.9
+    hooks:
+      - id: actionlint
+
+  # GitHub Actions security scanning
+  - repo: https://github.com/woodruffw/zizmor-pre-commit
+    rev: v1.18.0
+    hooks:
+      - id: zizmor
+        args: ["--min-severity=medium"]
