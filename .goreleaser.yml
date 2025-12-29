@@ -58,14 +58,12 @@ checksum:
 signs:
   - cmd: cosign
     artifacts: checksum
-    certificate: "${artifact}.pem"
     output: true
     args:
       - sign-blob
-      - "--output-certificate=${certificate}"
-      - "--output-signature=${signature}"
-      - "${artifact}"
+      - "--bundle=${artifact}.bundle"
       - "--yes"
+      - "${artifact}"
 
 # Generate Software Bill of Materials for supply chain transparency
 sboms:
@@ -153,8 +151,7 @@ release:
     ```bash
     # Install cosign: https://docs.sigstore.dev/cosign/system_config/installation/
     cosign verify-blob \
-      --certificate checksums.txt.pem \
-      --signature checksums.txt.sig \
+      --bundle checksums.txt.bundle \
       --certificate-identity 'https://github.com/thoreinstein/sre/.github/workflows/release.yml@refs/tags/{{ .Tag }}' \
       --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
       checksums.txt
