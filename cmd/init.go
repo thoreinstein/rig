@@ -25,7 +25,7 @@ This command performs the following actions:
 - Parses ticket type and number
 - Creates git worktree and branch
 - Creates/updates markdown note with JIRA integration
-- Updates daily note with log entry  
+- Updates daily note with log entry
 - Creates tmux session with configured windows
 
 Examples:

@@ -177,7 +177,7 @@ func (dm *DatabaseManager) buildQuery(schema DatabaseSchema, options QueryOption
 // buildZshHistdbQuery builds a query for zsh-histdb schema
 func (dm *DatabaseManager) buildZshHistdbQuery(options QueryOptions) (string, []interface{}) {
 	query := `
-		SELECT 
+		SELECT
 			c.rowid,
 			c.argv,
 			datetime(c.start_time, 'unixepoch'),
@@ -242,7 +242,7 @@ func (dm *DatabaseManager) buildZshHistdbQuery(options QueryOptions) (string, []
 // buildAtuinQuery builds a query for atuin schema
 func (dm *DatabaseManager) buildAtuinQuery(options QueryOptions) (string, []interface{}) {
 	query := `
-		SELECT 
+		SELECT
 			rowid,
 			command,
 			datetime(timestamp / 1000000000, 'unixepoch'),

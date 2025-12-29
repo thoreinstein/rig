@@ -31,7 +31,7 @@ builds:
       # Windows ARM64 is less common and harder to cross-compile
       - goos: windows
         goarch: arm64
-    
+
 
 archives:
   - id: default
@@ -108,11 +108,11 @@ homebrew_casks:
     homepage: https://github.com/thoreinstein/sre
     description: "SRE workflow automation CLI for Git worktrees, Tmux, and Obsidian integration"
     license: "Unlicense"
-    
+
     # CLI binaries (replaces install: block)
     binaries:
       - sre
-    
+
     # Auto-remove macOS quarantine on install
     hooks:
       post:
@@ -120,7 +120,7 @@ homebrew_casks:
           if OS.mac?
             system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/sre"]
           end
-    
+
     # URL verification for brew audit
     url:
       verified: "github.com/thoreinstein/sre/"
