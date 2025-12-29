@@ -15,7 +15,7 @@ var verbose bool
 var rootCmd = &cobra.Command{
 	Use:   "sre",
 	Short: "SRE workflow automation CLI",
-	Long: `A Go-based CLI tool for SRE workflow automation that integrates with 
+	Long: `A Go-based CLI tool for SRE workflow automation that integrates with
 Git worktrees, Tmux sessions, Obsidian documentation, and command history tracking.
 
 This tool replaces the complex bash script with an extensible, maintainable

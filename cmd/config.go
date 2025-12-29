@@ -18,7 +18,7 @@ var configCmd = &cobra.Command{
 	Short: "Manage SRE CLI configuration",
 	Long: `Display and manage the SRE CLI configuration.
 
-This command shows the current configuration values and can help with 
+This command shows the current configuration values and can help with
 initial setup by creating a default configuration file.`,
 	RunE: runConfigCommand,
 }
