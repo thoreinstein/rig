@@ -19,16 +19,19 @@ jobs:
     permissions:
       contents: read
     env:
-      GOLANGCI_LINT_VERSION: v2.6.2
+      GOLANGCI_LINT_VERSION: v2.7.2
     steps:
       - name: Checkout code
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up Go
         uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6.1.0
         with:
           go-version-file: go.mod
-          cache: true
+          # Disable cache for release builds to prevent cache poisoning
+          cache: false
 
       - name: Build golangci-lint from source
         run: |
@@ -55,12 +58,15 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up Go
         uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6.1.0
         with:
           go-version-file: go.mod
-          cache: true
+          # Disable cache for release builds to prevent cache poisoning
+          cache: false
 
       - name: Install dependencies
         run: |
@@ -85,6 +91,7 @@ jobs:
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Verify tag is on main branch
         env:
@@ -92,28 +99,28 @@ jobs:
         run: |
           # Get the commit the tag points to
           TAG_COMMIT=$(git rev-list -n 1 "$TAG_REF")
-          
+
           # Check if this commit is reachable from main or master
           # This ensures the tag points to a commit that exists on main/master
           MAIN_EXISTS=$(git ls-remote --heads origin main | wc -l)
           MASTER_EXISTS=$(git ls-remote --heads origin master | wc -l)
-          
+
           ON_MAIN=false
-          
+
           if [ "$MAIN_EXISTS" -gt 0 ]; then
             if git merge-base --is-ancestor "$TAG_COMMIT" origin/main 2>/dev/null; then
               ON_MAIN=true
               echo "Tag commit is an ancestor of main branch"
             fi
           fi
-          
+
           if [ "$MASTER_EXISTS" -gt 0 ]; then
             if git merge-base --is-ancestor "$TAG_COMMIT" origin/master 2>/dev/null; then
               ON_MAIN=true
               echo "Tag commit is an ancestor of master branch"
             fi
           fi
-          
+
           if [ "$ON_MAIN" = "true" ]; then
             echo "Proceeding with release"
           else
@@ -129,7 +136,8 @@ jobs:
         uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6.1.0
         with:
           go-version-file: go.mod
-          cache: true
+          # Disable cache for release builds to prevent cache poisoning
+          cache: false
 
       - name: Install Cosign
         uses: sigstore/cosign-installer@faadad0cce49287aee09b3a48701e75088a2c6ad # v4.0.0
