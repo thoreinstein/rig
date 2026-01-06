@@ -312,6 +312,11 @@ func (sm *SessionManager) selectWindow(sessionName string, windowNum int) error 
 
 // AttachToSession attaches to or switches to a tmux session
 func (sm *SessionManager) AttachToSession(sessionName string) error {
+	// Skip attachment during tests to avoid switching the user's terminal
+	if os.Getenv("SRE_TESTING") == "1" {
+		return nil
+	}
+
 	// Check if we're already in a tmux session
 	if os.Getenv("TMUX") != "" {
 		// We're in tmux, switch to the session
