@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-01-06
+
+### Added
+
+- 40ead95: Add auto-repair for missing fetch refspec in bare repos
+- 78d7129: Add beads issue tracking infrastructure
+- 0e84dc9: Add release documentation for v0.1.0
+- 34e4a5c: Add environment variable-based tmux socket isolation for tests
+
+### Changed
+
+- c61089f: **BREAKING**: Rename 'sre init' command to 'sre work'
+
+### Tests
+
+- 0d22c9e: Add TestMain to clean up tmux sessions after tests
+
+### Dependencies
+
+- ddb3360: Bump modernc.org/sqlite from 1.41.0 to 1.42.2
+
 ## [0.1.0] - 2025-12-29
 
 ### Added
@@ -69,4 +90,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - bc72a00: Bump golangci/golangci-lint-action from 6 to 9
 - bbc29e2: Bump golangci/golangci-lint-action from 6 to 9
 
+[0.2.0]: https://github.com/thoreinstein/sre/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/thoreinstein/sre/releases/tag/v0.1.0
