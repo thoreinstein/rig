@@ -7,7 +7,7 @@ require (
 	github.com/creativeprojects/go-selfupdate v1.5.2
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/viper v1.21.0
-	modernc.org/sqlite v1.41.0
+	modernc.org/sqlite v1.42.2
 )
 
 require (
