@@ -7,6 +7,14 @@ import (
 	"testing"
 )
 
+func TestMain(m *testing.M) {
+	// Configure all SessionManagers to use isolated test socket
+	SetupTestSocket()
+	code := m.Run()
+	_ = KillTestServer()
+	os.Exit(code)
+}
+
 func TestNewSessionManager(t *testing.T) {
 	windows := []WindowConfig{
 		{Name: "code", Command: "nvim", WorkingDir: "{worktree_path}"},
@@ -136,7 +144,7 @@ func TestSessionExists_NoTmux(t *testing.T) {
 		t.Skip("tmux not found in PATH, skipping test")
 	}
 
-	sm := NewSessionManager("", nil, false)
+	sm := NewTestSessionManager("", nil)
 
 	// Test with a session name that definitely doesn't exist
 	exists := sm.SessionExists("nonexistent-session-xyz-123456")
@@ -160,14 +168,14 @@ func TestCreateAndKillSession_Integration(t *testing.T) {
 		{Name: "test", WorkingDir: "{worktree_path}"},
 	}
 
-	sm := NewSessionManager("test-", windows, false)
+	sm := NewTestSessionManager("test-", windows)
 	sessionName := sm.GetSessionName("integration-test")
 
 	// Clean up any existing session first
-	_ = exec.Command("tmux", "kill-session", "-t", sessionName).Run()
+	_ = exec.Command("tmux", "-L", TestSocketName, "kill-session", "-t", sessionName).Run()
 
 	// Create a detached session for testing (we can't attach in test)
-	cmd := exec.Command("tmux", "new-session", "-d", "-s", sessionName, "-c", tmpDir)
+	cmd := exec.Command("tmux", "-L", TestSocketName, "new-session", "-d", "-s", sessionName, "-c", tmpDir)
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("Failed to create test session: %v", err)
 	}
@@ -194,7 +202,7 @@ func TestListSessions_Integration(t *testing.T) {
 		t.Skip("tmux not found in PATH, skipping integration test")
 	}
 
-	sm := NewSessionManager("", nil, false)
+	sm := NewTestSessionManager("", nil)
 
 	// This test just verifies ListSessions doesn't error
 	// We can't guarantee any sessions exist
@@ -217,7 +225,7 @@ func TestKillSession_NonExistent(t *testing.T) {
 		t.Skip("tmux not found in PATH, skipping test")
 	}
 
-	sm := NewSessionManager("", nil, false)
+	sm := NewTestSessionManager("", nil)
 
 	err := sm.KillSession("definitely-does-not-exist-xyz-999")
 	if err == nil {
@@ -231,7 +239,7 @@ func TestCreateSession_NonExistentWorktree(t *testing.T) {
 		t.Skip("tmux not found in PATH, skipping test")
 	}
 
-	sm := NewSessionManager("test-", nil, false)
+	sm := NewTestSessionManager("test-", nil)
 
 	err := sm.CreateSession("test-ticket", "/nonexistent/path/that/does/not/exist", "")
 	if err == nil {

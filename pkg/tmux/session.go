@@ -38,8 +38,9 @@ type SessionManager struct {
 	SessionPrefix    string
 	Windows          []WindowConfig
 	Verbose          bool
-	WarnOnCommand    bool // Warn when executing commands from config
-	ValidateCommands bool // Validate commands against allowlist
+	WarnOnCommand    bool   // Warn when executing commands from config
+	ValidateCommands bool   // Validate commands against allowlist
+	SocketName       string // Optional socket name for tmux -L isolation (used in tests)
 }
 
 // WindowConfig represents a tmux window configuration
@@ -51,13 +52,27 @@ type WindowConfig struct {
 
 // NewSessionManager creates a new SessionManager
 func NewSessionManager(sessionPrefix string, windows []WindowConfig, verbose bool) *SessionManager {
-	return &SessionManager{
+	sm := &SessionManager{
 		SessionPrefix:    sessionPrefix,
 		Windows:          windows,
 		Verbose:          verbose,
 		WarnOnCommand:    true, // Default: warn when executing config commands
 		ValidateCommands: true, // Default: validate commands against allowlist
 	}
+	// Use isolated socket for tests (set by TestMain via SetupTestSocket)
+	if socketName := os.Getenv("SRE_TEST_TMUX_SOCKET"); socketName != "" {
+		sm.SocketName = socketName
+	}
+	return sm
+}
+
+// tmuxCmd creates an exec.Cmd for tmux with optional socket isolation.
+// When SocketName is set, commands run on a separate tmux server.
+func (sm *SessionManager) tmuxCmd(args ...string) *exec.Cmd {
+	if sm.SocketName != "" {
+		args = append([]string{"-L", sm.SocketName}, args...)
+	}
+	return exec.Command("tmux", args...)
 }
 
 // CreateSession creates a new tmux session for a ticket
@@ -124,7 +139,7 @@ func (sm *SessionManager) getSessionName(ticket string) string {
 
 // SessionExists checks if a tmux session exists
 func (sm *SessionManager) SessionExists(sessionName string) bool {
-	cmd := exec.Command("tmux", "has-session", "-t", sessionName)
+	cmd := sm.tmuxCmd("has-session", "-t", sessionName)
 	return cmd.Run() == nil
 }
 
@@ -143,7 +158,7 @@ func (sm *SessionManager) createInitialSession(sessionName, worktreePath string)
 		initialDir = worktreePath
 	}
 
-	cmd := exec.Command("tmux", "new-session", "-d", "-s", sessionName, "-c", initialDir)
+	cmd := sm.tmuxCmd("new-session", "-d", "-s", sessionName, "-c", initialDir)
 
 	if sm.Verbose {
 		cmd.Stdout = os.Stdout
@@ -209,7 +224,7 @@ func (sm *SessionManager) expandPath(template, worktreePath, notePath string) st
 
 // renameWindow renames a tmux window
 func (sm *SessionManager) renameWindow(windowTarget, name string) error {
-	cmd := exec.Command("tmux", "rename-window", "-t", windowTarget, name)
+	cmd := sm.tmuxCmd("rename-window", "-t", windowTarget, name)
 
 	if sm.Verbose {
 		cmd.Stdout = os.Stdout
@@ -223,7 +238,7 @@ func (sm *SessionManager) renameWindow(windowTarget, name string) error {
 func (sm *SessionManager) createWindow(sessionName string, windowNum int, name, workingDir string) error {
 	windowTarget := fmt.Sprintf("%s:%d", sessionName, windowNum)
 
-	cmd := exec.Command("tmux", "new-window", "-t", windowTarget, "-n", name, "-c", workingDir)
+	cmd := sm.tmuxCmd("new-window", "-t", windowTarget, "-n", name, "-c", workingDir)
 
 	if sm.Verbose {
 		cmd.Stdout = os.Stdout
@@ -247,7 +262,7 @@ func (sm *SessionManager) sendCommand(windowTarget, command string) error {
 		fmt.Printf("⚠️  Executing command from config: %s\n", command)
 	}
 
-	cmd := exec.Command("tmux", "send-keys", "-t", windowTarget, command, "Enter")
+	cmd := sm.tmuxCmd("send-keys", "-t", windowTarget, command, "Enter")
 
 	if sm.Verbose {
 		cmd.Stdout = os.Stdout
@@ -280,7 +295,7 @@ func (sm *SessionManager) setEnvironmentVars(sessionName, ticket, worktreePath s
 	}
 
 	for key, value := range vars {
-		cmd := exec.Command("tmux", "set-environment", "-t", sessionName, key, value)
+		cmd := sm.tmuxCmd("set-environment", "-t", sessionName, key, value)
 
 		if sm.Verbose {
 			fmt.Printf("Setting %s=%s\n", key, value)
@@ -300,7 +315,7 @@ func (sm *SessionManager) setEnvironmentVars(sessionName, ticket, worktreePath s
 func (sm *SessionManager) selectWindow(sessionName string, windowNum int) error {
 	windowTarget := fmt.Sprintf("%s:%d", sessionName, windowNum)
 
-	cmd := exec.Command("tmux", "select-window", "-t", windowTarget)
+	cmd := sm.tmuxCmd("select-window", "-t", windowTarget)
 
 	if sm.Verbose {
 		cmd.Stdout = os.Stdout
@@ -312,15 +327,10 @@ func (sm *SessionManager) selectWindow(sessionName string, windowNum int) error 
 
 // AttachToSession attaches to or switches to a tmux session
 func (sm *SessionManager) AttachToSession(sessionName string) error {
-	// Skip attachment during tests to avoid switching the user's terminal
-	if os.Getenv("SRE_TESTING") == "1" {
-		return nil
-	}
-
 	// Check if we're already in a tmux session
 	if os.Getenv("TMUX") != "" {
 		// We're in tmux, switch to the session
-		cmd := exec.Command("tmux", "switch-client", "-t", sessionName)
+		cmd := sm.tmuxCmd("switch-client", "-t", sessionName)
 
 		if sm.Verbose {
 			fmt.Printf("Switching to session: %s\n", sessionName)
@@ -332,7 +342,7 @@ func (sm *SessionManager) AttachToSession(sessionName string) error {
 	}
 
 	// We're not in tmux, attach to the session
-	cmd := exec.Command("tmux", "attach-session", "-t", sessionName)
+	cmd := sm.tmuxCmd("attach-session", "-t", sessionName)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -351,7 +361,7 @@ func (sm *SessionManager) attachToSession(sessionName string) error {
 
 // ListSessions returns a list of all tmux sessions
 func (sm *SessionManager) ListSessions() ([]string, error) {
-	cmd := exec.Command("tmux", "list-sessions", "-F", "#{session_name}")
+	cmd := sm.tmuxCmd("list-sessions", "-F", "#{session_name}")
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to list sessions")
@@ -378,7 +388,7 @@ func (sm *SessionManager) KillSession(ticket string) error {
 		return errors.Newf("session does not exist: %s", sessionName)
 	}
 
-	cmd := exec.Command("tmux", "kill-session", "-t", sessionName)
+	cmd := sm.tmuxCmd("kill-session", "-t", sessionName)
 
 	if sm.Verbose {
 		fmt.Printf("Killing session: %s\n", sessionName)
