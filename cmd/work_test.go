@@ -185,41 +185,41 @@ func TestTicketInfo(t *testing.T) {
 	}
 }
 
-func TestInitCommandDescription(t *testing.T) {
-	cmd := initCmd
+func TestWorkCommandDescription(t *testing.T) {
+	cmd := workCmd
 
-	if cmd.Use != "init <ticket>" {
-		t.Errorf("init command Use = %q, want %q", cmd.Use, "init <ticket>")
+	if cmd.Use != "work <ticket>" {
+		t.Errorf("work command Use = %q, want %q", cmd.Use, "work <ticket>")
 	}
 
 	if cmd.Short == "" {
-		t.Error("init command should have Short description")
+		t.Error("work command should have Short description")
 	}
 
 	if cmd.Long == "" {
-		t.Error("init command should have Long description")
+		t.Error("work command should have Long description")
 	}
 
 	// Verify key information is in the description
 	if !containsSubstring(cmd.Long, "worktree") {
-		t.Error("init command Long description should mention 'worktree'")
+		t.Error("work command Long description should mention 'worktree'")
 	}
 
 	if !containsSubstring(cmd.Long, "note") {
-		t.Error("init command Long description should mention 'note'")
+		t.Error("work command Long description should mention 'note'")
 	}
 
 	if !containsSubstring(cmd.Long, "tmux") {
-		t.Error("init command Long description should mention 'tmux'")
+		t.Error("work command Long description should mention 'tmux'")
 	}
 }
 
-func TestInitCommandArgs(t *testing.T) {
-	cmd := initCmd
+func TestWorkCommandArgs(t *testing.T) {
+	cmd := workCmd
 
 	// Command should require exactly 1 argument
 	if cmd.Args == nil {
-		t.Error("init command should have Args validation")
+		t.Error("work command should have Args validation")
 	}
 }
 
@@ -329,10 +329,10 @@ func TestParseTicketErrorMessages(t *testing.T) {
 	}
 }
 
-// Integration tests for runInitCommand
+// Integration tests for runWorkCommand
 
-// setupInitTestGitRepo creates a temporary bare git repository for testing
-func setupInitTestGitRepo(t *testing.T) string {
+// setupWorkTestGitRepo creates a temporary bare git repository for testing
+func setupWorkTestGitRepo(t *testing.T) string {
 	t.Helper()
 
 	tmpDir := t.TempDir()
@@ -378,8 +378,8 @@ func setupInitTestGitRepo(t *testing.T) string {
 	return repoDir
 }
 
-// setupInitTestConfig configures viper with test defaults for init command
-func setupInitTestConfig(t *testing.T, notesPath string) {
+// setupWorkTestConfig configures viper with test defaults for work command
+func setupWorkTestConfig(t *testing.T, notesPath string) {
 	t.Helper()
 
 	viper.Reset()
@@ -394,28 +394,28 @@ func setupInitTestConfig(t *testing.T, notesPath string) {
 	})
 }
 
-func TestRunInitCommand_CreatesWorktreeAndNote(t *testing.T) {
+func TestRunWorkCommand_CreatesWorktreeAndNote(t *testing.T) {
 	// Skip if git is not available
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not found in PATH, skipping test")
 	}
 
-	repoDir := setupInitTestGitRepo(t)
+	repoDir := setupWorkTestGitRepo(t)
 	notesDir := t.TempDir()
-	setupInitTestConfig(t, notesDir)
+	setupWorkTestConfig(t, notesDir)
 	defer viper.Reset()
 
 	// Change to repo directory
 	t.Chdir(repoDir)
 
-	// Run the init command
-	err := runInitCommand("proj-123")
+	// Run the work command
+	err := runWorkCommand("proj-123")
 
 	// The command may fail on tmux session creation, but should create worktree and note
 	// Check for worktree creation regardless of tmux status
 	worktreePath := filepath.Join(repoDir, "proj", "proj-123")
 	if _, statErr := os.Stat(worktreePath); os.IsNotExist(statErr) {
-		t.Errorf("Worktree should be created at %s, err from runInitCommand: %v", worktreePath, err)
+		t.Errorf("Worktree should be created at %s, err from runWorkCommand: %v", worktreePath, err)
 	}
 
 	// Verify it's a valid git worktree
@@ -459,15 +459,15 @@ func TestRunInitCommand_CreatesWorktreeAndNote(t *testing.T) {
 	}
 }
 
-func TestRunInitCommand_InvalidTicketFormat(t *testing.T) {
+func TestRunWorkCommand_InvalidTicketFormat(t *testing.T) {
 	// Skip if git is not available
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not found in PATH, skipping test")
 	}
 
-	repoDir := setupInitTestGitRepo(t)
+	repoDir := setupWorkTestGitRepo(t)
 	notesDir := t.TempDir()
-	setupInitTestConfig(t, notesDir)
+	setupWorkTestConfig(t, notesDir)
 	defer viper.Reset()
 
 	t.Chdir(repoDir)
@@ -511,33 +511,33 @@ func TestRunInitCommand_InvalidTicketFormat(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := runInitCommand(tt.ticket)
+			err := runWorkCommand(tt.ticket)
 			if err == nil {
-				t.Errorf("runInitCommand(%q) should have returned an error", tt.ticket)
+				t.Errorf("runWorkCommand(%q) should have returned an error", tt.ticket)
 				return
 			}
 			if !strings.Contains(err.Error(), tt.errMsg) {
-				t.Errorf("runInitCommand(%q) error = %q, should contain %q", tt.ticket, err.Error(), tt.errMsg)
+				t.Errorf("runWorkCommand(%q) error = %q, should contain %q", tt.ticket, err.Error(), tt.errMsg)
 			}
 		})
 	}
 }
 
-func TestRunInitCommand_UpdatesDailyNote(t *testing.T) {
+func TestRunWorkCommand_UpdatesDailyNote(t *testing.T) {
 	// Skip if git is not available
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not found in PATH, skipping test")
 	}
 
-	repoDir := setupInitTestGitRepo(t)
+	repoDir := setupWorkTestGitRepo(t)
 	notesDir := t.TempDir()
-	setupInitTestConfig(t, notesDir)
+	setupWorkTestConfig(t, notesDir)
 	defer viper.Reset()
 
 	t.Chdir(repoDir)
 
-	// Run the init command
-	_ = runInitCommand("ops-456")
+	// Run the work command
+	_ = runWorkCommand("ops-456")
 
 	// Verify daily note was created/updated
 	today := time.Now().Format("2006-01-02")
@@ -564,24 +564,24 @@ func TestRunInitCommand_UpdatesDailyNote(t *testing.T) {
 	}
 }
 
-func TestRunInitCommand_IdempotentWorktree(t *testing.T) {
+func TestRunWorkCommand_IdempotentWorktree(t *testing.T) {
 	// Skip if git is not available
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not found in PATH, skipping test")
 	}
 
-	repoDir := setupInitTestGitRepo(t)
+	repoDir := setupWorkTestGitRepo(t)
 	notesDir := t.TempDir()
-	setupInitTestConfig(t, notesDir)
+	setupWorkTestConfig(t, notesDir)
 	defer viper.Reset()
 
 	t.Chdir(repoDir)
 
-	// Run the init command twice
-	_ = runInitCommand("test-789")
+	// Run the work command twice
+	_ = runWorkCommand("test-789")
 
 	// Second call should not fail (worktree already exists)
-	_ = runInitCommand("test-789")
+	_ = runWorkCommand("test-789")
 
 	worktreePath := filepath.Join(repoDir, "test", "test-789")
 	if _, statErr := os.Stat(worktreePath); os.IsNotExist(statErr) {
@@ -589,7 +589,7 @@ func TestRunInitCommand_IdempotentWorktree(t *testing.T) {
 	}
 }
 
-func TestRunInitCommand_DifferentTicketTypes(t *testing.T) {
+func TestRunWorkCommand_DifferentTicketTypes(t *testing.T) {
 	// Skip if git is not available
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not found in PATH, skipping test")
@@ -624,14 +624,14 @@ func TestRunInitCommand_DifferentTicketTypes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			repoDir := setupInitTestGitRepo(t)
+			repoDir := setupWorkTestGitRepo(t)
 			notesDir := t.TempDir()
-			setupInitTestConfig(t, notesDir)
+			setupWorkTestConfig(t, notesDir)
 			defer viper.Reset()
 
 			t.Chdir(repoDir)
 
-			_ = runInitCommand(tt.ticket)
+			_ = runWorkCommand(tt.ticket)
 
 			// Worktree should be under the ticket type directory
 			worktreePath := filepath.Join(repoDir, tt.expectedType, tt.ticket)
@@ -648,22 +648,22 @@ func TestRunInitCommand_DifferentTicketTypes(t *testing.T) {
 	}
 }
 
-func TestRunInitCommand_JiraDisabled(t *testing.T) {
+func TestRunWorkCommand_JiraDisabled(t *testing.T) {
 	// Skip if git is not available
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not found in PATH, skipping test")
 	}
 
-	repoDir := setupInitTestGitRepo(t)
+	repoDir := setupWorkTestGitRepo(t)
 	notesDir := t.TempDir()
-	setupInitTestConfig(t, notesDir)
+	setupWorkTestConfig(t, notesDir)
 	viper.Set("jira.enabled", false) // Explicitly disable JIRA
 	defer viper.Reset()
 
 	t.Chdir(repoDir)
 
-	// Run the init command - should succeed without JIRA
-	_ = runInitCommand("nojira-100")
+	// Run the work command - should succeed without JIRA
+	_ = runWorkCommand("nojira-100")
 
 	// Worktree should still be created
 	worktreePath := filepath.Join(repoDir, "nojira", "nojira-100")
@@ -688,21 +688,21 @@ func TestRunInitCommand_JiraDisabled(t *testing.T) {
 	}
 }
 
-func TestRunInitCommand_PreservesOriginalTicketCase(t *testing.T) {
+func TestRunWorkCommand_PreservesOriginalTicketCase(t *testing.T) {
 	// Skip if git is not available
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not found in PATH, skipping test")
 	}
 
-	repoDir := setupInitTestGitRepo(t)
+	repoDir := setupWorkTestGitRepo(t)
 	notesDir := t.TempDir()
-	setupInitTestConfig(t, notesDir)
+	setupWorkTestConfig(t, notesDir)
 	defer viper.Reset()
 
 	t.Chdir(repoDir)
 
 	// Use uppercase ticket
-	_ = runInitCommand("FRAAS-999")
+	_ = runWorkCommand("FRAAS-999")
 
 	// Note filename should preserve original case
 	notePath := filepath.Join(notesDir, "fraas", "FRAAS-999.md")

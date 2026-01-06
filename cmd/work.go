@@ -15,11 +15,11 @@ import (
 	"thoreinstein.com/sre/pkg/tmux"
 )
 
-// initCmd represents the init command
-var initCmd = &cobra.Command{
-	Use:   "init <ticket>",
-	Short: "Initialize SRE workflow for a ticket",
-	Long: `Initialize the complete SRE workflow for a given ticket.
+// workCmd represents the work command
+var workCmd = &cobra.Command{
+	Use:   "work <ticket>",
+	Short: "Start SRE workflow for a ticket",
+	Long: `Start the complete SRE workflow for a given ticket.
 
 This command performs the following actions:
 - Parses ticket type and number
@@ -29,17 +29,17 @@ This command performs the following actions:
 - Creates tmux session with configured windows
 
 Examples:
-  sre init proj-123
-  sre init ops-456
-  sre init incident-789`,
+  sre work proj-123
+  sre work ops-456
+  sre work incident-789`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return runInitCommand(args[0])
+		return runWorkCommand(args[0])
 	},
 }
 
 func init() {
-	rootCmd.AddCommand(initCmd)
+	rootCmd.AddCommand(workCmd)
 }
 
 // TicketInfo holds parsed ticket information
@@ -66,7 +66,7 @@ func parseTicket(ticket string) (*TicketInfo, error) {
 	}, nil
 }
 
-func runInitCommand(ticket string) error {
+func runWorkCommand(ticket string) error {
 	// Load configuration
 	cfg, err := config.Load()
 	if err != nil {

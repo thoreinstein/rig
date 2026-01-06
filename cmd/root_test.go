@@ -91,7 +91,7 @@ func TestRootCommandHasSubcommands(t *testing.T) {
 	}
 
 	// Verify expected subcommands exist
-	expectedCommands := []string{"init", "list", "session", "config", "sync", "history", "timeline", "clean", "hack", "update", "version"}
+	expectedCommands := []string{"work", "list", "session", "config", "sync", "history", "timeline", "clean", "hack", "update", "version"}
 	for _, expected := range expectedCommands {
 		if !registeredCommands[expected] {
 			t.Errorf("root command should have %q subcommand registered", expected)
@@ -490,4 +490,4 @@ key = "toml_value"
 	}
 }
 
-// Note: containsSubstring helper is already defined in init_test.go
+// Note: containsSubstring helper is already defined in work_test.go

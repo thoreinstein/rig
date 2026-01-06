@@ -15,7 +15,7 @@ A modern, extensible Go CLI tool for Site Reliability Engineering workflow autom
 ### 🛠️ **Powerful CLI Interface**
 
 ```bash
-sre init <ticket>              # Initialize complete workflow
+sre work <ticket>              # Start complete workflow
 sre hack <name>                # Lightweight workflow for non-ticket work
 sre list                       # Show all worktrees and tmux sessions
 sre clean                      # Remove old worktrees and sessions
@@ -73,7 +73,7 @@ sre config --show/--init       # Manage configuration
 1. **Start working on a ticket**:
 
    ```bash
-   ./sre init proj-123
+   ./sre work proj-123
    ```
 
    This creates:
@@ -199,20 +199,20 @@ name = "term"
 working_dir = "{worktree_path}"
 ```
 
-With multi-repo config, `sre init proj-123` routes to `main-repo` while `sre init ops-456` routes to `infra-repo`.
+With multi-repo config, `sre work proj-123` routes to `main-repo` while `sre work ops-456` routes to `infra-repo`.
 
 ## Commands Reference
 
 ### Core Workflow
 
-#### `sre init <ticket>`
+#### `sre work <ticket>`
 
-Initialize complete workflow for a ticket.
+Start complete workflow for a ticket.
 
 **Example:**
 
 ```bash
-sre init proj-123
+sre work proj-123
 ```
 
 **What it does:**
@@ -392,7 +392,7 @@ main/
 │   ├── config.go     # Configuration management
 │   ├── hack.go       # Lightweight non-ticket workflow
 │   ├── history.go    # History database queries
-│   ├── init.go       # Ticket workflow initialization
+│   ├── work.go       # Ticket workflow start
 │   ├── list.go       # List worktrees and sessions
 │   ├── root.go       # Root command setup
 │   ├── session.go    # Tmux session management

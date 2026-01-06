@@ -99,7 +99,7 @@ func syncTicketNote(cfg *config.Config, ticket string) error {
 	// Check if note exists
 	if _, err := os.Stat(notePath); os.IsNotExist(err) {
 		fmt.Printf("Note not found: %s\n", notePath)
-		fmt.Println("Use 'sre init' to create the note first.")
+		fmt.Println("Use 'sre work' to create the note first.")
 		return nil
 	}
 
@@ -181,7 +181,7 @@ func syncDailyNote(cfg *config.Config) error {
 
 	if _, err := os.Stat(dailyNotePath); os.IsNotExist(err) {
 		fmt.Printf("Daily note not found: %s\n", dailyNotePath)
-		fmt.Println("Create the daily note first or use 'sre init' to create a ticket.")
+		fmt.Println("Create the daily note first or use 'sre work' to create a ticket.")
 		return nil
 	}
 
