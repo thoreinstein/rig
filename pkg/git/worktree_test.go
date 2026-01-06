@@ -304,7 +304,15 @@ func TestGetDefaultBranch_FallbackToMaster(t *testing.T) {
 }
 
 func TestFetchAndPull_Success(t *testing.T) {
-	mock := &MockCommandRunner{}
+	mock := &MockCommandRunner{
+		OutputFunc: func(dir string, name string, args ...string) ([]byte, error) {
+			// Return existing refspec so ensureFetchRefspec doesn't add one
+			if len(args) >= 3 && args[0] == "config" && args[1] == "--get" && args[2] == "remote.origin.fetch" {
+				return []byte("+refs/heads/*:refs/remotes/origin/*\n"), nil
+			}
+			return []byte{}, nil
+		},
+	}
 	wm := NewWorktreeManagerWithRunner("main", false, mock)
 
 	err := wm.fetchAndPull("/repo", "main")
@@ -312,30 +320,45 @@ func TestFetchAndPull_Success(t *testing.T) {
 		t.Fatalf("fetchAndPull() error = %v, want nil", err)
 	}
 
-	// Verify correct commands were called
-	if len(mock.Calls) != 2 {
-		t.Fatalf("Expected 2 calls, got %d", len(mock.Calls))
+	// Verify correct commands were called:
+	// 1. git config --get remote.origin.fetch (check refspec)
+	// 2. git fetch origin
+	// 3. git pull origin main
+	if len(mock.Calls) != 3 {
+		t.Fatalf("Expected 3 calls, got %d", len(mock.Calls))
 	}
 
-	// First call: git fetch origin
-	if mock.Calls[0].Name != "git" {
-		t.Errorf("Call 0: Name = %q, want %q", mock.Calls[0].Name, "git")
-	}
-	if len(mock.Calls[0].Args) < 2 || mock.Calls[0].Args[0] != "fetch" || mock.Calls[0].Args[1] != "origin" {
-		t.Errorf("Call 0: Args = %v, want [fetch origin]", mock.Calls[0].Args)
+	// First call: git config --get remote.origin.fetch
+	if mock.Calls[0].Name != "git" || mock.Calls[0].Args[0] != "config" {
+		t.Errorf("Call 0: expected git config, got %q %v", mock.Calls[0].Name, mock.Calls[0].Args)
 	}
 
-	// Second call: git pull origin main
+	// Second call: git fetch origin
 	if mock.Calls[1].Name != "git" {
 		t.Errorf("Call 1: Name = %q, want %q", mock.Calls[1].Name, "git")
 	}
-	if len(mock.Calls[1].Args) < 3 || mock.Calls[1].Args[0] != "pull" || mock.Calls[1].Args[1] != "origin" || mock.Calls[1].Args[2] != "main" {
-		t.Errorf("Call 1: Args = %v, want [pull origin main]", mock.Calls[1].Args)
+	if len(mock.Calls[1].Args) < 2 || mock.Calls[1].Args[0] != "fetch" || mock.Calls[1].Args[1] != "origin" {
+		t.Errorf("Call 1: Args = %v, want [fetch origin]", mock.Calls[1].Args)
+	}
+
+	// Third call: git pull origin main
+	if mock.Calls[2].Name != "git" {
+		t.Errorf("Call 2: Name = %q, want %q", mock.Calls[2].Name, "git")
+	}
+	if len(mock.Calls[2].Args) < 3 || mock.Calls[2].Args[0] != "pull" || mock.Calls[2].Args[1] != "origin" || mock.Calls[2].Args[2] != "main" {
+		t.Errorf("Call 2: Args = %v, want [pull origin main]", mock.Calls[2].Args)
 	}
 }
 
 func TestFetchAndPull_FetchError(t *testing.T) {
 	mock := &MockCommandRunner{
+		OutputFunc: func(dir string, name string, args ...string) ([]byte, error) {
+			// Return existing refspec so ensureFetchRefspec doesn't add one
+			if len(args) >= 3 && args[0] == "config" && args[1] == "--get" && args[2] == "remote.origin.fetch" {
+				return []byte("+refs/heads/*:refs/remotes/origin/*\n"), nil
+			}
+			return []byte{}, nil
+		},
 		RunFunc: func(dir string, name string, args ...string) error {
 			if len(args) > 0 && args[0] == "fetch" {
 				return errors.New("network error")
@@ -354,14 +377,21 @@ func TestFetchAndPull_FetchError(t *testing.T) {
 		t.Errorf("Error = %q, want to contain 'git fetch failed'", err.Error())
 	}
 
-	// Should have only called fetch (failed before pull)
-	if len(mock.Calls) != 1 {
-		t.Errorf("Expected 1 call (fetch only), got %d", len(mock.Calls))
+	// Should have called: config check, then fetch (which failed before pull)
+	if len(mock.Calls) != 2 {
+		t.Errorf("Expected 2 calls (config check + fetch), got %d", len(mock.Calls))
 	}
 }
 
 func TestFetchAndPull_PullError(t *testing.T) {
 	mock := &MockCommandRunner{
+		OutputFunc: func(dir string, name string, args ...string) ([]byte, error) {
+			// Return existing refspec so ensureFetchRefspec doesn't add one
+			if len(args) >= 3 && args[0] == "config" && args[1] == "--get" && args[2] == "remote.origin.fetch" {
+				return []byte("+refs/heads/*:refs/remotes/origin/*\n"), nil
+			}
+			return []byte{}, nil
+		},
 		RunFunc: func(dir string, name string, args ...string) error {
 			if len(args) > 0 && args[0] == "pull" {
 				return errors.New("merge conflict")
@@ -380,14 +410,22 @@ func TestFetchAndPull_PullError(t *testing.T) {
 		t.Errorf("Error = %q, want to contain 'git pull failed'", err.Error())
 	}
 
-	// Should have called both fetch and pull
-	if len(mock.Calls) != 2 {
-		t.Errorf("Expected 2 calls, got %d", len(mock.Calls))
+	// Should have called: config check, fetch, then pull (which failed)
+	if len(mock.Calls) != 3 {
+		t.Errorf("Expected 3 calls, got %d", len(mock.Calls))
 	}
 }
 
 func TestFetchAndPull_DifferentBranch(t *testing.T) {
-	mock := &MockCommandRunner{}
+	mock := &MockCommandRunner{
+		OutputFunc: func(dir string, name string, args ...string) ([]byte, error) {
+			// Return existing refspec so ensureFetchRefspec doesn't add one
+			if len(args) >= 3 && args[0] == "config" && args[1] == "--get" && args[2] == "remote.origin.fetch" {
+				return []byte("+refs/heads/*:refs/remotes/origin/*\n"), nil
+			}
+			return []byte{}, nil
+		},
+	}
 	wm := NewWorktreeManagerWithRunner("develop", false, mock)
 
 	err := wm.fetchAndPull("/repo", "develop")
@@ -396,12 +434,125 @@ func TestFetchAndPull_DifferentBranch(t *testing.T) {
 	}
 
 	// Verify pull uses correct branch
-	if len(mock.Calls) < 2 {
-		t.Fatalf("Expected at least 2 calls, got %d", len(mock.Calls))
+	// Calls: config check, fetch, pull
+	if len(mock.Calls) < 3 {
+		t.Fatalf("Expected at least 3 calls, got %d", len(mock.Calls))
 	}
 
-	if mock.Calls[1].Args[2] != "develop" {
-		t.Errorf("Pull branch = %q, want %q", mock.Calls[1].Args[2], "develop")
+	// Third call should be pull with develop branch
+	if mock.Calls[2].Args[2] != "develop" {
+		t.Errorf("Pull branch = %q, want %q", mock.Calls[2].Args[2], "develop")
+	}
+}
+
+func TestEnsureFetchRefspec_AlreadyConfigured(t *testing.T) {
+	mock := &MockCommandRunner{
+		OutputFunc: func(dir string, name string, args ...string) ([]byte, error) {
+			if len(args) >= 3 && args[0] == "config" && args[1] == "--get" && args[2] == "remote.origin.fetch" {
+				return []byte("+refs/heads/*:refs/remotes/origin/*\n"), nil
+			}
+			return []byte{}, nil
+		},
+	}
+	wm := NewWorktreeManagerWithRunner("main", false, mock)
+
+	err := wm.ensureFetchRefspec("/repo")
+	if err != nil {
+		t.Fatalf("ensureFetchRefspec() error = %v, want nil", err)
+	}
+
+	// Should only check config, not set it
+	if len(mock.Calls) != 1 {
+		t.Errorf("Expected 1 call (config check only), got %d", len(mock.Calls))
+	}
+
+	if mock.Calls[0].Args[0] != "config" || mock.Calls[0].Args[1] != "--get" {
+		t.Errorf("Expected config --get call, got %v", mock.Calls[0].Args)
+	}
+}
+
+func TestEnsureFetchRefspec_MissingRefspec(t *testing.T) {
+	mock := &MockCommandRunner{
+		OutputFunc: func(dir string, name string, args ...string) ([]byte, error) {
+			if len(args) >= 3 && args[0] == "config" && args[1] == "--get" && args[2] == "remote.origin.fetch" {
+				// Simulate bare repo with no fetch refspec
+				return []byte{}, errors.New("exit status 1")
+			}
+			return []byte{}, nil
+		},
+	}
+	wm := NewWorktreeManagerWithRunner("main", false, mock)
+
+	err := wm.ensureFetchRefspec("/repo")
+	if err != nil {
+		t.Fatalf("ensureFetchRefspec() error = %v, want nil", err)
+	}
+
+	// Should check config then set it
+	if len(mock.Calls) != 2 {
+		t.Fatalf("Expected 2 calls (config check + config set), got %d", len(mock.Calls))
+	}
+
+	// Verify the set call has correct args
+	setCall := mock.Calls[1]
+	if setCall.Args[0] != "config" {
+		t.Errorf("Expected config command, got %v", setCall.Args)
+	}
+	if setCall.Args[1] != "remote.origin.fetch" {
+		t.Errorf("Expected remote.origin.fetch key, got %v", setCall.Args[1])
+	}
+	if setCall.Args[2] != "+refs/heads/*:refs/remotes/origin/*" {
+		t.Errorf("Expected standard refspec, got %v", setCall.Args[2])
+	}
+}
+
+func TestEnsureFetchRefspec_EmptyRefspec(t *testing.T) {
+	mock := &MockCommandRunner{
+		OutputFunc: func(dir string, name string, args ...string) ([]byte, error) {
+			if len(args) >= 3 && args[0] == "config" && args[1] == "--get" && args[2] == "remote.origin.fetch" {
+				// Returns empty string (config key exists but empty)
+				return []byte("   \n"), nil
+			}
+			return []byte{}, nil
+		},
+	}
+	wm := NewWorktreeManagerWithRunner("main", false, mock)
+
+	err := wm.ensureFetchRefspec("/repo")
+	if err != nil {
+		t.Fatalf("ensureFetchRefspec() error = %v, want nil", err)
+	}
+
+	// Should check config then set it since it's empty
+	if len(mock.Calls) != 2 {
+		t.Fatalf("Expected 2 calls (config check + config set), got %d", len(mock.Calls))
+	}
+}
+
+func TestEnsureFetchRefspec_SetError(t *testing.T) {
+	mock := &MockCommandRunner{
+		OutputFunc: func(dir string, name string, args ...string) ([]byte, error) {
+			if len(args) >= 3 && args[0] == "config" && args[1] == "--get" {
+				return []byte{}, errors.New("exit status 1")
+			}
+			return []byte{}, nil
+		},
+		RunFunc: func(dir string, name string, args ...string) error {
+			if len(args) > 0 && args[0] == "config" {
+				return errors.New("permission denied")
+			}
+			return nil
+		},
+	}
+	wm := NewWorktreeManagerWithRunner("main", false, mock)
+
+	err := wm.ensureFetchRefspec("/repo")
+	if err == nil {
+		t.Fatal("ensureFetchRefspec() expected error, got nil")
+	}
+
+	if !strings.Contains(err.Error(), "failed to configure fetch refspec") {
+		t.Errorf("Error = %q, want to contain 'failed to configure fetch refspec'", err.Error())
 	}
 }
 

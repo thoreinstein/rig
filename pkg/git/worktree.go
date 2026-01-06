@@ -215,8 +215,39 @@ func (wm *WorktreeManager) CreateWorktreeWithBranch(ticketType, name, branchName
 	return worktreePath, nil
 }
 
+// ensureFetchRefspec ensures the fetch refspec is configured for the origin remote.
+// Bare repos created with `git clone --bare` don't have this configured by default,
+// which causes `git fetch` to not download remote-tracking branches.
+func (wm *WorktreeManager) ensureFetchRefspec(repoRoot string) error {
+	// Check if fetch refspec already exists
+	output, err := wm.runner.Output(repoRoot, "git", "config", "--get", "remote.origin.fetch")
+	if err == nil && len(strings.TrimSpace(string(output))) > 0 {
+		// Already configured
+		return nil
+	}
+
+	// Add the standard fetch refspec
+	if wm.Verbose {
+		fmt.Println("Adding missing fetch refspec for bare repository...")
+	}
+
+	if err := wm.runner.Run(repoRoot, "git", "config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*"); err != nil {
+		return errors.Wrap(err, "failed to configure fetch refspec")
+	}
+
+	return nil
+}
+
 // fetchAndPull fetches from origin and pulls the latest changes for the base branch
 func (wm *WorktreeManager) fetchAndPull(repoRoot, baseBranch string) error {
+	// Ensure fetch refspec is configured (needed for bare repos)
+	if err := wm.ensureFetchRefspec(repoRoot); err != nil {
+		// Log warning but don't fail - we'll try fetch anyway
+		if wm.Verbose {
+			fmt.Printf("Warning: Could not ensure fetch refspec: %v\n", err)
+		}
+	}
+
 	if wm.Verbose {
 		fmt.Println("Fetching latest changes from origin...")
 	}
