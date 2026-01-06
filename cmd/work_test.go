@@ -388,7 +388,7 @@ func setupWorkTestConfig(t *testing.T, notesPath string) {
 	viper.Set("notes.template_dir", "") // Use embedded templates
 	viper.Set("git.base_branch", "")
 	viper.Set("jira.enabled", false)
-	viper.Set("tmux.session_prefix", "")
+	viper.Set("tmux.session_prefix", "test-")
 	viper.Set("tmux.windows", []map[string]string{
 		{"name": "code", "command": ""},
 	})
