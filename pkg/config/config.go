@@ -13,6 +13,7 @@ import (
 type Config struct {
 	Notes   NotesConfig   `mapstructure:"notes"`
 	Git     GitConfig     `mapstructure:"git"`
+	Clone   CloneConfig   `mapstructure:"clone"`
 	History HistoryConfig `mapstructure:"history"`
 	Jira    JiraConfig    `mapstructure:"jira"`
 	Tmux    TmuxConfig    `mapstructure:"tmux"`
@@ -28,6 +29,11 @@ type NotesConfig struct {
 // GitConfig holds optional git configuration overrides
 type GitConfig struct {
 	BaseBranch string `mapstructure:"base_branch"` // Optional override for default branch
+}
+
+// CloneConfig holds clone command configuration
+type CloneConfig struct {
+	BasePath string `mapstructure:"base_path"` // Base directory for clones (default: ~/src)
 }
 
 // HistoryConfig holds command history configuration
@@ -91,6 +97,9 @@ func setDefaults() {
 	// Git defaults (empty means auto-detect)
 	viper.SetDefault("git.base_branch", "")
 
+	// Clone defaults (empty means ~/src)
+	viper.SetDefault("clone.base_path", "")
+
 	// History defaults
 	viper.SetDefault("history.database_path", filepath.Join(homeDir, ".histdb", "zsh-history.db"))
 	viper.SetDefault("history.ignore_patterns", []string{"ls", "cd", "pwd", "clear"})
@@ -123,6 +132,11 @@ func expandPaths(config *Config) error {
 	}
 
 	config.History.DatabasePath, err = expandPath(config.History.DatabasePath)
+	if err != nil {
+		return err
+	}
+
+	config.Clone.BasePath, err = expandPath(config.Clone.BasePath)
 	if err != nil {
 		return err
 	}
