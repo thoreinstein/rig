@@ -1,3 +1,142 @@
+# Release Notes: v0.4.0
+
+## Overview
+
+This release fixes environment variable pollution that corrupted tmux configuration when running the CLI inside an existing tmux session. All environment variable bindings now require an `SRE_` prefix, which is a **breaking change** for users who set configuration via environment variables.
+
+**Release date:** 2026-01-07
+
+## Installation
+
+### Homebrew (recommended)
+
+```bash
+brew upgrade thoreinstein/tap/sre
+# or for fresh install:
+brew install thoreinstein/tap/sre
+```
+
+### Manual Installation
+
+1. Download the appropriate archive from the [releases page](https://github.com/thoreinstein/sre/releases/tag/v0.4.0)
+2. Extract and move to your PATH:
+
+```bash
+tar -xzf sre_0.4.0_darwin_arm64.tar.gz
+mv sre /usr/local/bin/
+```
+
+3. Verify installation:
+
+```bash
+sre version
+```
+
+## Breaking Changes
+
+### Environment Variables Require `SRE_` Prefix
+
+Environment variables used to configure the CLI must now include an `SRE_` prefix.
+
+**Rationale:** The tmux program sets a `TMUX` environment variable (e.g., `/private/tmp/tmux-502/default,12345,0`) in all processes it spawns. Viper's automatic environment binding was mapping this to the `tmux` config key, overwriting tmux window configuration and causing unpredictable behavior when running `sre` commands inside a tmux session.
+
+Adding `SetEnvPrefix("SRE")` ensures only explicitly-intended environment variables affect configuration.
+
+**Migration Table:**
+
+| Before (v0.3.x) | After (v0.4.0)      |
+| --------------- | ------------------- |
+| `NOTES_PATH`      | `SRE_NOTES_PATH`      |
+| `CLONE_BASE_PATH` | `SRE_CLONE_BASE_PATH` |
+| `VERBOSE`         | `SRE_VERBOSE`         |
+
+**Nested Configuration:**
+
+For nested config keys, use underscore separators after the `SRE_` prefix:
+
+| Config Key          | Environment Variable    |
+| ------------------- | ----------------------- |
+| `notes.path`          | `SRE_NOTES_PATH`          |
+| `clone.base_path`     | `SRE_CLONE_BASE_PATH`     |
+| `tmux.session_prefix` | `SRE_TMUX_SESSION_PREFIX` |
+| `tmux.windows`        | `SRE_TMUX_WINDOWS`        |
+
+**Impact:** Shell profiles, CI/CD pipelines, and container configurations that set these environment variables will stop working until updated.
+
+**Migration Script:**
+
+```bash
+# Check for affected environment variables in shell configs
+grep -E '^\s*export\s+(NOTES_PATH|CLONE_BASE_PATH|VERBOSE)=' \
+  ~/.bashrc ~/.zshrc ~/.profile ~/.bash_profile 2>/dev/null
+
+# Example fix in .zshrc
+# Before:
+export NOTES_PATH=~/notes/work
+
+# After:
+export SRE_NOTES_PATH=~/notes/work
+```
+
+## Bug Fixes
+
+### Fixed: Tmux Configuration Corruption in Nested Sessions
+
+**Symptom:** Running `sre work` or `sre hack` inside an existing tmux session would fail to create configured windows, or create sessions with wrong window layouts.
+
+**Root Cause:** The `TMUX` environment variable (set by tmux itself) was being bound to Viper's `tmux` config key, overwriting the user's tmux window configuration with the socket path string.
+
+**Fix:** Environment variables now require the `SRE_` prefix, preventing pollution from unrelated environment variables like `TMUX`, `TERM`, `PATH`, etc.
+
+## Test Improvements
+
+- **Clone URL parsing tests** now call `git.ParseGitHubURL` directly instead of `runCloneCommand`, eliminating network dependencies and improving reliability
+- **New integration test** `TestCreateSession_CreatesAllWindows` verifies tmux sessions are created with all configured windows, catching window creation regressions
+
+## Developer Experience
+
+- **Removed `go-test` hook** from pre-commit configuration — tests no longer run on every commit, significantly speeding up local development iteration
+- Pre-commit still runs `go-vet` and `go-build` to catch obvious issues
+- Full test suite runs in CI before merge
+
+## Verification
+
+All releases are signed with [keyless Sigstore](https://www.sigstore.dev/). Verify the checksums file signature:
+
+```bash
+# Download checksums and signature
+curl -LO https://github.com/thoreinstein/sre/releases/download/v0.4.0/checksums.txt
+curl -LO https://github.com/thoreinstein/sre/releases/download/v0.4.0/checksums.txt.sig
+curl -LO https://github.com/thoreinstein/sre/releases/download/v0.4.0/checksums.txt.bundle
+
+# Verify signature
+cosign verify-blob \
+  --bundle checksums.txt.bundle \
+  --certificate-identity 'https://github.com/thoreinstein/sre/.github/workflows/release.yml@refs/tags/v0.4.0' \
+  --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+  checksums.txt
+
+# Verify your download against checksums
+sha256sum --check checksums.txt --ignore-missing
+```
+
+## Rollback
+
+If you need to revert to v0.3.0:
+
+```bash
+# Homebrew
+brew uninstall sre
+brew install thoreinstein/tap/sre@0.3.0
+
+# Manual
+curl -LO https://github.com/thoreinstein/sre/releases/download/v0.3.0/sre_0.3.0_darwin_arm64.tar.gz
+tar -xzf sre_0.3.0_darwin_arm64.tar.gz
+mv sre /usr/local/bin/
+```
+
+**After rollback:** Revert environment variable changes (`SRE_NOTES_PATH` → `NOTES_PATH`) if you updated them for v0.4.0. Note that the tmux configuration corruption bug will return if you run `sre` commands inside tmux sessions.
+
 # Release Notes: v0.3.0
 
 ## Overview
