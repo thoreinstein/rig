@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -470,6 +471,72 @@ func TestValidateCommandsDefault(t *testing.T) {
 	}
 	if !sm.WarnOnCommand {
 		t.Error("WarnOnCommand should be true by default")
+	}
+}
+
+// TestCreateSession_CreatesAllWindows verifies that CreateSession creates all configured windows
+func TestCreateSession_CreatesAllWindows(t *testing.T) {
+	// Skip if tmux is not available
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("tmux not found in PATH, skipping integration test")
+	}
+
+	// Create a temporary worktree directory
+	tmpDir := t.TempDir()
+
+	// Configure 3 windows like the default config
+	windows := []WindowConfig{
+		{Name: "note", WorkingDir: "{worktree_path}"},
+		{Name: "code", WorkingDir: "{worktree_path}"},
+		{Name: "term", WorkingDir: "{worktree_path}"},
+	}
+
+	sm := NewTestSessionManager("test-", windows)
+	sessionName := sm.GetSessionName("window-test")
+
+	// Clean up any existing session first
+	_ = exec.Command("tmux", "-L", TestSocketName, "kill-session", "-t", sessionName).Run()
+
+	// We need to test createWindows directly since CreateSession tries to attach
+	// First create the initial session
+	cmd := exec.Command("tmux", "-L", TestSocketName, "new-session", "-d", "-s", sessionName, "-c", tmpDir)
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("Failed to create test session: %v", err)
+	}
+
+	// Clean up session when done
+	defer func() {
+		_ = exec.Command("tmux", "-L", TestSocketName, "kill-session", "-t", sessionName).Run()
+	}()
+
+	// Now call createWindows to add the configured windows
+	err := sm.createWindows(sessionName, tmpDir, "")
+	if err != nil {
+		t.Fatalf("createWindows failed: %v", err)
+	}
+
+	// Verify window count using tmux list-windows
+	listCmd := exec.Command("tmux", "-L", TestSocketName, "list-windows", "-t", sessionName, "-F", "#{window_name}")
+	output, err := listCmd.Output()
+	if err != nil {
+		t.Fatalf("list-windows failed: %v", err)
+	}
+
+	windowNames := strings.Split(strings.TrimSpace(string(output)), "\n")
+	if len(windowNames) != 3 {
+		t.Errorf("Expected 3 windows, got %d: %v", len(windowNames), windowNames)
+	}
+
+	// Verify window names match
+	expectedNames := []string{"note", "code", "term"}
+	for i, expected := range expectedNames {
+		if i >= len(windowNames) {
+			t.Errorf("Missing window %d: expected %q", i, expected)
+			continue
+		}
+		if windowNames[i] != expected {
+			t.Errorf("Window %d name = %q, want %q", i, windowNames[i], expected)
+		}
 	}
 }
 

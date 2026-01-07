@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/spf13/viper"
+
+	"thoreinstein.com/sre/pkg/git"
 )
 
 func TestCloneCommandArgs(t *testing.T) {
@@ -165,40 +167,53 @@ func TestRunCloneCommand_ValidURL_Integration(t *testing.T) {
 	// Clean up temp worktree
 	os.RemoveAll(tempWorktree)
 
-	// Now test cloning using local path (simulating HTTPS clone behavior)
-	// Since we can't easily test actual GitHub URLs without network,
-	// we verify URL parsing works correctly
+	// Test URL parsing only - no network operations
 	t.Run("SSH URL parsing", func(t *testing.T) {
-		// This only tests URL parsing, not actual clone
-		err := runCloneCommand("git@github.com:test-owner/test-repo.git")
-		// We expect this to fail (can't reach github.com), but it should get past URL parsing
-		if err == nil {
-			t.Error("Expected error (can't reach github.com)")
+		url, err := git.ParseGitHubURL("git@github.com:test-owner/test-repo.git")
+		if err != nil {
+			t.Fatalf("ParseGitHubURL failed for valid SSH URL: %v", err)
 		}
-		// It should NOT fail with "invalid GitHub URL"
-		if strings.Contains(err.Error(), "invalid GitHub URL") {
-			t.Error("URL parsing should succeed for valid SSH URL")
+		if url.Protocol != "ssh" {
+			t.Errorf("Protocol = %q, want %q", url.Protocol, "ssh")
+		}
+		if url.Owner != "test-owner" {
+			t.Errorf("Owner = %q, want %q", url.Owner, "test-owner")
+		}
+		if url.Repo != "test-repo" {
+			t.Errorf("Repo = %q, want %q", url.Repo, "test-repo")
 		}
 	})
 
 	t.Run("HTTPS URL parsing", func(t *testing.T) {
-		err := runCloneCommand("https://github.com/test-owner/test-repo")
-		// We expect this to fail (can't reach github.com), but it should get past URL parsing
-		if err == nil {
-			t.Error("Expected error (can't reach github.com)")
+		url, err := git.ParseGitHubURL("https://github.com/test-owner/test-repo")
+		if err != nil {
+			t.Fatalf("ParseGitHubURL failed for valid HTTPS URL: %v", err)
 		}
-		if strings.Contains(err.Error(), "invalid GitHub URL") {
-			t.Error("URL parsing should succeed for valid HTTPS URL")
+		if url.Protocol != "https" {
+			t.Errorf("Protocol = %q, want %q", url.Protocol, "https")
+		}
+		if url.Owner != "test-owner" {
+			t.Errorf("Owner = %q, want %q", url.Owner, "test-owner")
+		}
+		if url.Repo != "test-repo" {
+			t.Errorf("Repo = %q, want %q", url.Repo, "test-repo")
 		}
 	})
 
 	t.Run("Shorthand URL parsing", func(t *testing.T) {
-		err := runCloneCommand("github.com/test-owner/test-repo")
-		if err == nil {
-			t.Error("Expected error (can't reach github.com)")
+		url, err := git.ParseGitHubURL("github.com/test-owner/test-repo")
+		if err != nil {
+			t.Fatalf("ParseGitHubURL failed for valid shorthand URL: %v", err)
 		}
-		if strings.Contains(err.Error(), "invalid GitHub URL") {
-			t.Error("URL parsing should succeed for valid shorthand URL")
+		// Shorthand defaults to SSH
+		if url.Protocol != "ssh" {
+			t.Errorf("Protocol = %q, want %q", url.Protocol, "ssh")
+		}
+		if url.Owner != "test-owner" {
+			t.Errorf("Owner = %q, want %q", url.Owner, "test-owner")
+		}
+		if url.Repo != "test-repo" {
+			t.Errorf("Repo = %q, want %q", url.Repo, "test-repo")
 		}
 	})
 }
