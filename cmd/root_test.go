@@ -491,3 +491,66 @@ key = "toml_value"
 }
 
 // Note: containsSubstring helper is already defined in work_test.go
+
+func TestInitConfig_TMUXEnvVarDoesNotOverrideConfig(t *testing.T) {
+	// Set TMUX like tmux itself does (socket path, pid, session index)
+	// t.Setenv automatically restores the original value after the test
+	t.Setenv("TMUX", "/private/tmp/tmux-502/default,12345,0")
+
+	tmpDir := t.TempDir()
+
+	// Create config directory with tmux config that has windows defined
+	configDir := filepath.Join(tmpDir, ".config", "sre")
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		t.Fatalf("Failed to create config dir: %v", err)
+	}
+
+	// Config with explicitly defined tmux windows
+	configContent := `[notes]
+path = "/test/notes"
+
+[tmux]
+session_prefix = "test"
+
+[[tmux.windows]]
+name = "editor"
+command = "nvim"
+
+[[tmux.windows]]
+name = "shell"
+`
+	configPath := filepath.Join(configDir, "config.toml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0600); err != nil {
+		t.Fatalf("Failed to write config: %v", err)
+	}
+
+	viper.Reset()
+	defer viper.Reset()
+
+	t.Setenv("HOME", tmpDir)
+
+	oldCfgFile := cfgFile
+	cfgFile = ""
+	defer func() { cfgFile = oldCfgFile }()
+
+	initConfig()
+
+	// With the SRE_ prefix, plain TMUX env var should not interfere
+	// Verify the tmux config section is properly loaded
+	windows := viper.Get("tmux.windows")
+	if windows == nil {
+		t.Error("TMUX env var overwrote tmux config - windows is nil")
+	}
+
+	// Check via viper.GetString to see if TMUX env var leaked through
+	tmuxVal := viper.GetString("tmux")
+	if strings.Contains(tmuxVal, "/private/tmp") || strings.Contains(tmuxVal, "tmux-502") {
+		t.Errorf("TMUX env var leaked into config: tmux=%q", tmuxVal)
+	}
+
+	// Also verify the session_prefix is correct
+	prefix := viper.GetString("tmux.session_prefix")
+	if prefix != "test" {
+		t.Errorf("tmux.session_prefix = %q, want %q", prefix, "test")
+	}
+}

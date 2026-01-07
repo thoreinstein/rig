@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -64,7 +65,9 @@ func initConfig() {
 		viper.SetConfigName("config")
 	}
 
-	viper.AutomaticEnv() // read in environment variables that match
+	viper.SetEnvPrefix("SRE")                              // Only bind SRE_* environment variables
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_")) // SRE_NOTES_PATH -> notes.path
+	viper.AutomaticEnv()                                   // read in environment variables that match
 
 	// If a config file is found, read it in.
 	if err := viper.ReadInConfig(); err == nil && verbose {
