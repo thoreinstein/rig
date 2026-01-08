@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- a8fd2cb: **BREAKING**: Environment variables now require `SRE_` prefix to prevent config pollution from system variables like `TMUX`
+- a8fd2cb: **BREAKING**: Environment variables now require `RIG_` prefix to prevent config pollution from system variables like `TMUX`
 
 ### Fixed
 
@@ -52,7 +52,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- c61089f: **BREAKING**: Rename 'sre init' command to 'sre work'
+- c61089f: **BREAKING**: Rename 'init' command to 'rig work'
 
 ### Tests
 
@@ -126,8 +126,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - bc72a00: Bump golangci/golangci-lint-action from 6 to 9
 - bbc29e2: Bump golangci/golangci-lint-action from 6 to 9
 
-[0.4.1]: https://github.com/thoreinstein/sre/compare/v0.4.0...v0.4.1
-[0.4.0]: https://github.com/thoreinstein/sre/compare/v0.3.0...v0.4.0
-[0.3.0]: https://github.com/thoreinstein/sre/compare/v0.2.0...v0.3.0
-[0.2.0]: https://github.com/thoreinstein/sre/compare/v0.1.0...v0.2.0
-[0.1.0]: https://github.com/thoreinstein/sre/releases/tag/v0.1.0
+[0.4.1]: https://github.com/thoreinstein/rig/compare/v0.4.0...v0.4.1
+[0.4.0]: https://github.com/thoreinstein/rig/compare/v0.3.0...v0.4.0
+[0.3.0]: https://github.com/thoreinstein/rig/compare/v0.2.0...v0.3.0
+[0.2.0]: https://github.com/thoreinstein/rig/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/thoreinstein/rig/releases/tag/v0.1.0
