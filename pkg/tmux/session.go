@@ -66,7 +66,7 @@ func NewSessionManager(sessionPrefix string, windows []WindowConfig, verbose boo
 		ValidateCommands: true, // Default: validate commands against allowlist
 	}
 	// Use isolated socket for tests (set by TestMain via SetupTestSocket)
-	if socketName := os.Getenv("SRE_TEST_TMUX_SOCKET"); socketName != "" {
+	if socketName := os.Getenv("RIG_TEST_TMUX_SOCKET"); socketName != "" {
 		sm.SocketName = socketName
 	}
 	return sm
@@ -328,8 +328,8 @@ func (sm *SessionManager) isCommandAllowed(command string) bool {
 // setEnvironmentVars sets environment variables for the tmux session
 func (sm *SessionManager) setEnvironmentVars(sessionName, ticket, worktreePath string) error {
 	vars := map[string]string{
-		"SRE_TICKET":   ticket,
-		"SRE_WORKTREE": worktreePath,
+		"RIG_TICKET":   ticket,
+		"RIG_WORKTREE": worktreePath,
 	}
 
 	for key, value := range vars {

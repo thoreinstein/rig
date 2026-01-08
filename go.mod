@@ -1,4 +1,4 @@
-module thoreinstein.com/sre
+module thoreinstein.com/rig
 
 go 1.25.5
 

@@ -15,8 +15,8 @@ func TestRootCommandStructure(t *testing.T) {
 	// Not parallel - accesses global rootCmd
 	cmd := rootCmd
 
-	if cmd.Use != "sre" {
-		t.Errorf("root command Use = %q, want %q", cmd.Use, "sre")
+	if cmd.Use != "rig" {
+		t.Errorf("root command Use = %q, want %q", cmd.Use, "rig")
 	}
 
 	if cmd.Short == "" {
@@ -28,7 +28,7 @@ func TestRootCommandStructure(t *testing.T) {
 	}
 
 	// Verify key information is in the description
-	expectedKeywords := []string{"SRE", "workflow", "automation"}
+	expectedKeywords := []string{"Rig", "workflow", "automation"}
 	for _, keyword := range expectedKeywords {
 		if !strings.Contains(cmd.Long, keyword) {
 			t.Errorf("root command Long description should mention %q", keyword)
@@ -53,7 +53,7 @@ func TestRootCommandPersistentFlags(t *testing.T) {
 			t.Error("--config flag should have usage description")
 		}
 		// Verify usage mentions default location
-		if !strings.Contains(configFlag.Usage, "$HOME/.config/sre") {
+		if !strings.Contains(configFlag.Usage, "$HOME/.config/rig") {
 			t.Error("--config usage should mention default config location")
 		}
 	}
@@ -145,7 +145,7 @@ func TestInitConfig_WithDefaultLocation(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create config directory and file in default location
-	configDir := filepath.Join(tmpDir, ".config", "sre")
+	configDir := filepath.Join(tmpDir, ".config", "rig")
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		t.Fatalf("Failed to create config dir: %v", err)
 	}
@@ -242,7 +242,7 @@ func TestInitConfig_VerboseOutput(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create config directory and file
-	configDir := filepath.Join(tmpDir, ".config", "sre")
+	configDir := filepath.Join(tmpDir, ".config", "rig")
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		t.Fatalf("Failed to create config dir: %v", err)
 	}
@@ -301,7 +301,7 @@ func TestInitConfig_NonVerboseNoOutput(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create config directory and file
-	configDir := filepath.Join(tmpDir, ".config", "sre")
+	configDir := filepath.Join(tmpDir, ".config", "rig")
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		t.Fatalf("Failed to create config dir: %v", err)
 	}
@@ -402,7 +402,7 @@ func TestInitConfig_ConfigFilePrecedence(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create default config
-	defaultConfigDir := filepath.Join(tmpDir, ".config", "sre")
+	defaultConfigDir := filepath.Join(tmpDir, ".config", "rig")
 	if err := os.MkdirAll(defaultConfigDir, 0755); err != nil {
 		t.Fatalf("Failed to create default config dir: %v", err)
 	}
@@ -466,7 +466,7 @@ func TestInitConfig_ConfigType(t *testing.T) {
 	// Check that viper is configured for toml
 	// We can't directly check the config type, but we can verify
 	// it was set by the behavior with toml files
-	configDir := filepath.Join(tmpDir, ".config", "sre")
+	configDir := filepath.Join(tmpDir, ".config", "rig")
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		t.Fatalf("Failed to create config dir: %v", err)
 	}
@@ -500,7 +500,7 @@ func TestInitConfig_TMUXEnvVarDoesNotOverrideConfig(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create config directory with tmux config that has windows defined
-	configDir := filepath.Join(tmpDir, ".config", "sre")
+	configDir := filepath.Join(tmpDir, ".config", "rig")
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		t.Fatalf("Failed to create config dir: %v", err)
 	}
@@ -535,7 +535,7 @@ name = "shell"
 
 	initConfig()
 
-	// With the SRE_ prefix, plain TMUX env var should not interfere
+	// With the RIG_ prefix, plain TMUX env var should not interfere
 	// Verify the tmux config section is properly loaded
 	windows := viper.Get("tmux.windows")
 	if windows == nil {

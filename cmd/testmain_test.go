@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"thoreinstein.com/sre/pkg/tmux"
+	"thoreinstein.com/rig/pkg/tmux"
 )
 
 // TestMain handles test setup and teardown for the cmd package.

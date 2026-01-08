@@ -7,19 +7,18 @@ import (
 
 	"github.com/cockroachdb/errors"
 	"github.com/spf13/cobra"
-
-	"thoreinstein.com/sre/pkg/config"
-	"thoreinstein.com/sre/pkg/git"
-	"thoreinstein.com/sre/pkg/jira"
-	"thoreinstein.com/sre/pkg/notes"
-	"thoreinstein.com/sre/pkg/tmux"
+	"thoreinstein.com/rig/pkg/config"
+	"thoreinstein.com/rig/pkg/git"
+	"thoreinstein.com/rig/pkg/jira"
+	"thoreinstein.com/rig/pkg/notes"
+	"thoreinstein.com/rig/pkg/tmux"
 )
 
 // workCmd represents the work command
 var workCmd = &cobra.Command{
 	Use:   "work <ticket>",
-	Short: "Start SRE workflow for a ticket",
-	Long: `Start the complete SRE workflow for a given ticket.
+	Short: "Start workflow for a ticket",
+	Long: `Start the complete workflow for a given ticket.
 
 This command performs the following actions:
 - Parses ticket type and number
@@ -29,9 +28,9 @@ This command performs the following actions:
 - Creates tmux session with configured windows
 
 Examples:
-  sre work proj-123
-  sre work ops-456
-  sre work incident-789`,
+  rig work proj-123
+  rig work ops-456
+  rig work incident-789`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runWorkCommand(args[0])

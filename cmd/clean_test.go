@@ -7,8 +7,7 @@ import (
 	"testing"
 
 	"github.com/spf13/viper"
-
-	"thoreinstein.com/sre/pkg/config"
+	"thoreinstein.com/rig/pkg/config"
 )
 
 func TestIsBranchMerged(t *testing.T) {

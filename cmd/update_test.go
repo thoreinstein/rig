@@ -90,7 +90,7 @@ func TestUpdateCommandDescription(t *testing.T) {
 
 	// Verify examples are included in Long description
 	expectedExamples := []string{
-		"sre update",
+		"rig update",
 		"--check",
 		"--yes",
 		"--force",
@@ -165,9 +165,9 @@ func TestConfirmUpdatePromptFormat(t *testing.T) {
 			// Verify the prompt format logic by reconstructing it
 			var prompt string
 			if tt.currentVersion == "dev" {
-				prompt = "Update sre from dev to " + tt.newVersion + "? [y/N]: "
+				prompt = "Update rig from dev to " + tt.newVersion + "? [y/N]: "
 			} else {
-				prompt = "Update sre from " + tt.currentVersion + " to " + tt.newVersion + "? [y/N]: "
+				prompt = "Update rig from " + tt.currentVersion + " to " + tt.newVersion + "? [y/N]: "
 			}
 
 			if !strings.Contains(prompt, tt.wantContains) {
@@ -354,8 +354,8 @@ func TestRepoConstants(t *testing.T) {
 		t.Errorf("repoOwner = %q, want %q", repoOwner, "thoreinstein")
 	}
 
-	if repoName != "sre" {
-		t.Errorf("repoName = %q, want %q", repoName, "sre")
+	if repoName != "rig" {
+		t.Errorf("repoName = %q, want %q", repoName, "rig")
 	}
 }
 

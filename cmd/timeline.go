@@ -10,10 +10,9 @@ import (
 
 	"github.com/cockroachdb/errors"
 	"github.com/spf13/cobra"
-
-	"thoreinstein.com/sre/pkg/config"
-	"thoreinstein.com/sre/pkg/history"
-	"thoreinstein.com/sre/pkg/notes"
+	"thoreinstein.com/rig/pkg/config"
+	"thoreinstein.com/rig/pkg/history"
+	"thoreinstein.com/rig/pkg/notes"
 )
 
 // timelineCmd represents the timeline command
@@ -27,11 +26,11 @@ related to the specified ticket and generates a formatted timeline that can be
 inserted into the ticket's Obsidian note.
 
 Examples:
-  sre timeline proj-123
-  sre timeline proj-123 --since "2025-08-10 09:00"
-  sre timeline proj-123 --until "2025-08-10 18:00"
-  sre timeline proj-123 --failed-only
-  sre timeline proj-123 --directory /path/to/worktree`,
+  rig timeline proj-123
+  rig timeline proj-123 --since "2025-08-10 09:00"
+  rig timeline proj-123 --until "2025-08-10 18:00"
+  rig timeline proj-123 --failed-only
+  rig timeline proj-123 --directory /path/to/worktree`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runTimelineCommand(args[0])

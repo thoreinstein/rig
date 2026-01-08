@@ -126,7 +126,7 @@ func TestCreateDefaultConfig(t *testing.T) {
 	}
 
 	// Verify config file was created
-	configPath := filepath.Join(tmpDir, ".config", "sre", "config.toml")
+	configPath := filepath.Join(tmpDir, ".config", "rig", "config.toml")
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		t.Errorf("Config file not created at %s", configPath)
 	}
@@ -160,7 +160,7 @@ func TestCreateDefaultConfig_AlreadyExists(t *testing.T) {
 	t.Setenv("HOME", tmpDir)
 
 	// Create config directory and file
-	configDir := filepath.Join(tmpDir, ".config", "sre")
+	configDir := filepath.Join(tmpDir, ".config", "rig")
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		t.Fatalf("Failed to create config dir: %v", err)
 	}
@@ -223,12 +223,12 @@ func TestConfigEditSubcommand(t *testing.T) {
 
 func TestDefaultConfigContent(t *testing.T) {
 	// Verify the default config has all necessary fields (TOML format)
-	defaultConfig := `# SRE CLI Configuration
+	defaultConfig := `# Rig Configuration
 
 [notes]
 path = "~/Documents/Notes"
 daily_dir = "daily"
-template_dir = "~/.config/sre/templates"
+template_dir = "~/.config/rig/templates"
 
 [git]
 # Optional: override auto-detected default branch

@@ -7,10 +7,9 @@ import (
 
 	"github.com/cockroachdb/errors"
 	"github.com/spf13/cobra"
-
-	"thoreinstein.com/sre/pkg/config"
-	"thoreinstein.com/sre/pkg/git"
-	"thoreinstein.com/sre/pkg/tmux"
+	"thoreinstein.com/rig/pkg/config"
+	"thoreinstein.com/rig/pkg/git"
+	"thoreinstein.com/rig/pkg/tmux"
 )
 
 var listWorktrees bool
@@ -25,9 +24,9 @@ var listCmd = &cobra.Command{
 By default, shows both worktrees and sessions. Use flags to filter.
 
 Examples:
-  sre list              # Show both worktrees and sessions
-  sre list --worktrees  # Show only worktrees
-  sre list --sessions   # Show only tmux sessions`,
+  rig list              # Show both worktrees and sessions
+  rig list --worktrees  # Show only worktrees
+  rig list --sessions   # Show only tmux sessions`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runListCommand()
 	},

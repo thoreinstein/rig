@@ -10,10 +10,9 @@ import (
 
 	"github.com/cockroachdb/errors"
 	"github.com/spf13/cobra"
-
-	"thoreinstein.com/sre/pkg/config"
-	"thoreinstein.com/sre/pkg/git"
-	"thoreinstein.com/sre/pkg/tmux"
+	"thoreinstein.com/rig/pkg/config"
+	"thoreinstein.com/rig/pkg/git"
+	"thoreinstein.com/rig/pkg/tmux"
 )
 
 var cleanDryRun bool
@@ -29,9 +28,9 @@ This command identifies worktrees that can be safely removed and offers
 to clean them up. By default, it prompts for confirmation before removing.
 
 Examples:
-  sre clean              # Interactive cleanup with confirmation
-  sre clean --dry-run    # Show what would be removed without removing
-  sre clean --force      # Remove without confirmation`,
+  rig clean              # Interactive cleanup with confirmation
+  rig clean --dry-run    # Show what would be removed without removing
+  rig clean --force      # Remove without confirmation`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runCleanCommand()
 	},
