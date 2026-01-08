@@ -1,3 +1,91 @@
+# Release Notes: v0.4.1
+
+## Overview
+
+This patch release fixes tmux window creation on systems using the default `base-index=0` setting. Previously, window indices were hardcoded to start at 1, causing session creation failures when tmux's default 0-based indexing was in effect. The fix queries and respects the user's configured `base-index` value.
+
+**Release date:** 2026-01-08
+
+## Installation
+
+### Homebrew (recommended)
+
+```bash
+brew upgrade thoreinstein/tap/sre
+# or for fresh install:
+brew install thoreinstein/tap/sre
+```
+
+### Manual Installation
+
+1. Download the appropriate archive from the [releases page](https://github.com/thoreinstein/sre/releases/tag/v0.4.1)
+2. Extract and move to your PATH:
+
+```bash
+tar -xzf sre_0.4.1_darwin_arm64.tar.gz
+mv sre /usr/local/bin/
+```
+
+3. Verify installation:
+
+```bash
+sre version
+```
+
+## Bug Fixes
+
+### Fixed: Tmux Window Indexing Ignores `base-index` Setting
+
+**Symptom:** Running `sre work` or `sre hack` failed to create tmux sessions on systems using the default `base-index=0` configuration.
+
+**Root Cause:** Window indices were hardcoded to start at 1, but tmux defaults to 0-based indexing. Users who hadn't set `base-index=1` in their tmux configuration experienced session creation failures.
+
+**Fix:** Added `getBaseIndex()` method that queries `tmux show-options -g base-index` to respect the user's configured value. The result is cached with `sync.Once` (queried once per SessionManager lifetime) and falls back to 0 (tmux default) on any failure.
+
+**Impact:** Transparent improvement—existing configurations continue to work, and systems using the tmux default now work correctly.
+
+## CI/Test Improvements
+
+- Added tmux installation to CI workflow to enable tmux integration tests
+
+## Verification
+
+All releases are signed with [keyless Sigstore](https://www.sigstore.dev/). Verify the checksums file signature:
+
+```bash
+# Download checksums and signature
+curl -LO https://github.com/thoreinstein/sre/releases/download/v0.4.1/checksums.txt
+curl -LO https://github.com/thoreinstein/sre/releases/download/v0.4.1/checksums.txt.sig
+curl -LO https://github.com/thoreinstein/sre/releases/download/v0.4.1/checksums.txt.bundle
+
+# Verify signature
+cosign verify-blob \
+  --bundle checksums.txt.bundle \
+  --certificate-identity 'https://github.com/thoreinstein/sre/.github/workflows/release.yml@refs/tags/v0.4.1' \
+  --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+  checksums.txt
+
+# Verify your download against checksums
+sha256sum --check checksums.txt --ignore-missing
+```
+
+## Rollback
+
+If you need to revert to v0.4.0:
+
+```bash
+# Homebrew
+brew uninstall sre
+brew install thoreinstein/tap/sre@0.4.0
+
+# Manual
+curl -LO https://github.com/thoreinstein/sre/releases/download/v0.4.0/sre_0.4.0_darwin_arm64.tar.gz
+tar -xzf sre_0.4.0_darwin_arm64.tar.gz
+mv sre /usr/local/bin/
+```
+
+**Note:** After rollback, tmux session creation will fail on systems using `base-index=0`. As a workaround, add `set-option -g base-index 1` to your `~/.tmux.conf`.
+
 # Release Notes: v0.4.0
 
 ## Overview
