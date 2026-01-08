@@ -6,7 +6,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/cockroachdb/errors"
 )
@@ -41,6 +43,10 @@ type SessionManager struct {
 	WarnOnCommand    bool   // Warn when executing commands from config
 	ValidateCommands bool   // Validate commands against allowlist
 	SocketName       string // Optional socket name for tmux -L isolation (used in tests)
+
+	// baseIndex caches the tmux base-index option (0 or 1 typically)
+	baseIndex     int
+	baseIndexOnce sync.Once
 }
 
 // WindowConfig represents a tmux window configuration
@@ -73,6 +79,35 @@ func (sm *SessionManager) tmuxCmd(args ...string) *exec.Cmd {
 		args = append([]string{"-L", sm.SocketName}, args...)
 	}
 	return exec.Command("tmux", args...)
+}
+
+// getBaseIndex returns the tmux base-index option value (typically 0 or 1).
+// The value is queried once and cached for the lifetime of the SessionManager.
+// If the query fails, defaults to 0 (tmux's default).
+func (sm *SessionManager) getBaseIndex() int {
+	sm.baseIndexOnce.Do(func() {
+		cmd := sm.tmuxCmd("show-options", "-g", "base-index")
+		output, err := cmd.Output()
+		if err != nil {
+			// Default to 0 if query fails (tmux's default)
+			sm.baseIndex = 0
+			return
+		}
+
+		// Parse output format: "base-index N"
+		line := strings.TrimSpace(string(output))
+		parts := strings.Fields(line)
+		if len(parts) >= 2 {
+			if val, err := strconv.Atoi(parts[1]); err == nil {
+				sm.baseIndex = val
+				return
+			}
+		}
+
+		// Default to 0 if parsing fails
+		sm.baseIndex = 0
+	})
+	return sm.baseIndex
 }
 
 // CreateSession creates a new tmux session for a ticket
@@ -115,7 +150,7 @@ func (sm *SessionManager) CreateSession(ticket, worktreePath, notePath string) e
 	}
 
 	// Start on the first window (note)
-	err = sm.selectWindow(sessionName, 1)
+	err = sm.selectWindow(sessionName, sm.getBaseIndex())
 	if err != nil {
 		return errors.Wrap(err, "failed to select first window")
 	}
@@ -170,8 +205,11 @@ func (sm *SessionManager) createInitialSession(sessionName, worktreePath string)
 
 // createWindows creates additional windows based on configuration
 func (sm *SessionManager) createWindows(sessionName, worktreePath, notePath string) error {
+	baseIndex := sm.getBaseIndex()
+
 	for i, window := range sm.Windows {
-		windowTarget := fmt.Sprintf("%s:%d", sessionName, i+1)
+		windowIndex := baseIndex + i
+		windowTarget := fmt.Sprintf("%s:%d", sessionName, windowIndex)
 
 		if i == 0 {
 			// Rename the first window that was created with the session
@@ -186,9 +224,9 @@ func (sm *SessionManager) createWindows(sessionName, worktreePath, notePath stri
 				workingDir = worktreePath
 			}
 
-			err := sm.createWindow(sessionName, i+1, window.Name, workingDir)
+			err := sm.createWindow(sessionName, windowIndex, window.Name, workingDir)
 			if err != nil {
-				return errors.Wrapf(err, "failed to create window %d", i+1)
+				return errors.Wrapf(err, "failed to create window %d", windowIndex)
 			}
 		}
 
