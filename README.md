@@ -1,6 +1,6 @@
 # Rig
 
-A modern, extensible Go CLI tool for Site Reliability Engineering workflow automation. This tool replaces a complex bash script with a maintainable, feature-rich application that integrates with Git worktrees, Tmux sessions, Markdown documentation, and command history tracking.
+A modern, extensible Go CLI tool for developer workflow automation. This tool replaces a complex bash script with a maintainable, feature-rich application that integrates with Git worktrees, Tmux sessions, Markdown documentation, and command history tracking.
 
 ## Features
 
