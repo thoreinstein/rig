@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/spf13/viper"
+
 	"thoreinstein.com/rig/pkg/git"
 )
 

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/spf13/viper"
+
 	"thoreinstein.com/rig/pkg/jira"
 )
 
