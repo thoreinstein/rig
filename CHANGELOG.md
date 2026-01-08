@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2026-01-08
+
+### Fixed
+
+- 96a07c3: Fix tmux window indexing to respect base-index setting
+
+### CI
+
+- cfbb626: Install tmux in CI workflow for integration tests
+
 ## [0.4.0] - 2026-01-07
 
 ### Changed
@@ -116,6 +126,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - bc72a00: Bump golangci/golangci-lint-action from 6 to 9
 - bbc29e2: Bump golangci/golangci-lint-action from 6 to 9
 
+[0.4.1]: https://github.com/thoreinstein/sre/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/thoreinstein/sre/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/thoreinstein/sre/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/thoreinstein/sre/compare/v0.1.0...v0.2.0
