@@ -10,6 +10,7 @@ import (
 
 	"github.com/cockroachdb/errors"
 	"github.com/spf13/cobra"
+
 	"thoreinstein.com/rig/pkg/config"
 	"thoreinstein.com/rig/pkg/history"
 	"thoreinstein.com/rig/pkg/notes"

@@ -8,6 +8,7 @@ import (
 
 	"github.com/cockroachdb/errors"
 	"github.com/spf13/cobra"
+
 	"thoreinstein.com/rig/pkg/config"
 )
 
