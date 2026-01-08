@@ -132,7 +132,7 @@ formatters:
       sections:
         - standard
         - default
-        - prefix(thoreinstein.com/sre)
+        - prefix(thoreinstein.com/rig)
       custom-order: true
   exclusions:
     paths:
