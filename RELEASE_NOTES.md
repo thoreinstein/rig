@@ -1,3 +1,171 @@
+# Release Notes: v0.5.0
+
+## Overview
+
+The "Identity Release" completes the rename from `sre` to `rig`. This release updates the Go module path, binary name, and configuration directory to use the `rig` identity throughout. The name captures what the tool does: it **rigs up** your development environment—wiring together git worktrees, tmux sessions, and documentation into a cohesive workflow.
+
+**Release date:** 2026-01-08
+
+## Installation
+
+### Homebrew (recommended)
+
+```bash
+brew upgrade thoreinstein/tap/rig
+# or for fresh install:
+brew install thoreinstein/tap/rig
+```
+
+### Manual Installation
+
+1. Download the appropriate archive from the [releases page](https://github.com/thoreinstein/rig/releases/tag/v0.5.0)
+2. Extract and move to your PATH:
+
+```bash
+tar -xzf rig_0.5.0_darwin_arm64.tar.gz
+mv rig /usr/local/bin/
+```
+
+3. Verify installation:
+
+```bash
+rig version
+```
+
+## Breaking Changes
+
+### Go Module Path Renamed
+
+The Go module has been renamed from `thoreinstein.com/sre` to `thoreinstein.com/rig`.
+
+| Before (v0.4.x)      | After (v0.5.0)       |
+| -------------------- | -------------------- |
+| `thoreinstein.com/sre` | `thoreinstein.com/rig` |
+
+**Impact:** Users who import this module in Go code must update their import paths.
+
+### Binary Name Changed
+
+The CLI binary has been renamed from `sre` to `rig`.
+
+| Before (v0.4.x) | After (v0.5.0) |
+| --------------- | -------------- |
+| `sre`             | `rig`            |
+
+**Impact:** Scripts, shell aliases, and PATH references that invoke `sre` will break.
+
+### Configuration Directory Moved
+
+The configuration directory has moved to match the new identity.
+
+| Before (v0.4.x) | After (v0.5.0) |
+| --------------- | -------------- |
+| `~/.config/sre/`  | `~/.config/rig/` |
+
+**Impact:** Existing configuration files must be migrated to the new location.
+
+**Note:** Environment variables already use the `RIG_*` prefix (changed in v0.4.0), so no environment variable changes are required for this release.
+
+## Migration Guide
+
+### Step 1: Move Configuration Directory
+
+```bash
+# Move config to new location
+mv ~/.config/sre ~/.config/rig
+
+# Verify configuration is recognized
+rig config list
+```
+
+### Step 2: Update Shell Aliases
+
+Replace references to `sre` with `rig` in your shell configuration:
+
+```bash
+# Check for affected aliases
+grep -E '\bsre\b' ~/.bashrc ~/.zshrc ~/.config/fish/config.fish 2>/dev/null
+
+# Example: Update alias
+# Before:
+alias sw="sre work"
+
+# After:
+alias sw="rig work"
+```
+
+### Step 3: Update Scripts
+
+Replace `sre` with `rig` in any automation scripts:
+
+```bash
+# Find scripts referencing sre
+grep -r '\bsre\b' ~/bin ~/.local/bin /usr/local/bin 2>/dev/null
+
+# Update references
+sed -i 's/\bsre\b/rig/g' ~/bin/my-workflow.sh
+```
+
+### Step 4: Update Go Import Paths (if applicable)
+
+If you import this module in Go code:
+
+```go
+// Before
+import "thoreinstein.com/sre/pkg/git"
+
+// After
+import "thoreinstein.com/rig/pkg/git"
+```
+
+## Other Changes
+
+- **Code style improvements** — Cosmetic lint fixes across 13 command files for consistent formatting
+
+## Verification
+
+All releases are signed with [keyless Sigstore](https://www.sigstore.dev/). Verify the checksums file signature:
+
+```bash
+# Download checksums and signature
+curl -LO https://github.com/thoreinstein/rig/releases/download/v0.5.0/checksums.txt
+curl -LO https://github.com/thoreinstein/rig/releases/download/v0.5.0/checksums.txt.sig
+curl -LO https://github.com/thoreinstein/rig/releases/download/v0.5.0/checksums.txt.bundle
+
+# Verify signature
+cosign verify-blob \
+  --bundle checksums.txt.bundle \
+  --certificate-identity 'https://github.com/thoreinstein/rig/.github/workflows/release.yml@refs/tags/v0.5.0' \
+  --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+  checksums.txt
+
+# Verify your download against checksums
+sha256sum --check checksums.txt --ignore-missing
+```
+
+## Rollback
+
+If you need to revert to v0.4.1:
+
+```bash
+# Homebrew
+brew uninstall rig
+brew install thoreinstein/tap/rig@0.4.1
+
+# Manual
+curl -LO https://github.com/thoreinstein/rig/releases/download/v0.4.1/rig_0.4.1_darwin_arm64.tar.gz
+tar -xzf rig_0.4.1_darwin_arm64.tar.gz
+mv rig /usr/local/bin/
+```
+
+**After rollback:** Move your configuration back to the old location:
+
+```bash
+mv ~/.config/rig ~/.config/sre
+```
+
+Revert any alias or script changes (`rig` → `sre`) if you updated them for v0.5.0.
+
 # Release Notes: v0.4.1
 
 ## Overview

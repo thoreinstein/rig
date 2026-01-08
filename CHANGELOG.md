@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-01-08
+
+### Changed
+
+- 736377b: **BREAKING**: Rename Go module from `thoreinstein.com/sre` to `thoreinstein.com/rig`
+- 736377b: **BREAKING**: Rename binary from `sre` to `rig`
+- 736377b: **BREAKING**: Move config directory from `~/.config/sre/` to `~/.config/rig/`
+- 8226d2f: Update all documentation for rig rename
+- 5bdf61d: Update build configuration (CI, golangci, goreleaser) for rig rename
+
+### Fixed
+
+- bc1cb9e: Fix lint nits across command files
+
 ## [0.4.1] - 2026-01-08
 
 ### Fixed
@@ -126,6 +140,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - bc72a00: Bump golangci/golangci-lint-action from 6 to 9
 - bbc29e2: Bump golangci/golangci-lint-action from 6 to 9
 
+[0.5.0]: https://github.com/thoreinstein/rig/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/thoreinstein/rig/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/thoreinstein/rig/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/thoreinstein/rig/compare/v0.2.0...v0.3.0
