@@ -8,8 +8,7 @@ import (
 	"testing"
 
 	"github.com/spf13/viper"
-
-	"thoreinstein.com/sre/pkg/git"
+	"thoreinstein.com/rig/pkg/git"
 )
 
 func TestCloneCommandArgs(t *testing.T) {
@@ -55,7 +54,7 @@ func TestCloneCommandExamples(t *testing.T) {
 	cmd := cloneCmd
 
 	// Verify examples are present
-	if !strings.Contains(cmd.Long, "sre clone") {
+	if !strings.Contains(cmd.Long, "rig clone") {
 		t.Error("clone command should have examples")
 	}
 }

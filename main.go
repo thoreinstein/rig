@@ -1,7 +1,7 @@
 package main
 
 import (
-	"thoreinstein.com/sre/cmd"
+	"thoreinstein.com/rig/cmd"
 )
 
 func main() {

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"thoreinstein.com/sre/pkg/history"
+	"thoreinstein.com/rig/pkg/history"
 )
 
 func TestTimelineCommandStructure(t *testing.T) {
@@ -36,7 +36,7 @@ func TestTimelineCommandStructure(t *testing.T) {
 	}
 
 	// Verify examples are in the description
-	if !strings.Contains(cmd.Long, "sre timeline") {
+	if !strings.Contains(cmd.Long, "rig timeline") {
 		t.Error("timeline command Long description should contain usage examples")
 	}
 }

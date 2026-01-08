@@ -6,11 +6,10 @@ import (
 
 	"github.com/cockroachdb/errors"
 	"github.com/spf13/cobra"
-
-	"thoreinstein.com/sre/pkg/config"
-	"thoreinstein.com/sre/pkg/git"
-	"thoreinstein.com/sre/pkg/notes"
-	"thoreinstein.com/sre/pkg/tmux"
+	"thoreinstein.com/rig/pkg/config"
+	"thoreinstein.com/rig/pkg/git"
+	"thoreinstein.com/rig/pkg/notes"
+	"thoreinstein.com/rig/pkg/tmux"
 )
 
 var hackNotes bool
@@ -28,8 +27,8 @@ This command creates a simplified workflow without JIRA integration:
 - Creates tmux session
 
 Examples:
-  sre hack winter-2025
-  sre hack experiment-auth --notes`,
+  rig hack winter-2025
+  rig hack experiment-auth --notes`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runHackCommand(args[0])

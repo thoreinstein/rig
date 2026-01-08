@@ -92,7 +92,7 @@ func setDefaults() {
 	// Notes defaults
 	viper.SetDefault("notes.path", filepath.Join(homeDir, "Documents", "Notes"))
 	viper.SetDefault("notes.daily_dir", "daily")
-	viper.SetDefault("notes.template_dir", filepath.Join(homeDir, ".config", "sre", "templates"))
+	viper.SetDefault("notes.template_dir", filepath.Join(homeDir, ".config", "rig", "templates"))
 
 	// Git defaults (empty means auto-detect)
 	viper.SetDefault("git.base_branch", "")

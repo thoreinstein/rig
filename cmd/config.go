@@ -8,15 +8,14 @@ import (
 
 	"github.com/cockroachdb/errors"
 	"github.com/spf13/cobra"
-
-	"thoreinstein.com/sre/pkg/config"
+	"thoreinstein.com/rig/pkg/config"
 )
 
 // configCmd represents the config command
 var configCmd = &cobra.Command{
 	Use:   "config",
-	Short: "Manage SRE CLI configuration",
-	Long: `Display and manage the SRE CLI configuration.
+	Short: "Manage Rig configuration",
+	Long: `Display and manage the Rig configuration.
 
 This command shows the current configuration values and can help with
 initial setup by creating a default configuration file.`,
@@ -27,7 +26,7 @@ initial setup by creating a default configuration file.`,
 var configEditCmd = &cobra.Command{
 	Use:   "edit",
 	Short: "Open configuration file in $EDITOR",
-	Long: `Open the SRE CLI configuration file in your preferred editor.
+	Long: `Open the Rig configuration file in your preferred editor.
 
 Uses $EDITOR environment variable, falls back to $VISUAL, then common editors (vim, vi, nano).`,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -66,7 +65,7 @@ func createDefaultConfig() error {
 		return errors.Wrap(err, "failed to get home directory")
 	}
 
-	configDir := filepath.Join(homeDir, ".config", "sre")
+	configDir := filepath.Join(homeDir, ".config", "rig")
 	configFile := filepath.Join(configDir, "config.toml")
 
 	// Check if config file already exists
@@ -81,12 +80,12 @@ func createDefaultConfig() error {
 	}
 
 	// Default configuration content
-	defaultConfig := `# SRE CLI Configuration
+	defaultConfig := `# Rig Configuration
 
 [notes]
 path = "~/Documents/Notes"
 daily_dir = "daily"
-template_dir = "~/.config/sre/templates"
+template_dir = "~/.config/rig/templates"
 
 [git]
 # Optional: override auto-detected default branch
@@ -124,7 +123,7 @@ working_dir = "{worktree_path}"
 	}
 
 	fmt.Printf("Default configuration created at: %s\n", configFile)
-	fmt.Println("Edit this file to customize your SRE CLI settings.")
+	fmt.Println("Edit this file to customize your Rig settings.")
 
 	return nil
 }
@@ -135,7 +134,7 @@ func showConfig() error {
 		return errors.Wrap(err, "failed to load configuration")
 	}
 
-	fmt.Println("Current SRE CLI Configuration:")
+	fmt.Println("Current Rig Configuration:")
 	fmt.Println("==============================")
 
 	fmt.Printf("Notes Path:          %s\n", cfg.Notes.Path)
@@ -173,7 +172,7 @@ func editConfig() error {
 		return errors.Wrap(err, "failed to get home directory")
 	}
 
-	configFile := filepath.Join(homeDir, ".config", "sre", "config.toml")
+	configFile := filepath.Join(homeDir, ".config", "rig", "config.toml")
 
 	// Create default config if it doesn't exist
 	if _, err := os.Stat(configFile); os.IsNotExist(err) {

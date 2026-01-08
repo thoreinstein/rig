@@ -16,24 +16,24 @@ func TestParseGitHubURL_SSH(t *testing.T) {
 	}{
 		{
 			name:  "SSH with .git suffix",
-			input: "git@github.com:thoreinstein/sre.git",
+			input: "git@github.com:thoreinstein/rig.git",
 			want: &RepoURL{
-				Original:  "git@github.com:thoreinstein/sre.git",
-				Canonical: "git@github.com:thoreinstein/sre.git",
+				Original:  "git@github.com:thoreinstein/rig.git",
+				Canonical: "git@github.com:thoreinstein/rig.git",
 				Protocol:  "ssh",
 				Owner:     "thoreinstein",
-				Repo:      "sre",
+				Repo:      "rig",
 			},
 		},
 		{
 			name:  "SSH without .git suffix",
-			input: "git@github.com:thoreinstein/sre",
+			input: "git@github.com:thoreinstein/rig",
 			want: &RepoURL{
-				Original:  "git@github.com:thoreinstein/sre",
-				Canonical: "git@github.com:thoreinstein/sre.git",
+				Original:  "git@github.com:thoreinstein/rig",
+				Canonical: "git@github.com:thoreinstein/rig.git",
 				Protocol:  "ssh",
 				Owner:     "thoreinstein",
-				Repo:      "sre",
+				Repo:      "rig",
 			},
 		},
 		{
@@ -83,24 +83,24 @@ func TestParseGitHubURL_HTTPS(t *testing.T) {
 	}{
 		{
 			name:  "HTTPS with .git suffix",
-			input: "https://github.com/thoreinstein/sre.git",
+			input: "https://github.com/thoreinstein/rig.git",
 			want: &RepoURL{
-				Original:  "https://github.com/thoreinstein/sre.git",
-				Canonical: "https://github.com/thoreinstein/sre.git",
+				Original:  "https://github.com/thoreinstein/rig.git",
+				Canonical: "https://github.com/thoreinstein/rig.git",
 				Protocol:  "https",
 				Owner:     "thoreinstein",
-				Repo:      "sre",
+				Repo:      "rig",
 			},
 		},
 		{
 			name:  "HTTPS without .git suffix",
-			input: "https://github.com/thoreinstein/sre",
+			input: "https://github.com/thoreinstein/rig",
 			want: &RepoURL{
-				Original:  "https://github.com/thoreinstein/sre",
-				Canonical: "https://github.com/thoreinstein/sre.git",
+				Original:  "https://github.com/thoreinstein/rig",
+				Canonical: "https://github.com/thoreinstein/rig.git",
 				Protocol:  "https",
 				Owner:     "thoreinstein",
-				Repo:      "sre",
+				Repo:      "rig",
 			},
 		},
 		{
@@ -139,13 +139,13 @@ func TestParseGitHubURL_Shorthand(t *testing.T) {
 	}{
 		{
 			name:  "shorthand basic",
-			input: "github.com/thoreinstein/sre",
+			input: "github.com/thoreinstein/rig",
 			want: &RepoURL{
-				Original:  "github.com/thoreinstein/sre",
-				Canonical: "git@github.com:thoreinstein/sre.git",
+				Original:  "github.com/thoreinstein/rig",
+				Canonical: "git@github.com:thoreinstein/rig.git",
 				Protocol:  "ssh",
 				Owner:     "thoreinstein",
-				Repo:      "sre",
+				Repo:      "rig",
 			},
 		},
 		{

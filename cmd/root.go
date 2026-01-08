@@ -14,13 +14,13 @@ var verbose bool
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "sre",
-	Short: "SRE workflow automation CLI",
-	Long: `A Go-based CLI tool for SRE workflow automation that integrates with
+	Use:   "rig",
+	Short: "Rig - developer workflow automation",
+	Long: `Rig is a Go-based CLI tool for developer workflow automation that integrates with
 Git worktrees, Tmux sessions, Obsidian documentation, and command history tracking.
 
-This tool replaces the complex bash script with an extensible, maintainable
-Go application that provides better error handling and scriptability.`,
+This tool provides an extensible, maintainable way to rig up your development
+environment with better error handling and scriptability.`,
 	// Uncomment the following line if your bare application
 	// has an action associated with it:
 	// Run: func(cmd *cobra.Command, args []string) { },
@@ -42,7 +42,7 @@ func init() {
 	// Cobra supports persistent flags, which, if defined here,
 	// will be global for your application.
 
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.config/sre/config.toml)")
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.config/rig/config.toml)")
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "verbose output")
 
 	// Remove the example toggle flag
@@ -59,14 +59,14 @@ func initConfig() {
 		home, err := os.UserHomeDir()
 		cobra.CheckErr(err)
 
-		// Search config in home directory with name ".config/sre" (without extension).
-		viper.AddConfigPath(home + "/.config/sre")
+		// Search config in home directory with name ".config/rig" (without extension).
+		viper.AddConfigPath(home + "/.config/rig")
 		viper.SetConfigType("toml")
 		viper.SetConfigName("config")
 	}
 
-	viper.SetEnvPrefix("SRE")                              // Only bind SRE_* environment variables
-	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_")) // SRE_NOTES_PATH -> notes.path
+	viper.SetEnvPrefix("RIG")                              // Only bind RIG_* environment variables
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_")) // RIG_NOTES_PATH -> notes.path
 	viper.AutomaticEnv()                                   // read in environment variables that match
 
 	// If a config file is found, read it in.

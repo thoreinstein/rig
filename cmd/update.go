@@ -15,7 +15,7 @@ import (
 
 const (
 	repoOwner = "thoreinstein"
-	repoName  = "sre"
+	repoName  = "rig"
 )
 
 var (
@@ -27,8 +27,8 @@ var (
 
 var updateCmd = &cobra.Command{
 	Use:   "update",
-	Short: "Update sre to the latest version",
-	Long: `Check for and install the latest version of sre from GitHub releases.
+	Short: "Update rig to the latest version",
+	Long: `Check for and install the latest version of rig from GitHub releases.
 
 This command connects to GitHub to check for newer releases. If a newer
 version is found, it downloads the appropriate binary for your platform
@@ -38,11 +38,11 @@ The update process validates the download using checksums to ensure
 integrity before replacing the binary.
 
 Examples:
-  sre update           # Check and update (with confirmation)
-  sre update --check   # Only check for updates, don't install
-  sre update --yes     # Update without confirmation prompt
-  sre update --force   # Force reinstall even if on latest version
-  sre update --pre     # Include pre-release versions`,
+  rig update           # Check and update (with confirmation)
+  rig update --check   # Only check for updates, don't install
+  rig update --yes     # Update without confirmation prompt
+  rig update --force   # Force reinstall even if on latest version
+  rig update --pre     # Include pre-release versions`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runUpdateCommand(cmd.Context())
 	},
@@ -164,9 +164,9 @@ func runUpdateCommand(ctx context.Context) error {
 func confirmUpdate(currentVersion, newVersion string) bool {
 	var prompt string
 	if currentVersion == "dev" {
-		prompt = fmt.Sprintf("Update sre from dev to %s? [y/N]: ", newVersion)
+		prompt = fmt.Sprintf("Update rig from dev to %s? [y/N]: ", newVersion)
 	} else {
-		prompt = fmt.Sprintf("Update sre from %s to %s? [y/N]: ", currentVersion, newVersion)
+		prompt = fmt.Sprintf("Update rig from %s to %s? [y/N]: ", currentVersion, newVersion)
 	}
 
 	fmt.Print(prompt)

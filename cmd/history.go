@@ -6,9 +6,8 @@ import (
 
 	"github.com/cockroachdb/errors"
 	"github.com/spf13/cobra"
-
-	"thoreinstein.com/sre/pkg/config"
-	"thoreinstein.com/sre/pkg/history"
+	"thoreinstein.com/rig/pkg/config"
+	"thoreinstein.com/rig/pkg/history"
 )
 
 // historyCmd represents the history command
@@ -28,11 +27,11 @@ var historyQueryCmd = &cobra.Command{
 	Long: `Query the command history database with optional filters.
 
 Examples:
-  sre history query                     # List recent commands
-  sre history query "git"               # Search for commands containing "git"
-  sre history query --since "2025-08-10"
-  sre history query --directory /path/to/dir
-  sre history query --failed-only`,
+  rig history query                     # List recent commands
+  rig history query "git"               # Search for commands containing "git"
+  rig history query --since "2025-08-10"
+  rig history query --directory /path/to/dir
+  rig history query --failed-only`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		pattern := ""

@@ -8,10 +8,9 @@ import (
 
 	"github.com/cockroachdb/errors"
 	"github.com/spf13/cobra"
-
-	"thoreinstein.com/sre/pkg/config"
-	"thoreinstein.com/sre/pkg/jira"
-	"thoreinstein.com/sre/pkg/notes"
+	"thoreinstein.com/rig/pkg/config"
+	"thoreinstein.com/rig/pkg/jira"
+	"thoreinstein.com/rig/pkg/notes"
 )
 
 // syncCmd represents the sync command
@@ -26,10 +25,10 @@ This command can:
 - Sync multiple tickets at once
 
 Examples:
-  sre sync                    # Interactive mode - prompts for ticket
-  sre sync proj-123           # Sync specific ticket
-  sre sync proj-123 --jira    # Force JIRA refresh
-  sre sync --daily            # Update today's daily note`,
+  rig sync                    # Interactive mode - prompts for ticket
+  rig sync proj-123           # Sync specific ticket
+  rig sync proj-123 --jira    # Force JIRA refresh
+  rig sync --daily            # Update today's daily note`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ticket := ""
@@ -99,7 +98,7 @@ func syncTicketNote(cfg *config.Config, ticket string) error {
 	// Check if note exists
 	if _, err := os.Stat(notePath); os.IsNotExist(err) {
 		fmt.Printf("Note not found: %s\n", notePath)
-		fmt.Println("Use 'sre work' to create the note first.")
+		fmt.Println("Use 'rig work' to create the note first.")
 		return nil
 	}
 
@@ -181,7 +180,7 @@ func syncDailyNote(cfg *config.Config) error {
 
 	if _, err := os.Stat(dailyNotePath); os.IsNotExist(err) {
 		fmt.Printf("Daily note not found: %s\n", dailyNotePath)
-		fmt.Println("Create the daily note first or use 'sre work' to create a ticket.")
+		fmt.Println("Create the daily note first or use 'rig work' to create a ticket.")
 		return nil
 	}
 

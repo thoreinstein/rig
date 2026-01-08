@@ -8,8 +8,7 @@ import (
 	"time"
 
 	"github.com/spf13/viper"
-
-	"thoreinstein.com/sre/pkg/jira"
+	"thoreinstein.com/rig/pkg/jira"
 )
 
 func TestUpdateNoteTitle(t *testing.T) {

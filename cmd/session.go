@@ -6,19 +6,18 @@ import (
 
 	"github.com/cockroachdb/errors"
 	"github.com/spf13/cobra"
-
-	"thoreinstein.com/sre/pkg/config"
-	"thoreinstein.com/sre/pkg/tmux"
+	"thoreinstein.com/rig/pkg/config"
+	"thoreinstein.com/rig/pkg/tmux"
 )
 
 // sessionCmd represents the session command
 var sessionCmd = &cobra.Command{
 	Use:   "session",
 	Short: "Manage tmux sessions",
-	Long: `Manage tmux sessions for SRE workflow tickets.
+	Long: `Manage tmux sessions for workflow tickets.
 
 This command provides subcommands to list, attach, and manage tmux sessions
-created by the SRE workflow.`,
+created by the rig workflow.`,
 }
 
 // sessionListCmd lists all tmux sessions

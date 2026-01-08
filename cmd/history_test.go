@@ -78,7 +78,7 @@ func TestHistoryQueryCommandDescription(t *testing.T) {
 	}
 
 	// Verify examples are in the description
-	if !strings.Contains(cmd.Long, "sre history query") {
+	if !strings.Contains(cmd.Long, "rig history query") {
 		t.Error("history query Long description should contain usage examples")
 	}
 }

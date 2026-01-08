@@ -7,13 +7,13 @@ import (
 
 // TestSocketName is the socket name used for test isolation.
 // Tests run on a separate tmux server that doesn't affect the user's session.
-const TestSocketName = "sre-test"
+const TestSocketName = "rig-test"
 
 // SetupTestSocket configures the test environment to use an isolated tmux socket.
 // Call this in TestMain before running tests. This ensures ALL SessionManagers
 // (including those created by production code) use the test socket.
 func SetupTestSocket() {
-	os.Setenv("SRE_TEST_TMUX_SOCKET", TestSocketName)
+	os.Setenv("RIG_TEST_TMUX_SOCKET", TestSocketName)
 }
 
 // NewTestSessionManager creates a SessionManager configured for test isolation.

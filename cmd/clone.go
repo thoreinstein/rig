@@ -5,9 +5,8 @@ import (
 
 	"github.com/cockroachdb/errors"
 	"github.com/spf13/cobra"
-
-	"thoreinstein.com/sre/pkg/config"
-	"thoreinstein.com/sre/pkg/git"
+	"thoreinstein.com/rig/pkg/config"
+	"thoreinstein.com/rig/pkg/git"
 )
 
 // cloneCmd represents the clone command
@@ -31,9 +30,9 @@ Shorthand URLs (github.com/owner/repo):
   - Interpreted as SSH by default
 
 Examples:
-  sre clone git@github.com:thoreinstein/sre.git
-  sre clone https://github.com/thoreinstein/sre
-  sre clone github.com/owner/repo`,
+  rig clone git@github.com:thoreinstein/rig.git
+  rig clone https://github.com/thoreinstein/rig
+  rig clone github.com/owner/repo`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runCloneCommand(args[0])
@@ -80,7 +79,7 @@ func runCloneCommand(urlInput string) error {
 	fmt.Printf("Repository cloned to: %s\n", repoPath)
 
 	if repoURL.Protocol == "ssh" {
-		fmt.Printf("\nWorktree workflow enabled. Use 'sre hack <name>' from within the repo to create feature worktrees.\n")
+		fmt.Printf("\nWorktree workflow enabled. Use 'rig hack <name>' from within the repo to create feature worktrees.\n")
 	}
 
 	return nil
