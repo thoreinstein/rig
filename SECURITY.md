@@ -18,7 +18,7 @@ Do **not** open a public GitHub issue for security vulnerabilities.
 This CLI tool operates with the following trust assumptions:
 
 1. **Config files are user-controlled and trusted**
-   - `~/.config/sre/config.yaml` is created and maintained by the user
+   - `~/.config/rig/config.yaml` is created and maintained by the user
    - Commands specified in config (e.g., tmux window commands) are executed as the user
    - Defense-in-depth: Command allowlists limit blast radius if config is compromised
 
@@ -46,6 +46,6 @@ This CLI tool operates with the following trust assumptions:
 
 When deploying this tool:
 
-- [ ] Review `~/.config/sre/config.yaml` permissions (should be 0600)
+- [ ] Review `~/.config/rig/config.yaml` permissions (should be 0600)
 - [ ] Verify binary checksum before first run
-- [ ] Keep the tool updated (`sre update`)
+- [ ] Keep the tool updated (`rig update`)

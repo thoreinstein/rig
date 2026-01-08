@@ -1,4 +1,4 @@
-# SRE Workflow CLI
+# Rig
 
 A modern, extensible Go CLI tool for Site Reliability Engineering workflow automation. This tool replaces a complex bash script with a maintainable, feature-rich application that integrates with Git worktrees, Tmux sessions, Markdown documentation, and command history tracking.
 
@@ -15,15 +15,15 @@ A modern, extensible Go CLI tool for Site Reliability Engineering workflow autom
 ### 🛠️ **Powerful CLI Interface**
 
 ```bash
-sre work <ticket>              # Start complete workflow
-sre hack <name>                # Lightweight workflow for non-ticket work
-sre list                       # Show all worktrees and tmux sessions
-sre clean                      # Remove old worktrees and sessions
-sre session list/attach/kill   # Manage tmux sessions
-sre timeline <ticket>          # Export command history timeline
-sre history query [pattern]    # Query command database
-sre sync <ticket>              # Update notes and JIRA info
-sre config --show/--init       # Manage configuration
+rig work <ticket>              # Start complete workflow
+rig hack <name>                # Lightweight workflow for non-ticket work
+rig list                       # Show all worktrees and tmux sessions
+rig clean                      # Remove old worktrees and sessions
+rig session list/attach/kill   # Manage tmux sessions
+rig timeline <ticket>          # Export command history timeline
+rig history query [pattern]    # Query command database
+rig sync <ticket>              # Update notes and JIRA info
+rig config --show/--init       # Manage configuration
 ```
 
 ### 🔧 **Integrations**
@@ -42,23 +42,23 @@ sre config --show/--init       # Manage configuration
 
    ```bash
    git clone <repository-url>
-   cd sre
+   cd rig
    ```
 
 2. **Build the CLI**:
 
    ```bash
    cd main/
-   go build -o sre
+   go build -o rig
    ```
 
 3. **Initialize configuration**:
 
    ```bash
-   ./sre config --init
+   ./rig config --init
    ```
 
-4. **Edit configuration** at `~/.config/sre/config.yaml`:
+4. **Edit configuration** at `~/.config/rig/config.yaml`:
    ```yaml
    vault:
      path: "~/Documents/Second Brain"
@@ -73,7 +73,7 @@ sre config --show/--init       # Manage configuration
 1. **Start working on a ticket**:
 
    ```bash
-   ./sre work proj-123
+   ./rig work proj-123
    ```
 
    This creates:
@@ -85,17 +85,17 @@ sre config --show/--init       # Manage configuration
 2. **Export your work timeline**:
 
    ```bash
-   ./sre timeline proj-123
+   ./rig timeline proj-123
    ```
 
 3. **Sync latest information**:
    ```bash
-   ./sre sync proj-123
+   ./rig sync proj-123
    ```
 
 ## Configuration
 
-The CLI uses TOML configuration at `~/.config/sre/config.toml`:
+The CLI uses TOML configuration at `~/.config/rig/config.toml`:
 
 ### Single Repository Configuration
 
@@ -199,20 +199,20 @@ name = "term"
 working_dir = "{worktree_path}"
 ```
 
-With multi-repo config, `sre work proj-123` routes to `main-repo` while `sre work ops-456` routes to `infra-repo`.
+With multi-repo config, `rig work proj-123` routes to `main-repo` while `rig work ops-456` routes to `infra-repo`.
 
 ## Commands Reference
 
 ### Core Workflow
 
-#### `sre work <ticket>`
+#### `rig work <ticket>`
 
 Start complete workflow for a ticket.
 
 **Example:**
 
 ```bash
-sre work proj-123
+rig work proj-123
 ```
 
 **What it does:**
@@ -223,15 +223,15 @@ sre work proj-123
 - Updates daily note with timestamp
 - Launches tmux session with configured windows
 
-#### `sre hack <name>`
+#### `rig hack <name>`
 
 Lightweight workflow for non-ticket work (experiments, spikes, etc.).
 
 **Example:**
 
 ```bash
-sre hack winter-cleanup
-sre hack --notes experiment-auth
+rig hack winter-cleanup
+rig hack --notes experiment-auth
 ```
 
 **Options:**
@@ -245,7 +245,7 @@ sre hack --notes experiment-auth
 - Skips JIRA integration (no ticket needed)
 - Optionally creates Markdown note with `--notes` flag
 
-#### `sre list`
+#### `rig list`
 
 Show all worktrees and tmux sessions across configured repositories.
 
@@ -254,7 +254,7 @@ Show all worktrees and tmux sessions across configured repositories.
 - `--worktrees` - Show only worktrees
 - `--sessions` - Show only tmux sessions
 
-#### `sre clean`
+#### `rig clean`
 
 Remove old worktrees and associated tmux sessions.
 
@@ -263,7 +263,7 @@ Remove old worktrees and associated tmux sessions.
 - `--dry-run` - Show what would be removed without removing
 - `--force` - Skip confirmation prompts
 
-#### `sre timeline <ticket>`
+#### `rig timeline <ticket>`
 
 Generate and export command timeline to Markdown.
 
@@ -280,28 +280,28 @@ Generate and export command timeline to Markdown.
 **Examples:**
 
 ```bash
-sre timeline proj-123
-sre timeline proj-123 --since "2025-08-10" --failed-only
-sre timeline proj-123 --output /tmp/timeline.md
+rig timeline proj-123
+rig timeline proj-123 --since "2025-08-10" --failed-only
+rig timeline proj-123 --output /tmp/timeline.md
 ```
 
 ### Session Management
 
-#### `sre session list`
+#### `rig session list`
 
 List all active tmux sessions.
 
-#### `sre session attach <ticket>`
+#### `rig session attach <ticket>`
 
 Attach to existing tmux session for a ticket.
 
-#### `sre session kill <ticket>`
+#### `rig session kill <ticket>`
 
 Kill tmux session for a ticket.
 
 ### History Analysis
 
-#### `sre history query [pattern]`
+#### `rig history query [pattern]`
 
 Query command history database.
 
@@ -317,18 +317,18 @@ Query command history database.
 **Examples:**
 
 ```bash
-sre history query "git"
-sre history query --since "2025-08-10" --failed-only
-sre history query --directory "/Users/me/src/myproject"
+rig history query "git"
+rig history query --since "2025-08-10" --failed-only
+rig history query --directory "/Users/me/src/myproject"
 ```
 
-#### `sre history info`
+#### `rig history info`
 
 Show information about the history database.
 
 ### Synchronization
 
-#### `sre sync <ticket>`
+#### `rig sync <ticket>`
 
 Update ticket note with fresh JIRA information and daily notes.
 
@@ -338,17 +338,17 @@ Update ticket note with fresh JIRA information and daily notes.
 - `--daily` - Update today's daily note only
 - `--force` - Force update even if recently modified
 
-#### `sre sync --daily`
+#### `rig sync --daily`
 
 Update today's daily note.
 
 ### Configuration
 
-#### `sre config --show`
+#### `rig config --show`
 
 Display current configuration.
 
-#### `sre config --init`
+#### `rig config --init`
 
 Create default configuration file.
 
@@ -423,7 +423,7 @@ main/
 
 ```bash
 cd main/
-go build -o sre
+go build -o rig
 ```
 
 ### Testing
@@ -471,7 +471,7 @@ go test ./pkg/git/...
 
 ## Migration from Bash Script
 
-This CLI tool replaces the original `sre.sh` bash script with the following improvements:
+This CLI tool replaces the original `rig.sh` bash script with the following improvements:
 
 ### ✅ **Enhanced Features**
 
@@ -526,4 +526,4 @@ For issues and questions:
 
 ---
 
-**Note**: This tool is designed for SRE workflow automation and integrates with multiple external tools. Ensure all prerequisites are installed and configured for full functionality.
+**Note**: This tool is designed for Developer workflow automation and integrates with multiple external tools. Ensure all prerequisites are installed and configured for full functionality.
