@@ -113,7 +113,7 @@ func runWorkCommand(ticket string) error {
 		if verbose {
 			fmt.Println("Fetching JIRA details...")
 		}
-		jiraClient, err := jira.NewClient(cfg.Jira.CliCommand, verbose)
+		jiraClient, err := jira.NewJiraClient(&cfg.Jira, verbose)
 		if err != nil {
 			if verbose {
 				fmt.Printf("Warning: Invalid JIRA CLI command: %v\n", err)

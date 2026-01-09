@@ -121,6 +121,7 @@ ignore_patterns = ["ls", "cd", "pwd", "clear"]
 
 [jira]
 enabled = true
+mode = "acli"  # or "api" - see Jira Configuration section
 cli_command = "acli"
 
 [tmux]
@@ -180,6 +181,7 @@ ignore_patterns = ["ls", "cd", "pwd", "clear"]
 
 [jira]
 enabled = true
+mode = "acli"  # or "api" - see Jira Configuration section
 cli_command = "acli"
 
 [tmux]
@@ -200,6 +202,49 @@ working_dir = "{worktree_path}"
 ```
 
 With multi-repo config, `rig work proj-123` routes to `main-repo` while `rig work ops-456` routes to `infra-repo`.
+
+### Jira Configuration
+
+Rig supports two modes for fetching Jira ticket information: direct API access (recommended) and ACLI (legacy).
+
+#### API Mode (Recommended)
+
+Direct API integration provides faster performance and richer metadata without external dependencies.
+
+1. **Create an API token** at https://id.atlassian.com/manage/api-tokens
+
+2. **Set the token as an environment variable** (preferred):
+   ```bash
+   export JIRA_TOKEN="your-api-token"
+   ```
+
+3. **Configure rig**:
+   ```toml
+   [jira]
+   enabled = true
+   mode = "api"
+   base_url = "https://your-domain.atlassian.net"
+   email = "your-email@example.com"
+   # token can be set via JIRA_TOKEN env var (preferred) or token field
+
+   [jira.custom_fields]
+   story_points = "customfield_10016"
+   ```
+
+   To find your custom field IDs, use the Jira REST API or check your Jira admin settings.
+
+#### ACLI Mode (Legacy)
+
+For users who prefer the Atlassian CLI tool:
+
+```toml
+[jira]
+enabled = true
+mode = "acli"
+cli_command = "acli"  # path to acli binary if not in PATH
+```
+
+Ensure `acli` is installed and configured with your Jira credentials before using this mode.
 
 ## Commands Reference
 
