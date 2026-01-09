@@ -44,8 +44,13 @@ type HistoryConfig struct {
 
 // JiraConfig holds JIRA integration configuration
 type JiraConfig struct {
-	Enabled    bool   `mapstructure:"enabled"`
-	CliCommand string `mapstructure:"cli_command"`
+	Enabled      bool              `mapstructure:"enabled"`
+	Mode         string            `mapstructure:"mode"`          // "api" or "acli"
+	BaseURL      string            `mapstructure:"base_url"`      // e.g., "https://your-domain.atlassian.net"
+	Email        string            `mapstructure:"email"`         // User email for Basic Auth
+	Token        string            `mapstructure:"token"`         // API token (JIRA_TOKEN env var takes precedence)
+	CliCommand   string            `mapstructure:"cli_command"`   // For acli mode
+	CustomFields map[string]string `mapstructure:"custom_fields"` // Map of field name to customfield_ID
 }
 
 // TmuxWindow represents a tmux window configuration
@@ -106,7 +111,12 @@ func setDefaults() {
 
 	// JIRA defaults
 	viper.SetDefault("jira.enabled", true)
+	viper.SetDefault("jira.mode", "api")
+	viper.SetDefault("jira.base_url", "")
+	viper.SetDefault("jira.email", "")
+	viper.SetDefault("jira.token", "")
 	viper.SetDefault("jira.cli_command", "acli")
+	viper.SetDefault("jira.custom_fields", map[string]string{})
 
 	// Tmux defaults
 	viper.SetDefault("tmux.session_prefix", "")

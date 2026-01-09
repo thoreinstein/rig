@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"github.com/cockroachdb/errors"
+
+	"thoreinstein.com/rig/pkg/config"
 )
 
 // validCliCommandPattern validates CLI command names to prevent injection.
@@ -15,38 +17,78 @@ var validCliCommandPattern = regexp.MustCompile(`^[a-zA-Z0-9_\-/]+$`)
 
 // TicketInfo holds JIRA ticket information
 type TicketInfo struct {
-	Type        string
-	Summary     string
-	Status      string
-	Description string
+	Type         string
+	Summary      string
+	Status       string
+	Priority     string
+	Description  string
+	CustomFields map[string]string // Maps friendly field names to their values
 }
 
-// Client handles JIRA integration via CLI tool
-type Client struct {
+// JiraClient defines the interface for JIRA integrations.
+// Implementations include CLIClient (wrapping the ACLI CLI tool) and
+// future API-based clients.
+type JiraClient interface {
+	// IsAvailable checks if the JIRA client is ready to use
+	IsAvailable() bool
+
+	// FetchTicketDetails retrieves ticket information from JIRA
+	FetchTicketDetails(ticket string) (*TicketInfo, error)
+}
+
+// Compile-time check that CLIClient implements JiraClient.
+var _ JiraClient = (*CLIClient)(nil)
+
+// NewJiraClient creates a JiraClient based on the provided configuration.
+// Returns an APIClient when mode is "api", or a CLIClient when mode is "acli" or empty.
+func NewJiraClient(cfg *config.JiraConfig, verbose bool) (JiraClient, error) {
+	if cfg == nil {
+		return nil, errors.New("jira config is required")
+	}
+
+	switch cfg.Mode {
+	case "api":
+		return NewAPIClient(cfg, verbose)
+	case "acli", "":
+		return NewCLIClient(cfg.CliCommand, verbose)
+	default:
+		return nil, errors.Newf("unknown jira mode: %s", cfg.Mode)
+	}
+}
+
+// CLIClient handles JIRA integration via CLI tool (e.g., ACLI)
+type CLIClient struct {
 	CliCommand string
 	Verbose    bool
 }
 
-// NewClient creates a new JIRA client.
+// NewCLIClient creates a new CLI-based JIRA client.
 // Returns an error if the CLI command contains invalid characters.
-func NewClient(cliCommand string, verbose bool) (*Client, error) {
+func NewCLIClient(cliCommand string, verbose bool) (*CLIClient, error) {
 	if !validCliCommandPattern.MatchString(cliCommand) {
 		return nil, errors.Newf("invalid CLI command %q: must contain only alphanumeric characters, hyphens, underscores, or forward slashes", cliCommand)
 	}
-	return &Client{
+	return &CLIClient{
 		CliCommand: cliCommand,
 		Verbose:    verbose,
 	}, nil
 }
 
+// NewClient creates a new JIRA client.
+//
+// Deprecated: Use NewCLIClient or NewJiraClient instead.
+func NewClient(cliCommand string, verbose bool) (*CLIClient, error) {
+	return NewCLIClient(cliCommand, verbose)
+}
+
 // IsAvailable checks if the JIRA CLI command is available
-func (c *Client) IsAvailable() bool {
+func (c *CLIClient) IsAvailable() bool {
 	_, err := exec.LookPath(c.CliCommand)
 	return err == nil
 }
 
 // FetchTicketDetails fetches JIRA ticket details using the CLI
-func (c *Client) FetchTicketDetails(ticket string) (*TicketInfo, error) {
+func (c *CLIClient) FetchTicketDetails(ticket string) (*TicketInfo, error) {
 	if !c.IsAvailable() {
 		if c.Verbose {
 			fmt.Printf("JIRA CLI command '%s' not found, skipping JIRA details fetch\n", c.CliCommand)
@@ -76,7 +118,7 @@ func (c *Client) FetchTicketDetails(ticket string) (*TicketInfo, error) {
 }
 
 // parseJiraOutput parses the output from the JIRA CLI command
-func (c *Client) parseJiraOutput(output string) *TicketInfo {
+func (c *CLIClient) parseJiraOutput(output string) *TicketInfo {
 	jiraInfo := &TicketInfo{}
 
 	lines := strings.Split(output, "\n")
@@ -92,6 +134,8 @@ func (c *Client) parseJiraOutput(output string) *TicketInfo {
 			jiraInfo.Summary = strings.TrimSpace(strings.TrimPrefix(line, "Summary:"))
 		} else if strings.HasPrefix(line, "Status:") {
 			jiraInfo.Status = strings.TrimSpace(strings.TrimPrefix(line, "Status:"))
+		} else if strings.HasPrefix(line, "Priority:") {
+			jiraInfo.Priority = strings.TrimSpace(strings.TrimPrefix(line, "Priority:"))
 		} else if strings.HasPrefix(line, "Description:") {
 			descriptionStarted = true
 			// Don't include the "Description:" line itself
@@ -119,7 +163,7 @@ func (c *Client) parseJiraOutput(output string) *TicketInfo {
 }
 
 // isNewField checks if a line represents a new field in JIRA output
-func (c *Client) isNewField(line string) bool {
+func (c *CLIClient) isNewField(line string) bool {
 	// Match pattern: "FieldName:" at the start of line
 	matched, _ := regexp.MatchString(`^[A-Z][a-zA-Z\s]*:`, line)
 	return matched

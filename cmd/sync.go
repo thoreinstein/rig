@@ -112,7 +112,7 @@ func syncTicketNote(cfg *config.Config, ticket string) error {
 				fmt.Println("Refreshing JIRA information...")
 			}
 
-			jiraClient, err := jira.NewClient(cfg.Jira.CliCommand, verbose)
+			jiraClient, err := jira.NewJiraClient(&cfg.Jira, verbose)
 			if err != nil {
 				if verbose {
 					fmt.Printf("Warning: Invalid JIRA CLI command: %v\n", err)
@@ -312,6 +312,10 @@ func buildJiraDetailsSection(jiraInfo *jira.TicketInfo) string {
 
 	if jiraInfo.Status != "" {
 		section.WriteString(fmt.Sprintf("**Status:** %s\n", jiraInfo.Status))
+	}
+
+	if jiraInfo.Priority != "" {
+		section.WriteString(fmt.Sprintf("**Priority:** %s\n", jiraInfo.Priority))
 	}
 
 	if jiraInfo.Description != "" {
