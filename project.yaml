@@ -1,0 +1,77 @@
+version: "1.0"
+
+project:
+  name: "rig"
+  description: "Developer productivity CLI - tools to streamline workflows and reduce repetitive tasks"
+  repo_type: "single"
+
+vision:
+  purpose: "Streamline developer workflows by making repetitive tasks efficient and consistent"
+  target_users:
+    - "Individual developers"
+    - "SRE teams"
+    - "DevOps engineers"
+    - "Open source community"
+  success_metrics:
+    - "Reduce task completion time for common developer workflows"
+  core_principles:
+    - "Simplicity first - prefer simple, obvious solutions"
+  boundaries:
+    - "No GUI - CLI only"
+    - "No cloud dependency - core features work offline"
+    - "No bloat - single binary, minimal dependencies"
+
+stacks:
+  cli:
+    framework: "cobra"
+    language: "Go"
+    testing:
+      unit: "go testing"
+      commands:
+        test: "go test ./..."
+        lint: "golangci-lint run"
+        build: "go build"
+
+data_governance:
+  auth_provider: "none"
+  database_access: "read-only"
+  naming_conventions:
+    fields: "snake_case"
+    files: "snake_case"
+    directories: "kebab-case"
+    enums: "SCREAMING_SNAKE"
+
+code_governance:
+  linting:
+    mode: "strict"
+    command: "golangci-lint run"
+  testing:
+    min_coverage: 0
+    command: "go test ./..."
+  review:
+    requirement: "optional"
+
+design_system:
+  enabled: false
+
+agents:
+  builtin:
+    - name: "CLI Design Expert"
+      label: "cli-design"
+      prompt_file: ".claude/agents/cli-design.md"
+    - name: "Git Workflow Expert"
+      label: "git-workflow"
+      prompt_file: ".claude/agents/git-workflow.md"
+    - name: "Go Engineer"
+      label: "go-engineer"
+      prompt_file: ".claude/agents/go-engineer.md"
+    - name: "Jira Integration Expert"
+      label: "jira-integration"
+      prompt_file: ".claude/agents/jira-integration.md"
+    - name: "Obsidian Notes Expert"
+      label: "obsidian-notes"
+      prompt_file: ".claude/agents/obsidian-notes.md"
+    - name: "Tmux Expert"
+      label: "tmux-expert"
+      prompt_file: ".claude/agents/tmux-expert.md"
+  custom: []
