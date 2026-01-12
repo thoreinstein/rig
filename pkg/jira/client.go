@@ -26,8 +26,7 @@ type TicketInfo struct {
 }
 
 // JiraClient defines the interface for JIRA integrations.
-// Implementations include CLIClient (wrapping the ACLI CLI tool) and
-// future API-based clients.
+// Current implementations include CLIClient (wrapping the ACLI CLI tool) and APIClient.
 type JiraClient interface {
 	// IsAvailable checks if the JIRA client is ready to use
 	IsAvailable() bool
