@@ -23,7 +23,7 @@ const (
 	maxRetries   = 3
 	baseDelay    = time.Second
 	maxDelay     = 30 * time.Second
-	jitterFactor = 0.4 // ±20% means multiply by 0.8 to 1.2, which is (1 - 0.2) to (1 + 0.2)
+	jitterFactor = 0.4 // jitterFactor = 0.4 produces a multiplier range of [0.8, 1.2], which is ±20% variation around 1.0
 )
 
 // Compile-time interface check
