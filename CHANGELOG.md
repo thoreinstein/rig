@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-01-12
+
+### Added
+
+- a04d09d: Add direct Jira REST API integration with `mode: "api"` configuration
+  - Native Jira Cloud REST API v3 support without external CLI dependencies
+  - Automatic rate limiting with exponential backoff and jitter
+  - Respects `Retry-After` headers from Jira API
+  - `JIRA_TOKEN` environment variable support (takes precedence over config)
+- a216bee: Add custom field support in Jira details section
+  - Configure field mappings via `jira.custom_fields` in config
+  - Supports string, number, object, and array field types
+  - Display custom fields (e.g., story points) in ticket notes
+
+### Changed
+
+- cec5f52: Update README description to reflect developer focus
+- 5f62841, 6aa971e: Refactor Jira client to use factory pattern for mode selection
+
+### Internal
+
+- 3d3dc80: Setup parade project scaffolding
+- 6e2ff44: Update beads issue tracking configuration
+
 ## [0.5.0] - 2026-01-08
 
 ### Changed
@@ -140,6 +164,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - bc72a00: Bump golangci/golangci-lint-action from 6 to 9
 - bbc29e2: Bump golangci/golangci-lint-action from 6 to 9
 
+[0.6.0]: https://github.com/thoreinstein/rig/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/thoreinstein/rig/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/thoreinstein/rig/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/thoreinstein/rig/compare/v0.3.0...v0.4.0

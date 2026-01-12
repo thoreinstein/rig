@@ -1,3 +1,132 @@
+# Release Notes: v0.6.0
+
+## Overview
+
+This release introduces direct Jira REST API integration, enabling native communication with Jira Cloud without requiring external CLI tools. The new API client supports rate limiting, automatic retries, and custom field display while maintaining full backward compatibility with existing CLI-based configurations.
+
+**Release date:** 2026-01-12
+
+## Installation
+
+### Homebrew (recommended)
+
+```bash
+brew upgrade thoreinstein/tap/rig
+# or for fresh install:
+brew install thoreinstein/tap/rig
+```
+
+### Manual Installation
+
+1. Download the appropriate archive from the [releases page](https://github.com/thoreinstein/rig/releases/tag/v0.6.0)
+2. Extract and move to your PATH:
+
+```bash
+tar -xzf rig_0.6.0_darwin_arm64.tar.gz
+mv rig /usr/local/bin/
+```
+
+3. Verify installation:
+
+```bash
+rig version
+```
+
+## Features
+
+### Direct Jira REST API Integration
+
+The new APIClient provides native Jira Cloud REST API v3 support without requiring external CLI dependencies:
+
+- **Authentication**: Basic auth via email and API token (supports `JIRA_TOKEN` environment variable)
+- **Rate Limiting**: Exponential backoff with configurable retries (max 3 retries, ±20% jitter)
+- **Retry-After Support**: Automatically respects Jira's rate limit headers
+- **ADF Parsing**: Native Atlassian Document Format parsing for issue descriptions
+
+### Dual-Mode Architecture
+
+A factory pattern allows seamless selection between implementations:
+
+| Mode       | Implementation     | Use Case                                |
+| ---------- | ------------------ | --------------------------------------- |
+| `api`        | New APIClient      | Direct REST API access, no CLI required |
+| `acli`       | Existing CLIClient | Legacy Atlassian CLI integration        |
+| `""` (empty) | CLIClient          | Backward compatible default             |
+
+### Custom Fields Support
+
+Display custom Jira fields in your notes with configurable field mappings:
+
+- Map friendly names to Jira field IDs
+- Supports strings, numbers, objects, and arrays
+- Configure via `jira.custom_fields` in your config file
+
+## Configuration
+
+### New Configuration Options
+
+```yaml
+jira:
+  enabled: true
+  mode: "api"                                     # "api" or "acli" (default: acli)
+  base_url: "https://your-domain.atlassian.net"   # Required for API mode
+  email: "user@example.com"                       # Required for API mode
+  token: ""                                       # Or use JIRA_TOKEN env var
+  custom_fields:                                  # Map friendly names to field IDs
+    story_points: "customfield_10016"
+    team: "customfield_10001"
+```
+
+### Environment Variables
+
+| Variable   | Description                                 |
+| ---------- | ------------------------------------------- |
+| `JIRA_TOKEN` | Jira API token (alternative to config file) |
+
+### Backward Compatibility
+
+Existing configurations continue to work unchanged:
+
+- Empty or unset `mode` defaults to `acli`
+- All existing CLI-based configurations are fully supported
+- No migration required for current users
+
+## Verification
+
+All releases are signed with [keyless Sigstore](https://www.sigstore.dev/). Verify the checksums file signature:
+
+```bash
+# Download checksums and signature
+curl -LO https://github.com/thoreinstein/rig/releases/download/v0.6.0/checksums.txt
+curl -LO https://github.com/thoreinstein/rig/releases/download/v0.6.0/checksums.txt.sig
+curl -LO https://github.com/thoreinstein/rig/releases/download/v0.6.0/checksums.txt.bundle
+
+# Verify signature
+cosign verify-blob \
+  --bundle checksums.txt.bundle \
+  --certificate-identity 'https://github.com/thoreinstein/rig/.github/workflows/release.yml@refs/tags/v0.6.0' \
+  --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+  checksums.txt
+
+# Verify your download against checksums
+sha256sum --check checksums.txt --ignore-missing
+```
+
+## Rollback
+
+If you need to revert to v0.5.0:
+
+```bash
+# Homebrew
+brew uninstall rig
+brew install thoreinstein/tap/rig@0.5.0
+
+# Manual
+curl -LO https://github.com/thoreinstein/rig/releases/download/v0.5.0/rig_0.5.0_darwin_arm64.tar.gz
+tar -xzf rig_0.5.0_darwin_arm64.tar.gz
+mv rig /usr/local/bin/
+```
+
 # Release Notes: v0.5.0
 
 ## Overview
