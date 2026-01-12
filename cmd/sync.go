@@ -318,6 +318,15 @@ func buildJiraDetailsSection(jiraInfo *jira.TicketInfo) string {
 		section.WriteString(fmt.Sprintf("**Priority:** %s\n", jiraInfo.Priority))
 	}
 
+	// Display custom fields if present
+	if len(jiraInfo.CustomFields) > 0 {
+		for fieldName, fieldValue := range jiraInfo.CustomFields {
+			if fieldValue != "" {
+				section.WriteString(fmt.Sprintf("**%s:** %s\n", fieldName, fieldValue))
+			}
+		}
+	}
+
 	if jiraInfo.Description != "" {
 		section.WriteString("\n**Description:**\n" + jiraInfo.Description)
 	}
