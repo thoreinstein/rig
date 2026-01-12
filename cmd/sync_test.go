@@ -136,6 +136,55 @@ func TestBuildJiraDetailsSection(t *testing.T) {
 				"Line 1\nLine 2\nLine 3",
 			},
 		},
+		{
+			name: "with custom fields",
+			jiraInfo: &jira.TicketInfo{
+				Type:   "Bug",
+				Status: "In Progress",
+				CustomFields: map[string]string{
+					"Story Points": "5",
+					"Sprint":       "Sprint 23",
+				},
+				Description: "Bug with custom fields",
+			},
+			contains: []string{
+				"**Type:** Bug",
+				"**Status:** In Progress",
+				"**Story Points:** 5",
+				"**Sprint:** Sprint 23",
+				"**Description:**",
+				"Bug with custom fields",
+			},
+		},
+		{
+			name: "custom fields only",
+			jiraInfo: &jira.TicketInfo{
+				CustomFields: map[string]string{
+					"Team":     "Platform",
+					"Assignee": "john.doe",
+				},
+			},
+			contains: []string{
+				"**Team:** Platform",
+				"**Assignee:** john.doe",
+			},
+			missing: []string{"**Type:**", "**Status:**", "**Description:**"},
+		},
+		{
+			name: "custom fields with empty values ignored",
+			jiraInfo: &jira.TicketInfo{
+				Type: "Story",
+				CustomFields: map[string]string{
+					"Sprint":     "Sprint 24",
+					"EmptyField": "",
+				},
+			},
+			contains: []string{
+				"**Type:** Story",
+				"**Sprint:** Sprint 24",
+			},
+			missing: []string{"**EmptyField:**"},
+		},
 	}
 
 	for _, tt := range tests {
