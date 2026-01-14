@@ -426,3 +426,212 @@ func extractADFContentText(content *jiraADFContent) string {
 		return strings.Join(parts, "")
 	}
 }
+
+// jiraTransitionsResponse represents the response from the transitions endpoint.
+type jiraTransitionsResponse struct {
+	Transitions []jiraTransition `json:"transitions"`
+}
+
+// jiraTransitionStatus represents a status in the transition response.
+type jiraTransitionStatus struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// jiraTransition represents a single transition in the API response.
+type jiraTransition struct {
+	ID   string               `json:"id"`
+	Name string               `json:"name"`
+	To   jiraTransitionStatus `json:"to"`
+}
+
+// GetTransitions returns the available workflow transitions for a ticket.
+// GET /rest/api/3/issue/{issueKey}/transitions
+func (c *APIClient) GetTransitions(ticket string) ([]Transition, error) {
+	if !c.IsAvailable() {
+		return nil, errors.New("jira API client is not configured")
+	}
+
+	url := fmt.Sprintf("%s/rest/api/3/issue/%s/transitions", c.baseURL, ticket)
+
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to create request")
+	}
+
+	auth := base64.StdEncoding.EncodeToString([]byte(c.email + ":" + c.token))
+	req.Header.Set("Authorization", "Basic "+auth)
+	req.Header.Set("Accept", "application/json")
+
+	if c.verbose {
+		fmt.Printf("Fetching transitions for ticket: %s\n", ticket)
+	}
+
+	resp, err := c.doRequestWithRetry(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to read response body")
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, c.handleHTTPError(resp.StatusCode, body, ticket)
+	}
+
+	var transResp jiraTransitionsResponse
+	if err := json.Unmarshal(body, &transResp); err != nil {
+		return nil, errors.Wrap(err, "failed to parse transitions response")
+	}
+
+	transitions := make([]Transition, len(transResp.Transitions))
+	for i, t := range transResp.Transitions {
+		transitions[i] = Transition{
+			ID:   t.ID,
+			Name: t.Name,
+			To: TransitionStatus{
+				ID:   t.To.ID,
+				Name: t.To.Name,
+			},
+		}
+	}
+
+	if c.verbose {
+		fmt.Printf("Found %d available transitions for %s\n", len(transitions), ticket)
+	}
+
+	return transitions, nil
+}
+
+// jiraTransitionRequest represents the request body for executing a transition.
+type jiraTransitionRequest struct {
+	Transition jiraTransitionID `json:"transition"`
+}
+
+// jiraTransitionID represents the transition ID in the request body.
+type jiraTransitionID struct {
+	ID string `json:"id"`
+}
+
+// TransitionTicket executes a workflow transition by its ID.
+// POST /rest/api/3/issue/{issueKey}/transitions
+// Body: {"transition": {"id": "31"}}
+func (c *APIClient) TransitionTicket(ticket string, transitionID string) error {
+	if !c.IsAvailable() {
+		return errors.New("jira API client is not configured")
+	}
+
+	url := fmt.Sprintf("%s/rest/api/3/issue/%s/transitions", c.baseURL, ticket)
+
+	reqBody := jiraTransitionRequest{
+		Transition: jiraTransitionID{ID: transitionID},
+	}
+	bodyBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		return errors.Wrap(err, "failed to marshal request body")
+	}
+
+	req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(string(bodyBytes)))
+	if err != nil {
+		return errors.Wrap(err, "failed to create request")
+	}
+
+	auth := base64.StdEncoding.EncodeToString([]byte(c.email + ":" + c.token))
+	req.Header.Set("Authorization", "Basic "+auth)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+
+	if c.verbose {
+		fmt.Printf("Transitioning ticket %s with transition ID %s\n", ticket, transitionID)
+	}
+
+	resp, err := c.doRequestWithRetry(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	// 204 No Content is the success response for transitions
+	if resp.StatusCode == http.StatusNoContent {
+		if c.verbose {
+			fmt.Printf("Successfully transitioned ticket %s\n", ticket)
+		}
+		return nil
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return errors.Wrap(err, "failed to read response body")
+	}
+
+	return c.handleTransitionError(resp.StatusCode, body, ticket, transitionID)
+}
+
+// handleTransitionError returns an appropriate error for transition failures.
+func (c *APIClient) handleTransitionError(statusCode int, body []byte, ticket, transitionID string) error {
+	switch statusCode {
+	case http.StatusBadRequest:
+		// Try to extract error details from response
+		var errResp struct {
+			ErrorMessages []string          `json:"errorMessages"`
+			Errors        map[string]string `json:"errors"`
+		}
+		if err := json.Unmarshal(body, &errResp); err == nil {
+			if len(errResp.ErrorMessages) > 0 {
+				return errors.Newf("invalid transition %s for ticket %s: %s", transitionID, ticket, strings.Join(errResp.ErrorMessages, "; "))
+			}
+			if len(errResp.Errors) > 0 {
+				var errs []string
+				for field, msg := range errResp.Errors {
+					errs = append(errs, fmt.Sprintf("%s: %s", field, msg))
+				}
+				return errors.Newf("invalid transition %s for ticket %s: %s", transitionID, ticket, strings.Join(errs, "; "))
+			}
+		}
+		return errors.Newf("invalid transition %s for ticket %s (HTTP 400)", transitionID, ticket)
+	case http.StatusNotFound:
+		return errors.Newf("ticket %s not found (HTTP 404)", ticket)
+	default:
+		return c.handleHTTPError(statusCode, body, ticket)
+	}
+}
+
+// TransitionTicketByName finds a transition by status name and executes it.
+// It performs a case-insensitive match on the transition name or target status name.
+func (c *APIClient) TransitionTicketByName(ticket string, statusName string) error {
+	transitions, err := c.GetTransitions(ticket)
+	if err != nil {
+		return errors.Wrap(err, "failed to get available transitions")
+	}
+
+	statusLower := strings.ToLower(statusName)
+	var matchedTransition *Transition
+
+	for i := range transitions {
+		t := &transitions[i]
+		// Match on transition name or target status name (case-insensitive)
+		if strings.ToLower(t.Name) == statusLower || strings.ToLower(t.To.Name) == statusLower {
+			matchedTransition = t
+			break
+		}
+	}
+
+	if matchedTransition == nil {
+		available := make([]string, len(transitions))
+		for i, t := range transitions {
+			available[i] = fmt.Sprintf("%s -> %s", t.Name, t.To.Name)
+		}
+		return errors.Newf("transition to %q not found for ticket %s; available: [%s]",
+			statusName, ticket, strings.Join(available, ", "))
+	}
+
+	if c.verbose {
+		fmt.Printf("Found transition %q (ID: %s) -> %s for ticket %s\n",
+			matchedTransition.Name, matchedTransition.ID, matchedTransition.To.Name, ticket)
+	}
+
+	return c.TransitionTicket(ticket, matchedTransition.ID)
+}

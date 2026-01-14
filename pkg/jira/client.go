@@ -25,6 +25,19 @@ type TicketInfo struct {
 	CustomFields map[string]string // Maps friendly field names to their values
 }
 
+// Transition represents an available workflow transition for a ticket.
+type Transition struct {
+	ID   string
+	Name string
+	To   TransitionStatus
+}
+
+// TransitionStatus represents the target status of a transition.
+type TransitionStatus struct {
+	ID   string
+	Name string
+}
+
 // JiraClient defines the interface for JIRA integrations.
 // Current implementations include CLIClient (wrapping the ACLI CLI tool) and APIClient.
 type JiraClient interface {
@@ -33,6 +46,16 @@ type JiraClient interface {
 
 	// FetchTicketDetails retrieves ticket information from JIRA
 	FetchTicketDetails(ticket string) (*TicketInfo, error)
+
+	// GetTransitions returns the available workflow transitions for a ticket.
+	GetTransitions(ticket string) ([]Transition, error)
+
+	// TransitionTicket executes a workflow transition by its ID.
+	TransitionTicket(ticket string, transitionID string) error
+
+	// TransitionTicketByName finds a transition by status name and executes it.
+	// This is a convenience method that calls GetTransitions then TransitionTicket.
+	TransitionTicketByName(ticket string, statusName string) error
 }
 
 // Compile-time check that CLIClient implements JiraClient.
@@ -166,4 +189,22 @@ func (c *CLIClient) isNewField(line string) bool {
 	// Match pattern: "FieldName:" at the start of line
 	matched, _ := regexp.MatchString(`^[A-Z][a-zA-Z\s]*:`, line)
 	return matched
+}
+
+// GetTransitions returns an error as CLI-based transitions are not implemented.
+// The ACLI tool does not provide a straightforward way to query available transitions.
+func (c *CLIClient) GetTransitions(ticket string) ([]Transition, error) {
+	return nil, errors.New("GetTransitions not implemented for CLI client")
+}
+
+// TransitionTicket returns an error as CLI-based transitions are not implemented.
+// The ACLI tool does not provide a straightforward way to execute transitions.
+func (c *CLIClient) TransitionTicket(ticket string, transitionID string) error {
+	return errors.New("TransitionTicket not implemented for CLI client")
+}
+
+// TransitionTicketByName returns an error as CLI-based transitions are not implemented.
+// The ACLI tool does not provide a straightforward way to execute transitions.
+func (c *CLIClient) TransitionTicketByName(ticket string, statusName string) error {
+	return errors.New("TransitionTicketByName not implemented for CLI client")
 }
