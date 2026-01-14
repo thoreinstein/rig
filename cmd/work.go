@@ -15,6 +15,8 @@ import (
 	"thoreinstein.com/rig/pkg/tmux"
 )
 
+var workNoNotes bool
+
 // workCmd represents the work command
 var workCmd = &cobra.Command{
 	Use:   "work <ticket>",
@@ -24,14 +26,14 @@ var workCmd = &cobra.Command{
 This command performs the following actions:
 - Parses ticket type and number
 - Creates git worktree and branch
-- Creates/updates markdown note with JIRA integration
+- Creates/updates markdown note with JIRA integration (use --no-notes to skip)
 - Updates daily note with log entry
 - Creates tmux session with configured windows
 
 Examples:
   rig work proj-123
   rig work ops-456
-  rig work incident-789`,
+  rig work incident-789 --no-notes`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runWorkCommand(args[0])
@@ -40,6 +42,8 @@ Examples:
 
 func init() {
 	rootCmd.AddCommand(workCmd)
+
+	workCmd.Flags().BoolVar(&workNoNotes, "no-notes", false, "Skip creating markdown note and note-related tmux window commands")
 }
 
 // TicketInfo holds parsed ticket information
@@ -133,10 +137,7 @@ func runWorkCommand(ticket string) error {
 		}
 	}
 
-	// Step 3: Create/update note
-	if verbose {
-		fmt.Println("Creating note...")
-	}
+	// Step 3: Create/update note (unless --no-notes flag is set)
 	noteManager := notes.NewManager(
 		cfg.Notes.Path,
 		cfg.Notes.DailyDir,
@@ -144,27 +145,34 @@ func runWorkCommand(ticket string) error {
 		verbose,
 	)
 
-	// Build ticket data for template
-	noteData := notes.TicketData{
-		Ticket:       ticketInfo.Full,
-		TicketType:   ticketInfo.Type,
-		RepoName:     repoName,
-		RepoPath:     repoRoot,
-		WorktreePath: worktreePath,
-	}
+	var notePath string
+	if !workNoNotes {
+		if verbose {
+			fmt.Println("Creating note...")
+		}
 
-	// Add JIRA info if available
-	if jiraInfo != nil {
-		noteData.Summary = jiraInfo.Summary
-		noteData.Status = jiraInfo.Status
-		noteData.Description = jiraInfo.Description
-	}
+		// Build ticket data for template
+		noteData := notes.TicketData{
+			Ticket:       ticketInfo.Full,
+			TicketType:   ticketInfo.Type,
+			RepoName:     repoName,
+			RepoPath:     repoRoot,
+			WorktreePath: worktreePath,
+		}
 
-	notePath, err := noteManager.CreateTicketNote(noteData)
-	if err != nil {
-		return errors.Wrap(err, "failed to create note")
+		// Add JIRA info if available
+		if jiraInfo != nil {
+			noteData.Summary = jiraInfo.Summary
+			noteData.Status = jiraInfo.Status
+			noteData.Description = jiraInfo.Description
+		}
+
+		notePath, err = noteManager.CreateTicketNote(noteData)
+		if err != nil {
+			return errors.Wrap(err, "failed to create note")
+		}
+		fmt.Printf("Note created at: %s\n", notePath)
 	}
-	fmt.Printf("Note created at: %s\n", notePath)
 
 	// Step 4: Update daily note
 	if verbose {
@@ -209,7 +217,9 @@ func runWorkCommand(ticket string) error {
 
 	fmt.Printf("\nWorkflow initialization for %s completed successfully!\n", ticketInfo.Full)
 	fmt.Printf("Worktree: %s\n", worktreePath)
-	fmt.Printf("Note: %s\n", notePath)
+	if notePath != "" {
+		fmt.Printf("Note: %s\n", notePath)
+	}
 
 	return nil
 }
