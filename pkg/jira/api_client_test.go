@@ -24,6 +24,9 @@ import (
 )
 
 func TestNewAPIClient(t *testing.T) {
+	// Clear env var to ensure test uses config token
+	t.Setenv("JIRA_TOKEN", "")
+
 	cfg := &config.JiraConfig{
 		BaseURL: "https://example.atlassian.net",
 		Email:   "test@example.com",
@@ -47,6 +50,9 @@ func TestNewAPIClient(t *testing.T) {
 }
 
 func TestNewAPIClient_TrimsTrailingSlash(t *testing.T) {
+	// Clear env var to ensure test uses config token
+	t.Setenv("JIRA_TOKEN", "")
+
 	cfg := &config.JiraConfig{
 		BaseURL: "https://example.atlassian.net/",
 		Email:   "test@example.com",
@@ -1380,5 +1386,383 @@ func TestAPIClient_FetchTicketDetails_MinimalFields(t *testing.T) {
 	}
 	if info.Description != "" {
 		t.Errorf("Description = %q, want empty", info.Description)
+	}
+}
+
+func TestAPIClient_GetTransitions_Success(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("Expected GET request, got %s", r.Method)
+		}
+		if r.URL.Path != "/rest/api/3/issue/TEST-123/transitions" {
+			t.Errorf("Expected path /rest/api/3/issue/TEST-123/transitions, got %s", r.URL.Path)
+		}
+
+		response := map[string]interface{}{
+			"transitions": []map[string]interface{}{
+				{
+					"id":   "11",
+					"name": "Start Progress",
+					"to":   map[string]interface{}{"id": "3", "name": "In Progress"},
+				},
+				{
+					"id":   "21",
+					"name": "Done",
+					"to":   map[string]interface{}{"id": "5", "name": "Done"},
+				},
+			},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(response)
+	}))
+	defer server.Close()
+
+	cfg := &config.JiraConfig{
+		BaseURL: server.URL,
+		Email:   "test@example.com",
+		Token:   "test-token",
+	}
+
+	client, err := NewAPIClient(cfg, false)
+	if err != nil {
+		t.Fatalf("NewAPIClient() error = %v, want nil", err)
+	}
+
+	transitions, err := client.GetTransitions("TEST-123")
+	if err != nil {
+		t.Fatalf("GetTransitions() error = %v, want nil", err)
+	}
+
+	if len(transitions) != 2 {
+		t.Fatalf("len(transitions) = %d, want 2", len(transitions))
+	}
+
+	// Check first transition
+	if transitions[0].ID != "11" {
+		t.Errorf("transitions[0].ID = %q, want %q", transitions[0].ID, "11")
+	}
+	if transitions[0].Name != "Start Progress" {
+		t.Errorf("transitions[0].Name = %q, want %q", transitions[0].Name, "Start Progress")
+	}
+	if transitions[0].To.ID != "3" {
+		t.Errorf("transitions[0].To.ID = %q, want %q", transitions[0].To.ID, "3")
+	}
+	if transitions[0].To.Name != "In Progress" {
+		t.Errorf("transitions[0].To.Name = %q, want %q", transitions[0].To.Name, "In Progress")
+	}
+
+	// Check second transition
+	if transitions[1].ID != "21" {
+		t.Errorf("transitions[1].ID = %q, want %q", transitions[1].ID, "21")
+	}
+	if transitions[1].To.Name != "Done" {
+		t.Errorf("transitions[1].To.Name = %q, want %q", transitions[1].To.Name, "Done")
+	}
+}
+
+func TestAPIClient_GetTransitions_NotFound(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"errorMessages":["Issue does not exist"]}`))
+	}))
+	defer server.Close()
+
+	cfg := &config.JiraConfig{
+		BaseURL: server.URL,
+		Email:   "test@example.com",
+		Token:   "test-token",
+	}
+
+	client, err := NewAPIClient(cfg, false)
+	if err != nil {
+		t.Fatalf("NewAPIClient() error = %v, want nil", err)
+	}
+
+	_, err = client.GetTransitions("NONEXISTENT-999")
+	if err == nil {
+		t.Fatal("GetTransitions() should return error for non-existent ticket")
+	}
+	if !contains(err.Error(), "not found") {
+		t.Errorf("error = %q, should contain 'not found'", err.Error())
+	}
+}
+
+func TestAPIClient_GetTransitions_NotConfigured(t *testing.T) {
+	cfg := &config.JiraConfig{
+		BaseURL: "https://example.atlassian.net",
+		Email:   "test@example.com",
+		Token:   "test-token",
+	}
+
+	client, err := NewAPIClient(cfg, false)
+	if err != nil {
+		t.Fatalf("NewAPIClient() error = %v, want nil", err)
+	}
+
+	// Clear config to make IsAvailable return false
+	client.baseURL = ""
+
+	_, err = client.GetTransitions("TEST-123")
+	if err == nil {
+		t.Fatal("GetTransitions() should return error when client not configured")
+	}
+	if !contains(err.Error(), "not configured") {
+		t.Errorf("error = %q, should contain 'not configured'", err.Error())
+	}
+}
+
+func TestAPIClient_TransitionTicket_Success(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("Expected POST request, got %s", r.Method)
+		}
+		if r.URL.Path != "/rest/api/3/issue/TEST-123/transitions" {
+			t.Errorf("Expected path /rest/api/3/issue/TEST-123/transitions, got %s", r.URL.Path)
+		}
+		if r.Header.Get("Content-Type") != "application/json" {
+			t.Errorf("Expected Content-Type 'application/json', got %s", r.Header.Get("Content-Type"))
+		}
+
+		// Verify request body
+		var reqBody map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
+			t.Errorf("Failed to decode request body: %v", err)
+		}
+		transition, ok := reqBody["transition"].(map[string]interface{})
+		if !ok {
+			t.Error("Request body missing 'transition' field")
+		}
+		if transition["id"] != "21" {
+			t.Errorf("transition.id = %v, want '21'", transition["id"])
+		}
+
+		// 204 No Content indicates success
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	cfg := &config.JiraConfig{
+		BaseURL: server.URL,
+		Email:   "test@example.com",
+		Token:   "test-token",
+	}
+
+	client, err := NewAPIClient(cfg, false)
+	if err != nil {
+		t.Fatalf("NewAPIClient() error = %v, want nil", err)
+	}
+
+	err = client.TransitionTicket("TEST-123", "21")
+	if err != nil {
+		t.Fatalf("TransitionTicket() error = %v, want nil", err)
+	}
+}
+
+func TestAPIClient_TransitionTicket_BadRequest(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"errorMessages":["Transition id '999' is not valid for this issue."]}`))
+	}))
+	defer server.Close()
+
+	cfg := &config.JiraConfig{
+		BaseURL: server.URL,
+		Email:   "test@example.com",
+		Token:   "test-token",
+	}
+
+	client, err := NewAPIClient(cfg, false)
+	if err != nil {
+		t.Fatalf("NewAPIClient() error = %v, want nil", err)
+	}
+
+	err = client.TransitionTicket("TEST-123", "999")
+	if err == nil {
+		t.Fatal("TransitionTicket() should return error for invalid transition")
+	}
+	if !contains(err.Error(), "invalid transition") {
+		t.Errorf("error = %q, should contain 'invalid transition'", err.Error())
+	}
+}
+
+func TestAPIClient_TransitionTicket_BadRequestWithFieldErrors(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"errors":{"resolution":"Field is required."}}`))
+	}))
+	defer server.Close()
+
+	cfg := &config.JiraConfig{
+		BaseURL: server.URL,
+		Email:   "test@example.com",
+		Token:   "test-token",
+	}
+
+	client, err := NewAPIClient(cfg, false)
+	if err != nil {
+		t.Fatalf("NewAPIClient() error = %v, want nil", err)
+	}
+
+	err = client.TransitionTicket("TEST-123", "31")
+	if err == nil {
+		t.Fatal("TransitionTicket() should return error for invalid transition")
+	}
+	if !contains(err.Error(), "resolution") {
+		t.Errorf("error = %q, should contain 'resolution'", err.Error())
+	}
+}
+
+func TestAPIClient_TransitionTicket_NotConfigured(t *testing.T) {
+	cfg := &config.JiraConfig{
+		BaseURL: "https://example.atlassian.net",
+		Email:   "test@example.com",
+		Token:   "test-token",
+	}
+
+	client, err := NewAPIClient(cfg, false)
+	if err != nil {
+		t.Fatalf("NewAPIClient() error = %v, want nil", err)
+	}
+
+	client.baseURL = ""
+
+	err = client.TransitionTicket("TEST-123", "21")
+	if err == nil {
+		t.Fatal("TransitionTicket() should return error when client not configured")
+	}
+	if !contains(err.Error(), "not configured") {
+		t.Errorf("error = %q, should contain 'not configured'", err.Error())
+	}
+}
+
+func TestAPIClient_TransitionTicketByName_Success(t *testing.T) {
+	requestCount := 0
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount++
+
+		if r.Method == http.MethodGet {
+			// Return transitions
+			response := map[string]interface{}{
+				"transitions": []map[string]interface{}{
+					{
+						"id":   "11",
+						"name": "Start Progress",
+						"to":   map[string]interface{}{"id": "3", "name": "In Progress"},
+					},
+					{
+						"id":   "21",
+						"name": "Done",
+						"to":   map[string]interface{}{"id": "5", "name": "Done"},
+					},
+				},
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(response)
+			return
+		}
+
+		// POST - execute transition
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	cfg := &config.JiraConfig{
+		BaseURL: server.URL,
+		Email:   "test@example.com",
+		Token:   "test-token",
+	}
+
+	client, err := NewAPIClient(cfg, false)
+	if err != nil {
+		t.Fatalf("NewAPIClient() error = %v, want nil", err)
+	}
+
+	// Test matching by target status name
+	err = client.TransitionTicketByName("TEST-123", "In Progress")
+	if err != nil {
+		t.Fatalf("TransitionTicketByName() error = %v, want nil", err)
+	}
+
+	if requestCount != 2 {
+		t.Errorf("Expected 2 requests (get transitions + post transition), got %d", requestCount)
+	}
+}
+
+func TestAPIClient_TransitionTicketByName_CaseInsensitive(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			response := map[string]interface{}{
+				"transitions": []map[string]interface{}{
+					{
+						"id":   "21",
+						"name": "Mark as Done",
+						"to":   map[string]interface{}{"id": "5", "name": "Done"},
+					},
+				},
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(response)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	cfg := &config.JiraConfig{
+		BaseURL: server.URL,
+		Email:   "test@example.com",
+		Token:   "test-token",
+	}
+
+	client, err := NewAPIClient(cfg, false)
+	if err != nil {
+		t.Fatalf("NewAPIClient() error = %v, want nil", err)
+	}
+
+	// Test case-insensitive matching
+	err = client.TransitionTicketByName("TEST-123", "DONE")
+	if err != nil {
+		t.Fatalf("TransitionTicketByName() error = %v, want nil", err)
+	}
+}
+
+func TestAPIClient_TransitionTicketByName_NotFound(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		response := map[string]interface{}{
+			"transitions": []map[string]interface{}{
+				{
+					"id":   "11",
+					"name": "Start Progress",
+					"to":   map[string]interface{}{"id": "3", "name": "In Progress"},
+				},
+			},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(response)
+	}))
+	defer server.Close()
+
+	cfg := &config.JiraConfig{
+		BaseURL: server.URL,
+		Email:   "test@example.com",
+		Token:   "test-token",
+	}
+
+	client, err := NewAPIClient(cfg, false)
+	if err != nil {
+		t.Fatalf("NewAPIClient() error = %v, want nil", err)
+	}
+
+	err = client.TransitionTicketByName("TEST-123", "Closed")
+	if err == nil {
+		t.Fatal("TransitionTicketByName() should return error for unknown status")
+	}
+	if !contains(err.Error(), "not found") {
+		t.Errorf("error = %q, should contain 'not found'", err.Error())
+	}
+	// Should list available transitions
+	if !contains(err.Error(), "Start Progress") {
+		t.Errorf("error = %q, should contain available transitions", err.Error())
 	}
 }

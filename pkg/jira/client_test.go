@@ -350,3 +350,48 @@ func TestFetchTicketDetails_UnavailableClient(t *testing.T) {
 		t.Error("FetchTicketDetails() should return error when CLI is unavailable")
 	}
 }
+
+func TestCLIClient_GetTransitions_NotImplemented(t *testing.T) {
+	client, err := NewCLIClient("acli", false)
+	if err != nil {
+		t.Fatalf("NewCLIClient() error = %v, want nil", err)
+	}
+
+	_, err = client.GetTransitions("TEST-123")
+	if err == nil {
+		t.Error("GetTransitions() should return error for CLI client")
+	}
+	if err.Error() != "GetTransitions not implemented for CLI client" {
+		t.Errorf("error = %q, want 'GetTransitions not implemented for CLI client'", err.Error())
+	}
+}
+
+func TestCLIClient_TransitionTicket_NotImplemented(t *testing.T) {
+	client, err := NewCLIClient("acli", false)
+	if err != nil {
+		t.Fatalf("NewCLIClient() error = %v, want nil", err)
+	}
+
+	err = client.TransitionTicket("TEST-123", "21")
+	if err == nil {
+		t.Error("TransitionTicket() should return error for CLI client")
+	}
+	if err.Error() != "TransitionTicket not implemented for CLI client" {
+		t.Errorf("error = %q, want 'TransitionTicket not implemented for CLI client'", err.Error())
+	}
+}
+
+func TestCLIClient_TransitionTicketByName_NotImplemented(t *testing.T) {
+	client, err := NewCLIClient("acli", false)
+	if err != nil {
+		t.Fatalf("NewCLIClient() error = %v, want nil", err)
+	}
+
+	err = client.TransitionTicketByName("TEST-123", "Done")
+	if err == nil {
+		t.Error("TransitionTicketByName() should return error for CLI client")
+	}
+	if err.Error() != "TransitionTicketByName not implemented for CLI client" {
+		t.Errorf("error = %q, want 'TransitionTicketByName not implemented for CLI client'", err.Error())
+	}
+}
