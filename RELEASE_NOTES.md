@@ -1,3 +1,104 @@
+# Release Notes: v0.7.1
+
+## Overview
+
+This patch release extends ticket identifier parsing to accept alphanumeric suffixes, enabling compatibility with beads-style identifiers like `rig-abc123` alongside traditional numeric formats like `PROJ-123`. All existing workflows continue unchanged.
+
+**Release date:** 2026-01-14
+
+## Installation
+
+### Homebrew (recommended)
+
+```bash
+brew upgrade thoreinstein/tap/rig
+# or for fresh install:
+brew install thoreinstein/tap/rig
+```
+
+### Manual Installation
+
+1. Download the appropriate archive from the [releases page](https://github.com/thoreinstein/rig/releases/tag/v0.7.1)
+2. Extract and move to your PATH:
+
+```bash
+tar -xzf rig_0.7.1_darwin_arm64.tar.gz
+mv rig /usr/local/bin/
+```
+
+3. Verify installation:
+
+```bash
+rig version
+```
+
+## Enhancements
+
+### Alphanumeric Ticket Identifiers
+
+Ticket parsing now accepts alphanumeric suffixes in addition to numeric-only suffixes:
+
+| Format             | Example            | Status      |
+| ------------------ | ------------------ | ----------- |
+| Numeric (existing) | `PROJ-123`           | Supported |
+| Alphanumeric (new) | `rig-2o1`, `beads-xyz` | Supported |
+
+**Affected Commands:**
+
+- `rig work` — Creates worktrees using ticket identifier as branch name
+- `rig sync` — Extracts ticket from branch name for commit messages
+
+**Usage Examples:**
+
+```bash
+# Numeric ticket (unchanged)
+rig work PROJ-1234
+
+# Beads-style alphanumeric ticket (new)
+rig work rig-abc123
+rig work beads-2o1
+```
+
+**Edge Case:** Branch names like `feature-branch` now match the ticket pattern since `branch` is alphanumeric. This is expected behavior when supporting beads-style identifiers.
+
+## Verification
+
+All releases are signed with [keyless Sigstore](https://www.sigstore.dev/). Verify the checksums file signature:
+
+```bash
+# Download checksums and signature
+curl -LO https://github.com/thoreinstein/rig/releases/download/v0.7.1/checksums.txt
+curl -LO https://github.com/thoreinstein/rig/releases/download/v0.7.1/checksums.txt.sig
+curl -LO https://github.com/thoreinstein/rig/releases/download/v0.7.1/checksums.txt.bundle
+
+# Verify signature
+cosign verify-blob \
+  --bundle checksums.txt.bundle \
+  --certificate-identity 'https://github.com/thoreinstein/rig/.github/workflows/release.yml@refs/tags/v0.7.1' \
+  --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+  checksums.txt
+
+# Verify your download against checksums
+sha256sum --check checksums.txt --ignore-missing
+```
+
+## Rollback
+
+If you need to revert to v0.7.0:
+
+```bash
+# Homebrew
+brew uninstall rig
+brew install thoreinstein/tap/rig@0.7.0
+
+# Manual
+curl -LO https://github.com/thoreinstein/rig/releases/download/v0.7.0/rig_0.7.0_darwin_arm64.tar.gz
+tar -xzf rig_0.7.0_darwin_arm64.tar.gz
+mv rig /usr/local/bin/
+```
+
+**After rollback:** Alphanumeric ticket identifiers like `rig-abc123` will no longer be recognized. Use numeric-only formats (`PROJ-123`) or specify branch names explicitly.
+
 # Release Notes: v0.7.0
 
 ## Overview

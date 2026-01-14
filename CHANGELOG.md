@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.1] - 2026-01-14
+
+### Enhanced
+
+- fdfe6d7: Accept beads-style alphanumeric ticket identifiers
+  - Ticket parsing now accepts alphanumeric suffixes (e.g., `rig-2o1`, `beads-xyz`)
+  - All existing numeric formats (`PROJ-123`) continue to work unchanged
+  - Affects `rig work` and `rig sync` commands
+
 ## [0.7.0] - 2026-01-14
 
 ### Added
@@ -202,6 +211,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - bc72a00: Bump golangci/golangci-lint-action from 6 to 9
 - bbc29e2: Bump golangci/golangci-lint-action from 6 to 9
 
+[0.7.1]: https://github.com/thoreinstein/rig/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/thoreinstein/rig/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/thoreinstein/rig/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/thoreinstein/rig/compare/v0.4.1...v0.5.0
