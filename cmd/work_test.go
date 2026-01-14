@@ -77,6 +77,34 @@ func TestParseTicket(t *testing.T) {
 			wantNumber: "999999999",
 		},
 		{
+			name:       "beads-style alphanumeric",
+			ticket:     "rig-abc123",
+			wantFull:   "rig-abc123",
+			wantType:   "rig",
+			wantNumber: "abc123",
+		},
+		{
+			name:       "beads-style letters only",
+			ticket:     "beads-xyz",
+			wantFull:   "beads-xyz",
+			wantType:   "beads",
+			wantNumber: "xyz",
+		},
+		{
+			name:       "beads-style mixed case",
+			ticket:     "rig-AbC123",
+			wantFull:   "rig-AbC123",
+			wantType:   "rig",
+			wantNumber: "AbC123",
+		},
+		{
+			name:       "beads-style short ID",
+			ticket:     "rig-2o1",
+			wantFull:   "rig-2o1",
+			wantType:   "rig",
+			wantNumber: "2o1",
+		},
+		{
 			name:        "missing number",
 			ticket:      "fraas-",
 			expectError: true,
@@ -104,16 +132,6 @@ func TestParseTicket(t *testing.T) {
 		{
 			name:        "empty string",
 			ticket:      "",
-			expectError: true,
-		},
-		{
-			name:        "letters in number",
-			ticket:      "fraas-abc",
-			expectError: true,
-		},
-		{
-			name:        "mixed letters and numbers",
-			ticket:      "fraas-123abc",
 			expectError: true,
 		},
 		{
@@ -319,13 +337,13 @@ func TestParseTicketErrorMessages(t *testing.T) {
 	errorMsg := err.Error()
 
 	// Error should mention expected format
-	if !containsSubstring(errorMsg, "TYPE-NUMBER") {
-		t.Error("Error message should mention expected format TYPE-NUMBER")
+	if !containsSubstring(errorMsg, "TYPE-ID") {
+		t.Error("Error message should mention expected format TYPE-ID")
 	}
 
 	// Error should give an example
-	if !containsSubstring(errorMsg, "proj-123") {
-		t.Error("Error message should include an example like 'proj-123'")
+	if !containsSubstring(errorMsg, "proj-123") || !containsSubstring(errorMsg, "rig-abc") {
+		t.Error("Error message should include examples like 'proj-123' or 'rig-abc'")
 	}
 }
 
@@ -490,11 +508,6 @@ func TestRunWorkCommand_InvalidTicketFormat(t *testing.T) {
 		{
 			name:   "no type",
 			ticket: "-123",
-			errMsg: "invalid ticket format",
-		},
-		{
-			name:   "letters in number",
-			ticket: "proj-abc",
 			errMsg: "invalid ticket format",
 		},
 		{

@@ -49,14 +49,15 @@ type TicketInfo struct {
 	Number string
 }
 
-// parseTicket parses a ticket string into type and number components
+// parseTicket parses a ticket string into type and number/identifier components.
+// Supports both traditional Jira-style tickets (proj-123) and beads-style tickets (rig-abc123).
 func parseTicket(ticket string) (*TicketInfo, error) {
-	// Match pattern: TYPE-NUMBER (e.g., proj-123, ops-456)
-	re := regexp.MustCompile(`^([a-zA-Z]+)-([0-9]+)$`)
+	// Match pattern: TYPE-ID where ID can be digits or alphanumeric (e.g., proj-123, rig-abc, beads-42f)
+	re := regexp.MustCompile(`^([a-zA-Z]+)-([a-zA-Z0-9]+)$`)
 	matches := re.FindStringSubmatch(ticket)
 
 	if len(matches) != 3 {
-		return nil, errors.New("invalid ticket format. Expected format: TYPE-NUMBER (e.g., proj-123)")
+		return nil, errors.New("invalid ticket format. Expected format: TYPE-ID (e.g., proj-123 or rig-abc)")
 	}
 
 	return &TicketInfo{

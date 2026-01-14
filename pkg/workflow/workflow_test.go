@@ -115,9 +115,24 @@ func TestExtractTicketFromBranch(t *testing.T) {
 			expected: "",
 		},
 		{
-			name:     "no ticket with dashes",
+			name:     "branch with dashes looks like ticket now",
 			branch:   "feature-branch-name",
-			expected: "",
+			expected: "feature-branch", // With alphanumeric IDs, this matches ticket pattern
+		},
+		{
+			name:     "beads-style simple",
+			branch:   "rig-abc123",
+			expected: "rig-abc123",
+		},
+		{
+			name:     "beads-style with prefix",
+			branch:   "feature/rig-2o1",
+			expected: "rig-2o1",
+		},
+		{
+			name:     "beads-style with underscore prefix",
+			branch:   "user_beads-xyz",
+			expected: "beads-xyz",
 		},
 	}
 
@@ -140,6 +155,12 @@ func TestLooksLikeTicket(t *testing.T) {
 		{"ABC-1", true},
 		{"proj-456", true},
 		{"A-1", true},
+		// Beads-style alphanumeric identifiers
+		{"rig-abc", true},
+		{"beads-xyz123", true},
+		{"rig-2o1", true},
+		{"proj-AbC", true},
+		// Invalid formats
 		{"main", false},
 		{"feature", false},
 		{"123-ABC", false},
@@ -147,6 +168,7 @@ func TestLooksLikeTicket(t *testing.T) {
 		{"PROJ-", false},
 		{"", false},
 		{"AB", false},
+		{"proj-123-456", false}, // multiple dashes not supported in suffix
 	}
 
 	for _, tt := range tests {
