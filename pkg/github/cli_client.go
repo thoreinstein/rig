@@ -74,11 +74,9 @@ func (c *CLIClient) CreatePR(ctx context.Context, opts CreatePROptions) (*PRInfo
 		return nil, rigerrors.NewGitHubError("CreatePR", "title is required")
 	}
 
-	args := []string{"pr", "create", "--title", opts.Title}
-
-	if opts.Body != "" {
-		args = append(args, "--body", opts.Body)
-	}
+	// Always pass --body (even if empty) because gh requires both --title and --body
+	// when running non-interactively
+	args := []string{"pr", "create", "--title", opts.Title, "--body", opts.Body}
 	if opts.HeadBranch != "" {
 		args = append(args, "--head", opts.HeadBranch)
 	}
