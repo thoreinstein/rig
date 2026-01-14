@@ -1,3 +1,276 @@
+# Release Notes: v0.7.0
+
+## Overview
+
+This release introduces comprehensive GitHub PR workflows and local AI inference capabilities. The new `rig pr` command family provides a full pull request lifecycle—create, view, list, and merge PRs—powered by a native GitHub API client with multi-layer authentication. The merge workflow includes an AI-powered debrief session for post-merge retrospectives. A new Ollama provider enables offline AI inference without cloud dependencies.
+
+**Release date:** 2026-01-14
+
+## Installation
+
+### Homebrew (recommended)
+
+```bash
+brew upgrade thoreinstein/tap/rig
+# or for fresh install:
+brew install thoreinstein/tap/rig
+```
+
+### Manual Installation
+
+1. Download the appropriate archive from the [releases page](https://github.com/thoreinstein/rig/releases/tag/v0.7.0)
+2. Extract and move to your PATH:
+
+```bash
+tar -xzf rig_0.7.0_darwin_arm64.tar.gz
+mv rig /usr/local/bin/
+```
+
+3. Verify installation:
+
+```bash
+rig version
+```
+
+## Features
+
+### New Command Family: `rig pr`
+
+Full pull request lifecycle management without leaving your terminal:
+
+| Command               | Description                                       |
+| --------------------- | ------------------------------------------------- |
+| `rig pr create`         | Create a PR from the current branch               |
+| `rig pr view [number]`  | View PR details (defaults to current branch's PR) |
+| `rig pr list`           | List PRs with filtering options                   |
+| `rig pr merge [number]` | Full merge workflow with AI debrief               |
+
+**Usage Examples:**
+
+```bash
+# Create PR from current branch
+rig pr create
+
+# View PR for current branch
+rig pr view
+
+# List open PRs
+rig pr list
+
+# Merge with AI debrief session
+rig pr merge
+```
+
+### Native GitHub API Client
+
+Replaces the previous `gh` CLI wrapper with a native Go implementation using `google/go-github/v68`:
+
+**Multi-Layer Authentication:**
+
+| Priority | Method            | Description                                |
+| -------- | ----------------- | ------------------------------------------ |
+| 1        | `RIG_GITHUB_TOKEN`  | Environment variable (highest priority)    |
+| 2        | `GITHUB_TOKEN`      | Standard GitHub token environment variable |
+| 3        | Config file       | Token stored in `config.toml`                |
+| 4        | OAuth device flow | Interactive browser-based authentication   |
+| 5        | `gh` CLI fallback   | Uses existing `gh auth` if available         |
+
+**Secure Token Caching:**
+
+Tokens obtained via OAuth device flow are cached securely using native OS credential storage:
+
+| Platform | Storage Backend    |
+| -------- | ------------------ |
+| macOS    | Keychain           |
+| Linux    | libsecret          |
+| Windows  | Credential Manager |
+
+### Merge Workflow Engine
+
+The `rig pr merge` command executes a structured 5-step workflow:
+
+1. **Preflight** — Validates PR is mergeable (no conflicts, CI passing, approvals)
+2. **Gather** — Collects PR metadata, commits, reviews, and comments
+3. **Debrief** — AI-powered Q&A session for post-merge retrospective
+4. **Merge** — Performs the actual merge operation
+5. **Closeout** — Updates related issues and cleans up branches
+
+**Checkpoint System:**
+
+Interrupted workflows can be resumed—progress is saved after each step:
+
+```bash
+# Resume an interrupted merge workflow
+rig pr merge --resume
+```
+
+**Skip Approval Flag:**
+
+For self-authored PRs where you want to skip the pre-merge approval prompt:
+
+```bash
+rig pr merge --skip-approval
+```
+
+### AI-Powered Debrief
+
+The merge workflow includes an interactive AI debrief session:
+
+- Summarizes changes, decisions, and trade-offs made in the PR
+- Answers questions about the implementation
+- Captures lessons learned for future reference
+- Generates documentation snippets from the discussion
+
+### Ollama Provider for Local AI Inference
+
+New AI provider for fully offline operation using [Ollama](https://ollama.ai/):
+
+**Key Benefits:**
+
+- **No API key required** — Works entirely offline
+- **Data privacy** — Code never leaves your machine
+- **Cost-free** — No API usage charges
+
+**Supported Models:**
+
+Any model available in Ollama, including:
+- `llama3.2`
+- `codellama`
+- `mistral`
+- `deepseek-coder`
+
+## Configuration
+
+### GitHub Configuration
+
+```toml
+[github]
+# Optional: set token directly (prefer environment variables)
+token = ""
+# OAuth app client ID for device flow (optional, uses built-in default)
+oauth_client_id = ""
+```
+
+### AI Configuration
+
+```toml
+[ai]
+# Provider: "openai", "anthropic", or "ollama"
+provider = "ollama"
+
+# Ollama-specific settings
+[ai.ollama]
+# Ollama server URL (default: http://localhost:11434)
+base_url = "http://localhost:11434"
+# Model to use
+model = "llama3.2"
+```
+
+### Workflow Configuration
+
+```toml
+[workflow]
+# Enable AI debrief during merge
+debrief_enabled = true
+# Skip approval prompt for self-authored PRs
+auto_approve_self = false
+# Checkpoint directory for workflow state
+checkpoint_dir = "~/.local/state/rig/workflows"
+```
+
+### Environment Variables
+
+| Variable         | Description                                     |
+| ---------------- | ----------------------------------------------- |
+| `RIG_GITHUB_TOKEN` | GitHub personal access token (highest priority) |
+| `GITHUB_TOKEN`     | Standard GitHub token (fallback)                |
+| `OLLAMA_HOST`      | Override Ollama server URL                      |
+
+## Bug Fixes
+
+### Fixed: GitHub PR Reviews Response Parsing
+
+**Symptom:** Viewing PR details with reviews would fail with JSON unmarshaling errors.
+
+**Root Cause:** Struct field mismatch between the GitHub API response and the internal type definition.
+
+**Fix:** Corrected struct tags to match GitHub API v3 response format.
+
+### Fixed: Pre-commit Hooks in Git Worktrees
+
+**Symptom:** Pre-commit hooks failed with build errors when running in git worktrees.
+
+**Root Cause:** The Go build attempted to embed VCS information, which fails in worktrees where `.git` is a file (gitdir reference) rather than a directory.
+
+**Fix:** Added `-buildvcs=false` flag to pre-commit hook configuration.
+
+### Fixed: Copilot Review Issues (rig-oxt, rig-4sd)
+
+Various code quality improvements based on automated review feedback.
+
+## Breaking Changes
+
+### `github.Client.ListPRs` Method Signature
+
+The `ListPRs` method now accepts an additional author filter parameter:
+
+**Before (v0.6.x):**
+
+```go
+func (c *Client) ListPRs(ctx context.Context, state string) ([]*PR, error)
+```
+
+**After (v0.7.0):**
+
+```go
+func (c *Client) ListPRs(ctx context.Context, state, author string) ([]*PR, error)
+```
+
+**Migration:** Pass empty string `""` for author to maintain previous behavior (list all authors).
+
+## Dependencies
+
+- `anchore/sbom-action`: 0.21.0 → 0.21.1
+- `modernc.org/sqlite`: 1.42.2 → 1.43.0
+
+## Verification
+
+All releases are signed with [keyless Sigstore](https://www.sigstore.dev/). Verify the checksums file signature:
+
+```bash
+# Download checksums and signature
+curl -LO https://github.com/thoreinstein/rig/releases/download/v0.7.0/checksums.txt
+curl -LO https://github.com/thoreinstein/rig/releases/download/v0.7.0/checksums.txt.sig
+curl -LO https://github.com/thoreinstein/rig/releases/download/v0.7.0/checksums.txt.bundle
+
+# Verify signature
+cosign verify-blob \
+  --bundle checksums.txt.bundle \
+  --certificate-identity 'https://github.com/thoreinstein/rig/.github/workflows/release.yml@refs/tags/v0.7.0' \
+  --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+  checksums.txt
+
+# Verify your download against checksums
+sha256sum --check checksums.txt --ignore-missing
+```
+
+## Rollback
+
+If you need to revert to v0.6.0:
+
+```bash
+# Homebrew
+brew uninstall rig
+brew install thoreinstein/tap/rig@0.6.0
+
+# Manual
+curl -LO https://github.com/thoreinstein/rig/releases/download/v0.6.0/rig_0.6.0_darwin_arm64.tar.gz
+tar -xzf rig_0.6.0_darwin_arm64.tar.gz
+mv rig /usr/local/bin/
+```
+
+**After rollback:** The `rig pr` commands will not be available. Use `gh` CLI directly for PR operations. Remove any `[github]`, `[ai]`, or `[workflow]` configuration sections if they cause errors on the older version.
+
 # Release Notes: v0.6.0
 
 ## Overview

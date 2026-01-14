@@ -5,6 +5,44 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-01-14
+
+### Added
+
+- e5a3dc4: Add Ollama provider for local LLM inference
+  - Local AI inference via Ollama `/api/chat` endpoint
+  - No API key required; works offline
+- 6588683: Add native GitHub API client
+  - Replaces `gh` CLI wrapper with `google/go-github/v68`
+  - Multi-layer auth: env vars, config, OAuth device flow, gh fallback
+  - Secure token caching via OS keychain
+- 54e86d2: Add `rig pr` command family
+  - `rig pr create` - Create PR from current branch
+  - `rig pr view` - View PR details
+  - `rig pr list` - List PRs with filtering
+  - `rig pr merge` - Full merge workflow with AI debrief
+- d735d11: Add merge workflow engine and AI debrief
+  - 5-step workflow: Preflight → Gather → Debrief → Merge → Closeout
+  - Checkpoint system for resuming interrupted workflows
+- 88abf67: Add GitHub, AI, and Jira workflow integration packages
+- 6344bf5: Add GitHub, AI, workflow configuration and error framework
+- 0aec65d: Add `--skip-approval` flag for self-authored PRs
+
+### Fixed
+
+- 5878f2a: Fix Copilot review comments (rig-oxt, rig-4sd)
+- 8517449: Fix GitHub PR reviews response parsing
+- 29d8cbb: Fix pre-commit hooks for git worktree compatibility
+
+### Changed
+
+- **Internal API**: `github.Client.ListPRs` now accepts author filter parameter
+
+### Dependencies
+
+- 667e961: Bump anchore/sbom-action from 0.21.0 to 0.21.1
+- 5840c05: Bump modernc.org/sqlite from 1.42.2 to 1.43.0
+
 ## [0.6.0] - 2026-01-12
 
 ### Added
@@ -164,6 +202,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - bc72a00: Bump golangci/golangci-lint-action from 6 to 9
 - bbc29e2: Bump golangci/golangci-lint-action from 6 to 9
 
+[0.7.0]: https://github.com/thoreinstein/rig/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/thoreinstein/rig/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/thoreinstein/rig/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/thoreinstein/rig/compare/v0.4.0...v0.4.1
