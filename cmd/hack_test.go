@@ -78,13 +78,13 @@ func TestHackCommandFlags(t *testing.T) {
 	// Test that the hack command has the expected flags
 	cmd := hackCmd
 
-	// Check --notes flag exists
-	notesFlag := cmd.Flags().Lookup("notes")
-	if notesFlag == nil {
-		t.Error("hack command should have --notes flag")
+	// Check --no-notes flag exists
+	noNotesFlag := cmd.Flags().Lookup("no-notes")
+	if noNotesFlag == nil {
+		t.Error("hack command should have --no-notes flag")
 	}
-	if notesFlag != nil && notesFlag.DefValue != "false" {
-		t.Errorf("--notes default should be false, got %s", notesFlag.DefValue)
+	if noNotesFlag != nil && noNotesFlag.DefValue != "false" {
+		t.Errorf("--no-notes default should be false (notes enabled by default), got %s", noNotesFlag.DefValue)
 	}
 
 	// Note: --repo flag was removed - repo is now detected from CWD
@@ -321,7 +321,7 @@ func TestRunHackCommand_CreatesWorktree(t *testing.T) {
 	t.Chdir(repoDir)
 
 	// Reset hack flags for test
-	hackNotes = false
+	hackNoNotes = false
 
 	// Run the hack command
 	err := runHackCommand("test-experiment")
@@ -412,7 +412,7 @@ func TestRunHackCommand_InvalidName(t *testing.T) {
 	}
 }
 
-func TestRunHackCommand_WithNotesFlag(t *testing.T) {
+func TestRunHackCommand_NotesEnabledByDefault(t *testing.T) {
 	// Skip if git is not available
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not found in PATH, skipping test")
@@ -439,26 +439,88 @@ hack
 		t.Fatalf("Failed to write hack template: %v", err)
 	}
 
+	// Create daily template for UpdateDailyNote
+	dailyTemplate := `# {{.Date}}
+
+## Log
+`
+	if err := os.WriteFile(filepath.Join(templatesDir, "daily.md.tmpl"), []byte(dailyTemplate), 0644); err != nil {
+		t.Fatalf("Failed to write daily template: %v", err)
+	}
+
 	setupTestConfig(t, notesDir)
 	viper.Set("notes.template_dir", templatesDir)
 	defer viper.Reset()
 
 	t.Chdir(repoDir)
 
-	// Enable notes flag
-	hackNotes = true
-	defer func() { hackNotes = false }()
+	// Notes should be enabled by default (hackNoNotes = false)
+	hackNoNotes = false
+	defer func() { hackNoNotes = false }()
 
 	// Run the hack command
-	_ = runHackCommand("notes-test")
+	_ = runHackCommand("notes-default-test")
 
-	// Worktree should be created regardless
-	worktreePath := filepath.Join(repoDir, "hack", "notes-test")
+	// Worktree should be created
+	worktreePath := filepath.Join(repoDir, "hack", "notes-default-test")
 	if _, err := os.Stat(worktreePath); os.IsNotExist(err) {
 		t.Errorf("Worktree should be created at %s", worktreePath)
 	}
 
-	// Note: Note creation might fail if template doesn't work, but worktree should still exist
+	// Note should be created (default behavior)
+	notePath := filepath.Join(notesDir, "hack", "notes-default-test.md")
+	if _, err := os.Stat(notePath); os.IsNotExist(err) {
+		t.Errorf("Note should be created at %s by default", notePath)
+	}
+}
+
+func TestRunHackCommand_WithNoNotesFlag(t *testing.T) {
+	// Skip if git is not available
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not found in PATH, skipping test")
+	}
+
+	repoDir := setupTestGitRepo(t)
+	notesDir := t.TempDir()
+
+	// Create templates directory and daily template (needed for UpdateDailyNote)
+	templatesDir := filepath.Join(notesDir, "templates")
+	if err := os.MkdirAll(templatesDir, 0755); err != nil {
+		t.Fatalf("Failed to create templates dir: %v", err)
+	}
+
+	dailyTemplate := `# {{.Date}}
+
+## Log
+`
+	if err := os.WriteFile(filepath.Join(templatesDir, "daily.md.tmpl"), []byte(dailyTemplate), 0644); err != nil {
+		t.Fatalf("Failed to write daily template: %v", err)
+	}
+
+	setupTestConfig(t, notesDir)
+	viper.Set("notes.template_dir", templatesDir)
+	defer viper.Reset()
+
+	t.Chdir(repoDir)
+
+	// Disable notes with --no-notes flag
+	hackNoNotes = true
+	defer func() { hackNoNotes = false }()
+
+	// Run the hack command
+	_ = runHackCommand("no-notes-test")
+
+	// Worktree should still be created
+	worktreePath := filepath.Join(repoDir, "hack", "no-notes-test")
+	if _, err := os.Stat(worktreePath); os.IsNotExist(err) {
+		t.Errorf("Worktree should be created at %s even with --no-notes", worktreePath)
+	}
+
+	// Note should NOT be created when --no-notes is set
+	notePath := filepath.Join(notesDir, "hack", "no-notes-test.md")
+	if _, err := os.Stat(notePath); err == nil {
+		t.Errorf("Note should NOT be created at %s when --no-notes is set", notePath)
+	}
 }
 
 func TestRunHackCommand_IdempotentWorktree(t *testing.T) {
@@ -474,7 +536,7 @@ func TestRunHackCommand_IdempotentWorktree(t *testing.T) {
 
 	t.Chdir(repoDir)
 
-	hackNotes = false
+	hackNoNotes = false
 
 	// Run the hack command twice
 	_ = runHackCommand("idempotent-test")
