@@ -297,12 +297,13 @@ func extractTicketFromBranch(branch string) string {
 	return ""
 }
 
-// looksLikeTicket checks if a string looks like a Jira ticket (e.g., PROJ-123).
+// looksLikeTicket checks if a string looks like a ticket (e.g., PROJ-123 or rig-abc123).
+// Supports both traditional Jira-style tickets and beads-style alphanumeric identifiers.
 func looksLikeTicket(s string) bool {
 	if len(s) < 3 {
 		return false
 	}
-	// Look for pattern: letters followed by dash followed by numbers
+	// Look for pattern: letters followed by dash followed by alphanumeric identifier
 	dashIdx := -1
 	for i, c := range s {
 		if c == '-' {
@@ -319,9 +320,9 @@ func looksLikeTicket(s string) bool {
 			return false
 		}
 	}
-	// Check suffix is digits
+	// Check suffix is alphanumeric (digits or letters)
 	for i := dashIdx + 1; i < len(s); i++ {
-		if !isDigit(s[i]) {
+		if !isDigit(s[i]) && !isLetter(s[i]) {
 			return false
 		}
 	}

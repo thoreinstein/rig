@@ -581,7 +581,6 @@ func TestRunSyncCommand_InvalidTicketFormat(t *testing.T) {
 		{"no dash", "proj123"},
 		{"no number", "proj-"},
 		{"no type", "-123"},
-		{"letters in number", "proj-abc"},
 		{"multiple dashes", "proj-123-456"},
 	}
 
