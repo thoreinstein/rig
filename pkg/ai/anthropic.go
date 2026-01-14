@@ -221,7 +221,21 @@ func (p *AnthropicProvider) StreamChat(ctx context.Context, messages []Message) 
 // streamResponse reads SSE events and sends chunks to the channel.
 func (p *AnthropicProvider) streamResponse(ctx context.Context, body io.ReadCloser, chunks chan<- StreamChunk) {
 	defer close(chunks)
-	defer body.Close()
+
+	// Close body on context cancellation to unblock scanner.Scan().
+	// This prevents goroutine leaks when the context is cancelled while
+	// the scanner is blocked waiting for network data.
+	done := make(chan struct{})
+	defer close(done)
+	go func() {
+		select {
+		case <-ctx.Done():
+			body.Close()
+		case <-done:
+			// Normal completion
+		}
+	}()
+	defer body.Close() // Ensure body is closed on normal exit too
 
 	scanner := bufio.NewScanner(body)
 	for scanner.Scan() {
@@ -275,7 +289,13 @@ func (p *AnthropicProvider) streamResponse(ctx context.Context, body io.ReadClos
 		}
 	}
 
+	// Check for scanner errors, but ignore errors caused by closing the body
 	if err := scanner.Err(); err != nil {
+		// If context was cancelled, the error is expected (body was closed)
+		if ctx.Err() != nil {
+			chunks <- StreamChunk{Error: ctx.Err(), Done: true}
+			return
+		}
 		chunks <- StreamChunk{
 			Error: rigerrors.NewAIErrorWithCause(ProviderAnthropic, "StreamChat",
 				"stream read error", err),

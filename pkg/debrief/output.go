@@ -109,19 +109,23 @@ func (o *Output) formatSimple() string {
 // AppendToNotes appends the debrief output to an existing notes file.
 // If the file doesn't exist, it creates it. The output is appended with
 // a separator to distinguish it from existing content.
-func AppendToNotes(notePath string, output *Output) error {
+func AppendToNotes(notePath string, output *Output) (err error) {
 	markdown := output.FormatMarkdown()
 
 	// Check if file exists
-	_, err := os.Stat(notePath)
-	fileExists := err == nil
+	_, statErr := os.Stat(notePath)
+	fileExists := statErr == nil
 
 	// Open file for appending (create if needed)
 	f, err := os.OpenFile(notePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
 		return rigerrors.Wrapf(err, "failed to open notes file: %s", notePath)
 	}
-	defer f.Close()
+	defer func() {
+		if cerr := f.Close(); cerr != nil && err == nil {
+			err = rigerrors.Wrap(cerr, "failed to close notes file")
+		}
+	}()
 
 	// Add separator if appending to existing file
 	if fileExists {

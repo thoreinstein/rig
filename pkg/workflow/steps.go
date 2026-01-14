@@ -307,13 +307,17 @@ func (e *Engine) transitionJiraToDone(ticket string) error {
 }
 
 // appendDebriefNotes appends notes to a file.
-func (e *Engine) appendDebriefNotes(notePath, notes string) error {
+func (e *Engine) appendDebriefNotes(notePath, notes string) (err error) {
 	// Open file for appending, create if doesn't exist
 	f, err := os.OpenFile(notePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		return rigerrors.Wrapf(err, "failed to open note file")
 	}
-	defer f.Close()
+	defer func() {
+		if cerr := f.Close(); cerr != nil && err == nil {
+			err = rigerrors.Wrap(cerr, "failed to close note file")
+		}
+	}()
 
 	// Add a header for the debrief section
 	content := fmt.Sprintf("\n\n## Merge Debrief\n\n%s\n", notes)

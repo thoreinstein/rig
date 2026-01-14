@@ -34,7 +34,7 @@ func (m *mockGitHubClient) GetPR(_ context.Context, _ int) (*github.PRInfo, erro
 	return m.pr, nil
 }
 
-func (m *mockGitHubClient) ListPRs(_ context.Context, _ string) ([]github.PRInfo, error) {
+func (m *mockGitHubClient) ListPRs(_ context.Context, _, _ string) ([]github.PRInfo, error) {
 	return nil, nil
 }
 
