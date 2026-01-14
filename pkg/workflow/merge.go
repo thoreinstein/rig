@@ -237,12 +237,13 @@ func (e *Engine) Preflight(ctx context.Context, prNumber int, opts MergeOptions)
 	result.PRExists = true
 	result.PROpen = pr.State == "open" || pr.State == "OPEN"
 	result.PRApproved = pr.Approved
+	result.ApprovalSkipped = opts.SkipApproval
 	result.ChecksPassing = pr.ChecksPassing
 
 	if !result.PROpen {
 		result.FailureReason = fmt.Sprintf("PR is not open (state: %s)", pr.State)
-	} else if !result.PRApproved {
-		result.FailureReason = "PR is not approved"
+	} else if !result.PRApproved && !result.ApprovalSkipped {
+		result.FailureReason = "PR is not approved (use --skip-approval for self-authored PRs)"
 	} else if !result.ChecksPassing {
 		result.FailureReason = "CI checks are not passing"
 	}

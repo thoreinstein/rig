@@ -436,7 +436,19 @@ func TestPreflight(t *testing.T) {
 			},
 			opts:        MergeOptions{SkipJira: true},
 			wantReady:   false,
-			wantFailure: "PR is not approved",
+			wantFailure: "PR is not approved (use --skip-approval for self-authored PRs)",
+		},
+		{
+			name: "pr not approved but skip-approval set",
+			pr: &github.PRInfo{
+				Number:        1,
+				State:         "open",
+				Approved:      false,
+				ChecksPassing: true,
+				HeadBranch:    "TEST-123",
+			},
+			opts:      MergeOptions{SkipJira: true, SkipApproval: true},
+			wantReady: true,
 		},
 		{
 			name: "checks failing",

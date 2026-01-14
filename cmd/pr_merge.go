@@ -24,6 +24,7 @@ var (
 	prMergeKeepWorktree bool
 	prMergeNoJira       bool
 	prMergeMergeMethod  string
+	prMergeSkipApproval bool
 )
 
 // prMergeCmd executes the full merge workflow with AI debrief.
@@ -70,6 +71,7 @@ func init() {
 	prMergeCmd.Flags().BoolVar(&prMergeKeepWorktree, "keep-worktree", false, "Don't cleanup worktree after merge")
 	prMergeCmd.Flags().BoolVar(&prMergeNoJira, "no-jira", false, "Skip Jira operations")
 	prMergeCmd.Flags().StringVar(&prMergeMergeMethod, "merge-method", "", "Merge method: merge, squash, rebase")
+	prMergeCmd.Flags().BoolVar(&prMergeSkipApproval, "skip-approval", false, "Skip approval check (for self-authored PRs)")
 }
 
 func runPRMerge(prNumber int) error {
@@ -147,6 +149,7 @@ func runPRMerge(prNumber int) error {
 		KeepWorktree:     prMergeKeepWorktree,
 		MergeMethod:      resolveMergeMethod(cfg, prMergeMergeMethod),
 		SkipConfirmation: prMergeYes,
+		SkipApproval:     prMergeSkipApproval,
 	}
 
 	// Apply config defaults for optional flags

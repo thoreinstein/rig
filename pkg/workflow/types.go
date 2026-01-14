@@ -88,6 +88,9 @@ type MergeOptions struct {
 	// SkipJira disables Jira-related operations (preflight check and closeout transition).
 	SkipJira bool
 
+	// SkipApproval bypasses the PR approval check (for self-authored PRs).
+	SkipApproval bool
+
 	// KeepWorktree prevents worktree cleanup during closeout.
 	KeepWorktree bool
 
@@ -112,14 +115,15 @@ type MergeOptions struct {
 
 // PreflightResult holds the results of preflight checks.
 type PreflightResult struct {
-	PRExists      bool
-	PROpen        bool
-	PRApproved    bool
-	ChecksPassing bool
-	JiraInReview  bool
-	JiraSkipped   bool
-	FailureReason string
-	Warnings      []string
+	PRExists        bool
+	PROpen          bool
+	PRApproved      bool
+	ApprovalSkipped bool
+	ChecksPassing   bool
+	JiraInReview    bool
+	JiraSkipped     bool
+	FailureReason   string
+	Warnings        []string
 }
 
 // IsReady returns true if all preflight checks passed.
@@ -127,7 +131,7 @@ func (r *PreflightResult) IsReady() bool {
 	if !r.PRExists || !r.PROpen {
 		return false
 	}
-	if !r.PRApproved {
+	if !r.PRApproved && !r.ApprovalSkipped {
 		return false
 	}
 	if !r.ChecksPassing {
