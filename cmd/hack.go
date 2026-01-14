@@ -13,7 +13,7 @@ import (
 	"thoreinstein.com/rig/pkg/tmux"
 )
 
-var hackNotes bool
+var hackNoNotes bool
 
 // hackCmd represents the hack command
 var hackCmd = &cobra.Command{
@@ -24,12 +24,13 @@ var hackCmd = &cobra.Command{
 This command creates a simplified workflow without JIRA integration:
 - Creates git worktree at {repo}/hack/{name}
 - Creates branch {name}
-- Optionally creates markdown note with --notes flag
+- Creates markdown note (use --no-notes to skip)
+- Updates daily note with log entry
 - Creates tmux session
 
 Examples:
   rig hack winter-2025
-  rig hack experiment-auth --notes`,
+  rig hack experiment-auth --no-notes`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runHackCommand(args[0])
@@ -39,7 +40,7 @@ Examples:
 func init() {
 	rootCmd.AddCommand(hackCmd)
 
-	hackCmd.Flags().BoolVar(&hackNotes, "notes", false, "Create a markdown note for this hack")
+	hackCmd.Flags().BoolVar(&hackNoNotes, "no-notes", false, "Skip creating markdown note and note-related tmux window commands")
 }
 
 // hackNameRegex validates hack names: must start with letter, contain only alphanumeric/hyphen/underscore, max 64 chars
@@ -70,7 +71,7 @@ func runHackCommand(name string) error {
 
 	if verbose {
 		fmt.Printf("Starting hack workflow for: %s\n", name)
-		fmt.Printf("  Notes: %v\n", hackNotes)
+		fmt.Printf("  No-notes: %v\n", hackNoNotes)
 	}
 
 	// Step 1: Create git worktree (uses CWD to find repo)
@@ -96,18 +97,19 @@ func runHackCommand(name string) error {
 	}
 	fmt.Printf("Git worktree created at: %s\n", worktreePath)
 
-	// Step 2: Create note (only if --notes flag is set)
+	// Step 2: Create note (unless --no-notes flag is set)
+	noteManager := notes.NewManager(
+		cfg.Notes.Path,
+		cfg.Notes.DailyDir,
+		cfg.Notes.TemplateDir,
+		verbose,
+	)
+
 	var notePath string
-	if hackNotes {
+	if !hackNoNotes {
 		if verbose {
 			fmt.Println("Creating note...")
 		}
-		noteManager := notes.NewManager(
-			cfg.Notes.Path,
-			cfg.Notes.DailyDir,
-			cfg.Notes.TemplateDir,
-			verbose,
-		)
 
 		noteData := notes.TicketData{
 			Ticket:       name,
@@ -128,7 +130,21 @@ func runHackCommand(name string) error {
 		}
 	}
 
-	// Step 3: Create tmux session
+	// Step 3: Update daily note (always, regardless of --no-notes)
+	if verbose {
+		fmt.Println("Updating daily note...")
+	}
+	err = noteManager.UpdateDailyNote(name, "hack")
+	if err != nil {
+		// Don't fail if daily note update fails
+		if verbose {
+			fmt.Printf("Warning: Could not update daily note: %v\n", err)
+		}
+	} else {
+		fmt.Println("Daily note updated")
+	}
+
+	// Step 4: Create tmux session
 	if verbose {
 		fmt.Println("Creating tmux session...")
 	}
