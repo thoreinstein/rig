@@ -72,6 +72,7 @@ type TmuxConfig struct {
 // GitHubConfig holds GitHub integration configuration
 type GitHubConfig struct {
 	AuthMethod          string   `mapstructure:"auth_method"`          // "token", "oauth", "gh_cli"
+	ClientID            string   `mapstructure:"client_id"`            // OAuth app client ID (for device flow)
 	Token               string   `mapstructure:"token"`                // For token auth (RIG_GITHUB_TOKEN env var takes precedence)
 	DefaultReviewers    []string `mapstructure:"default_reviewers"`    // Default PR reviewers
 	DefaultMergeMethod  string   `mapstructure:"default_merge_method"` // "merge", "squash", "rebase"
@@ -155,6 +156,7 @@ func setDefaults() {
 
 	// GitHub defaults
 	viper.SetDefault("github.auth_method", "gh_cli") // Prefer gh CLI auth
+	viper.SetDefault("github.client_id", "")         // OAuth app client ID for device flow
 	viper.SetDefault("github.token", "")
 	viper.SetDefault("github.default_reviewers", []string{})
 	viper.SetDefault("github.default_merge_method", "squash")
