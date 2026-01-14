@@ -11,12 +11,15 @@ import (
 // Config represents the application configuration
 // Repository information is derived from git, not configuration
 type Config struct {
-	Notes   NotesConfig   `mapstructure:"notes"`
-	Git     GitConfig     `mapstructure:"git"`
-	Clone   CloneConfig   `mapstructure:"clone"`
-	History HistoryConfig `mapstructure:"history"`
-	Jira    JiraConfig    `mapstructure:"jira"`
-	Tmux    TmuxConfig    `mapstructure:"tmux"`
+	Notes    NotesConfig    `mapstructure:"notes"`
+	Git      GitConfig      `mapstructure:"git"`
+	Clone    CloneConfig    `mapstructure:"clone"`
+	History  HistoryConfig  `mapstructure:"history"`
+	Jira     JiraConfig     `mapstructure:"jira"`
+	Tmux     TmuxConfig     `mapstructure:"tmux"`
+	GitHub   GitHubConfig   `mapstructure:"github"`
+	AI       AIConfig       `mapstructure:"ai"`
+	Workflow WorkflowConfig `mapstructure:"workflow"`
 }
 
 // NotesConfig holds markdown notes configuration
@@ -64,6 +67,30 @@ type TmuxWindow struct {
 type TmuxConfig struct {
 	SessionPrefix string       `mapstructure:"session_prefix"`
 	Windows       []TmuxWindow `mapstructure:"windows"`
+}
+
+// GitHubConfig holds GitHub integration configuration
+type GitHubConfig struct {
+	AuthMethod          string   `mapstructure:"auth_method"`          // "token", "oauth", "gh_cli"
+	Token               string   `mapstructure:"token"`                // For token auth (RIG_GITHUB_TOKEN env var takes precedence)
+	DefaultReviewers    []string `mapstructure:"default_reviewers"`    // Default PR reviewers
+	DefaultMergeMethod  string   `mapstructure:"default_merge_method"` // "merge", "squash", "rebase"
+	DeleteBranchOnMerge bool     `mapstructure:"delete_branch_on_merge"`
+}
+
+// AIConfig holds AI provider configuration
+type AIConfig struct {
+	Enabled  bool   `mapstructure:"enabled"`
+	Provider string `mapstructure:"provider"` // "anthropic", "groq", "ollama"
+	Model    string `mapstructure:"model"`    // e.g., "claude-3-5-sonnet-20241022"
+	APIKey   string `mapstructure:"api_key"`  // Provider API key (env var takes precedence)
+}
+
+// WorkflowConfig holds PR workflow automation configuration
+type WorkflowConfig struct {
+	TransitionJira       bool `mapstructure:"transition_jira"`        // Auto-transition Jira on merge
+	KillSession          bool `mapstructure:"kill_session"`           // Kill tmux session on merge
+	QueueWorktreeCleanup bool `mapstructure:"queue_worktree_cleanup"` // Queue worktree for cleanup
 }
 
 // Load loads the configuration from file and environment variables
@@ -125,6 +152,24 @@ func setDefaults() {
 		{Name: "code", Command: "nvim", WorkingDir: "{worktree_path}"},
 		{Name: "term", WorkingDir: "{worktree_path}"},
 	})
+
+	// GitHub defaults
+	viper.SetDefault("github.auth_method", "gh_cli") // Prefer gh CLI auth
+	viper.SetDefault("github.token", "")
+	viper.SetDefault("github.default_reviewers", []string{})
+	viper.SetDefault("github.default_merge_method", "squash")
+	viper.SetDefault("github.delete_branch_on_merge", true)
+
+	// AI defaults
+	viper.SetDefault("ai.enabled", true)
+	viper.SetDefault("ai.provider", "anthropic")
+	viper.SetDefault("ai.model", "claude-sonnet-4-20250514")
+	viper.SetDefault("ai.api_key", "")
+
+	// Workflow defaults
+	viper.SetDefault("workflow.transition_jira", true)
+	viper.SetDefault("workflow.kill_session", true)
+	viper.SetDefault("workflow.queue_worktree_cleanup", true)
 }
 
 // expandPaths expands ~ and environment variables in paths
