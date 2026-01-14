@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os/exec"
 	"strings"
 
 	"github.com/cockroachdb/errors"
@@ -66,28 +65,20 @@ func runPRList() error {
 		fmt.Printf("Listing PRs with state: %s\n", prListState)
 	}
 
-	// Get current user for --mine filter
-	var currentUser string
+	// Determine author filter
+	author := ""
 	if prListMine {
-		currentUser, err = getCurrentGitHubUser()
-		if err != nil {
-			return errors.Wrap(err, "failed to get current GitHub user")
-		}
+		author = "@me"
 		if verbose {
-			fmt.Printf("Filtering by author: %s\n", currentUser)
+			fmt.Printf("Filtering by author: %s\n", author)
 		}
 	}
 
-	// List PRs
-	prs, err := ghClient.ListPRs(ctx, prListState)
+	// List PRs with optional author filter
+	prs, err := ghClient.ListPRs(ctx, prListState, author)
 	if err != nil {
 		fmt.Println(rigerrors.FormatUserError(err))
 		return err
-	}
-
-	// Filter by current user if --mine flag is set
-	if prListMine {
-		prs = filterPRsByAuthor(prs, currentUser)
 	}
 
 	// Display results
@@ -98,29 +89,6 @@ func runPRList() error {
 
 	displayPRList(prs)
 	return nil
-}
-
-// getCurrentGitHubUser returns the authenticated GitHub username.
-func getCurrentGitHubUser() (string, error) {
-	cmd := exec.Command("gh", "api", "user", "--jq", ".login")
-	output, err := cmd.Output()
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimSpace(string(output)), nil
-}
-
-// filterPRsByAuthor filters PRs to only include those by the given author.
-// Note: This is a simple filter based on available PR info.
-// The gh CLI doesn't return author in the standard fields we request,
-// so this filters based on branch naming conventions or returns all if
-// author info isn't available.
-func filterPRsByAuthor(prs []github.PRInfo, author string) []github.PRInfo {
-	// Since the standard PR fields don't include author, we'd need to
-	// make additional API calls or use gh pr list --author directly.
-	// For now, return all PRs when --mine is used with a note.
-	// A more complete implementation would use gh pr list --author @me
-	return prs
 }
 
 // displayPRList formats and prints a list of PRs.

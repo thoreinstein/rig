@@ -138,8 +138,8 @@ func (c *CLIClient) GetPR(ctx context.Context, number int) (*PRInfo, error) {
 	return resp.toPRInfo(), nil
 }
 
-// ListPRs lists pull requests filtered by state.
-func (c *CLIClient) ListPRs(ctx context.Context, state string) ([]PRInfo, error) {
+// ListPRs lists pull requests filtered by state and optionally by author.
+func (c *CLIClient) ListPRs(ctx context.Context, state, author string) ([]PRInfo, error) {
 	fields := prJSONFields()
 	args := []string{
 		"pr", "list",
@@ -150,7 +150,11 @@ func (c *CLIClient) ListPRs(ctx context.Context, state string) ([]PRInfo, error)
 		args = append(args, "--state", state)
 	}
 
-	c.logDebug("listing PRs", "state", state)
+	if author != "" {
+		args = append(args, "--author", author)
+	}
+
+	c.logDebug("listing PRs", "state", state, "author", author)
 
 	output, err := c.runGH(ctx, args...)
 	if err != nil {
