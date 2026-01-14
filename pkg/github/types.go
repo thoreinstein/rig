@@ -84,13 +84,11 @@ type ghPRResponse struct {
 	ReviewRequests   []struct {
 		Login string `json:"login"`
 	} `json:"reviewRequests"`
-	Reviews struct {
-		Nodes []struct {
-			State  string `json:"state"`
-			Author struct {
-				Login string `json:"login"`
-			} `json:"author"`
-		} `json:"nodes"`
+	Reviews []struct {
+		State  string `json:"state"`
+		Author struct {
+			Login string `json:"login"`
+		} `json:"author"`
 	} `json:"reviews"`
 	StatusCheckRollup []struct {
 		Context    string `json:"context"`
@@ -125,7 +123,7 @@ func (r *ghPRResponse) toPRInfo() *PRInfo {
 
 	// Check if approved (any APPROVED review from a unique reviewer)
 	approvedBy := make(map[string]bool)
-	for _, review := range r.Reviews.Nodes {
+	for _, review := range r.Reviews {
 		if review.State == "APPROVED" {
 			approvedBy[review.Author.Login] = true
 		}

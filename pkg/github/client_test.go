@@ -74,7 +74,7 @@ func TestGHPRResponseToPRInfo(t *testing.T) {
 		{Login: "reviewer1"},
 		{Login: "reviewer2"},
 	}
-	resp.Reviews.Nodes = []struct {
+	resp.Reviews = []struct {
 		State  string `json:"state"`
 		Author struct {
 			Login string `json:"login"`
