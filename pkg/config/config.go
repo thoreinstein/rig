@@ -85,6 +85,7 @@ type AIConfig struct {
 	Provider string `mapstructure:"provider"` // "anthropic", "groq", "ollama"
 	Model    string `mapstructure:"model"`    // e.g., "claude-3-5-sonnet-20241022"
 	APIKey   string `mapstructure:"api_key"`  // Provider API key (env var takes precedence)
+	Endpoint string `mapstructure:"endpoint"` // Custom endpoint URL (e.g., for Ollama: http://localhost:11434)
 }
 
 // WorkflowConfig holds PR workflow automation configuration
@@ -167,6 +168,7 @@ func setDefaults() {
 	viper.SetDefault("ai.provider", "anthropic")
 	viper.SetDefault("ai.model", "claude-sonnet-4-20250514")
 	viper.SetDefault("ai.api_key", "")
+	viper.SetDefault("ai.endpoint", "") // Empty means use provider default (e.g., http://localhost:11434 for Ollama)
 
 	// Workflow defaults
 	viper.SetDefault("workflow.transition_jira", true)
