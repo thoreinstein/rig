@@ -153,14 +153,14 @@ func (c *APIClient) GetPR(ctx context.Context, number int) (*PRInfo, error) {
 	return info, nil
 }
 
-// ListPRs lists pull requests filtered by state.
-func (c *APIClient) ListPRs(ctx context.Context, state string) ([]PRInfo, error) {
+// ListPRs lists pull requests filtered by state and optionally by author.
+func (c *APIClient) ListPRs(ctx context.Context, state, author string) ([]PRInfo, error) {
 	owner, repo, err := c.GetCurrentRepo(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	c.logDebug("listing PRs", "state", state)
+	c.logDebug("listing PRs", "state", state, "author", author)
 
 	opts := &gh.PullRequestListOptions{
 		State: state,
@@ -174,9 +174,24 @@ func (c *APIClient) ListPRs(ctx context.Context, state string) ([]PRInfo, error)
 		return nil, toGitHubError("ListPRs", resp, err)
 	}
 
+	// Get current user login if author is "@me"
+	filterAuthor := author
+	if author == "@me" {
+		user, _, err := c.client.Users.Get(ctx, "")
+		if err != nil {
+			return nil, toGitHubError("ListPRs", nil, err)
+		}
+		filterAuthor = user.GetLogin()
+	}
+
 	result := make([]PRInfo, 0, len(prs))
 	for _, pr := range prs {
-		result = append(result, *prInfoFromGitHub(pr))
+		info := prInfoFromGitHub(pr)
+		// Filter by author if specified
+		if filterAuthor != "" && info.Author != filterAuthor {
+			continue
+		}
+		result = append(result, *info)
 	}
 
 	return result, nil
@@ -294,6 +309,7 @@ func prInfoFromGitHub(pr *gh.PullRequest) *PRInfo {
 		State:     pr.GetState(),
 		Draft:     pr.GetDraft(),
 		URL:       pr.GetHTMLURL(),
+		Author:    pr.GetUser().GetLogin(),
 		CreatedAt: pr.GetCreatedAt().Time,
 		UpdatedAt: pr.GetUpdatedAt().Time,
 	}

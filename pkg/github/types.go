@@ -27,6 +27,7 @@ type PRInfo struct {
 	State          string    `json:"state"`   // "open", "closed", "merged"
 	Draft          bool      `json:"isDraft"` // gh CLI uses isDraft
 	URL            string    `json:"url"`
+	Author         string    `json:"author"`           // PR author login
 	HeadBranch     string    `json:"headRefName"`      // gh CLI uses headRefName
 	BaseBranch     string    `json:"baseRefName"`      // gh CLI uses baseRefName
 	Mergeable      string    `json:"mergeable"`        // gh CLI returns string: "MERGEABLE", "CONFLICTING", "UNKNOWN"

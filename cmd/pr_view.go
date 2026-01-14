@@ -30,7 +30,7 @@ Displays:
   - Mergeable state
 
 Examples:
-  rig view view         # View PR for current branch
+  rig pr view           # View PR for current branch
   rig pr view 123       # View PR #123`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -109,7 +109,7 @@ func findPRForCurrentBranch(ctx context.Context, ghClient github.Client) (int, e
 	}
 
 	// List open PRs and find one matching the branch
-	prs, err := ghClient.ListPRs(ctx, "open")
+	prs, err := ghClient.ListPRs(ctx, "open", "")
 	if err != nil {
 		return 0, errors.Wrap(err, "failed to list PRs")
 	}
