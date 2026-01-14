@@ -1,0 +1,176 @@
+package cmd
+
+import (
+	"context"
+	"fmt"
+	"os/exec"
+	"runtime"
+	"strings"
+
+	"github.com/cockroachdb/errors"
+	"github.com/spf13/cobra"
+
+	"thoreinstein.com/rig/pkg/config"
+	rigerrors "thoreinstein.com/rig/pkg/errors"
+	"thoreinstein.com/rig/pkg/github"
+)
+
+var (
+	prCreateTitle     string
+	prCreateBody      string
+	prCreateDraft     bool
+	prCreateReviewers []string
+	prCreateBase      string
+	prCreateNoBrowser bool
+)
+
+// prCreateCmd creates a new pull request from the current branch.
+var prCreateCmd = &cobra.Command{
+	Use:   "create",
+	Short: "Create a pull request",
+	Long: `Create a new pull request from the current branch.
+
+If no title is provided, the last commit message subject is used.
+After creation, the PR URL is opened in the default browser.
+
+Examples:
+  rig pr create                           # Use last commit message as title
+  rig pr create --title "Add feature X"   # Specify title
+  rig pr create --draft                   # Create as draft PR
+  rig pr create --reviewer user1,user2    # Request reviewers`,
+	Args: cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runPRCreate()
+	},
+}
+
+func init() {
+	prCmd.AddCommand(prCreateCmd)
+
+	prCreateCmd.Flags().StringVarP(&prCreateTitle, "title", "t", "", "PR title (defaults to last commit message)")
+	prCreateCmd.Flags().StringVarP(&prCreateBody, "body", "b", "", "PR body/description")
+	prCreateCmd.Flags().BoolVarP(&prCreateDraft, "draft", "d", false, "Create as draft PR")
+	prCreateCmd.Flags().StringSliceVarP(&prCreateReviewers, "reviewer", "r", nil, "Request reviewers (comma-separated)")
+	prCreateCmd.Flags().StringVar(&prCreateBase, "base", "", "Base branch (defaults to repo default)")
+	prCreateCmd.Flags().BoolVar(&prCreateNoBrowser, "no-browser", false, "Don't open PR URL in browser")
+}
+
+func runPRCreate() error {
+	ctx := context.Background()
+
+	// Load configuration
+	cfg, err := config.Load()
+	if err != nil {
+		return errors.Wrap(err, "failed to load configuration")
+	}
+
+	// Create GitHub client
+	ghClient, err := github.NewClient(&cfg.GitHub, verbose)
+	if err != nil {
+		fmt.Println(rigerrors.FormatUserError(err))
+		return err
+	}
+
+	// Check authentication
+	if !ghClient.IsAuthenticated() {
+		return errors.New("not authenticated with GitHub. Run 'gh auth login' first")
+	}
+
+	// Get title from last commit if not provided
+	title := prCreateTitle
+	if title == "" {
+		if verbose {
+			fmt.Println("No title provided, using last commit message...")
+		}
+		commitTitle, err := getLastCommitMessage()
+		if err != nil {
+			return errors.Wrap(err, "failed to get last commit message")
+		}
+		title = commitTitle
+	}
+
+	// Build create options
+	opts := github.CreatePROptions{
+		Title:      title,
+		Body:       prCreateBody,
+		BaseBranch: prCreateBase,
+		Draft:      prCreateDraft,
+		Reviewers:  prCreateReviewers,
+	}
+
+	// Add default reviewers from config if none specified
+	if len(opts.Reviewers) == 0 && len(cfg.GitHub.DefaultReviewers) > 0 {
+		opts.Reviewers = cfg.GitHub.DefaultReviewers
+		if verbose {
+			fmt.Printf("Using default reviewers: %s\n", strings.Join(opts.Reviewers, ", "))
+		}
+	}
+
+	if verbose {
+		fmt.Printf("Creating PR with title: %s\n", title)
+		if opts.Draft {
+			fmt.Println("  Draft: yes")
+		}
+		if len(opts.Reviewers) > 0 {
+			fmt.Printf("  Reviewers: %s\n", strings.Join(opts.Reviewers, ", "))
+		}
+	}
+
+	// Create the PR
+	pr, err := ghClient.CreatePR(ctx, opts)
+	if err != nil {
+		fmt.Println(rigerrors.FormatUserError(err))
+		return err
+	}
+
+	// Print success message
+	fmt.Printf("Created PR #%d: %s\n", pr.Number, pr.Title)
+	fmt.Printf("URL: %s\n", pr.URL)
+
+	if pr.Draft {
+		fmt.Println("Status: Draft")
+	}
+
+	// Open in browser unless disabled
+	if !prCreateNoBrowser && pr.URL != "" {
+		if verbose {
+			fmt.Println("Opening PR in browser...")
+		}
+		if err := openURL(pr.URL); err != nil {
+			// Don't fail if browser open fails
+			if verbose {
+				fmt.Printf("Warning: Could not open browser: %v\n", err)
+			}
+		}
+	}
+
+	return nil
+}
+
+// getLastCommitMessage returns the subject line of the last commit.
+func getLastCommitMessage() (string, error) {
+	cmd := exec.Command("git", "log", "-1", "--format=%s")
+	output, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(output)), nil
+}
+
+// openURL opens a URL in the default browser.
+func openURL(url string) error {
+	var cmd *exec.Cmd
+
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = exec.Command("open", url)
+	case "linux":
+		cmd = exec.Command("xdg-open", url)
+	case "windows":
+		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
+	default:
+		return errors.Newf("unsupported platform: %s", runtime.GOOS)
+	}
+
+	return cmd.Start()
+}
