@@ -1,15 +1,21 @@
 minimum_pre_commit_version: "3.2.0"
 
 repos:
-  # golangci-lint official hooks
-  - repo: https://github.com/golangci/golangci-lint
-    rev: v2.3.0
+  # golangci-lint (local hooks to support git worktrees)
+  - repo: local
     hooks:
       - id: golangci-lint
         name: golangci-lint
-        args: [--timeout=5m]
+        entry: sh -c 'GOFLAGS=-buildvcs=false golangci-lint run --timeout=5m'
+        language: system
+        types: [go]
+        pass_filenames: false
       - id: golangci-lint-fmt
         name: golangci-lint fmt
+        entry: sh -c 'GOFLAGS=-buildvcs=false golangci-lint fmt'
+        language: system
+        types: [go]
+        pass_filenames: false
 
   # Go module maintenance
   - repo: https://github.com/dnephin/pre-commit-golang
@@ -22,7 +28,7 @@ repos:
     hooks:
       - id: go-build
         name: go build
-        entry: go build -o /dev/null .
+        entry: go build -buildvcs=false -o /dev/null .
         language: system
         pass_filenames: false
         types: [go]
