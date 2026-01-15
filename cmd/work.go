@@ -8,11 +8,13 @@ import (
 	"github.com/cockroachdb/errors"
 	"github.com/spf13/cobra"
 
+	"thoreinstein.com/rig/pkg/beads"
 	"thoreinstein.com/rig/pkg/config"
 	"thoreinstein.com/rig/pkg/git"
 	"thoreinstein.com/rig/pkg/jira"
 	"thoreinstein.com/rig/pkg/notes"
 	"thoreinstein.com/rig/pkg/tmux"
+	"thoreinstein.com/rig/pkg/workflow"
 )
 
 var workNoNotes bool
@@ -137,6 +139,42 @@ func runWorkCommand(ticket string) error {
 		}
 	}
 
+	// Step 2b: Update beads status (if beads project detected)
+	var beadsInfo *beads.IssueInfo
+	router := workflow.NewTicketRouter(cfg, worktreePath, verbose)
+	ticketSource := router.RouteTicket(ticketInfo.Full)
+
+	if ticketSource == workflow.TicketSourceBeads && cfg.Beads.Enabled {
+		if verbose {
+			fmt.Println("Detected beads project, updating issue status...")
+		}
+		beadsClient, err := beads.NewCLIClient(cfg.Beads.CliCommand, verbose)
+		if err != nil {
+			if verbose {
+				fmt.Printf("Warning: Invalid beads CLI command: %v\n", err)
+			}
+		} else if beadsClient.IsAvailable() {
+			// First, fetch issue details for note integration
+			beadsInfo, err = beadsClient.Show(ticketInfo.Full)
+			if err != nil {
+				if verbose {
+					fmt.Printf("Warning: Could not fetch beads issue details: %v\n", err)
+				}
+			}
+
+			// Update status to in_progress
+			if err := beadsClient.UpdateStatus(ticketInfo.Full, "in_progress"); err != nil {
+				if verbose {
+					fmt.Printf("Warning: Could not update beads status: %v\n", err)
+				}
+			} else {
+				fmt.Println("Beads issue status updated to in_progress")
+			}
+		} else if verbose {
+			fmt.Printf("Warning: beads CLI '%s' not found in PATH\n", cfg.Beads.CliCommand)
+		}
+	}
+
 	// Step 3: Create/update note (unless --no-notes flag is set)
 	noteManager := notes.NewManager(
 		cfg.Notes.Path,
@@ -160,8 +198,12 @@ func runWorkCommand(ticket string) error {
 			WorktreePath: worktreePath,
 		}
 
-		// Add JIRA info if available
-		if jiraInfo != nil {
+		// Add issue info if available (beads takes precedence over JIRA)
+		if beadsInfo != nil {
+			noteData.Summary = beadsInfo.Title
+			noteData.Status = beadsInfo.Status
+			noteData.Description = beadsInfo.Description
+		} else if jiraInfo != nil {
 			noteData.Summary = jiraInfo.Summary
 			noteData.Status = jiraInfo.Status
 			noteData.Description = jiraInfo.Description
