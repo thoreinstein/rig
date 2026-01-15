@@ -265,6 +265,7 @@ func (e *Engine) Preflight(ctx context.Context, prNumber int, opts MergeOptions)
 				ticketInfo, err := e.jira.FetchTicketDetails(ticket)
 				if err != nil {
 					result.Warnings = append(result.Warnings, fmt.Sprintf("could not fetch Jira ticket: %v", err))
+					result.JiraSkipped = true // Treat fetch error as soft skip
 				} else {
 					// Check if ticket is in "In Review" or similar status
 					result.JiraInReview = isInReviewStatus(ticketInfo.Status)
@@ -280,6 +281,10 @@ func (e *Engine) Preflight(ctx context.Context, prNumber int, opts MergeOptions)
 			result.JiraSkipped = true
 			result.Warnings = append(result.Warnings, "could not extract ticket from branch name")
 		}
+	} else if !opts.SkipJira {
+		// Jira integration unavailable but check was not skipped
+		result.JiraSkipped = true
+		result.Warnings = append(result.Warnings, "Jira integration unavailable, skipping Jira checks")
 	}
 
 	return result, nil
