@@ -251,8 +251,10 @@ func workflowToDebriefContext(wf *MergeWorkflow) *debrief.Context {
 		}
 	}
 
-	// Calculate duration if we have commit history
-	if len(ctx.Commits) > 0 {
+	// Calculate duration: prefer workflow start time; fall back to first commit date
+	if !wf.StartedAt.IsZero() {
+		ctx.Duration = time.Since(wf.StartedAt)
+	} else if len(ctx.Commits) > 0 {
 		ctx.Duration = time.Since(ctx.Commits[0].Date)
 	}
 
