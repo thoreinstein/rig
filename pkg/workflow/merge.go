@@ -17,6 +17,7 @@ import (
 type Engine struct {
 	github  github.Client
 	jira    jira.JiraClient
+	router  *TicketRouter
 	cfg     *config.Config
 	verbose bool
 	logger  *slog.Logger
@@ -28,8 +29,9 @@ type Engine struct {
 //   - gh: GitHub client for PR operations (required)
 //   - jiraClient: Jira client for ticket operations (may be nil if Jira is disabled)
 //   - cfg: Configuration (required)
+//   - projectPath: Path to the project directory for ticket routing
 //   - verbose: Enable verbose logging
-func NewEngine(gh github.Client, jiraClient jira.JiraClient, cfg *config.Config, verbose bool) *Engine {
+func NewEngine(gh github.Client, jiraClient jira.JiraClient, cfg *config.Config, projectPath string, verbose bool) *Engine {
 	var logger *slog.Logger
 	if verbose {
 		logger = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
@@ -40,6 +42,7 @@ func NewEngine(gh github.Client, jiraClient jira.JiraClient, cfg *config.Config,
 	return &Engine{
 		github:  gh,
 		jira:    jiraClient,
+		router:  NewTicketRouter(cfg, projectPath, verbose),
 		cfg:     cfg,
 		verbose: verbose,
 		logger:  logger,
@@ -252,15 +255,21 @@ func (e *Engine) Preflight(ctx context.Context, prNumber int, opts MergeOptions)
 	if !opts.SkipJira && e.jira != nil && e.jira.IsAvailable() {
 		ticket := extractTicketFromBranch(pr.HeadBranch)
 		if ticket != "" {
-			ticketInfo, err := e.jira.FetchTicketDetails(ticket)
-			if err != nil {
-				result.Warnings = append(result.Warnings, fmt.Sprintf("could not fetch Jira ticket: %v", err))
-			} else {
-				// Check if ticket is in "In Review" or similar status
-				result.JiraInReview = isInReviewStatus(ticketInfo.Status)
-				if !result.JiraInReview && result.FailureReason == "" {
-					result.FailureReason = fmt.Sprintf("Jira ticket is not in review status (status: %s)", ticketInfo.Status)
+			source := e.router.RouteTicket(ticket)
+			if source == TicketSourceJira {
+				ticketInfo, err := e.jira.FetchTicketDetails(ticket)
+				if err != nil {
+					result.Warnings = append(result.Warnings, fmt.Sprintf("could not fetch Jira ticket: %v", err))
+				} else {
+					// Check if ticket is in "In Review" or similar status
+					result.JiraInReview = isInReviewStatus(ticketInfo.Status)
+					if !result.JiraInReview && result.FailureReason == "" {
+						result.FailureReason = fmt.Sprintf("Jira ticket is not in review status (status: %s)", ticketInfo.Status)
+					}
 				}
+			} else if source == TicketSourceBeads {
+				// Beads tickets don't need Jira status checks
+				result.JiraSkipped = true
 			}
 		} else {
 			result.JiraSkipped = true

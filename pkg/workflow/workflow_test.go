@@ -397,7 +397,7 @@ func TestNewEngine(t *testing.T) {
 	jiraClient := &mockJiraClient{}
 	cfg := &config.Config{}
 
-	engine := NewEngine(gh, jiraClient, cfg, false)
+	engine := NewEngine(gh, jiraClient, cfg, "", false)
 	if engine == nil {
 		t.Fatal("NewEngine returned nil")
 	}
@@ -405,7 +405,7 @@ func TestNewEngine(t *testing.T) {
 		t.Error("Engine verbose should be false")
 	}
 
-	engineVerbose := NewEngine(gh, jiraClient, cfg, true)
+	engineVerbose := NewEngine(gh, jiraClient, cfg, "", true)
 	if !engineVerbose.verbose {
 		t.Error("Engine verbose should be true")
 	}
@@ -491,9 +491,11 @@ func TestPreflight(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			gh := &mockGitHubClient{pr: tt.pr}
 			jiraClient := &mockJiraClient{ticketInfo: tt.jiraTicket}
-			cfg := &config.Config{}
+			cfg := &config.Config{
+				Jira: config.JiraConfig{Enabled: true},
+			}
 
-			engine := NewEngine(gh, jiraClient, cfg, false)
+			engine := NewEngine(gh, jiraClient, cfg, "", false)
 			result, err := engine.Preflight(t.Context(), 1, tt.opts)
 			if err != nil {
 				t.Fatalf("Preflight failed: %v", err)
