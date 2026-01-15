@@ -149,9 +149,12 @@ func runPRMerge(prNumber int) error {
 	// Build workflow options
 	// Determine if we should delete branch (flag takes precedence over config)
 	var deleteBranch *bool
-	if prMergeDeleteBranch {
-		deleteBranch = &prMergeDeleteBranch
+	if cmd.Flags().Changed("delete-branch") {
+		// Flag explicitly set (true or false) – honor user choice
+		val := prMergeDeleteBranch
+		deleteBranch = &val
 	} else if cfg.GitHub.DeleteBranchOnMerge {
+		// Flag not set – fall back to config
 		val := true
 		deleteBranch = &val
 	}
