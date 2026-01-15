@@ -8,7 +8,9 @@ import (
 	"testing"
 	"time"
 
+	"thoreinstein.com/rig/pkg/ai"
 	"thoreinstein.com/rig/pkg/config"
+	"thoreinstein.com/rig/pkg/debrief"
 	"thoreinstein.com/rig/pkg/github"
 	"thoreinstein.com/rig/pkg/jira"
 )
@@ -81,6 +83,30 @@ func (m *mockJiraClient) TransitionTicket(_, _ string) error {
 
 func (m *mockJiraClient) TransitionTicketByName(_, _ string) error {
 	return m.transitionError
+}
+
+// mockAIProvider implements ai.Provider for testing.
+type mockAIProvider struct {
+	available bool
+}
+
+func (m *mockAIProvider) IsAvailable() bool {
+	return m.available
+}
+
+func (m *mockAIProvider) Chat(_ context.Context, _ []ai.Message) (*ai.Response, error) {
+	return &ai.Response{Content: "mock response"}, nil
+}
+
+func (m *mockAIProvider) StreamChat(_ context.Context, _ []ai.Message) (<-chan ai.StreamChunk, error) {
+	ch := make(chan ai.StreamChunk, 1)
+	ch <- ai.StreamChunk{Content: "mock response", Done: true}
+	close(ch)
+	return ch, nil
+}
+
+func (m *mockAIProvider) Name() string {
+	return "mock"
 }
 
 func TestExtractTicketFromBranch(t *testing.T) {
@@ -397,7 +423,7 @@ func TestNewEngine(t *testing.T) {
 	jiraClient := &mockJiraClient{}
 	cfg := &config.Config{}
 
-	engine := NewEngine(gh, jiraClient, cfg, "", false)
+	engine := NewEngine(gh, jiraClient, nil, cfg, "", false)
 	if engine == nil {
 		t.Fatal("NewEngine returned nil")
 	}
@@ -405,9 +431,19 @@ func TestNewEngine(t *testing.T) {
 		t.Error("Engine verbose should be false")
 	}
 
-	engineVerbose := NewEngine(gh, jiraClient, cfg, "", true)
+	engineVerbose := NewEngine(gh, jiraClient, nil, cfg, "", true)
 	if !engineVerbose.verbose {
 		t.Error("Engine verbose should be true")
+	}
+
+	// Test with AI provider
+	aiProvider := &mockAIProvider{available: true}
+	engineWithAI := NewEngine(gh, jiraClient, aiProvider, cfg, "", false)
+	if engineWithAI == nil {
+		t.Fatal("NewEngine with AI provider returned nil")
+	}
+	if engineWithAI.ai == nil {
+		t.Error("Engine AI provider should not be nil")
 	}
 }
 
@@ -495,7 +531,7 @@ func TestPreflight(t *testing.T) {
 				Jira: config.JiraConfig{Enabled: true},
 			}
 
-			engine := NewEngine(gh, jiraClient, cfg, "", false)
+			engine := NewEngine(gh, jiraClient, nil, cfg, "", false)
 			result, err := engine.Preflight(t.Context(), 1, tt.opts)
 			if err != nil {
 				t.Fatalf("Preflight failed: %v", err)
@@ -508,6 +544,130 @@ func TestPreflight(t *testing.T) {
 			if tt.wantFailure != "" && result.FailureReason != tt.wantFailure {
 				t.Errorf("FailureReason = %q, want %q", result.FailureReason, tt.wantFailure)
 			}
+		})
+	}
+}
+
+func TestWorkflowToDebriefContext(t *testing.T) {
+	testTime := time.Now()
+
+	tests := []struct {
+		name     string
+		workflow *MergeWorkflow
+		checks   func(t *testing.T, ctx *debrief.Context)
+	}{
+		{
+			name: "basic context conversion",
+			workflow: &MergeWorkflow{
+				PRNumber:  123,
+				Ticket:    "TEST-456",
+				StartedAt: testTime,
+				Context: &WorkflowContext{
+					BranchName: "feature/TEST-456",
+					BaseBranch: "main",
+					PR: &github.PRInfo{
+						Title: "Add feature X",
+						Body:  "This PR adds feature X",
+					},
+				},
+			},
+			checks: func(t *testing.T, ctx *debrief.Context) {
+				if ctx.BranchName != "feature/TEST-456" {
+					t.Errorf("BranchName = %q, want %q", ctx.BranchName, "feature/TEST-456")
+				}
+				if ctx.BaseBranch != "main" {
+					t.Errorf("BaseBranch = %q, want %q", ctx.BaseBranch, "main")
+				}
+				if ctx.PRTitle != "Add feature X" {
+					t.Errorf("PRTitle = %q, want %q", ctx.PRTitle, "Add feature X")
+				}
+				if ctx.PRBody != "This PR adds feature X" {
+					t.Errorf("PRBody = %q, want %q", ctx.PRBody, "This PR adds feature X")
+				}
+				if ctx.TicketID != "TEST-456" {
+					t.Errorf("TicketID = %q, want %q", ctx.TicketID, "TEST-456")
+				}
+			},
+		},
+		{
+			name: "with commits",
+			workflow: &MergeWorkflow{
+				PRNumber:  123,
+				StartedAt: testTime,
+				Context: &WorkflowContext{
+					BranchName: "feature-branch",
+					BaseBranch: "main",
+					Commits: []CommitInfo{
+						{SHA: "abc1234", Message: "First commit", Author: "dev", Date: testTime.Add(-time.Hour)},
+						{SHA: "def5678", Message: "Second commit", Author: "dev", Date: testTime},
+					},
+				},
+			},
+			checks: func(t *testing.T, ctx *debrief.Context) {
+				if len(ctx.Commits) != 2 {
+					t.Errorf("Commits length = %d, want 2", len(ctx.Commits))
+				}
+				if ctx.Commits[0].SHA != "abc1234" {
+					t.Errorf("First commit SHA = %q, want %q", ctx.Commits[0].SHA, "abc1234")
+				}
+				if ctx.Commits[1].Message != "Second commit" {
+					t.Errorf("Second commit message = %q, want %q", ctx.Commits[1].Message, "Second commit")
+				}
+			},
+		},
+		{
+			name: "with jira ticket info",
+			workflow: &MergeWorkflow{
+				PRNumber:  123,
+				Ticket:    "PROJ-789",
+				StartedAt: testTime,
+				Context: &WorkflowContext{
+					BranchName: "PROJ-789",
+					BaseBranch: "main",
+					Ticket: &jira.TicketInfo{
+						Summary:     "Implement feature Y",
+						Type:        "Story",
+						Description: "Full description of feature Y",
+					},
+				},
+			},
+			checks: func(t *testing.T, ctx *debrief.Context) {
+				if ctx.TicketID != "PROJ-789" {
+					t.Errorf("TicketID = %q, want %q", ctx.TicketID, "PROJ-789")
+				}
+				if ctx.TicketSummary != "Implement feature Y" {
+					t.Errorf("TicketSummary = %q, want %q", ctx.TicketSummary, "Implement feature Y")
+				}
+				if ctx.TicketType != "Story" {
+					t.Errorf("TicketType = %q, want %q", ctx.TicketType, "Story")
+				}
+			},
+		},
+		{
+			name: "minimal context",
+			workflow: &MergeWorkflow{
+				PRNumber:  1,
+				StartedAt: testTime,
+				Context: &WorkflowContext{
+					BranchName: "branch",
+					BaseBranch: "main",
+				},
+			},
+			checks: func(t *testing.T, ctx *debrief.Context) {
+				if ctx.BranchName != "branch" {
+					t.Errorf("BranchName = %q, want %q", ctx.BranchName, "branch")
+				}
+				if ctx.PRTitle != "" {
+					t.Errorf("PRTitle should be empty, got %q", ctx.PRTitle)
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := workflowToDebriefContext(tt.workflow)
+			tt.checks(t, ctx)
 		})
 	}
 }

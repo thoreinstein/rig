@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"thoreinstein.com/rig/pkg/ai"
 	"thoreinstein.com/rig/pkg/config"
 	rigerrors "thoreinstein.com/rig/pkg/errors"
 	"thoreinstein.com/rig/pkg/github"
@@ -17,6 +18,7 @@ import (
 type Engine struct {
 	github  github.Client
 	jira    jira.JiraClient
+	ai      ai.Provider
 	router  *TicketRouter
 	cfg     *config.Config
 	verbose bool
@@ -28,10 +30,11 @@ type Engine struct {
 // Parameters:
 //   - gh: GitHub client for PR operations (required)
 //   - jiraClient: Jira client for ticket operations (may be nil if Jira is disabled)
+//   - aiProvider: AI provider for debrief operations (may be nil if AI is disabled)
 //   - cfg: Configuration (required)
 //   - projectPath: Path to the project directory for ticket routing
 //   - verbose: Enable verbose logging
-func NewEngine(gh github.Client, jiraClient jira.JiraClient, cfg *config.Config, projectPath string, verbose bool) *Engine {
+func NewEngine(gh github.Client, jiraClient jira.JiraClient, aiProvider ai.Provider, cfg *config.Config, projectPath string, verbose bool) *Engine {
 	var logger *slog.Logger
 	if verbose {
 		logger = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
@@ -42,6 +45,7 @@ func NewEngine(gh github.Client, jiraClient jira.JiraClient, cfg *config.Config,
 	return &Engine{
 		github:  gh,
 		jira:    jiraClient,
+		ai:      aiProvider,
 		router:  NewTicketRouter(cfg, projectPath, verbose),
 		cfg:     cfg,
 		verbose: verbose,
@@ -256,7 +260,8 @@ func (e *Engine) Preflight(ctx context.Context, prNumber int, opts MergeOptions)
 		ticket := extractTicketFromBranch(pr.HeadBranch)
 		if ticket != "" {
 			source := e.router.RouteTicket(ticket)
-			if source == TicketSourceJira {
+			switch source {
+			case TicketSourceJira:
 				ticketInfo, err := e.jira.FetchTicketDetails(ticket)
 				if err != nil {
 					result.Warnings = append(result.Warnings, fmt.Sprintf("could not fetch Jira ticket: %v", err))
@@ -267,7 +272,7 @@ func (e *Engine) Preflight(ctx context.Context, prNumber int, opts MergeOptions)
 						result.FailureReason = fmt.Sprintf("Jira ticket is not in review status (status: %s)", ticketInfo.Status)
 					}
 				}
-			} else if source == TicketSourceBeads {
+			case TicketSourceBeads:
 				// Beads tickets don't need Jira status checks
 				result.JiraSkipped = true
 			}

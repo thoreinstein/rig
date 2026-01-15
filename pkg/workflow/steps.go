@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"thoreinstein.com/rig/pkg/debrief"
 	rigerrors "thoreinstein.com/rig/pkg/errors"
 	"thoreinstein.com/rig/pkg/github"
 )
@@ -181,16 +182,90 @@ func (e *Engine) runDebrief(ctx context.Context, wf *MergeWorkflow, opts MergeOp
 		return nil
 	}
 
-	// TODO: Integrate with pkg/debrief when available
-	// For now, log that debrief would run here
-	e.log("AI debrief step (integration pending with pkg/debrief)")
+	// Check if AI provider is available
+	if e.ai == nil || !e.ai.IsAvailable() {
+		e.log("Skipping AI debrief (AI provider not available)")
+		return nil
+	}
 
-	// Placeholder: In the future, this will:
-	// 1. Create a debrief session with context
-	// 2. Run interactive Q&A
-	// 3. Store notes in wf.Context.DebriefNotes
+	// Check if stdin is a terminal (skip interactive debrief in non-interactive mode)
+	if !isTerminal() {
+		e.log("Skipping AI debrief (non-interactive mode)")
+		return nil
+	}
+
+	// Convert workflow context to debrief context
+	debriefCtx := workflowToDebriefContext(wf)
+
+	// Create and run the debrief session
+	e.log("Starting AI debrief session...")
+	session := debrief.NewDebriefSession(e.ai, debriefCtx, e.verbose)
+	output, err := session.Run(ctx)
+	if err != nil {
+		// Debrief errors are non-fatal - log and continue
+		e.logger.Warn("AI debrief failed", "error", err)
+		return nil
+	}
+
+	// Store the formatted notes in the workflow context
+	wf.Context.DebriefNotes = output.FormatMarkdown()
+	e.log("AI debrief completed successfully")
 
 	return nil
+}
+
+// workflowToDebriefContext converts WorkflowContext to debrief.Context.
+func workflowToDebriefContext(wf *MergeWorkflow) *debrief.Context {
+	ctx := &debrief.Context{
+		BranchName: wf.Context.BranchName,
+		BaseBranch: wf.Context.BaseBranch,
+		StartedAt:  wf.StartedAt,
+	}
+
+	// Map PR info
+	if wf.Context.PR != nil {
+		ctx.PRTitle = wf.Context.PR.Title
+		ctx.PRBody = wf.Context.PR.Body
+	}
+
+	// Map Jira ticket info
+	if wf.Context.Ticket != nil {
+		ctx.TicketID = wf.Ticket
+		ctx.TicketSummary = wf.Context.Ticket.Summary
+		ctx.TicketType = wf.Context.Ticket.Type
+		ctx.TicketDescription = wf.Context.Ticket.Description
+	} else if wf.Ticket != "" {
+		ctx.TicketID = wf.Ticket
+	}
+
+	// Map commits (convert CommitInfo to CommitSummary)
+	if len(wf.Context.Commits) > 0 {
+		ctx.Commits = make([]debrief.CommitSummary, len(wf.Context.Commits))
+		for i, c := range wf.Context.Commits {
+			ctx.Commits[i] = debrief.CommitSummary{
+				SHA:     c.SHA,
+				Message: c.Message,
+				Author:  c.Author,
+				Date:    c.Date,
+			}
+		}
+	}
+
+	// Calculate duration if we have commit history
+	if len(ctx.Commits) > 0 {
+		ctx.Duration = time.Since(ctx.Commits[len(ctx.Commits)-1].Date)
+	}
+
+	return ctx
+}
+
+// isTerminal checks if stdin is connected to a terminal.
+func isTerminal() bool {
+	fi, err := os.Stdin.Stat()
+	if err != nil {
+		return false
+	}
+	return (fi.Mode() & os.ModeCharDevice) != 0
 }
 
 // runMerge executes the actual merge on GitHub.
