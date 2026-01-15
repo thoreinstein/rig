@@ -249,6 +249,7 @@ func TestTicketRouter_RouteTicket(t *testing.T) {
 			cfg := &config.Config{
 				Beads: config.BeadsConfig{Enabled: tt.beadsEnabled},
 				Jira:  config.JiraConfig{Enabled: tt.jiraEnabled},
+				AI:    config.AIConfig{Enabled: false},
 			}
 			router := NewTicketRouter(cfg, tt.projectPath, false)
 			got := router.RouteTicket(tt.ticketID)
@@ -283,6 +284,7 @@ func TestTicketRouter_RouteTicket_NestedBeadsProject(t *testing.T) {
 	cfg := &config.Config{
 		Beads: config.BeadsConfig{Enabled: true},
 		Jira:  config.JiraConfig{Enabled: true},
+		AI:    config.AIConfig{Enabled: false},
 	}
 
 	// Route from nested directory should find beads root
@@ -303,6 +305,7 @@ func TestNewTicketRouter(t *testing.T) {
 	cfg := &config.Config{
 		Beads: config.BeadsConfig{Enabled: true, CliCommand: "bd"},
 		Jira:  config.JiraConfig{Enabled: false, BaseURL: "https://jira.example.com"},
+		AI:    config.AIConfig{Enabled: false},
 	}
 
 	router := NewTicketRouter(cfg, "/test/path", true)
