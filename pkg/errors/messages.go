@@ -230,9 +230,25 @@ func formatWorkflowError(err *WorkflowError) string {
 	switch err.Step {
 	case "preflight":
 		b.WriteString("\nPreflight checks failed. To fix this:\n")
-		b.WriteString("  • Ensure you have uncommitted changes staged\n")
-		b.WriteString("  • Verify your branch is up to date with the base branch\n")
-		b.WriteString("  • Check that all required tools are available\n")
+		// Provide context-aware guidance based on the failure reason
+		switch {
+		case strings.Contains(err.Message, "not approved"):
+			b.WriteString("  • Get at least one approval on your PR\n")
+			b.WriteString("  • Or use --skip-approval for self-authored PRs\n")
+		case strings.Contains(err.Message, "checks are not passing"):
+			b.WriteString("  • Check CI status on GitHub\n")
+			b.WriteString("  • Fix any failing tests or linter issues\n")
+		case strings.Contains(err.Message, "not open"):
+			b.WriteString("  • Ensure the PR hasn't been closed or already merged\n")
+		case strings.Contains(err.Message, "not in review status"):
+			b.WriteString("  • Move the Jira ticket to 'In Review' status\n")
+			b.WriteString("  • Or use --no-jira to skip Jira checks\n")
+		case strings.Contains(err.Message, "failed to fetch PR"):
+			b.WriteString("  • Verify the PR number is correct\n")
+			b.WriteString("  • Check network connectivity to GitHub\n")
+		default:
+			b.WriteString("  • Run with --verbose for more details\n")
+		}
 
 	case "gather":
 		b.WriteString("\nFailed to gather context. To fix this:\n")
