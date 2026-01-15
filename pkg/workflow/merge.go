@@ -276,6 +276,10 @@ func (e *Engine) Preflight(ctx context.Context, prNumber int, opts MergeOptions)
 			case TicketSourceBeads:
 				// Beads tickets don't need Jira status checks
 				result.JiraSkipped = true
+			default:
+				// Unknown ticket source - skip Jira checks with warning
+				result.JiraSkipped = true
+				result.Warnings = append(result.Warnings, fmt.Sprintf("unknown ticket source for %q, skipping Jira checks", ticket))
 			}
 		} else {
 			result.JiraSkipped = true
