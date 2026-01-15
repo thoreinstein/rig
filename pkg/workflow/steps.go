@@ -61,13 +61,16 @@ func (e *Engine) runGather(ctx context.Context, wf *MergeWorkflow, opts MergeOpt
 	ticket := extractTicketFromBranch(pr.HeadBranch)
 	wf.Ticket = ticket
 
-	// Fetch Jira ticket details if not skipped
+	// Fetch Jira ticket details if not skipped and ticket routes to Jira
 	if !opts.SkipJira && e.jira != nil && e.jira.IsAvailable() && ticket != "" {
-		ticketInfo, err := e.jira.FetchTicketDetails(ticket)
-		if err != nil {
-			e.logger.Warn("failed to fetch Jira ticket", "ticket", ticket, "error", err)
-		} else {
-			wf.Context.Ticket = ticketInfo
+		source := e.router.RouteTicket(ticket)
+		if source == TicketSourceJira {
+			ticketInfo, err := e.jira.FetchTicketDetails(ticket)
+			if err != nil {
+				e.logger.Warn("failed to fetch Jira ticket", "ticket", ticket, "error", err)
+			} else {
+				wf.Context.Ticket = ticketInfo
+			}
 		}
 	}
 
@@ -237,13 +240,16 @@ func (e *Engine) runMerge(ctx context.Context, wf *MergeWorkflow, opts MergeOpti
 func (e *Engine) runCloseout(ctx context.Context, wf *MergeWorkflow, opts MergeOptions) error {
 	var errs []string
 
-	// Transition Jira to Done
+	// Transition Jira to Done (only for Jira tickets)
 	if !opts.SkipJira && wf.Ticket != "" && e.jira != nil && e.jira.IsAvailable() {
-		if err := e.transitionJiraToDone(wf.Ticket); err != nil {
-			errs = append(errs, fmt.Sprintf("jira transition: %v", err))
-			e.logger.Warn("failed to transition Jira", "error", err)
-		} else {
-			e.log("Transitioned %s to Done", wf.Ticket)
+		source := e.router.RouteTicket(wf.Ticket)
+		if source == TicketSourceJira {
+			if err := e.transitionJiraToDone(wf.Ticket); err != nil {
+				errs = append(errs, fmt.Sprintf("jira transition: %v", err))
+				e.logger.Warn("failed to transition Jira", "error", err)
+			} else {
+				e.log("Transitioned %s to Done", wf.Ticket)
+			}
 		}
 	}
 
