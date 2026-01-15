@@ -9,12 +9,12 @@ const (
 	// BeadsDirName is the name of the beads configuration directory.
 	BeadsDirName = ".beads"
 
-	// BeadsFileName is the name of the beads issue database file.
-	BeadsFileName = "beads.jsonl"
+	// BeadsFileName is the name of the issue database file.
+	BeadsFileName = "issues.jsonl"
 )
 
 // IsBeadsProject checks if the given directory contains a beads project.
-// A beads project is identified by the presence of .beads/beads.jsonl.
+// A beads project is identified by the presence of .beads/issues.jsonl.
 func IsBeadsProject(dir string) bool {
 	beadsFile := filepath.Join(dir, BeadsDirName, BeadsFileName)
 	info, err := os.Stat(beadsFile)
@@ -25,7 +25,7 @@ func IsBeadsProject(dir string) bool {
 }
 
 // FindBeadsRoot walks up the directory tree from startDir looking for a
-// beads project root (a directory containing .beads/beads.jsonl).
+// beads project root (a directory containing .beads/issues.jsonl).
 // Returns the root directory path and true if found, or empty string and
 // false if no beads project is found.
 func FindBeadsRoot(startDir string) (string, bool) {
