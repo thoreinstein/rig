@@ -60,7 +60,7 @@ Examples:
 			}
 			prNumber = n
 		}
-		return runPRMerge(prNumber)
+		return runPRMerge(cmd, prNumber)
 	},
 }
 
@@ -78,7 +78,7 @@ func init() {
 		"Delete remote branch after merge (usually not needed if repo has auto-delete enabled)")
 }
 
-func runPRMerge(prNumber int) error {
+func runPRMerge(cmd *cobra.Command, prNumber int) error {
 	ctx := context.Background()
 
 	// Load configuration
