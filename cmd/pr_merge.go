@@ -167,7 +167,7 @@ func runPRMerge(prNumber int) error {
 
 	// Create and run workflow engine
 	fmt.Printf("Starting merge workflow for PR #%d...\n", prNumber)
-	engine := workflow.NewEngine(ghClient, jiraClient, cfg, cwd, verbose)
+	engine := workflow.NewEngine(ghClient, jiraClient, aiProvider, cfg, cwd, verbose)
 
 	if err := engine.Run(ctx, prNumber, opts); err != nil {
 		fmt.Println(rigerrors.FormatUserError(err))
