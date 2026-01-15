@@ -26,6 +26,7 @@ var (
 	prMergeNoJira       bool
 	prMergeMergeMethod  string
 	prMergeSkipApproval bool
+	prMergeDeleteBranch bool
 )
 
 // prMergeCmd executes the full merge workflow with AI debrief.
@@ -73,6 +74,8 @@ func init() {
 	prMergeCmd.Flags().BoolVar(&prMergeNoJira, "no-jira", false, "Skip Jira operations")
 	prMergeCmd.Flags().StringVar(&prMergeMergeMethod, "merge-method", "", "Merge method: merge, squash, rebase")
 	prMergeCmd.Flags().BoolVar(&prMergeSkipApproval, "skip-approval", false, "Skip approval check (for self-authored PRs)")
+	prMergeCmd.Flags().BoolVarP(&prMergeDeleteBranch, "delete-branch", "d", false,
+		"Delete remote branch after merge (usually not needed if repo has auto-delete enabled)")
 }
 
 func runPRMerge(prNumber int) error {
@@ -144,6 +147,15 @@ func runPRMerge(prNumber int) error {
 	}
 
 	// Build workflow options
+	// Determine if we should delete branch (flag takes precedence over config)
+	var deleteBranch *bool
+	if prMergeDeleteBranch {
+		deleteBranch = &prMergeDeleteBranch
+	} else if cfg.GitHub.DeleteBranchOnMerge {
+		val := true
+		deleteBranch = &val
+	}
+
 	opts := workflow.MergeOptions{
 		SkipAI:           prMergeNoAI || aiProvider == nil,
 		SkipJira:         prMergeNoJira || jiraClient == nil,
@@ -151,6 +163,7 @@ func runPRMerge(prNumber int) error {
 		MergeMethod:      resolveMergeMethod(cfg, prMergeMergeMethod),
 		SkipConfirmation: prMergeYes,
 		SkipApproval:     prMergeSkipApproval,
+		DeleteBranch:     deleteBranch,
 	}
 
 	// Apply config defaults for optional flags
