@@ -1,3 +1,118 @@
+# Release Notes: v0.8.0
+
+## Overview
+
+This release inverts the notes flag behavior for `hack` and `work` commands—notes are now created by default, with `--no-notes` available to opt out. This release also fixes `rig pr create` which was broken in non-interactive mode.
+
+**Release date:** 2026-01-14
+
+## Installation
+
+### Homebrew (recommended)
+
+```bash
+brew upgrade thoreinstein/tap/rig
+# or for fresh install:
+brew install thoreinstein/tap/rig
+```
+
+### Manual Installation
+
+1. Download the appropriate archive from the [releases page](https://github.com/thoreinstein/rig/releases/tag/v0.8.0)
+2. Extract and move to your PATH:
+
+```bash
+tar -xzf rig_0.8.0_darwin_arm64.tar.gz
+mv rig /usr/local/bin/
+```
+
+3. Verify installation:
+
+```bash
+rig version
+```
+
+## Breaking Changes
+
+### Notes Created by Default for `hack` and `work` Commands
+
+The notes flag has been inverted for consistency and improved workflow:
+
+| Before (v0.7.1) | After (v0.8.0) |
+|-----------------|----------------|
+| `rig hack foo` → No note created | `rig hack foo` → **Note created** |
+| `rig hack foo --notes` → Note created | *(flag removed)* |
+| `rig work PROJ-123` → Note created | `rig work PROJ-123` → Note created |
+| *(no opt-out available)* | `--no-notes` → Skip note creation |
+
+**Additional change:** The `hack` command now updates daily notes, matching `work` command behavior.
+
+**Migration:**
+
+```bash
+# Before (v0.7.1) - explicitly request notes
+rig hack experiment --notes
+
+# After (v0.8.0) - notes by default, opt out if needed
+rig hack experiment            # Notes created automatically
+rig hack experiment --no-notes # Opt out of note creation
+```
+
+**Impact on scripts:** Scripts using `rig hack` that expected no notes will now get notes created. Add `--no-notes` to preserve old behavior.
+
+## Bug Fixes
+
+### Fixed: `rig pr create` in Non-Interactive Mode
+
+**Symptom:** All `rig pr create` invocations failed when not running in an interactive terminal (e.g., from automation, agents, or scripts).
+
+**Root Cause:** The `gh` CLI requires both `--title` and `--body` flags when running non-interactively. Previously, `--body` was only passed when non-empty.
+
+**Fix:** `--body` is now always passed to `gh pr create`, even when empty.
+
+**Affected issues:** rig-cge, rig-a6t
+
+## Verification
+
+All releases are signed with [keyless Sigstore](https://www.sigstore.dev/). Verify the checksums file signature:
+
+```bash
+# Download checksums and signature
+curl -LO https://github.com/thoreinstein/rig/releases/download/v0.8.0/checksums.txt
+curl -LO https://github.com/thoreinstein/rig/releases/download/v0.8.0/checksums.txt.sig
+curl -LO https://github.com/thoreinstein/rig/releases/download/v0.8.0/checksums.txt.bundle
+
+# Verify signature
+cosign verify-blob \
+  --bundle checksums.txt.bundle \
+  --certificate-identity 'https://github.com/thoreinstein/rig/.github/workflows/release.yml@refs/tags/v0.8.0' \
+  --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+  checksums.txt
+
+# Verify your download against checksums
+sha256sum --check checksums.txt --ignore-missing
+```
+
+## Rollback
+
+If you need to revert to v0.7.1:
+
+```bash
+# Homebrew
+brew uninstall rig
+brew install thoreinstein/tap/rig@0.7.1
+
+# Manual
+curl -LO https://github.com/thoreinstein/rig/releases/download/v0.7.1/rig_0.7.1_darwin_arm64.tar.gz
+tar -xzf rig_0.7.1_darwin_arm64.tar.gz
+mv rig /usr/local/bin/
+```
+
+**After rollback:**
+- Remove `--no-notes` flags from any updated scripts
+- The `--notes` flag will be required again to create notes with `hack`
+- `rig pr create` will fail in non-interactive mode
+
 # Release Notes: v0.7.1
 
 ## Overview
