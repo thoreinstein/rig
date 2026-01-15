@@ -16,6 +16,7 @@ type Config struct {
 	Clone    CloneConfig    `mapstructure:"clone"`
 	History  HistoryConfig  `mapstructure:"history"`
 	Jira     JiraConfig     `mapstructure:"jira"`
+	Beads    BeadsConfig    `mapstructure:"beads"`
 	Tmux     TmuxConfig     `mapstructure:"tmux"`
 	GitHub   GitHubConfig   `mapstructure:"github"`
 	AI       AIConfig       `mapstructure:"ai"`
@@ -54,6 +55,12 @@ type JiraConfig struct {
 	Token        string            `mapstructure:"token"`         // API token (JIRA_TOKEN env var takes precedence)
 	CliCommand   string            `mapstructure:"cli_command"`   // For acli mode
 	CustomFields map[string]string `mapstructure:"custom_fields"` // Map of field name to customfield_ID
+}
+
+// BeadsConfig holds beads issue tracking configuration
+type BeadsConfig struct {
+	Enabled    bool   `mapstructure:"enabled"`
+	CliCommand string `mapstructure:"cli_command"` // Command to run (default: "bd")
 }
 
 // TmuxWindow represents a tmux window configuration
@@ -146,6 +153,10 @@ func setDefaults() {
 	viper.SetDefault("jira.token", "")
 	viper.SetDefault("jira.cli_command", "acli")
 	viper.SetDefault("jira.custom_fields", map[string]string{})
+
+	// Beads defaults
+	viper.SetDefault("beads.enabled", true)
+	viper.SetDefault("beads.cli_command", "bd")
 
 	// Tmux defaults
 	viper.SetDefault("tmux.session_prefix", "")

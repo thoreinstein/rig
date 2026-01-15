@@ -203,6 +203,49 @@ func NewJiraErrorWithCause(operation, ticket, message string, cause error) *Jira
 	}
 }
 
+// BeadsError represents beads issue tracking errors.
+type BeadsError struct {
+	Operation string
+	IssueID   string
+	Message   string
+	Retryable bool
+	Cause     error
+}
+
+// Error implements the error interface.
+func (e *BeadsError) Error() string {
+	if e.IssueID != "" {
+		return fmt.Sprintf("beads %s for %s failed: %s", e.Operation, e.IssueID, e.Message)
+	}
+	return fmt.Sprintf("beads %s failed: %s", e.Operation, e.Message)
+}
+
+// Unwrap returns the underlying cause for error chain traversal.
+func (e *BeadsError) Unwrap() error {
+	return e.Cause
+}
+
+// NewBeadsError creates a new BeadsError.
+func NewBeadsError(operation, message string) *BeadsError {
+	return &BeadsError{Operation: operation, Message: message}
+}
+
+// NewBeadsErrorWithIssue creates a new BeadsError for a specific issue.
+func NewBeadsErrorWithIssue(operation, issueID, message string) *BeadsError {
+	return &BeadsError{Operation: operation, IssueID: issueID, Message: message}
+}
+
+// NewBeadsErrorWithCause creates a new BeadsError with an underlying cause.
+func NewBeadsErrorWithCause(operation, issueID, message string, cause error) *BeadsError {
+	return &BeadsError{
+		Operation: operation,
+		IssueID:   issueID,
+		Message:   message,
+		Retryable: IsRetryable(cause),
+		Cause:     cause,
+	}
+}
+
 // WorkflowError represents workflow orchestration errors.
 type WorkflowError struct {
 	Step      string // e.g., "preflight", "gather", "debrief", "merge", "closeout"
@@ -265,6 +308,12 @@ func IsRetryable(err error) bool {
 		return jiraErr.Retryable
 	}
 
+	// Check BeadsError
+	var beadsErr *BeadsError
+	if errors.As(err, &beadsErr) {
+		return beadsErr.Retryable
+	}
+
 	// Check WorkflowError
 	var wfErr *WorkflowError
 	if errors.As(err, &wfErr) {
@@ -296,6 +345,12 @@ func IsAIError(err error) bool {
 func IsJiraError(err error) bool {
 	var jiraErr *JiraError
 	return errors.As(err, &jiraErr)
+}
+
+// IsBeadsError checks if an error or any error in its chain is a BeadsError.
+func IsBeadsError(err error) bool {
+	var beadsErr *BeadsError
+	return errors.As(err, &beadsErr)
 }
 
 // IsWorkflowError checks if an error or any error in its chain is a WorkflowError.
