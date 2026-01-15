@@ -193,9 +193,9 @@ func (c *CLIClient) MergePR(ctx context.Context, number int, opts MergeOptions) 
 	if opts.CommitBody != "" {
 		args = append(args, "--body", opts.CommitBody)
 	}
-	if opts.DeleteBranch {
-		args = append(args, "--delete-branch")
-	}
+	// Note: --delete-branch is intentionally NOT passed here.
+	// Branch deletion is handled separately via the API to avoid worktree conflicts
+	// when gh tries to checkout main to delete the local branch.
 
 	c.logDebug("merging PR", "number", number, "method", opts.Method)
 

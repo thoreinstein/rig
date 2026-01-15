@@ -302,10 +302,13 @@ func (e *Engine) runMerge(ctx context.Context, wf *MergeWorkflow, opts MergeOpti
 
 	e.log("Merging PR #%d using method: %s", wf.PRNumber, mergeMethod)
 
-	// Execute the merge
+	// Execute the merge (without --delete-branch to avoid worktree conflicts)
 	mergeOpts := github.MergeOptions{
-		Method:       mergeMethod,
-		DeleteBranch: deleteBranch,
+		Method: mergeMethod,
+		// Note: DeleteBranch is intentionally not passed here.
+		// gh pr merge --delete-branch tries to checkout main locally to delete the branch,
+		// which fails with "fatal: 'main' is already used by worktree".
+		// We handle branch deletion separately via the API below.
 	}
 
 	if err := e.github.MergePR(ctx, wf.PRNumber, mergeOpts); err != nil {
@@ -313,6 +316,22 @@ func (e *Engine) runMerge(ctx context.Context, wf *MergeWorkflow, opts MergeOpti
 	}
 
 	e.log("PR #%d merged successfully", wf.PRNumber)
+
+	// Delete remote branch if requested (worktree-safe - uses API, not local git)
+	if deleteBranch {
+		// Try to delete remote branch - may already be gone if repo has auto-delete enabled
+		if err := e.github.DeleteBranch(ctx, wf.Context.BranchName); err != nil {
+			// Check if it's a "not found" error (branch already deleted by GitHub)
+			errStr := err.Error()
+			if !strings.Contains(errStr, "Reference does not exist") && !strings.Contains(errStr, "404") {
+				e.logger.Warn("failed to delete remote branch", "branch", wf.Context.BranchName, "error", err)
+			}
+			// Non-fatal either way: merge succeeded
+		} else {
+			e.log("Deleted remote branch: %s", wf.Context.BranchName)
+		}
+	}
+
 	return nil
 }
 
