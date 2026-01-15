@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"os"
 	"strconv"
 
 	"github.com/cockroachdb/errors"
@@ -158,9 +159,15 @@ func runPRMerge(prNumber int) error {
 		opts.KeepWorktree = false
 	}
 
+	// Get current working directory for ticket routing
+	cwd, err := os.Getwd()
+	if err != nil {
+		return errors.Wrap(err, "failed to get current directory")
+	}
+
 	// Create and run workflow engine
 	fmt.Printf("Starting merge workflow for PR #%d...\n", prNumber)
-	engine := workflow.NewEngine(ghClient, jiraClient, cfg, verbose)
+	engine := workflow.NewEngine(ghClient, jiraClient, cfg, cwd, verbose)
 
 	if err := engine.Run(ctx, prNumber, opts); err != nil {
 		fmt.Println(rigerrors.FormatUserError(err))
