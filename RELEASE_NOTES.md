@@ -1,3 +1,170 @@
+# Release Notes: v0.9.0
+
+## Overview
+
+This release introduces **beads** as a first-class local issue tracking alternative to JIRA. The new `pkg/beads` package provides a full client for interacting with beads-tracked issues, while the TicketRouter intelligently routes ticket operations to either beads or JIRA based on identifier format. All existing JIRA workflows continue to work unchanged.
+
+**Release date:** 2026-01-15
+
+## Installation
+
+### Homebrew (recommended)
+
+```bash
+brew upgrade thoreinstein/tap/rig
+# or for fresh install:
+brew install thoreinstein/tap/rig
+```
+
+### Manual Installation
+
+1. Download the appropriate archive from the [releases page](https://github.com/thoreinstein/rig/releases/tag/v0.9.0)
+2. Extract and move to your PATH:
+
+```bash
+tar -xzf rig_0.9.0_darwin_arm64.tar.gz
+mv rig /usr/local/bin/
+```
+
+3. Verify installation:
+
+```bash
+rig version
+```
+
+## Features
+
+### Beads Integration
+
+[Beads](https://github.com/steveyegge/beads) is a lightweight, git-native issue tracker that stores issues in a local JSONL file (`.beads/beads.jsonl`). This release adds full beads support across rig's workflow commands.
+
+#### New Package: `pkg/beads`
+
+A complete beads client implementation:
+
+- **BeadsClient interface** — Abstracts beads operations for testability
+- **CLIClient implementation** — Executes the `bd` CLI under the hood
+- **Project detection** — Automatically detects beads projects via `.beads/beads.jsonl`
+- **Type definitions** — Full Go types for issues, statuses, and types
+
+#### Smart Ticket Routing
+
+The new TicketRouter automatically determines whether a ticket belongs to beads or JIRA:
+
+| Identifier Pattern  | Example               | Routes To |
+| ------------------- | --------------------- | --------- |
+| Alphanumeric suffix | `rig-abc123`, `beads-2o1` | Beads     |
+| Numeric suffix      | `PROJ-123`, `JIRA-456`    | JIRA      |
+
+This routing is transparent—commands like `rig work` and `rig pr merge` automatically use the correct backend.
+
+#### `rig work` Beads Support
+
+When starting work on a beads ticket, the issue status is automatically updated to `in_progress`:
+
+```bash
+# Beads ticket — updates status in .beads/beads.jsonl
+rig work rig-abc123
+
+# JIRA ticket — unchanged behavior
+rig work PROJ-123
+```
+
+### AI Debrief Integration
+
+The AI provider is now wired into the workflow engine, enabling AI-powered debrief sessions during `rig pr merge`. This completes the integration started in v0.7.0.
+
+### API-Based Branch Deletion
+
+Branch cleanup after PR merge now uses the GitHub API directly instead of local git operations. This avoids conflicts when deleting branches that are checked out in other worktrees.
+
+## Bug Fixes
+
+### Beads Detection Fix
+
+**Symptom:** Beads projects were not detected even when `.beads/` directory existed.
+
+**Root Cause:** Detection logic looked for the wrong filename.
+
+**Fix:** Now correctly checks for `.beads/beads.jsonl`. (`7e54767`)
+
+### Preflight Improvements
+
+Several fixes to make preflight checks more robust and helpful:
+
+| Commit  | Fix                                                      |
+| ------- | -------------------------------------------------------- |
+| `a4a75f5` | Handle `TicketSourceUnknown` in preflight switch statement |
+| `4e2eec4` | Fix empty `FailureReason` when JIRA is unavailable         |
+| `4696bd9` | Context-aware error guidance based on ticket source      |
+
+### PR Merge Fixes
+
+| Commit  | Fix                                              |
+| ------- | ------------------------------------------------ |
+| `7d5cf7f` | Fix undefined `cmd` variable in `runPRMerge`         |
+| `d971bcd` | Improve JIRA client initialization error message |
+| `f0d94ee` | Skip JIRA fetch for beads tickets during merge   |
+| `73dfeb1` | General PR merge cleanup                         |
+
+## Configuration
+
+### Beads Configuration
+
+Beads requires no configuration—project detection is automatic. If a `.beads/beads.jsonl` file exists in your repository (or any parent directory), rig will use beads for alphanumeric ticket identifiers.
+
+**Requirements:**
+- The `bd` CLI must be installed and available in your PATH
+- Initialize a beads project with `bd init <prefix>` if one doesn't exist
+
+### Unchanged Defaults
+
+All new functionality has sensible defaults:
+- JIRA workflows continue to work exactly as before
+- Ticket routing is automatic based on identifier format
+- No configuration changes required for existing users
+
+## Verification
+
+All releases are signed with [keyless Sigstore](https://www.sigstore.dev/). Verify the checksums file signature:
+
+```bash
+# Download checksums and signature
+curl -LO https://github.com/thoreinstein/rig/releases/download/v0.9.0/checksums.txt
+curl -LO https://github.com/thoreinstein/rig/releases/download/v0.9.0/checksums.txt.sig
+curl -LO https://github.com/thoreinstein/rig/releases/download/v0.9.0/checksums.txt.bundle
+
+# Verify signature
+cosign verify-blob \
+  --bundle checksums.txt.bundle \
+  --certificate-identity 'https://github.com/thoreinstein/rig/.github/workflows/release.yml@refs/tags/v0.9.0' \
+  --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+  checksums.txt
+
+# Verify your download against checksums
+sha256sum --check checksums.txt --ignore-missing
+```
+
+## Rollback
+
+If you need to revert to v0.8.0:
+
+```bash
+# Homebrew
+brew uninstall rig
+brew install thoreinstein/tap/rig@0.8.0
+
+# Manual
+curl -LO https://github.com/thoreinstein/rig/releases/download/v0.8.0/rig_0.8.0_darwin_arm64.tar.gz
+tar -xzf rig_0.8.0_darwin_arm64.tar.gz
+mv rig /usr/local/bin/
+```
+
+**After rollback:**
+- Beads tickets (`rig-abc123` style) will still be parsed but won't update beads issue status
+- JIRA workflows are unaffected
+- The `--no-notes` flag introduced in v0.8.0 remains available
+
 # Release Notes: v0.8.0
 
 ## Overview

@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-01-15
+
+### Added
+
+- 9c983d6: Add pkg/beads with detection and client interface
+  - BeadsClient interface and CLIClient implementation
+  - Project detection via `.beads/beads.jsonl`
+- 40379f2: Implement TicketRouter for beads vs JIRA routing
+  - Alphanumeric ticket IDs (rig-abc123) → beads
+  - Numeric ticket IDs (PROJ-123) → JIRA
+- 2cb8b06: Integrate beads status update into rig work command
+- c05b7ea: Integrate AI provider into workflow engine for debrief
+- a3108c4: Handle branch deletion via API to avoid worktree conflicts
+
+### Fixed
+
+- 7e54767: Fix Beads detection to use correct filename (beads.jsonl)
+- a4a75f5: Handle TicketSourceUnknown in preflight switch
+- 4e2eec4: Fix preflight empty FailureReason when Jira unavailable
+- 4696bd9: Fix preflight error guidance to be context-aware
+- 7d5cf7f: Fix undefined cmd variable in runPRMerge
+- d971bcd: Improve JIRA client initialization error message
+- f0d94ee: Fix pr merge attempting Jira fetch for beads tickets
+- 73dfeb1: PR merge cleanup
+
+### Tests
+
+- 88f7052: Add explicit AI config initialization in router tests
+- 2a79819: Add comprehensive unit tests for BeadsError type
+
 ## [0.8.0] - 2026-01-14
 
 ### Changed
@@ -226,6 +256,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - bc72a00: Bump golangci/golangci-lint-action from 6 to 9
 - bbc29e2: Bump golangci/golangci-lint-action from 6 to 9
 
+[0.9.0]: https://github.com/thoreinstein/rig/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/thoreinstein/rig/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/thoreinstein/rig/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/thoreinstein/rig/compare/v0.6.0...v0.7.0
