@@ -99,9 +99,9 @@ func TestTicketRouter_RouteTicket(t *testing.T) {
 	if err := os.MkdirAll(beadsDir, 0o755); err != nil {
 		t.Fatalf("failed to create .beads directory: %v", err)
 	}
-	beadsFile := filepath.Join(beadsDir, "beads.jsonl")
+	beadsFile := filepath.Join(beadsDir, "issues.jsonl")
 	if err := os.WriteFile(beadsFile, []byte("{}"), 0o644); err != nil {
-		t.Fatalf("failed to create beads.jsonl: %v", err)
+		t.Fatalf("failed to create issues.jsonl: %v", err)
 	}
 
 	// Create non-beads project structure
@@ -271,9 +271,9 @@ func TestTicketRouter_RouteTicket_NestedBeadsProject(t *testing.T) {
 	if err := os.MkdirAll(beadsDir, 0o755); err != nil {
 		t.Fatalf("failed to create .beads directory: %v", err)
 	}
-	beadsFile := filepath.Join(beadsDir, "beads.jsonl")
+	beadsFile := filepath.Join(beadsDir, "issues.jsonl")
 	if err := os.WriteFile(beadsFile, []byte("{}"), 0o644); err != nil {
-		t.Fatalf("failed to create beads.jsonl: %v", err)
+		t.Fatalf("failed to create issues.jsonl: %v", err)
 	}
 
 	// Create nested directory

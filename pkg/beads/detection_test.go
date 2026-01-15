@@ -21,15 +21,15 @@ func TestIsBeadsProject(t *testing.T) {
 		t.Fatalf("failed to create .beads directory: %v", err)
 	}
 
-	// Test case: .beads exists but no beads.jsonl
+	// Test case: .beads exists but no issues.jsonl
 	if IsBeadsProject(tmpDir) {
-		t.Error("IsBeadsProject() should return false without beads.jsonl")
+		t.Error("IsBeadsProject() should return false without issues.jsonl")
 	}
 
-	// Create beads.jsonl file
+	// Create issues.jsonl file
 	beadsFile := filepath.Join(beadsDir, BeadsFileName)
 	if err := os.WriteFile(beadsFile, []byte("{}"), 0o644); err != nil {
-		t.Fatalf("failed to create beads.jsonl: %v", err)
+		t.Fatalf("failed to create issues.jsonl: %v", err)
 	}
 
 	// Test case: valid beads project
@@ -81,7 +81,7 @@ func TestFindBeadsRoot(t *testing.T) {
 	}
 	beadsFile := filepath.Join(beadsDir, BeadsFileName)
 	if err := os.WriteFile(beadsFile, []byte("{}"), 0o644); err != nil {
-		t.Fatalf("failed to create beads.jsonl: %v", err)
+		t.Fatalf("failed to create issues.jsonl: %v", err)
 	}
 
 	// Test case: find beads root from level3
@@ -114,7 +114,7 @@ func TestFindBeadsRoot_RelativePath(t *testing.T) {
 	}
 	beadsFile := filepath.Join(beadsDir, BeadsFileName)
 	if err := os.WriteFile(beadsFile, []byte("{}"), 0o644); err != nil {
-		t.Fatalf("failed to create beads.jsonl: %v", err)
+		t.Fatalf("failed to create issues.jsonl: %v", err)
 	}
 
 	// Change to tmpDir to test relative path handling
@@ -145,7 +145,7 @@ func TestConstants(t *testing.T) {
 	if BeadsDirName != ".beads" {
 		t.Errorf("BeadsDirName = %q, want %q", BeadsDirName, ".beads")
 	}
-	if BeadsFileName != "beads.jsonl" {
-		t.Errorf("BeadsFileName = %q, want %q", BeadsFileName, "beads.jsonl")
+	if BeadsFileName != "issues.jsonl" {
+		t.Errorf("BeadsFileName = %q, want %q", BeadsFileName, "issues.jsonl")
 	}
 }
