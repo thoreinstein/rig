@@ -251,11 +251,20 @@ func workflowToDebriefContext(wf *MergeWorkflow) *debrief.Context {
 		}
 	}
 
-	// Calculate duration: prefer workflow start time; fall back to first commit date
-	if !wf.StartedAt.IsZero() {
-		ctx.Duration = time.Since(wf.StartedAt)
-	} else if len(ctx.Commits) > 0 {
-		ctx.Duration = time.Since(ctx.Commits[0].Date)
+	// Calculate duration: prefer workflow start time; fall back to commit range
+	if !wf.StartedAt.IsZero() && len(ctx.Commits) > 0 {
+		// Use the last commit time as an approximation of workflow completion time
+		lastCommitTime := ctx.Commits[len(ctx.Commits)-1].Date
+		if lastCommitTime.After(wf.StartedAt) {
+			ctx.Duration = lastCommitTime.Sub(wf.StartedAt)
+		}
+	} else if len(ctx.Commits) > 1 {
+		// Fallback: duration between first and last commit
+		firstCommitTime := ctx.Commits[0].Date
+		lastCommitTime := ctx.Commits[len(ctx.Commits)-1].Date
+		if lastCommitTime.After(firstCommitTime) {
+			ctx.Duration = lastCommitTime.Sub(firstCommitTime)
+		}
 	}
 
 	return ctx
