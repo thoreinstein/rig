@@ -275,13 +275,7 @@ func TestCheckSecurityWarnings_GitHubToken(t *testing.T) {
 	}
 
 	// Ensure env var is not set
-	origEnv := os.Getenv("RIG_GITHUB_TOKEN")
-	os.Unsetenv("RIG_GITHUB_TOKEN")
-	defer func() {
-		if origEnv != "" {
-			os.Setenv("RIG_GITHUB_TOKEN", origEnv)
-		}
-	}()
+	t.Setenv("RIG_GITHUB_TOKEN", "")
 
 	warnings := CheckSecurityWarnings(config)
 	if len(warnings) != 1 {
@@ -300,15 +294,7 @@ func TestCheckSecurityWarnings_GitHubTokenEnvVar(t *testing.T) {
 		},
 	}
 
-	origEnv := os.Getenv("RIG_GITHUB_TOKEN")
-	os.Setenv("RIG_GITHUB_TOKEN", "env_token")
-	defer func() {
-		if origEnv != "" {
-			os.Setenv("RIG_GITHUB_TOKEN", origEnv)
-		} else {
-			os.Unsetenv("RIG_GITHUB_TOKEN")
-		}
-	}()
+	t.Setenv("RIG_GITHUB_TOKEN", "env_token")
 
 	warnings := CheckSecurityWarnings(config)
 	if len(warnings) != 0 {
@@ -331,40 +317,12 @@ func TestCheckSecurityWarnings_AllTokens(t *testing.T) {
 	}
 
 	// Ensure all env vars are not set
-	origGH := os.Getenv("RIG_GITHUB_TOKEN")
-	origJira := os.Getenv("RIG_JIRA_TOKEN")
-	origJira2 := os.Getenv("JIRA_TOKEN")
-	origAI := os.Getenv("RIG_AI_API_KEY")
-	origAnthropic := os.Getenv("ANTHROPIC_API_KEY")
-	origGroq := os.Getenv("GROQ_API_KEY")
-
-	os.Unsetenv("RIG_GITHUB_TOKEN")
-	os.Unsetenv("RIG_JIRA_TOKEN")
-	os.Unsetenv("JIRA_TOKEN")
-	os.Unsetenv("RIG_AI_API_KEY")
-	os.Unsetenv("ANTHROPIC_API_KEY")
-	os.Unsetenv("GROQ_API_KEY")
-
-	defer func() {
-		if origGH != "" {
-			os.Setenv("RIG_GITHUB_TOKEN", origGH)
-		}
-		if origJira != "" {
-			os.Setenv("RIG_JIRA_TOKEN", origJira)
-		}
-		if origJira2 != "" {
-			os.Setenv("JIRA_TOKEN", origJira2)
-		}
-		if origAI != "" {
-			os.Setenv("RIG_AI_API_KEY", origAI)
-		}
-		if origAnthropic != "" {
-			os.Setenv("ANTHROPIC_API_KEY", origAnthropic)
-		}
-		if origGroq != "" {
-			os.Setenv("GROQ_API_KEY", origGroq)
-		}
-	}()
+	t.Setenv("RIG_GITHUB_TOKEN", "")
+	t.Setenv("RIG_JIRA_TOKEN", "")
+	t.Setenv("JIRA_TOKEN", "")
+	t.Setenv("RIG_AI_API_KEY", "")
+	t.Setenv("ANTHROPIC_API_KEY", "")
+	t.Setenv("GROQ_API_KEY", "")
 
 	warnings := CheckSecurityWarnings(config)
 	if len(warnings) != 3 {
