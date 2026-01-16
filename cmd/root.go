@@ -88,11 +88,16 @@ func initConfig() {
 
 	// Check for security warnings (tokens in config file)
 	cfg, err := config.Load()
-	if err == nil {
-		warnings := config.CheckSecurityWarnings(cfg)
-		for _, w := range warnings {
-			fmt.Fprintf(os.Stderr, "Warning: %s\n", w.Message)
+	if err != nil {
+		if verbose {
+			fmt.Fprintf(os.Stderr, "Warning: could not load config for security checks: %v\n", err)
 		}
+		return
+	}
+
+	warnings := config.CheckSecurityWarnings(cfg)
+	for _, w := range warnings {
+		fmt.Fprintf(os.Stderr, "Warning: %s\n", w.Message)
 	}
 }
 
