@@ -90,9 +90,15 @@ type GitHubConfig struct {
 type AIConfig struct {
 	Enabled  bool   `mapstructure:"enabled"`
 	Provider string `mapstructure:"provider"` // "anthropic", "groq", "ollama"
-	Model    string `mapstructure:"model"`    // e.g., "claude-3-5-sonnet-20241022"
+	Model    string `mapstructure:"model"`    // e.g., "claude-sonnet-4-20250514"
 	APIKey   string `mapstructure:"api_key"`  // Provider API key (env var takes precedence)
 	Endpoint string `mapstructure:"endpoint"` // Custom endpoint URL (e.g., for Ollama: http://localhost:11434)
+
+	// Per-provider default models (used when Model is empty)
+	AnthropicModel string `mapstructure:"anthropic_model"` // Default: claude-sonnet-4-20250514
+	GroqModel      string `mapstructure:"groq_model"`      // Default: llama-3.3-70b-versatile
+	OllamaModel    string `mapstructure:"ollama_model"`    // Default: llama3.2
+	OllamaEndpoint string `mapstructure:"ollama_endpoint"` // Default: http://localhost:11434
 }
 
 // WorkflowConfig holds PR workflow automation configuration
@@ -100,6 +106,12 @@ type WorkflowConfig struct {
 	TransitionJira       bool `mapstructure:"transition_jira"`        // Auto-transition Jira on merge
 	KillSession          bool `mapstructure:"kill_session"`           // Kill tmux session on merge
 	QueueWorktreeCleanup bool `mapstructure:"queue_worktree_cleanup"` // Queue worktree for cleanup
+}
+
+// SecurityWarning represents a configuration security issue
+type SecurityWarning struct {
+	Field   string
+	Message string
 }
 
 // Load loads the configuration from file and environment variables
@@ -119,7 +131,70 @@ func Load() (*Config, error) {
 		return nil, errors.Wrap(err, "failed to expand paths")
 	}
 
+	// Validate configuration
+	if err := config.Validate(); err != nil {
+		return nil, errors.Wrap(err, "config validation failed")
+	}
+
 	return config, nil
+}
+
+// CheckSecurityWarnings returns warnings for insecure configuration practices.
+// Call this when loading config to warn users about tokens stored in config files.
+func CheckSecurityWarnings(config *Config) []SecurityWarning {
+	var warnings []SecurityWarning
+
+	// Check for tokens in config file (should use environment variables instead)
+	// Consider checking viper.InConfig("github.token") if possible to warn whenever
+	// the secret exists in a physical file, regardless of environment overrides.
+	if config.GitHub.Token != "" && os.Getenv("RIG_GITHUB_TOKEN") == "" {
+		warnings = append(warnings, SecurityWarning{
+			Field:   "github.token",
+			Message: "GitHub token is set in config file. For security, use RIG_GITHUB_TOKEN environment variable or 'gh auth login' instead.",
+		})
+	}
+
+	if config.Jira.Token != "" && os.Getenv("RIG_JIRA_TOKEN") == "" && os.Getenv("JIRA_TOKEN") == "" {
+		warnings = append(warnings, SecurityWarning{
+			Field:   "jira.token",
+			Message: "Jira token is set in config file. For security, use RIG_JIRA_TOKEN or JIRA_TOKEN environment variable instead.",
+		})
+	}
+
+	if config.AI.APIKey != "" && os.Getenv("RIG_AI_API_KEY") == "" &&
+		os.Getenv("ANTHROPIC_API_KEY") == "" && os.Getenv("GROQ_API_KEY") == "" {
+		warnings = append(warnings, SecurityWarning{
+			Field:   "ai.api_key",
+			Message: "AI API key is set in config file. For security, use environment variables (ANTHROPIC_API_KEY, GROQ_API_KEY, or RIG_AI_API_KEY) instead.",
+		})
+	}
+
+	return warnings
+}
+
+// ValidMergeMethods is the list of supported GitHub merge methods.
+var ValidMergeMethods = []string{"merge", "squash", "rebase"}
+
+// ValidateMergeMethod validates that a merge method is supported.
+// Returns the method if valid, or an error if not.
+func ValidateMergeMethod(method string) error {
+	if method == "" {
+		return nil // Empty is allowed, will use default
+	}
+	for _, valid := range ValidMergeMethods {
+		if method == valid {
+			return nil
+		}
+	}
+	return errors.Newf("invalid merge method %q: must be one of: merge, squash, rebase", method)
+}
+
+// Validate validates the configuration and returns any validation errors.
+func (c *Config) Validate() error {
+	if err := ValidateMergeMethod(c.GitHub.DefaultMergeMethod); err != nil {
+		return errors.Wrap(err, "github.default_merge_method")
+	}
+	return nil
 }
 
 // setDefaults sets default configuration values
@@ -177,9 +252,15 @@ func setDefaults() {
 	// AI defaults
 	viper.SetDefault("ai.enabled", true)
 	viper.SetDefault("ai.provider", "anthropic")
-	viper.SetDefault("ai.model", "claude-sonnet-4-20250514")
+	viper.SetDefault("ai.model", "") // Empty means use per-provider default
 	viper.SetDefault("ai.api_key", "")
-	viper.SetDefault("ai.endpoint", "") // Empty means use provider default (e.g., http://localhost:11434 for Ollama)
+	viper.SetDefault("ai.endpoint", "") // Empty means use provider default
+
+	// Per-provider AI model defaults (configurable)
+	viper.SetDefault("ai.anthropic_model", "claude-sonnet-4-20250514")
+	viper.SetDefault("ai.groq_model", "llama-3.3-70b-versatile")
+	viper.SetDefault("ai.ollama_model", "llama3.2")
+	viper.SetDefault("ai.ollama_endpoint", "http://localhost:11434")
 
 	// Workflow defaults
 	viper.SetDefault("workflow.transition_jira", true)
