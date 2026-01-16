@@ -255,3 +255,184 @@ func TestConfigStructure(t *testing.T) {
 		t.Error("Tmux.Windows not set correctly")
 	}
 }
+
+func TestCheckSecurityWarnings_NoWarnings(t *testing.T) {
+	// Config with no tokens - should produce no warnings
+	config := &Config{}
+
+	warnings := CheckSecurityWarnings(config)
+	if len(warnings) != 0 {
+		t.Errorf("Expected no warnings for empty config, got %d: %+v", len(warnings), warnings)
+	}
+}
+
+func TestCheckSecurityWarnings_GitHubToken(t *testing.T) {
+	// Config with GitHub token in config file (not via env var)
+	config := &Config{
+		GitHub: GitHubConfig{
+			Token: "ghp_secret_token",
+		},
+	}
+
+	// Ensure env var is not set
+	origEnv := os.Getenv("RIG_GITHUB_TOKEN")
+	os.Unsetenv("RIG_GITHUB_TOKEN")
+	defer func() {
+		if origEnv != "" {
+			os.Setenv("RIG_GITHUB_TOKEN", origEnv)
+		}
+	}()
+
+	warnings := CheckSecurityWarnings(config)
+	if len(warnings) != 1 {
+		t.Errorf("Expected 1 warning for GitHub token in config, got %d", len(warnings))
+	}
+	if len(warnings) > 0 && warnings[0].Field != "github.token" {
+		t.Errorf("Expected warning field 'github.token', got %q", warnings[0].Field)
+	}
+}
+
+func TestCheckSecurityWarnings_GitHubTokenEnvVar(t *testing.T) {
+	// Config with GitHub token, but env var is also set (should be silent)
+	config := &Config{
+		GitHub: GitHubConfig{
+			Token: "ghp_secret_token",
+		},
+	}
+
+	origEnv := os.Getenv("RIG_GITHUB_TOKEN")
+	os.Setenv("RIG_GITHUB_TOKEN", "env_token")
+	defer func() {
+		if origEnv != "" {
+			os.Setenv("RIG_GITHUB_TOKEN", origEnv)
+		} else {
+			os.Unsetenv("RIG_GITHUB_TOKEN")
+		}
+	}()
+
+	warnings := CheckSecurityWarnings(config)
+	if len(warnings) != 0 {
+		t.Errorf("Expected no warnings when env var is set, got %d: %+v", len(warnings), warnings)
+	}
+}
+
+func TestCheckSecurityWarnings_AllTokens(t *testing.T) {
+	// Config with all tokens set in config file
+	config := &Config{
+		GitHub: GitHubConfig{
+			Token: "ghp_secret",
+		},
+		Jira: JiraConfig{
+			Token: "jira_secret",
+		},
+		AI: AIConfig{
+			APIKey: "ai_secret",
+		},
+	}
+
+	// Ensure all env vars are not set
+	origGH := os.Getenv("RIG_GITHUB_TOKEN")
+	origJira := os.Getenv("RIG_JIRA_TOKEN")
+	origJira2 := os.Getenv("JIRA_TOKEN")
+	origAI := os.Getenv("RIG_AI_API_KEY")
+	origAnthropic := os.Getenv("ANTHROPIC_API_KEY")
+	origGroq := os.Getenv("GROQ_API_KEY")
+
+	os.Unsetenv("RIG_GITHUB_TOKEN")
+	os.Unsetenv("RIG_JIRA_TOKEN")
+	os.Unsetenv("JIRA_TOKEN")
+	os.Unsetenv("RIG_AI_API_KEY")
+	os.Unsetenv("ANTHROPIC_API_KEY")
+	os.Unsetenv("GROQ_API_KEY")
+
+	defer func() {
+		if origGH != "" {
+			os.Setenv("RIG_GITHUB_TOKEN", origGH)
+		}
+		if origJira != "" {
+			os.Setenv("RIG_JIRA_TOKEN", origJira)
+		}
+		if origJira2 != "" {
+			os.Setenv("JIRA_TOKEN", origJira2)
+		}
+		if origAI != "" {
+			os.Setenv("RIG_AI_API_KEY", origAI)
+		}
+		if origAnthropic != "" {
+			os.Setenv("ANTHROPIC_API_KEY", origAnthropic)
+		}
+		if origGroq != "" {
+			os.Setenv("GROQ_API_KEY", origGroq)
+		}
+	}()
+
+	warnings := CheckSecurityWarnings(config)
+	if len(warnings) != 3 {
+		t.Errorf("Expected 3 warnings for all tokens, got %d: %+v", len(warnings), warnings)
+	}
+}
+
+func TestValidateMergeMethod_Valid(t *testing.T) {
+	validMethods := []string{"merge", "squash", "rebase", ""}
+	for _, method := range validMethods {
+		t.Run(method, func(t *testing.T) {
+			err := ValidateMergeMethod(method)
+			if err != nil {
+				t.Errorf("ValidateMergeMethod(%q) returned error: %v", method, err)
+			}
+		})
+	}
+}
+
+func TestValidateMergeMethod_Invalid(t *testing.T) {
+	invalidMethods := []string{"fast-forward", "invalid", "SQUASH", "Merge"}
+	for _, method := range invalidMethods {
+		t.Run(method, func(t *testing.T) {
+			err := ValidateMergeMethod(method)
+			if err == nil {
+				t.Errorf("ValidateMergeMethod(%q) should have returned error", method)
+			}
+		})
+	}
+}
+
+func TestConfig_Validate(t *testing.T) {
+	tests := []struct {
+		name    string
+		config  *Config
+		wantErr bool
+	}{
+		{
+			name:    "empty config",
+			config:  &Config{},
+			wantErr: false,
+		},
+		{
+			name: "valid merge method",
+			config: &Config{
+				GitHub: GitHubConfig{
+					DefaultMergeMethod: "squash",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "invalid merge method",
+			config: &Config{
+				GitHub: GitHubConfig{
+					DefaultMergeMethod: "invalid",
+				},
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.config.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
