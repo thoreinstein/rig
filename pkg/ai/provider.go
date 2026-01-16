@@ -60,6 +60,7 @@ const (
 
 // NewProvider creates an AI provider based on config.
 // Environment variables take precedence over config file values for API keys.
+// When model is empty, provider-specific default models from config are used.
 func NewProvider(cfg *config.AIConfig, verbose bool) (Provider, error) {
 	if cfg == nil {
 		return nil, rigerrors.NewConfigError("ai", "config is nil")
@@ -81,7 +82,12 @@ func NewProvider(cfg *config.AIConfig, verbose bool) (Provider, error) {
 			return nil, rigerrors.NewConfigError("ai.api_key",
 				"Anthropic API key not set (set ANTHROPIC_API_KEY or ai.api_key in config)")
 		}
-		return NewAnthropicProvider(apiKey, cfg.Model, logger), nil
+		// Use global model if set, otherwise use provider-specific default
+		model := cfg.Model
+		if model == "" {
+			model = cfg.AnthropicModel
+		}
+		return NewAnthropicProvider(apiKey, model, logger), nil
 
 	case ProviderGroq:
 		apiKey := resolveGroqAPIKey(cfg.APIKey)
@@ -89,10 +95,25 @@ func NewProvider(cfg *config.AIConfig, verbose bool) (Provider, error) {
 			return nil, rigerrors.NewConfigError("ai.api_key",
 				"Groq API key not set (set GROQ_API_KEY or ai.api_key in config)")
 		}
-		return NewGroqProvider(apiKey, cfg.Model, logger), nil
+		// Use global model if set, otherwise use provider-specific default
+		model := cfg.Model
+		if model == "" {
+			model = cfg.GroqModel
+		}
+		return NewGroqProvider(apiKey, model, logger), nil
 
 	case ProviderOllama:
-		return NewOllamaProvider(cfg.Endpoint, cfg.Model, logger), nil
+		// Use global model if set, otherwise use provider-specific default
+		model := cfg.Model
+		if model == "" {
+			model = cfg.OllamaModel
+		}
+		// Use global endpoint if set, otherwise use provider-specific default
+		endpoint := cfg.Endpoint
+		if endpoint == "" {
+			endpoint = cfg.OllamaEndpoint
+		}
+		return NewOllamaProvider(endpoint, model, logger), nil
 
 	default:
 		return nil, rigerrors.NewConfigError("ai.provider",
