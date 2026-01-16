@@ -159,11 +159,17 @@ func runPRMerge(cmd *cobra.Command, prNumber int) error {
 		deleteBranch = &val
 	}
 
+	// Resolve and validate merge method
+	mergeMethod, err := resolveMergeMethod(cfg, prMergeMergeMethod)
+	if err != nil {
+		return err
+	}
+
 	opts := workflow.MergeOptions{
 		SkipAI:           prMergeNoAI || aiProvider == nil,
 		SkipJira:         prMergeNoJira || jiraClient == nil,
 		KeepWorktree:     prMergeKeepWorktree,
-		MergeMethod:      resolveMergeMethod(cfg, prMergeMergeMethod),
+		MergeMethod:      mergeMethod,
 		SkipConfirmation: prMergeYes,
 		SkipApproval:     prMergeSkipApproval,
 		DeleteBranch:     deleteBranch,
@@ -250,12 +256,20 @@ func runAIDebriefOnly(ctx context.Context, ghClient github.Client, aiProvider ai
 }
 
 // resolveMergeMethod determines the merge method to use.
-func resolveMergeMethod(cfg *config.Config, flagValue string) string {
-	if flagValue != "" {
-		return flagValue
+// Returns an error if the method is invalid.
+func resolveMergeMethod(cfg *config.Config, flagValue string) (string, error) {
+	method := flagValue
+	if method == "" {
+		method = cfg.GitHub.DefaultMergeMethod
 	}
-	if cfg.GitHub.DefaultMergeMethod != "" {
-		return cfg.GitHub.DefaultMergeMethod
+	if method == "" {
+		method = "squash" // Default fallback
 	}
-	return "squash" // Default fallback
+
+	// Validate the merge method
+	if err := config.ValidateMergeMethod(method); err != nil {
+		return "", err
+	}
+
+	return method, nil
 }
