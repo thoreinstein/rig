@@ -10,7 +10,7 @@ type mockGHClient struct {
 	github.Client
 	isAuthenticated bool
 	createPRFunc    func(ctx context.Context, opts github.CreatePROptions) (*github.PRInfo, error)
-	listPRsFunc     func(ctx context.Context, state, author string) ([]github.PRInfo, error)
+	listPRsFunc     func(ctx context.Context, opts github.ListPRsOptions) ([]github.PRInfo, error)
 	getPRFunc       func(ctx context.Context, number int) (*github.PRInfo, error)
 	mergePRFunc     func(ctx context.Context, number int, opts github.MergeOptions) error
 }
@@ -31,9 +31,9 @@ func (m *mockGHClient) CreatePR(ctx context.Context, opts github.CreatePROptions
 	}, nil
 }
 
-func (m *mockGHClient) ListPRs(ctx context.Context, state, author string) ([]github.PRInfo, error) {
+func (m *mockGHClient) ListPRs(ctx context.Context, opts github.ListPRsOptions) ([]github.PRInfo, error) {
 	if m.listPRsFunc != nil {
-		return m.listPRsFunc(ctx, state, author)
+		return m.listPRsFunc(ctx, opts)
 	}
 	return []github.PRInfo{
 		{Number: 1, Title: "PR 1", State: "open", HeadBranch: "feat-1"},

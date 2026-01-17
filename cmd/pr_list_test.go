@@ -38,7 +38,7 @@ func TestRunPRList(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockClient.listPRsFunc = func(ctx context.Context, state, author string) ([]github.PRInfo, error) {
+			mockClient.listPRsFunc = func(ctx context.Context, opts github.ListPRsOptions) ([]github.PRInfo, error) {
 				return tt.prs, nil
 			}
 

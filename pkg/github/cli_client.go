@@ -137,22 +137,33 @@ func (c *CLIClient) GetPR(ctx context.Context, number int) (*PRInfo, error) {
 }
 
 // ListPRs lists pull requests filtered by state and optionally by author.
-func (c *CLIClient) ListPRs(ctx context.Context, state, author string) ([]PRInfo, error) {
+func (c *CLIClient) ListPRs(ctx context.Context, opts ListPRsOptions) ([]PRInfo, error) {
 	fields := prJSONFields()
 	args := []string{
 		"pr", "list",
 		"--json", strings.Join(fields, ","),
 	}
 
-	if state != "" && state != "all" {
-		args = append(args, "--state", state)
+	if opts.State != "" && opts.State != "all" {
+		args = append(args, "--state", opts.State)
 	}
 
-	if author != "" {
-		args = append(args, "--author", author)
+	if opts.Author != "" {
+		args = append(args, "--author", opts.Author)
 	}
 
-	c.logDebug("listing PRs", "state", state, "author", author)
+	if opts.Limit > 0 {
+		args = append(args, "--limit", strconv.Itoa(opts.Limit))
+	}
+
+	// Note: gh pr list doesn't support --page directly.
+	// If page > 1, we would need to use gh api or fetch all and slice.
+	// For now, we only support --limit.
+	if opts.Page > 1 {
+		c.logDebug("pagination (page > 1) is not supported by gh CLI client, ignoring page parameter")
+	}
+
+	c.logDebug("listing PRs", "state", opts.State, "author", opts.Author, "limit", opts.Limit)
 
 	output, err := c.runGH(ctx, args...)
 	if err != nil {

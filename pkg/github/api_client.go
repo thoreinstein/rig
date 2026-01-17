@@ -154,29 +154,36 @@ func (c *APIClient) GetPR(ctx context.Context, number int) (*PRInfo, error) {
 }
 
 // ListPRs lists pull requests filtered by state and optionally by author.
-func (c *APIClient) ListPRs(ctx context.Context, state, author string) ([]PRInfo, error) {
+func (c *APIClient) ListPRs(ctx context.Context, opts ListPRsOptions) ([]PRInfo, error) {
 	owner, repo, err := c.GetCurrentRepo(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	c.logDebug("listing PRs", "state", state, "author", author)
+	c.logDebug("listing PRs", "state", opts.State, "author", opts.Author, "limit", opts.Limit, "page", opts.Page)
 
-	opts := &gh.PullRequestListOptions{
-		State: state,
+	ghOpts := &gh.PullRequestListOptions{
+		State: opts.State,
 	}
-	if state == "" || state == "all" {
-		opts.State = "all"
+	if opts.State == "" || opts.State == "all" {
+		ghOpts.State = "all"
 	}
 
-	prs, resp, err := c.client.PullRequests.List(ctx, owner, repo, opts)
+	if opts.Limit > 0 {
+		ghOpts.PerPage = opts.Limit
+	}
+	if opts.Page > 0 {
+		ghOpts.Page = opts.Page
+	}
+
+	prs, resp, err := c.client.PullRequests.List(ctx, owner, repo, ghOpts)
 	if err != nil {
 		return nil, toGitHubError("ListPRs", resp, err)
 	}
 
 	// Get current user login if author is "@me"
-	filterAuthor := author
-	if author == "@me" {
+	filterAuthor := opts.Author
+	if opts.Author == "@me" {
 		user, _, err := c.client.Users.Get(ctx, "")
 		if err != nil {
 			return nil, toGitHubError("ListPRs", nil, err)
