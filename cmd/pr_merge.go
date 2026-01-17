@@ -18,16 +18,19 @@ import (
 	"thoreinstein.com/rig/pkg/workflow"
 )
 
-var (
-	prMergeYes          bool
-	prMergeNoAI         bool
-	prMergeAIOnly       bool
-	prMergeKeepWorktree bool
-	prMergeNoJira       bool
-	prMergeMergeMethod  string
-	prMergeSkipApproval bool
-	prMergeDeleteBranch bool
-)
+type PRMergeOptions struct {
+	Number       int
+	Yes          bool
+	NoAI         bool
+	AIOnly       bool
+	KeepWorktree bool
+	NoJira       bool
+	MergeMethod  string
+	SkipApproval bool
+	DeleteBranch bool
+}
+
+var prMergeOptions PRMergeOptions
 
 // prMergeCmd executes the full merge workflow with AI debrief.
 var prMergeCmd = &cobra.Command{
@@ -52,97 +55,100 @@ Examples:
   rig pr merge --ai-only    # Only run AI debrief (no merge)`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		var prNumber int
 		if len(args) > 0 {
 			n, err := strconv.Atoi(args[0])
 			if err != nil {
 				return errors.Wrap(err, "invalid PR number")
 			}
-			prNumber = n
+			prMergeOptions.Number = n
 		}
-		return runPRMerge(cmd, prNumber)
+
+		// Load configuration
+		cfg, err := config.Load()
+		if err != nil {
+			return errors.Wrap(err, "failed to load configuration")
+		}
+
+		// Create GitHub client
+		fmt.Println("Connecting to GitHub...")
+		ghClient, err := github.NewClient(&cfg.GitHub, verbose)
+		if err != nil {
+			fmt.Println(rigerrors.FormatUserError(err))
+			return err
+		}
+
+		// Create Jira client (optional)
+		var jiraClient jira.JiraClient
+		if cfg.Jira.Enabled && !prMergeOptions.NoJira {
+			if verbose {
+				fmt.Println("Initializing Jira client...")
+			}
+			jiraClient, err = jira.NewJiraClient(&cfg.Jira, verbose)
+			if err != nil {
+				// Warn but continue - Jira is optional
+				fmt.Printf("Warning: Could not initialize Jira client: %v\n", err)
+				fmt.Println("Continuing without Jira integration...")
+			}
+		}
+
+		// Create AI provider (optional)
+		var aiProvider ai.Provider
+		if cfg.AI.Enabled && !prMergeOptions.NoAI {
+			if verbose {
+				fmt.Println("Initializing AI provider...")
+			}
+			aiProvider, err = ai.NewProvider(&cfg.AI, verbose)
+			if err != nil {
+				// Warn but continue - AI is optional
+				fmt.Printf("Warning: Could not initialize AI provider: %v\n", err)
+				fmt.Println("Continuing without AI debrief...")
+				prMergeOptions.NoAI = true
+			}
+		}
+
+		return runPRMerge(cmd, prMergeOptions, ghClient, jiraClient, aiProvider, cfg)
 	},
 }
 
 func init() {
 	prCmd.AddCommand(prMergeCmd)
 
-	prMergeCmd.Flags().BoolVarP(&prMergeYes, "yes", "y", false, "Skip confirmation prompts")
-	prMergeCmd.Flags().BoolVar(&prMergeNoAI, "no-ai", false, "Skip AI debrief step")
-	prMergeCmd.Flags().BoolVar(&prMergeAIOnly, "ai-only", false, "Only run AI debrief (don't merge)")
-	prMergeCmd.Flags().BoolVar(&prMergeKeepWorktree, "keep-worktree", false, "Don't cleanup worktree after merge")
-	prMergeCmd.Flags().BoolVar(&prMergeNoJira, "no-jira", false, "Skip Jira operations")
-	prMergeCmd.Flags().StringVar(&prMergeMergeMethod, "merge-method", "", "Merge method: merge, squash, rebase")
-	prMergeCmd.Flags().BoolVar(&prMergeSkipApproval, "skip-approval", false, "Skip approval check (for self-authored PRs)")
-	prMergeCmd.Flags().BoolVarP(&prMergeDeleteBranch, "delete-branch", "d", false,
+	prMergeCmd.Flags().BoolVarP(&prMergeOptions.Yes, "yes", "y", false, "Skip confirmation prompts")
+	prMergeCmd.Flags().BoolVar(&prMergeOptions.NoAI, "no-ai", false, "Skip AI debrief step")
+	prMergeCmd.Flags().BoolVar(&prMergeOptions.AIOnly, "ai-only", false, "Only run AI debrief (don't merge)")
+	prMergeCmd.Flags().BoolVar(&prMergeOptions.KeepWorktree, "keep-worktree", false, "Don't cleanup worktree after merge")
+	prMergeCmd.Flags().BoolVar(&prMergeOptions.NoJira, "no-jira", false, "Skip Jira operations")
+	prMergeCmd.Flags().StringVar(&prMergeOptions.MergeMethod, "merge-method", "", "Merge method: merge, squash, rebase")
+	prMergeCmd.Flags().BoolVar(&prMergeOptions.SkipApproval, "skip-approval", false, "Skip approval check (for self-authored PRs)")
+	prMergeCmd.Flags().BoolVarP(&prMergeOptions.DeleteBranch, "delete-branch", "d", false,
 		"Delete remote branch after merge (usually not needed if repo has auto-delete enabled)")
 }
 
-func runPRMerge(cmd *cobra.Command, prNumber int) error {
+func runPRMerge(cmd *cobra.Command, opts PRMergeOptions, ghClient github.Client, jiraClient jira.JiraClient, aiProvider ai.Provider, cfg *config.Config) error {
 	ctx := context.Background()
-
-	// Load configuration
-	cfg, err := config.Load()
-	if err != nil {
-		return errors.Wrap(err, "failed to load configuration")
-	}
-
-	// Create GitHub client
-	fmt.Println("Connecting to GitHub...")
-	ghClient, err := github.NewClient(&cfg.GitHub, verbose)
-	if err != nil {
-		fmt.Println(rigerrors.FormatUserError(err))
-		return err
-	}
 
 	// Check authentication
 	if !ghClient.IsAuthenticated() {
 		return errors.New("not authenticated with GitHub. Run 'gh auth login' first")
 	}
 
+	prNumber := opts.Number
+
 	// If no PR number provided, find PR for current branch
 	if prNumber == 0 {
 		if verbose {
 			fmt.Println("No PR number provided, looking for PR for current branch...")
 		}
-		prNumber, err = findPRForCurrentBranch(ctx, ghClient)
+		num, err := findPRForCurrentBranch(ctx, ghClient)
 		if err != nil {
 			return err
 		}
+		prNumber = num
 		fmt.Printf("Found PR #%d for current branch\n", prNumber)
 	}
 
-	// Create Jira client (optional)
-	var jiraClient jira.JiraClient
-	if cfg.Jira.Enabled && !prMergeNoJira {
-		if verbose {
-			fmt.Println("Initializing Jira client...")
-		}
-		jiraClient, err = jira.NewJiraClient(&cfg.Jira, verbose)
-		if err != nil {
-			// Warn but continue - Jira is optional
-			fmt.Printf("Warning: Could not initialize Jira client: %v\n", err)
-			fmt.Println("Continuing without Jira integration...")
-		}
-	}
-
-	// Create AI provider (optional)
-	var aiProvider ai.Provider
-	if cfg.AI.Enabled && !prMergeNoAI {
-		if verbose {
-			fmt.Println("Initializing AI provider...")
-		}
-		aiProvider, err = ai.NewProvider(&cfg.AI, verbose)
-		if err != nil {
-			// Warn but continue - AI is optional
-			fmt.Printf("Warning: Could not initialize AI provider: %v\n", err)
-			fmt.Println("Continuing without AI debrief...")
-			prMergeNoAI = true
-		}
-	}
-
 	// Handle --ai-only mode
-	if prMergeAIOnly {
+	if opts.AIOnly {
 		return runAIDebriefOnly(ctx, ghClient, aiProvider, prNumber)
 	}
 
@@ -151,7 +157,7 @@ func runPRMerge(cmd *cobra.Command, prNumber int) error {
 	var deleteBranch *bool
 	if cmd.Flags().Changed("delete-branch") {
 		// Flag explicitly set (true or false) – honor user choice
-		val := prMergeDeleteBranch
+		val := opts.DeleteBranch
 		deleteBranch = &val
 	} else if cfg.GitHub.DeleteBranchOnMerge {
 		// Flag not set – fall back to config
@@ -160,25 +166,25 @@ func runPRMerge(cmd *cobra.Command, prNumber int) error {
 	}
 
 	// Resolve and validate merge method
-	mergeMethod, err := resolveMergeMethod(cfg, prMergeMergeMethod)
+	mergeMethod, err := resolveMergeMethod(cfg, opts.MergeMethod)
 	if err != nil {
 		return err
 	}
 
-	opts := workflow.MergeOptions{
-		SkipAI:           prMergeNoAI || aiProvider == nil,
-		SkipJira:         prMergeNoJira || jiraClient == nil,
-		KeepWorktree:     prMergeKeepWorktree,
+	wfOpts := workflow.MergeOptions{
+		SkipAI:           opts.NoAI || aiProvider == nil,
+		SkipJira:         opts.NoJira || jiraClient == nil,
+		KeepWorktree:     opts.KeepWorktree,
 		MergeMethod:      mergeMethod,
-		SkipConfirmation: prMergeYes,
-		SkipApproval:     prMergeSkipApproval,
+		SkipConfirmation: opts.Yes,
+		SkipApproval:     opts.SkipApproval,
 		DeleteBranch:     deleteBranch,
 	}
 
 	// Apply config defaults for optional flags
-	if !prMergeKeepWorktree && cfg.Workflow.QueueWorktreeCleanup {
+	if !opts.KeepWorktree && cfg.Workflow.QueueWorktreeCleanup {
 		// Default is to queue cleanup based on config
-		opts.KeepWorktree = false
+		wfOpts.KeepWorktree = false
 	}
 
 	// Get current working directory for ticket routing
@@ -191,7 +197,7 @@ func runPRMerge(cmd *cobra.Command, prNumber int) error {
 	fmt.Printf("Starting merge workflow for PR #%d...\n", prNumber)
 	engine := workflow.NewEngine(ghClient, jiraClient, aiProvider, cfg, cwd, verbose)
 
-	if err := engine.Run(ctx, prNumber, opts); err != nil {
+	if err := engine.Run(ctx, prNumber, wfOpts); err != nil {
 		fmt.Println(rigerrors.FormatUserError(err))
 		return err
 	}
