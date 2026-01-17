@@ -18,9 +18,9 @@
     - [x] Write tests for flag parsing in `cmd/history_test.go`.
     - [x] Add flags: `--exit-code`, `--min-duration` to `cmd/history.go`.
     - [x] Connect flags to `pkg/history` query engine.
-- [ ] Task: Update `rig timeline` command filtering
-    - [ ] Write tests ensuring timeline filters are correctly passed.
-    - [ ] Add support for filtering timeline generation (e.g., "show me only failed commands in the timeline").
+- [x] Task: Update `rig timeline` command filtering c8a7e4f
+    - [x] Write tests ensuring timeline filters are correctly passed.
+    - [x] Add support for filtering timeline generation (e.g., "show me only failed commands in the timeline").
 - [ ] Task: Conductor - User Manual Verification 'CLI Command Updates' (Protocol in workflow.md)
 
 ## Phase 3: Timeline Formatting & Output
