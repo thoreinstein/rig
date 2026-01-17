@@ -39,7 +39,7 @@ func TestFormatTimeline(t *testing.T) {
 		t.Error("Output missing command 2")
 	}
 	// Check for visual indicators (spec says red text or icon for fail)
-	if !strings.Contains(output, "❌") && !strings.Contains(output, "[Exit: 1]") { 
+	if !strings.Contains(output, "❌") && !strings.Contains(output, "[Exit: 1]") {
 		// Allow either new icon or old format if I decide to stick to old, but spec said improved.
 		// Spec: "Failed commands (e.g., red text or specific icon)"
 		t.Error("Output missing failure indicator")
