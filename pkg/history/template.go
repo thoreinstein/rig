@@ -15,31 +15,31 @@ func FormatTimeline(commands []Command, ticket string) string {
 	totalCommands := len(commands)
 	var successCount int
 	var totalDuration int64
-	
-dayGroups := make(map[string][]Command)
+
+	dayGroups := make(map[string][]Command)
 	for _, cmd := range commands {
 		if cmd.ExitCode == 0 {
 			successCount++
 		}
 		totalDuration += cmd.Duration
-		
-day := cmd.Timestamp.Format("2006-01-02")
-dayGroups[day] = append(dayGroups[day], cmd)
+
+		day := cmd.Timestamp.Format("2006-01-02")
+		dayGroups[day] = append(dayGroups[day], cmd)
 	}
-	
+
 	successRate := 0.0
 	if totalCommands > 0 {
 		successRate = float64(successCount) / float64(totalCommands) * 100.0
 	}
-	
+
 	// Header and Summary
 	timeline.WriteString(fmt.Sprintf("## Command Timeline - %s\n\n", ticket))
 	timeline.WriteString(fmt.Sprintf("Generated: %s\n\n", time.Now().Format("2006-01-02 15:04:05")))
-	
-timeline.WriteString("### Summary\n")
-timeline.WriteString(fmt.Sprintf("- **Total Commands:** %d\n", totalCommands))
-timeline.WriteString(fmt.Sprintf("- **Success Rate:** %.1f%%\n", successRate))
-timeline.WriteString(fmt.Sprintf("- **Total Duration:** %s\n\n", formatDuration(totalDuration)))
+
+	timeline.WriteString("### Summary\n")
+	timeline.WriteString(fmt.Sprintf("- **Total Commands:** %d\n", totalCommands))
+	timeline.WriteString(fmt.Sprintf("- **Success Rate:** %.1f%%\n", successRate))
+	timeline.WriteString(fmt.Sprintf("- **Total Duration:** %s\n\n", formatDuration(totalDuration)))
 
 	// Sort days
 	days := make([]string, 0, len(dayGroups))

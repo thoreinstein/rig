@@ -50,7 +50,7 @@ Examples:
 var historyInfoCmd = &cobra.Command{
 	Use:   "info",
 	Short: "Show history database information",
-	Long:  `Display information about the history database including schema, size, and statistics.`, 
+	Long:  `Display information about the history database including schema, size, and statistics.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runHistoryInfoCommand()
 	},

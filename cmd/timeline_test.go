@@ -194,7 +194,7 @@ Commands: 10
 
 ## Notes
 
-Some notes here.`, 
+Some notes here.`,
 			expected: `# Ticket Note
 
 ## Summary
@@ -215,7 +215,7 @@ Some summary here.
 
 ## Notes
 
-Some notes here.`, 
+Some notes here.`,
 			expected: `# Ticket Note
 
 ## Summary
@@ -236,7 +236,7 @@ Summary.
 
 ## Command Timeline - TEST-456
 
-Commands: 5`, 
+Commands: 5`,
 			expected: `# Ticket Note
 
 ## Summary

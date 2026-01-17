@@ -27,7 +27,7 @@ func TestBuildZshHistdbQuery_NewFilters(t *testing.T) {
 				foundArg = true
 			}
 		}
-		
+
 		if !foundArg {
 			// Try checking if it was passed as int
 			for _, arg := range args {
@@ -80,7 +80,7 @@ func TestBuildAtuinQuery_NewFilters(t *testing.T) {
 		if !containsString(query, expected) {
 			t.Errorf("query missing duration filter %q: %s", expected, query)
 		}
-		
+
 		// Atuin stores duration in nanoseconds
 		expectedNs := int64(2 * time.Second) // 2e9
 		foundArg := false
@@ -105,7 +105,7 @@ func TestBuildAtuinQuery_NewFilters(t *testing.T) {
 		if !containsString(query, expected) {
 			t.Errorf("query missing session_id filter %q: %s", expected, query)
 		}
-		
+
 		foundArg := false
 		for _, arg := range args {
 			if str, ok := arg.(string); ok && str == "uuid-123" {
