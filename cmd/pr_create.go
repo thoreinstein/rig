@@ -15,12 +15,12 @@ import (
 )
 
 type CreateOptions struct {
-	Title     string
-	Body      string
-	Draft     bool
-	Reviewers []string
+	Title      string
+	Body       string
+	Draft      bool
+	Reviewers  []string
 	BaseBranch string
-	NoBrowser bool
+	NoBrowser  bool
 }
 
 var prCreateOptions CreateOptions
@@ -170,7 +170,7 @@ func openURL(url string) error {
 	case "windows":
 		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
 	default:
-		return rigerrors.NewWorkflowError("Browser", fmt.Sprintf("unsupported platform: %s", runtime.GOOS))
+		return rigerrors.NewWorkflowError("Browser", "unsupported platform: "+runtime.GOOS)
 	}
 
 	return cmd.Start()

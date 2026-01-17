@@ -29,9 +29,9 @@ func TestRunPRList(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "list no PRs",
-			opts: ListOptions{State: "open"},
-			prs:  []github.PRInfo{},
+			name:    "list no PRs",
+			opts:    ListOptions{State: "open"},
+			prs:     []github.PRInfo{},
 			wantErr: false,
 		},
 	}
