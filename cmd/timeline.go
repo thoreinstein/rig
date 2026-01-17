@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 
@@ -147,8 +146,8 @@ func runTimelineCommand(ticket string) error {
 		fmt.Printf("Found %d commands\n", len(commands))
 	}
 
-	// Generate timeline markdown
-	timeline := generateTimelineMarkdown(commands, ticketInfo.Full)
+	// Generate timeline markdown using the new formatter
+	timeline := history.FormatTimeline(commands, ticketInfo.Full)
 
 	// Output timeline
 	if timelineNoUpdate {
@@ -196,69 +195,6 @@ func parseTimeString(timeStr string) (time.Time, error) {
 	}
 
 	return time.Time{}, errors.Newf("unable to parse time: %s", timeStr)
-}
-
-// generateTimelineMarkdown generates a markdown timeline from commands
-func generateTimelineMarkdown(commands []history.Command, ticket string) string {
-	var timeline strings.Builder
-
-	timeline.WriteString(fmt.Sprintf("## Command Timeline - %s\n\n", ticket))
-	timeline.WriteString(fmt.Sprintf("Generated: %s\n", time.Now().Format("2006-01-02 15:04:05")))
-	timeline.WriteString(fmt.Sprintf("Commands: %d\n\n", len(commands)))
-
-	// Group commands by day
-	dayGroups := make(map[string][]history.Command)
-
-	for _, cmd := range commands {
-		day := cmd.Timestamp.Format("2006-01-02")
-		dayGroups[day] = append(dayGroups[day], cmd)
-	}
-
-	// Sort days and output
-	days := make([]string, 0, len(dayGroups))
-	for day := range dayGroups {
-		days = append(days, day)
-	}
-	sort.Strings(days)
-
-	for _, day := range days {
-		dayCommands := dayGroups[day]
-		timeline.WriteString(fmt.Sprintf("### %s\n\n", day))
-
-		for _, cmd := range dayCommands {
-			// Format timestamp
-			timeStr := cmd.Timestamp.Format("15:04:05")
-
-			// Format duration if available
-			var durationStr string
-			if cmd.Duration > 0 {
-				durationStr = fmt.Sprintf(" (%dms)", cmd.Duration)
-			}
-
-			// Format exit code
-			var exitStr string
-			if cmd.ExitCode != 0 {
-				exitStr = fmt.Sprintf(" [Exit: %d]", cmd.ExitCode)
-			}
-
-			// Format directory (show only basename if it's long)
-			var dirStr string
-			if cmd.Directory != "" {
-				if len(cmd.Directory) > 50 {
-					dirStr = fmt.Sprintf(" `.../%s`", cmd.Directory[len(cmd.Directory)-30:])
-				} else {
-					dirStr = fmt.Sprintf(" `%s`", cmd.Directory)
-				}
-			}
-
-			timeline.WriteString(fmt.Sprintf("- **%s**%s%s%s: `%s`\n",
-				timeStr, durationStr, exitStr, dirStr, cmd.Command))
-		}
-
-		timeline.WriteString("\n")
-	}
-
-	return timeline.String()
 }
 
 // validateOutputPath validates that the output path is safe to write to.
