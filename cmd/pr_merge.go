@@ -6,7 +6,6 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/cockroachdb/errors"
 	"github.com/spf13/cobra"
 
 	"thoreinstein.com/rig/pkg/ai"
@@ -58,7 +57,7 @@ Examples:
 		if len(args) > 0 {
 			n, err := strconv.Atoi(args[0])
 			if err != nil {
-				return errors.Wrap(err, "invalid PR number")
+				return rigerrors.NewConfigError("number", "invalid PR number")
 			}
 			prMergeOptions.Number = n
 		}
@@ -66,7 +65,7 @@ Examples:
 		// Load configuration
 		cfg, err := config.Load()
 		if err != nil {
-			return errors.Wrap(err, "failed to load configuration")
+			return rigerrors.NewConfigErrorWithCause("", "failed to load configuration", err)
 		}
 
 		// Create GitHub client
@@ -129,7 +128,7 @@ func runPRMerge(cmd *cobra.Command, opts PRMergeOptions, ghClient github.Client,
 
 	// Check authentication
 	if !ghClient.IsAuthenticated() {
-		return errors.New("not authenticated with GitHub. Run 'gh auth login' first")
+		return rigerrors.NewGitHubError("Auth", "not authenticated with GitHub. Run 'gh auth login' first")
 	}
 
 	prNumber := opts.Number
@@ -190,7 +189,7 @@ func runPRMerge(cmd *cobra.Command, opts PRMergeOptions, ghClient github.Client,
 	// Get current working directory for ticket routing
 	cwd, err := os.Getwd()
 	if err != nil {
-		return errors.Wrap(err, "failed to get current directory")
+		return rigerrors.NewWorkflowErrorWithCause("PRMerge", "failed to get current directory", err)
 	}
 
 	// Create and run workflow engine
@@ -207,7 +206,7 @@ func runPRMerge(cmd *cobra.Command, opts PRMergeOptions, ghClient github.Client,
 }
 func runAIDebriefOnly(ctx context.Context, ghClient github.Client, aiProvider ai.Provider, prNumber int) error {
 	if aiProvider == nil {
-		return errors.New("AI provider not available. Configure AI in your config file or check ANTHROPIC_API_KEY/GROQ_API_KEY")
+		return rigerrors.NewAIError("general", "Debrief", "AI provider not available. Configure AI in your config file or check ANTHROPIC_API_KEY/GROQ_API_KEY")
 	}
 
 	fmt.Printf("Running AI debrief for PR #%d (no merge)...\n", prNumber)
@@ -215,7 +214,7 @@ func runAIDebriefOnly(ctx context.Context, ghClient github.Client, aiProvider ai
 	// Get PR details
 	pr, err := ghClient.GetPR(ctx, prNumber)
 	if err != nil {
-		return errors.Wrap(err, "failed to get PR details")
+		return rigerrors.NewGitHubErrorWithCause("GetPR", "failed to get PR details", err)
 	}
 
 	// Build debrief context
@@ -230,7 +229,7 @@ func runAIDebriefOnly(ctx context.Context, ghClient github.Client, aiProvider ai
 	session := debrief.NewDebriefSession(aiProvider, debriefCtx, verbose)
 	output, err := session.Run(ctx)
 	if err != nil {
-		return errors.Wrap(err, "debrief session failed")
+		return rigerrors.NewAIErrorWithCause("general", "Debrief", "debrief session failed", err)
 	}
 
 	// Display summary

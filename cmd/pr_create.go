@@ -7,7 +7,6 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/cockroachdb/errors"
 	"github.com/spf13/cobra"
 
 	"thoreinstein.com/rig/pkg/config"
@@ -45,7 +44,7 @@ Examples:
 		// Load configuration
 		cfg, err := config.Load()
 		if err != nil {
-			return errors.Wrap(err, "failed to load configuration")
+			return rigerrors.NewConfigErrorWithCause("", "failed to load configuration", err)
 		}
 
 		// Create GitHub client
@@ -75,7 +74,7 @@ func runPRCreate(opts CreateOptions, ghClient github.Client, cfg *config.Config)
 
 	// Check authentication
 	if !ghClient.IsAuthenticated() {
-		return errors.New("not authenticated with GitHub. Run 'gh auth login' first")
+		return rigerrors.NewGitHubError("Auth", "not authenticated with GitHub. Run 'gh auth login' first")
 	}
 
 	// Get title from last commit if not provided
@@ -86,7 +85,7 @@ func runPRCreate(opts CreateOptions, ghClient github.Client, cfg *config.Config)
 		}
 		commitTitle, err := getLastCommitMessage()
 		if err != nil {
-			return errors.Wrap(err, "failed to get last commit message")
+			return rigerrors.NewWorkflowErrorWithCause("PRCreate", "failed to get last commit message", err)
 		}
 		title = commitTitle
 	}
@@ -171,7 +170,7 @@ func openURL(url string) error {
 	case "windows":
 		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
 	default:
-		return errors.Newf("unsupported platform: %s", runtime.GOOS)
+		return rigerrors.NewWorkflowError("Browser", fmt.Sprintf("unsupported platform: %s", runtime.GOOS))
 	}
 
 	return cmd.Start()
