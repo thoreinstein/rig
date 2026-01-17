@@ -15,14 +15,16 @@ import (
 	"thoreinstein.com/rig/pkg/github"
 )
 
-var (
-	prCreateTitle     string
-	prCreateBody      string
-	prCreateDraft     bool
-	prCreateReviewers []string
-	prCreateBase      string
-	prCreateNoBrowser bool
-)
+type CreateOptions struct {
+	Title     string
+	Body      string
+	Draft     bool
+	Reviewers []string
+	BaseBranch string
+	NoBrowser bool
+}
+
+var prCreateOptions CreateOptions
 
 // prCreateCmd creates a new pull request from the current branch.
 var prCreateCmd = &cobra.Command{
@@ -40,36 +42,36 @@ Examples:
   rig pr create --reviewer user1,user2    # Request reviewers`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return runPRCreate()
+		// Load configuration
+		cfg, err := config.Load()
+		if err != nil {
+			return errors.Wrap(err, "failed to load configuration")
+		}
+
+		// Create GitHub client
+		ghClient, err := github.NewClient(&cfg.GitHub, verbose)
+		if err != nil {
+			fmt.Println(rigerrors.FormatUserError(err))
+			return err
+		}
+
+		return runPRCreate(prCreateOptions, ghClient, cfg)
 	},
 }
 
 func init() {
 	prCmd.AddCommand(prCreateCmd)
 
-	prCreateCmd.Flags().StringVarP(&prCreateTitle, "title", "t", "", "PR title (defaults to last commit message)")
-	prCreateCmd.Flags().StringVarP(&prCreateBody, "body", "b", "", "PR body/description")
-	prCreateCmd.Flags().BoolVarP(&prCreateDraft, "draft", "d", false, "Create as draft PR")
-	prCreateCmd.Flags().StringSliceVarP(&prCreateReviewers, "reviewer", "r", nil, "Request reviewers (comma-separated)")
-	prCreateCmd.Flags().StringVar(&prCreateBase, "base", "", "Base branch (defaults to repo default)")
-	prCreateCmd.Flags().BoolVar(&prCreateNoBrowser, "no-browser", false, "Don't open PR URL in browser")
+	prCreateCmd.Flags().StringVarP(&prCreateOptions.Title, "title", "t", "", "PR title (defaults to last commit message)")
+	prCreateCmd.Flags().StringVarP(&prCreateOptions.Body, "body", "b", "", "PR body/description")
+	prCreateCmd.Flags().BoolVarP(&prCreateOptions.Draft, "draft", "d", false, "Create as draft PR")
+	prCreateCmd.Flags().StringSliceVarP(&prCreateOptions.Reviewers, "reviewer", "r", nil, "Request reviewers (comma-separated)")
+	prCreateCmd.Flags().StringVar(&prCreateOptions.BaseBranch, "base", "", "Base branch (defaults to repo default)")
+	prCreateCmd.Flags().BoolVar(&prCreateOptions.NoBrowser, "no-browser", false, "Don't open PR URL in browser")
 }
 
-func runPRCreate() error {
+func runPRCreate(opts CreateOptions, ghClient github.Client, cfg *config.Config) error {
 	ctx := context.Background()
-
-	// Load configuration
-	cfg, err := config.Load()
-	if err != nil {
-		return errors.Wrap(err, "failed to load configuration")
-	}
-
-	// Create GitHub client
-	ghClient, err := github.NewClient(&cfg.GitHub, verbose)
-	if err != nil {
-		fmt.Println(rigerrors.FormatUserError(err))
-		return err
-	}
 
 	// Check authentication
 	if !ghClient.IsAuthenticated() {
@@ -77,7 +79,7 @@ func runPRCreate() error {
 	}
 
 	// Get title from last commit if not provided
-	title := prCreateTitle
+	title := opts.Title
 	if title == "" {
 		if verbose {
 			fmt.Println("No title provided, using last commit message...")
@@ -89,35 +91,35 @@ func runPRCreate() error {
 		title = commitTitle
 	}
 
-	// Build create options
-	opts := github.CreatePROptions{
+	// Build GitHub create options
+	ghOpts := github.CreatePROptions{
 		Title:      title,
-		Body:       prCreateBody,
-		BaseBranch: prCreateBase,
-		Draft:      prCreateDraft,
-		Reviewers:  prCreateReviewers,
+		Body:       opts.Body,
+		BaseBranch: opts.BaseBranch,
+		Draft:      opts.Draft,
+		Reviewers:  opts.Reviewers,
 	}
 
 	// Add default reviewers from config if none specified
-	if len(opts.Reviewers) == 0 && len(cfg.GitHub.DefaultReviewers) > 0 {
-		opts.Reviewers = cfg.GitHub.DefaultReviewers
+	if len(ghOpts.Reviewers) == 0 && len(cfg.GitHub.DefaultReviewers) > 0 {
+		ghOpts.Reviewers = cfg.GitHub.DefaultReviewers
 		if verbose {
-			fmt.Printf("Using default reviewers: %s\n", strings.Join(opts.Reviewers, ", "))
+			fmt.Printf("Using default reviewers: %s\n", strings.Join(ghOpts.Reviewers, ", "))
 		}
 	}
 
 	if verbose {
 		fmt.Printf("Creating PR with title: %s\n", title)
-		if opts.Draft {
+		if ghOpts.Draft {
 			fmt.Println("  Draft: yes")
 		}
-		if len(opts.Reviewers) > 0 {
-			fmt.Printf("  Reviewers: %s\n", strings.Join(opts.Reviewers, ", "))
+		if len(ghOpts.Reviewers) > 0 {
+			fmt.Printf("  Reviewers: %s\n", strings.Join(ghOpts.Reviewers, ", "))
 		}
 	}
 
 	// Create the PR
-	pr, err := ghClient.CreatePR(ctx, opts)
+	pr, err := ghClient.CreatePR(ctx, ghOpts)
 	if err != nil {
 		fmt.Println(rigerrors.FormatUserError(err))
 		return err
@@ -132,7 +134,7 @@ func runPRCreate() error {
 	}
 
 	// Open in browser unless disabled
-	if !prCreateNoBrowser && pr.URL != "" {
+	if !opts.NoBrowser && pr.URL != "" {
 		if verbose {
 			fmt.Println("Opening PR in browser...")
 		}

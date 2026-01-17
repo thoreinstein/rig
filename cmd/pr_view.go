@@ -15,6 +15,12 @@ import (
 	"thoreinstein.com/rig/pkg/github"
 )
 
+type ViewOptions struct {
+	Number int
+}
+
+var prViewOptions ViewOptions
+
 // prViewCmd displays pull request details.
 var prViewCmd = &cobra.Command{
 	Use:   "view [number]",
@@ -34,15 +40,28 @@ Examples:
   rig pr view 123       # View PR #123`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		var prNumber int
 		if len(args) > 0 {
 			n, err := strconv.Atoi(args[0])
 			if err != nil {
 				return errors.Wrap(err, "invalid PR number")
 			}
-			prNumber = n
+			prViewOptions.Number = n
 		}
-		return runPRView(prNumber)
+
+		// Load configuration
+		cfg, err := config.Load()
+		if err != nil {
+			return errors.Wrap(err, "failed to load configuration")
+		}
+
+		// Create GitHub client
+		ghClient, err := github.NewClient(&cfg.GitHub, verbose)
+		if err != nil {
+			fmt.Println(rigerrors.FormatUserError(err))
+			return err
+		}
+
+		return runPRView(prViewOptions, ghClient, cfg)
 	},
 }
 
@@ -50,31 +69,21 @@ func init() {
 	prCmd.AddCommand(prViewCmd)
 }
 
-func runPRView(prNumber int) error {
+func runPRView(opts ViewOptions, ghClient github.Client, cfg *config.Config) error {
 	ctx := context.Background()
 
-	// Load configuration
-	cfg, err := config.Load()
-	if err != nil {
-		return errors.Wrap(err, "failed to load configuration")
-	}
-
-	// Create GitHub client
-	ghClient, err := github.NewClient(&cfg.GitHub, verbose)
-	if err != nil {
-		fmt.Println(rigerrors.FormatUserError(err))
-		return err
-	}
+	prNumber := opts.Number
 
 	// If no PR number provided, find PR for current branch
 	if prNumber == 0 {
 		if verbose {
 			fmt.Println("No PR number provided, looking for PR for current branch...")
 		}
-		prNumber, err = findPRForCurrentBranch(ctx, ghClient)
+		num, err := findPRForCurrentBranch(ctx, ghClient)
 		if err != nil {
 			return err
 		}
+		prNumber = num
 	}
 
 	// Get PR details

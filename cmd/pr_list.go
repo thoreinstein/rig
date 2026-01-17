@@ -13,10 +13,12 @@ import (
 	"thoreinstein.com/rig/pkg/github"
 )
 
-var (
-	prListState string
-	prListMine  bool
-)
+type ListOptions struct {
+	State string
+	Mine  bool
+}
+
+var prListOptions ListOptions
 
 // prListCmd lists pull requests.
 var prListCmd = &cobra.Command{
@@ -34,40 +36,40 @@ Examples:
   rig pr list --mine       # List your PRs`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return runPRList()
+		// Load configuration
+		cfg, err := config.Load()
+		if err != nil {
+			return errors.Wrap(err, "failed to load configuration")
+		}
+
+		// Create GitHub client
+		ghClient, err := github.NewClient(&cfg.GitHub, verbose)
+		if err != nil {
+			fmt.Println(rigerrors.FormatUserError(err))
+			return err
+		}
+
+		return runPRList(prListOptions, ghClient, cfg)
 	},
 }
 
 func init() {
 	prCmd.AddCommand(prListCmd)
 
-	prListCmd.Flags().StringVarP(&prListState, "state", "s", "open", "Filter by state (open, closed, merged, all)")
-	prListCmd.Flags().BoolVarP(&prListMine, "mine", "m", false, "Show only PRs authored by you")
+	prListCmd.Flags().StringVarP(&prListOptions.State, "state", "s", "open", "Filter by state (open, closed, merged, all)")
+	prListCmd.Flags().BoolVarP(&prListOptions.Mine, "mine", "m", false, "Show only PRs authored by you")
 }
 
-func runPRList() error {
+func runPRList(opts ListOptions, ghClient github.Client, cfg *config.Config) error {
 	ctx := context.Background()
 
-	// Load configuration
-	cfg, err := config.Load()
-	if err != nil {
-		return errors.Wrap(err, "failed to load configuration")
-	}
-
-	// Create GitHub client
-	ghClient, err := github.NewClient(&cfg.GitHub, verbose)
-	if err != nil {
-		fmt.Println(rigerrors.FormatUserError(err))
-		return err
-	}
-
 	if verbose {
-		fmt.Printf("Listing PRs with state: %s\n", prListState)
+		fmt.Printf("Listing PRs with state: %s\n", opts.State)
 	}
 
 	// Determine author filter
 	author := ""
-	if prListMine {
+	if opts.Mine {
 		author = "@me"
 		if verbose {
 			fmt.Printf("Filtering by author: %s\n", author)
@@ -75,7 +77,7 @@ func runPRList() error {
 	}
 
 	// List PRs with optional author filter
-	prs, err := ghClient.ListPRs(ctx, prListState, author)
+	prs, err := ghClient.ListPRs(ctx, opts.State, author)
 	if err != nil {
 		fmt.Println(rigerrors.FormatUserError(err))
 		return err
