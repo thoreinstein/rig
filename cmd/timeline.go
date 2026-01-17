@@ -112,7 +112,7 @@ func runTimelineCommand(ticket string) error {
 
 	// Get worktree path to include directory-based commands
 	var projectPaths []string
-	
+
 	// If explicit directory provided, use it as strict filter (Directory field)
 	// If NOT provided, use worktree path as an OR condition (ProjectPaths)
 	if timelineDirectory == "" {
