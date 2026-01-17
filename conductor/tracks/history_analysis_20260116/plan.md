@@ -4,10 +4,10 @@
 - [x] Task: Define new query parameters in `pkg/history/types.go` 300445c
     - [x] Create `QueryOptions` struct with `ExitCode`, `MinDuration`, `SessionID`.
     - [x] Update `Search` interface signature to accept `QueryOptions`.
-- [ ] Task: Implement SQL query builder updates in `pkg/history/sqlite.go`
-    - [ ] Write tests for `BuildQuery` ensuring correct WHERE clauses for new filters.
-    - [ ] Implement `BuildQuery` logic to handle `ExitCode`, `MinDuration`, etc.
-    - [ ] Verify query performance with `EXPLAIN QUERY PLAN` on sample data (manual check).
+- [x] Task: Implement SQL query builder updates in `pkg/history/sqlite.go` baae811
+    - [x] Write tests for `BuildQuery` ensuring correct WHERE clauses for new filters.
+    - [x] Implement `BuildQuery` logic to handle `ExitCode`, `MinDuration`, etc.
+    - [x] Verify query performance with `EXPLAIN QUERY PLAN` on sample data (manual check).
 - [ ] Task: Update `pkg/history` public API
     - [ ] Update `GetCommands` to pass through new options.
     - [ ] Update unit tests in `pkg/history/history_test.go`.
