@@ -13,15 +13,15 @@
     - [x] Update unit tests in `pkg/history/history_test.go`.
 - [x] Task: Conductor - User Manual Verification 'Query Engine Enhancements' (Protocol in workflow.md) be780d7
 
-## Phase 2: CLI Command Updates
+## Phase 2: CLI Command Updates [checkpoint: 2212813]
 - [x] Task: Update `rig history query` command 0450bc7
     - [x] Write tests for flag parsing in `cmd/history_test.go`.
-    - [x] Add flags: `--exit-code`, `--min-duration` to `cmd/history.go`.
+    - [x] Add flags: `--exit-code`, `--min-duration`, `--ticket` to `cmd/history.go`.
     - [x] Connect flags to `pkg/history` query engine.
 - [x] Task: Update `rig timeline` command filtering c8a7e4f
     - [x] Write tests ensuring timeline filters are correctly passed.
     - [x] Add support for filtering timeline generation (e.g., "show me only failed commands in the timeline").
-- [ ] Task: Conductor - User Manual Verification 'CLI Command Updates' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'CLI Command Updates' (Protocol in workflow.md) 2212813
 
 ## Phase 3: Timeline Formatting & Output
 - [ ] Task: Design new Timeline Markdown template
