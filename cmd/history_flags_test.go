@@ -14,6 +14,7 @@ func TestHistoryQueryCommandNewFlags(t *testing.T) {
 		{"exit-code", "-1"},
 		{"min-duration", "0s"},
 		{"session-id", ""},
+		{"ticket", ""},
 	}
 
 	for _, expected := range expectedFlags {
