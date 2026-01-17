@@ -23,7 +23,7 @@
     - [x] Add support for filtering timeline generation (e.g., "show me only failed commands in the timeline").
 - [x] Task: Conductor - User Manual Verification 'CLI Command Updates' (Protocol in workflow.md) 2212813
 
-## Phase 3: Timeline Formatting & Output
+## Phase 3: Timeline Formatting & Output [checkpoint: 1bebfc0]
 - [x] Task: Design new Timeline Markdown template c9a0824
     - [x] Create `pkg/history/template.go` or similar.
     - [x] Define structs for `TimelineSection`, `TimelineItem`.
@@ -34,4 +34,4 @@
 - [x] Task: Integrate Formatter into `rig timeline` 630383e
     - [x] Replace existing raw output with new formatted output.
     - [x] Update end-to-end tests for `rig timeline`.
-- [ ] Task: Conductor - User Manual Verification 'Timeline Formatting & Output' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Timeline Formatting & Output' (Protocol in workflow.md) 1bebfc0
