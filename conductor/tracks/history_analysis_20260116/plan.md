@@ -24,13 +24,13 @@
 - [x] Task: Conductor - User Manual Verification 'CLI Command Updates' (Protocol in workflow.md) 2212813
 
 ## Phase 3: Timeline Formatting & Output
-- [ ] Task: Design new Timeline Markdown template
-    - [ ] Create `pkg/history/template.go` or similar.
-    - [ ] Define structs for `TimelineSection`, `TimelineItem`.
-- [ ] Task: Implement Formatter Logic
-    - [ ] Write tests: Input `[]Command`, Output `string` (Markdown).
-    - [ ] Implement grouping logic (by time or session).
-    - [ ] Implement styling (icons for success/fail, duration strings).
+- [x] Task: Design new Timeline Markdown template c9a0824
+    - [x] Create `pkg/history/template.go` or similar.
+    - [x] Define structs for `TimelineSection`, `TimelineItem`.
+- [x] Task: Implement Formatter Logic c9a0824
+    - [x] Write tests: Input `[]Command`, Output `string` (Markdown).
+    - [x] Implement grouping logic (by time or session).
+    - [x] Implement styling (icons for success/fail, duration strings).
 - [ ] Task: Integrate Formatter into `rig timeline`
     - [ ] Replace existing raw output with new formatted output.
     - [ ] Update end-to-end tests for `rig timeline`.
