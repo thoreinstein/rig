@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/cockroachdb/errors"
 	"github.com/spf13/cobra"
 
 	"thoreinstein.com/rig/pkg/config"
@@ -39,7 +38,7 @@ Examples:
 		// Load configuration
 		cfg, err := config.Load()
 		if err != nil {
-			return errors.Wrap(err, "failed to load configuration")
+			return rigerrors.NewConfigErrorWithCause("", "failed to load configuration", err)
 		}
 
 		// Create GitHub client

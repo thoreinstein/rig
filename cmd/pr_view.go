@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/cockroachdb/errors"
 	"github.com/spf13/cobra"
 
 	"thoreinstein.com/rig/pkg/config"
@@ -43,7 +42,7 @@ Examples:
 		if len(args) > 0 {
 			n, err := strconv.Atoi(args[0])
 			if err != nil {
-				return errors.Wrap(err, "invalid PR number")
+				return rigerrors.NewConfigError("number", "invalid PR number")
 			}
 			prViewOptions.Number = n
 		}
@@ -51,7 +50,7 @@ Examples:
 		// Load configuration
 		cfg, err := config.Load()
 		if err != nil {
-			return errors.Wrap(err, "failed to load configuration")
+			return rigerrors.NewConfigErrorWithCause("", "failed to load configuration", err)
 		}
 
 		// Create GitHub client
@@ -105,12 +104,12 @@ func findPRForCurrentBranch(ctx context.Context, ghClient github.Client) (int, e
 	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
 	output, err := cmd.Output()
 	if err != nil {
-		return 0, errors.Wrap(err, "failed to get current branch")
+		return 0, rigerrors.NewWorkflowErrorWithCause("PRView", "failed to get current branch", err)
 	}
 	branch := strings.TrimSpace(string(output))
 
 	if branch == "HEAD" || branch == "" {
-		return 0, errors.New("not on a branch (detached HEAD state)")
+		return 0, rigerrors.NewWorkflowError("PRView", "not on a branch (detached HEAD state)")
 	}
 
 	if verbose {
@@ -120,7 +119,7 @@ func findPRForCurrentBranch(ctx context.Context, ghClient github.Client) (int, e
 	// List open PRs and find one matching the branch
 	prs, err := ghClient.ListPRs(ctx, "open", "")
 	if err != nil {
-		return 0, errors.Wrap(err, "failed to list PRs")
+		return 0, rigerrors.NewGitHubErrorWithCause("ListPRs", "failed to list PRs", err)
 	}
 
 	for _, pr := range prs {
@@ -129,7 +128,7 @@ func findPRForCurrentBranch(ctx context.Context, ghClient github.Client) (int, e
 		}
 	}
 
-	return 0, errors.Newf("no open PR found for branch '%s'", branch)
+	return 0, rigerrors.NewWorkflowError("PRView", fmt.Sprintf("no open PR found for branch '%s'", branch))
 }
 
 // displayPRInfo formats and prints PR information.
