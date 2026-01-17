@@ -15,6 +15,8 @@ import (
 type ListOptions struct {
 	State string
 	Mine  bool
+	Limit int
+	Page  int
 }
 
 var prListOptions ListOptions
@@ -28,11 +30,14 @@ var prListCmd = &cobra.Command{
 Filters:
   --state: Filter by state (open, closed, merged, all)
   --mine:  Show only PRs authored by you
+  --limit: Number of PRs to fetch (default: 30)
+  --page:  Page number to retrieve
 
 Examples:
   rig pr list              # List open PRs
   rig pr list --state all  # List all PRs
-  rig pr list --mine       # List your PRs`,
+  rig pr list --mine       # List your PRs
+  rig pr list --limit 10   # List last 10 PRs`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Load configuration
@@ -57,13 +62,15 @@ func init() {
 
 	prListCmd.Flags().StringVarP(&prListOptions.State, "state", "s", "open", "Filter by state (open, closed, merged, all)")
 	prListCmd.Flags().BoolVarP(&prListOptions.Mine, "mine", "m", false, "Show only PRs authored by you")
+	prListCmd.Flags().IntVarP(&prListOptions.Limit, "limit", "l", 30, "Number of PRs to fetch")
+	prListCmd.Flags().IntVarP(&prListOptions.Page, "page", "p", 1, "Page number to retrieve")
 }
 
 func runPRList(opts ListOptions, ghClient github.Client, cfg *config.Config) error {
 	ctx := context.Background()
 
 	if verbose {
-		fmt.Printf("Listing PRs with state: %s\n", opts.State)
+		fmt.Printf("Listing PRs with state: %s (limit: %d, page: %d)\n", opts.State, opts.Limit, opts.Page)
 	}
 
 	// Determine author filter
@@ -75,8 +82,13 @@ func runPRList(opts ListOptions, ghClient github.Client, cfg *config.Config) err
 		}
 	}
 
-	// List PRs with optional author filter
-	prs, err := ghClient.ListPRs(ctx, opts.State, author)
+	// List PRs with pagination options
+	prs, err := ghClient.ListPRs(ctx, github.ListPRsOptions{
+		State:  opts.State,
+		Author: author,
+		Limit:  opts.Limit,
+		Page:   opts.Page,
+	})
 	if err != nil {
 		fmt.Println(rigerrors.FormatUserError(err))
 		return err
