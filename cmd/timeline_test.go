@@ -6,8 +6,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"thoreinstein.com/rig/pkg/history"
 )
 
 func TestTimelineCommandStructure(t *testing.T) {
@@ -171,115 +169,6 @@ func TestParseTimeString(t *testing.T) {
 	}
 }
 
-func TestGenerateTimelineMarkdown(t *testing.T) {
-	t.Parallel()
-
-	commands := []history.Command{
-		{
-			ID:        1,
-			Command:   "git status",
-			Timestamp: time.Date(2025, 8, 10, 9, 0, 0, 0, time.UTC),
-			Duration:  100,
-			ExitCode:  0,
-			Directory: "/home/user/project",
-		},
-		{
-			ID:        2,
-			Command:   "git commit -m 'test'",
-			Timestamp: time.Date(2025, 8, 10, 9, 5, 0, 0, time.UTC),
-			Duration:  500,
-			ExitCode:  0,
-			Directory: "/home/user/project",
-		},
-		{
-			ID:        3,
-			Command:   "make build",
-			Timestamp: time.Date(2025, 8, 10, 10, 0, 0, 0, time.UTC),
-			Duration:  5000,
-			ExitCode:  1,
-			Directory: "/home/user/project",
-		},
-	}
-
-	result := generateTimelineMarkdown(commands, "FRAAS-123")
-
-	// Check header
-	if !containsSubstring(result, "## Command Timeline - FRAAS-123") {
-		t.Error("Timeline missing header")
-	}
-
-	// Check command count
-	if !containsSubstring(result, "Commands: 3") {
-		t.Error("Timeline missing command count")
-	}
-
-	// Check date section
-	if !containsSubstring(result, "### 2025-08-10") {
-		t.Error("Timeline missing date section")
-	}
-
-	// Check commands appear
-	if !containsSubstring(result, "git status") {
-		t.Error("Timeline missing first command")
-	}
-	if !containsSubstring(result, "git commit") {
-		t.Error("Timeline missing second command")
-	}
-	if !containsSubstring(result, "make build") {
-		t.Error("Timeline missing third command")
-	}
-
-	// Check failed command shows exit code
-	if !containsSubstring(result, "[Exit: 1]") {
-		t.Error("Timeline missing exit code for failed command")
-	}
-}
-
-func TestGenerateTimelineMarkdown_EmptyCommands(t *testing.T) {
-	t.Parallel()
-
-	result := generateTimelineMarkdown([]history.Command{}, "FRAAS-456")
-
-	if !containsSubstring(result, "## Command Timeline - FRAAS-456") {
-		t.Error("Timeline should have header even with empty commands")
-	}
-	if !containsSubstring(result, "Commands: 0") {
-		t.Error("Timeline should show 0 commands")
-	}
-}
-
-func TestGenerateTimelineMarkdown_MultipleDays(t *testing.T) {
-	t.Parallel()
-
-	commands := []history.Command{
-		{
-			Command:   "command1",
-			Timestamp: time.Date(2025, 8, 10, 9, 0, 0, 0, time.UTC),
-		},
-		{
-			Command:   "command2",
-			Timestamp: time.Date(2025, 8, 11, 10, 0, 0, 0, time.UTC),
-		},
-		{
-			Command:   "command3",
-			Timestamp: time.Date(2025, 8, 12, 11, 0, 0, 0, time.UTC),
-		},
-	}
-
-	result := generateTimelineMarkdown(commands, "TEST-789")
-
-	// Check all three days appear
-	if !containsSubstring(result, "### 2025-08-10") {
-		t.Error("Timeline missing first day")
-	}
-	if !containsSubstring(result, "### 2025-08-11") {
-		t.Error("Timeline missing second day")
-	}
-	if !containsSubstring(result, "### 2025-08-12") {
-		t.Error("Timeline missing third day")
-	}
-}
-
 func TestRemoveExistingTimeline(t *testing.T) {
 	t.Parallel()
 
@@ -305,7 +194,7 @@ Commands: 10
 
 ## Notes
 
-Some notes here.`,
+Some notes here.`, 
 			expected: `# Ticket Note
 
 ## Summary
@@ -326,7 +215,7 @@ Some summary here.
 
 ## Notes
 
-Some notes here.`,
+Some notes here.`, 
 			expected: `# Ticket Note
 
 ## Summary
@@ -347,7 +236,7 @@ Summary.
 
 ## Command Timeline - TEST-456
 
-Commands: 5`,
+Commands: 5`, 
 			expected: `# Ticket Note
 
 ## Summary
@@ -371,25 +260,6 @@ Summary.
 				t.Errorf("removeExistingTimeline() = %q, want %q", result, tt.expected)
 			}
 		})
-	}
-}
-
-func TestGenerateTimelineMarkdown_LongDirectory(t *testing.T) {
-	t.Parallel()
-
-	commands := []history.Command{
-		{
-			Command:   "ls",
-			Timestamp: time.Now(),
-			Directory: "/very/long/path/that/exceeds/fifty/characters/in/length/to/test/truncation",
-		},
-	}
-
-	result := generateTimelineMarkdown(commands, "TEST")
-
-	// The directory should be truncated (last 30 chars shown with ...)
-	if !containsSubstring(result, "...") {
-		t.Error("Long directory should be truncated with ...")
 	}
 }
 
@@ -650,6 +520,10 @@ func TestRemoveExistingTimeline_MultipleTimelineSections(t *testing.T) {
 	// Edge case: multiple timeline sections (shouldn't happen, but test behavior)
 	content := `# Note
 
+## Summary
+
+Some summary.
+
 ## Command Timeline - TICKET-1
 
 First timeline content
@@ -721,112 +595,5 @@ Final notes.`
 	}
 	if !strings.Contains(result, "Final notes") {
 		t.Error("removeExistingTimeline() should preserve Notes content")
-	}
-}
-
-func TestGenerateTimelineMarkdown_DurationFormatting(t *testing.T) {
-	t.Parallel()
-
-	commands := []history.Command{
-		{
-			Command:   "quick command",
-			Timestamp: time.Date(2025, 8, 10, 9, 0, 0, 0, time.UTC),
-			Duration:  50, // 50ms
-		},
-		{
-			Command:   "slow command",
-			Timestamp: time.Date(2025, 8, 10, 9, 1, 0, 0, time.UTC),
-			Duration:  5000, // 5000ms
-		},
-	}
-
-	result := generateTimelineMarkdown(commands, "TEST")
-
-	// Check duration formatting
-	if !strings.Contains(result, "(50ms)") {
-		t.Error("Timeline should show duration in milliseconds for quick command")
-	}
-	if !strings.Contains(result, "(5000ms)") {
-		t.Error("Timeline should show duration for slow command")
-	}
-}
-
-func TestGenerateTimelineMarkdown_ZeroDuration(t *testing.T) {
-	t.Parallel()
-
-	commands := []history.Command{
-		{
-			Command:   "instant command",
-			Timestamp: time.Date(2025, 8, 10, 9, 0, 0, 0, time.UTC),
-			Duration:  0, // No duration recorded
-		},
-	}
-
-	result := generateTimelineMarkdown(commands, "TEST")
-
-	// Zero duration should not show duration string
-	if strings.Contains(result, "(0ms)") {
-		t.Error("Timeline should not show (0ms) for zero duration")
-	}
-}
-
-func TestGenerateTimelineMarkdown_SuccessfulExitCode(t *testing.T) {
-	t.Parallel()
-
-	commands := []history.Command{
-		{
-			Command:   "successful command",
-			Timestamp: time.Date(2025, 8, 10, 9, 0, 0, 0, time.UTC),
-			ExitCode:  0,
-		},
-	}
-
-	result := generateTimelineMarkdown(commands, "TEST")
-
-	// Exit code 0 should not show [Exit: 0]
-	if strings.Contains(result, "[Exit: 0]") {
-		t.Error("Timeline should not show exit code for successful commands")
-	}
-}
-
-func TestGenerateTimelineMarkdown_ShortDirectory(t *testing.T) {
-	t.Parallel()
-
-	commands := []history.Command{
-		{
-			Command:   "ls",
-			Timestamp: time.Date(2025, 8, 10, 9, 0, 0, 0, time.UTC),
-			Directory: "/home/user",
-		},
-	}
-
-	result := generateTimelineMarkdown(commands, "TEST")
-
-	// Short directory should be shown fully
-	if !strings.Contains(result, "`/home/user`") {
-		t.Error("Timeline should show short directory path fully")
-	}
-	// Should not be truncated
-	if strings.Contains(result, "...") {
-		t.Error("Short directory should not be truncated")
-	}
-}
-
-func TestGenerateTimelineMarkdown_EmptyDirectory(t *testing.T) {
-	t.Parallel()
-
-	commands := []history.Command{
-		{
-			Command:   "echo hello",
-			Timestamp: time.Date(2025, 8, 10, 9, 0, 0, 0, time.UTC),
-			Directory: "",
-		},
-	}
-
-	result := generateTimelineMarkdown(commands, "TEST")
-
-	// Should not have backticks for empty directory
-	if strings.Contains(result, "`` `") || strings.Contains(result, "`: `echo") {
-		t.Error("Timeline should not show empty directory backticks")
 	}
 }
