@@ -14,10 +14,10 @@
 - [x] Task: Conductor - User Manual Verification 'Query Engine Enhancements' (Protocol in workflow.md) be780d7
 
 ## Phase 2: CLI Command Updates
-- [ ] Task: Update `rig history query` command
-    - [ ] Write tests for flag parsing in `cmd/history_test.go`.
-    - [ ] Add flags: `--exit-code`, `--min-duration` to `cmd/history.go`.
-    - [ ] Connect flags to `pkg/history` query engine.
+- [x] Task: Update `rig history query` command 0450bc7
+    - [x] Write tests for flag parsing in `cmd/history_test.go`.
+    - [x] Add flags: `--exit-code`, `--min-duration` to `cmd/history.go`.
+    - [x] Connect flags to `pkg/history` query engine.
 - [ ] Task: Update `rig timeline` command filtering
     - [ ] Write tests ensuring timeline filters are correctly passed.
     - [ ] Add support for filtering timeline generation (e.g., "show me only failed commands in the timeline").
