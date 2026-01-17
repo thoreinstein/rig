@@ -1,9 +1,9 @@
 # Implementation Plan - Refine History Analysis
 
 ## Phase 1: Query Engine Enhancements
-- [ ] Task: Define new query parameters in `pkg/history/types.go`
-    - [ ] Create `QueryOptions` struct with `ExitCode`, `MinDuration`, `SessionID`.
-    - [ ] Update `Search` interface signature to accept `QueryOptions`.
+- [x] Task: Define new query parameters in `pkg/history/types.go` 300445c
+    - [x] Create `QueryOptions` struct with `ExitCode`, `MinDuration`, `SessionID`.
+    - [x] Update `Search` interface signature to accept `QueryOptions`.
 - [ ] Task: Implement SQL query builder updates in `pkg/history/sqlite.go`
     - [ ] Write tests for `BuildQuery` ensuring correct WHERE clauses for new filters.
     - [ ] Implement `BuildQuery` logic to handle `ExitCode`, `MinDuration`, etc.
