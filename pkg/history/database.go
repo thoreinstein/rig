@@ -82,8 +82,7 @@ func (dm *DatabaseManager) QueryCommands(options QueryOptions) ([]Command, error
 		fmt.Printf("With args: %v\n", args)
 	}
 
-
-rows, err := db.Query(query, args...)
+	rows, err := db.Query(query, args...)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to execute query")
 	}
@@ -190,9 +189,20 @@ func (dm *DatabaseManager) buildZshHistdbQuery(options QueryOptions) (string, []
 		args = append(args, "%"+options.Session+"%")
 	}
 
+	if options.SessionID != "" {
+		query += " AND s.session = ?"
+		args = append(args, options.SessionID)
+	}
+
 	if options.ExitCode != nil {
 		query += " AND c.exit_status = ?"
 		args = append(args, *options.ExitCode)
+	}
+
+	if options.MinDuration > 0 {
+		query += " AND c.duration >= ?"
+		// zsh-histdb duration is usually seconds
+		args = append(args, int64(options.MinDuration.Seconds()))
 	}
 
 	if options.Pattern != "" {
@@ -253,9 +263,20 @@ func (dm *DatabaseManager) buildAtuinQuery(options QueryOptions) (string, []inte
 		args = append(args, "%"+options.Session+"%")
 	}
 
+	if options.SessionID != "" {
+		query += " AND session = ?"
+		args = append(args, options.SessionID)
+	}
+
 	if options.ExitCode != nil {
 		query += " AND exit = ?"
 		args = append(args, *options.ExitCode)
+	}
+
+	if options.MinDuration > 0 {
+		query += " AND duration >= ?"
+		// Atuin duration is nanoseconds
+		args = append(args, options.MinDuration.Nanoseconds())
 	}
 
 	if options.Pattern != "" {
