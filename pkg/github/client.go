@@ -23,10 +23,8 @@ type Client interface {
 	// GetPR retrieves pull request information by number.
 	GetPR(ctx context.Context, number int) (*PRInfo, error)
 
-	// ListPRs lists pull requests filtered by state ("open", "closed", "merged", "all").
-	// If author is non-empty, only PRs by that author are returned.
-	// Use "@me" to filter by the authenticated user.
-	ListPRs(ctx context.Context, state, author string) ([]PRInfo, error)
+	// ListPRs lists pull requests with the given options.
+	ListPRs(ctx context.Context, opts ListPRsOptions) ([]PRInfo, error)
 
 	// MergePR merges a pull request.
 	MergePR(ctx context.Context, number int, opts MergeOptions) error

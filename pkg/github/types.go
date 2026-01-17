@@ -59,6 +59,14 @@ type CreatePROptions struct {
 	Reviewers  []string // Requested reviewers
 }
 
+// ListPRsOptions holds options for listing pull requests.
+type ListPRsOptions struct {
+	State  string // "open", "closed", "merged", "all"
+	Author string // Filter by author login, "@me" for current user
+	Limit  int    // Number of results to fetch (default: 30)
+	Page   int    // Page number (default: 1)
+}
+
 // MergeOptions holds options for merging a pull request.
 type MergeOptions struct {
 	Method       string // "merge", "squash", "rebase" (defaults to repo setting)

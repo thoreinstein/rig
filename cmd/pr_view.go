@@ -117,7 +117,7 @@ func findPRForCurrentBranch(ctx context.Context, ghClient github.Client) (int, e
 	}
 
 	// List open PRs and find one matching the branch
-	prs, err := ghClient.ListPRs(ctx, "open", "")
+	prs, err := ghClient.ListPRs(ctx, github.ListPRsOptions{State: "open"})
 	if err != nil {
 		return 0, rigerrors.NewGitHubErrorWithCause("ListPRs", "failed to list PRs", err)
 	}

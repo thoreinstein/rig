@@ -18,7 +18,7 @@ func TestRunPRView(t *testing.T) {
 		name     string
 		opts     ViewOptions
 		getFunc  func(ctx context.Context, number int) (*github.PRInfo, error)
-		listFunc func(ctx context.Context, state, author string) ([]github.PRInfo, error)
+		listFunc func(ctx context.Context, opts github.ListPRsOptions) ([]github.PRInfo, error)
 		wantErr  bool
 	}{
 		{
@@ -32,7 +32,7 @@ func TestRunPRView(t *testing.T) {
 		{
 			name: "view current branch PR",
 			opts: ViewOptions{Number: 0},
-			listFunc: func(ctx context.Context, state, author string) ([]github.PRInfo, error) {
+			listFunc: func(ctx context.Context, opts github.ListPRsOptions) ([]github.PRInfo, error) {
 				// We need to mock findPRForCurrentBranch's behavior
 				// Since findPRForCurrentBranch calls 'git rev-parse', it's hard to test in unit tests
 				// without mocking the shell.
