@@ -8,9 +8,9 @@
     - [x] Write tests for `BuildQuery` ensuring correct WHERE clauses for new filters.
     - [x] Implement `BuildQuery` logic to handle `ExitCode`, `MinDuration`, etc.
     - [x] Verify query performance with `EXPLAIN QUERY PLAN` on sample data (manual check).
-- [ ] Task: Update `pkg/history` public API
-    - [ ] Update `GetCommands` to pass through new options.
-    - [ ] Update unit tests in `pkg/history/history_test.go`.
+- [x] Task: Update `pkg/history` public API 24bcc1a
+    - [x] Update `GetCommands` to pass through new options.
+    - [x] Update unit tests in `pkg/history/history_test.go`.
 - [ ] Task: Conductor - User Manual Verification 'Query Engine Enhancements' (Protocol in workflow.md)
 
 ## Phase 2: CLI Command Updates
