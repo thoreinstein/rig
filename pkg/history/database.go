@@ -25,30 +25,6 @@ func NewDatabaseManager(databasePath string, verbose bool) *DatabaseManager {
 	}
 }
 
-// Command represents a command from the history database
-type Command struct {
-	ID        int64
-	Command   string
-	Timestamp time.Time
-	Duration  int64 // milliseconds
-	ExitCode  int
-	Directory string
-	Session   string
-	Host      string
-}
-
-// QueryOptions defines filtering options for history queries
-type QueryOptions struct {
-	Since     *time.Time
-	Until     *time.Time
-	Directory string
-	Session   string
-	Ticket    string
-	ExitCode  *int
-	Limit     int
-	Pattern   string
-}
-
 // IsAvailable checks if the history database exists and is accessible
 func (dm *DatabaseManager) IsAvailable() bool {
 	if _, err := os.Stat(dm.DatabasePath); os.IsNotExist(err) {
@@ -106,7 +82,8 @@ func (dm *DatabaseManager) QueryCommands(options QueryOptions) ([]Command, error
 		fmt.Printf("With args: %v\n", args)
 	}
 
-	rows, err := db.Query(query, args...)
+
+rows, err := db.Query(query, args...)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to execute query")
 	}
