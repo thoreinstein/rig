@@ -16,14 +16,15 @@ type Command struct {
 
 // QueryOptions defines filtering options for history queries
 type QueryOptions struct {
-	Since       *time.Time
-	Until       *time.Time
-	Directory   string
-	Session     string // Used for fuzzy matching or session name
-	SessionID   string // Exact session ID match
-	Ticket      string
-	ExitCode    *int
-	MinDuration time.Duration // Minimum duration filter
-	Limit       int
-	Pattern     string
+	Since        *time.Time
+	Until        *time.Time
+	Directory    string
+	Session      string // Used for fuzzy matching or session name
+	SessionID    string // Exact session ID match
+	Ticket       string
+	ProjectPaths []string // Paths associated with the project/ticket (OR logic with Ticket)
+	ExitCode     *int
+	MinDuration  time.Duration // Minimum duration filter
+	Limit        int
+	Pattern      string
 }
