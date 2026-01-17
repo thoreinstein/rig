@@ -1,6 +1,6 @@
 # Implementation Plan - Refine History Analysis
 
-## Phase 1: Query Engine Enhancements
+## Phase 1: Query Engine Enhancements [checkpoint: be780d7]
 - [x] Task: Define new query parameters in `pkg/history/types.go` 300445c
     - [x] Create `QueryOptions` struct with `ExitCode`, `MinDuration`, `SessionID`.
     - [x] Update `Search` interface signature to accept `QueryOptions`.
@@ -11,7 +11,7 @@
 - [x] Task: Update `pkg/history` public API 24bcc1a
     - [x] Update `GetCommands` to pass through new options.
     - [x] Update unit tests in `pkg/history/history_test.go`.
-- [ ] Task: Conductor - User Manual Verification 'Query Engine Enhancements' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Query Engine Enhancements' (Protocol in workflow.md) be780d7
 
 ## Phase 2: CLI Command Updates
 - [ ] Task: Update `rig history query` command
