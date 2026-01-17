@@ -31,7 +31,7 @@
     - [x] Write tests: Input `[]Command`, Output `string` (Markdown).
     - [x] Implement grouping logic (by time or session).
     - [x] Implement styling (icons for success/fail, duration strings).
-- [ ] Task: Integrate Formatter into `rig timeline`
-    - [ ] Replace existing raw output with new formatted output.
-    - [ ] Update end-to-end tests for `rig timeline`.
+- [x] Task: Integrate Formatter into `rig timeline` 630383e
+    - [x] Replace existing raw output with new formatted output.
+    - [x] Update end-to-end tests for `rig timeline`.
 - [ ] Task: Conductor - User Manual Verification 'Timeline Formatting & Output' (Protocol in workflow.md)
