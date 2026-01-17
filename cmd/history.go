@@ -32,7 +32,9 @@ Examples:
   rig history query "git"               # Search for commands containing "git"
   rig history query --since "2025-08-10"
   rig history query --directory /path/to/dir
-  rig history query --failed-only`,
+  rig history query --failed-only
+  rig history query --exit-code 1
+  rig history query --min-duration 5s`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		pattern := ""
@@ -54,12 +56,15 @@ var historyInfoCmd = &cobra.Command{
 }
 
 var (
-	historySince      string
-	historyUntil      string
-	historyDirectory  string
-	historySession    string
-	historyFailedOnly bool
-	historyLimit      int
+	historySince       string
+	historyUntil       string
+	historyDirectory   string
+	historySession     string
+	historySessionID   string
+	historyFailedOnly  bool
+	historyExitCode    int
+	historyMinDuration time.Duration
+	historyLimit       int
 )
 
 func init() {
@@ -71,7 +76,10 @@ func init() {
 	historyQueryCmd.Flags().StringVar(&historyUntil, "until", "", "End time (YYYY-MM-DD HH:MM or YYYY-MM-DD)")
 	historyQueryCmd.Flags().StringVar(&historyDirectory, "directory", "", "Filter by directory path")
 	historyQueryCmd.Flags().StringVar(&historySession, "session", "", "Filter by session")
+	historyQueryCmd.Flags().StringVar(&historySessionID, "session-id", "", "Filter by exact session ID")
 	historyQueryCmd.Flags().BoolVar(&historyFailedOnly, "failed-only", false, "Show only failed commands")
+	historyQueryCmd.Flags().IntVar(&historyExitCode, "exit-code", -1, "Filter by exact exit code")
+	historyQueryCmd.Flags().DurationVar(&historyMinDuration, "min-duration", 0, "Filter by minimum duration (e.g. 5s, 1m)")
 	historyQueryCmd.Flags().IntVar(&historyLimit, "limit", 50, "Maximum number of commands to show")
 }
 
@@ -110,15 +118,19 @@ func runHistoryQueryCommand(pattern string) error {
 
 	// Build query options
 	options := history.QueryOptions{
-		Since:     since,
-		Until:     until,
-		Directory: historyDirectory,
-		Session:   historySession,
-		Pattern:   pattern,
-		Limit:     historyLimit,
+		Since:       since,
+		Until:       until,
+		Directory:   historyDirectory,
+		Session:     historySession,
+		SessionID:   historySessionID,
+		MinDuration: historyMinDuration,
+		Pattern:     pattern,
+		Limit:       historyLimit,
 	}
 
-	if historyFailedOnly {
+	if historyExitCode != -1 {
+		options.ExitCode = &historyExitCode
+	} else if historyFailedOnly {
 		failedExitCode := 1
 		options.ExitCode = &failedExitCode
 	}
