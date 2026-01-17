@@ -32,6 +32,7 @@ Examples:
   rig history query "git"               # Search for commands containing "git"
   rig history query --since "2025-08-10"
   rig history query --directory /path/to/dir
+  rig history query --ticket PROJ-123
   rig history query --failed-only
   rig history query --exit-code 1
   rig history query --min-duration 5s`,
@@ -49,7 +50,7 @@ Examples:
 var historyInfoCmd = &cobra.Command{
 	Use:   "info",
 	Short: "Show history database information",
-	Long:  `Display information about the history database including schema, size, and statistics.`,
+	Long:  `Display information about the history database including schema, size, and statistics.`, 
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runHistoryInfoCommand()
 	},
@@ -61,6 +62,7 @@ var (
 	historyDirectory   string
 	historySession     string
 	historySessionID   string
+	historyTicket      string
 	historyFailedOnly  bool
 	historyExitCode    int
 	historyMinDuration time.Duration
@@ -77,6 +79,7 @@ func init() {
 	historyQueryCmd.Flags().StringVar(&historyDirectory, "directory", "", "Filter by directory path")
 	historyQueryCmd.Flags().StringVar(&historySession, "session", "", "Filter by session")
 	historyQueryCmd.Flags().StringVar(&historySessionID, "session-id", "", "Filter by exact session ID")
+	historyQueryCmd.Flags().StringVar(&historyTicket, "ticket", "", "Filter by ticket ID")
 	historyQueryCmd.Flags().BoolVar(&historyFailedOnly, "failed-only", false, "Show only failed commands")
 	historyQueryCmd.Flags().IntVar(&historyExitCode, "exit-code", -1, "Filter by exact exit code")
 	historyQueryCmd.Flags().DurationVar(&historyMinDuration, "min-duration", 0, "Filter by minimum duration (e.g. 5s, 1m)")
@@ -123,6 +126,7 @@ func runHistoryQueryCommand(pattern string) error {
 		Directory:   historyDirectory,
 		Session:     historySession,
 		SessionID:   historySessionID,
+		Ticket:      historyTicket,
 		MinDuration: historyMinDuration,
 		Pattern:     pattern,
 		Limit:       historyLimit,
