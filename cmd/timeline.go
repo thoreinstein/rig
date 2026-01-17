@@ -31,7 +31,8 @@ Examples:
   rig timeline proj-123 --since "2025-08-10 09:00"
   rig timeline proj-123 --until "2025-08-10 18:00"
   rig timeline proj-123 --failed-only
-  rig timeline proj-123 --directory /path/to/worktree`,
+  rig timeline proj-123 --directory /path/to/worktree
+  rig timeline proj-123 --min-duration 5s`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runTimelineCommand(args[0])
@@ -39,13 +40,16 @@ Examples:
 }
 
 var (
-	timelineSince      string
-	timelineUntil      string
-	timelineDirectory  string
-	timelineFailedOnly bool
-	timelineLimit      int
-	timelineOutput     string
-	timelineNoUpdate   bool
+	timelineSince       string
+	timelineUntil       string
+	timelineDirectory   string
+	timelineSessionID   string
+	timelineFailedOnly  bool
+	timelineExitCode    int
+	timelineMinDuration time.Duration
+	timelineLimit       int
+	timelineOutput      string
+	timelineNoUpdate    bool
 )
 
 func init() {
@@ -54,7 +58,10 @@ func init() {
 	timelineCmd.Flags().StringVar(&timelineSince, "since", "", "Start time (YYYY-MM-DD HH:MM or YYYY-MM-DD)")
 	timelineCmd.Flags().StringVar(&timelineUntil, "until", "", "End time (YYYY-MM-DD HH:MM or YYYY-MM-DD)")
 	timelineCmd.Flags().StringVar(&timelineDirectory, "directory", "", "Filter by directory path")
+	timelineCmd.Flags().StringVar(&timelineSessionID, "session-id", "", "Filter by exact session ID")
 	timelineCmd.Flags().BoolVar(&timelineFailedOnly, "failed-only", false, "Show only failed commands (exit code != 0)")
+	timelineCmd.Flags().IntVar(&timelineExitCode, "exit-code", -1, "Filter by exact exit code")
+	timelineCmd.Flags().DurationVar(&timelineMinDuration, "min-duration", 0, "Filter by minimum duration (e.g. 5s, 1m)")
 	timelineCmd.Flags().IntVar(&timelineLimit, "limit", 1000, "Maximum number of commands to retrieve")
 	timelineCmd.Flags().StringVar(&timelineOutput, "output", "", "Output file path (default: update ticket note)")
 	timelineCmd.Flags().BoolVar(&timelineNoUpdate, "no-update", false, "Don't update the ticket note, only output to console")
@@ -105,14 +112,18 @@ func runTimelineCommand(ticket string) error {
 
 	// Build query options
 	options := history.QueryOptions{
-		Since:     since,
-		Until:     until,
-		Directory: timelineDirectory,
-		Ticket:    ticketInfo.Full,
-		Limit:     timelineLimit,
+		Since:       since,
+		Until:       until,
+		Directory:   timelineDirectory,
+		Ticket:      ticketInfo.Full,
+		SessionID:   timelineSessionID,
+		MinDuration: timelineMinDuration,
+		Limit:       timelineLimit,
 	}
 
-	if timelineFailedOnly {
+	if timelineExitCode != -1 {
+		options.ExitCode = &timelineExitCode
+	} else if timelineFailedOnly {
 		failedExitCode := 1
 		options.ExitCode = &failedExitCode
 	}
