@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"thoreinstein.com/rig/pkg/config"
+	"thoreinstein.com/rig/pkg/git"
 	"thoreinstein.com/rig/pkg/history"
 	"thoreinstein.com/rig/pkg/notes"
 )
@@ -109,15 +111,35 @@ func runTimelineCommand(ticket string) error {
 		until = &parsedUntil
 	}
 
+	// Get worktree path to include directory-based commands
+	var projectPaths []string
+	
+	// If explicit directory provided, use it as strict filter (Directory field)
+	// If NOT provided, use worktree path as an OR condition (ProjectPaths)
+	if timelineDirectory == "" {
+		// Attempt to resolve worktree path
+		gitManager := git.NewWorktreeManager(cfg.Git.BaseBranch, verbose)
+		worktreePath, err := gitManager.GetWorktreePath(ticketInfo.Type, ticketInfo.Full)
+		if err == nil {
+			projectPaths = append(projectPaths, worktreePath)
+			if verbose {
+				fmt.Printf("Including commands from worktree: %s\n", worktreePath)
+			}
+		} else if verbose {
+			fmt.Printf("Warning: Could not resolve worktree path: %v\n", err)
+		}
+	}
+
 	// Build query options
 	options := history.QueryOptions{
-		Since:       since,
-		Until:       until,
-		Directory:   timelineDirectory,
-		Ticket:      ticketInfo.Full,
-		SessionID:   timelineSessionID,
-		MinDuration: timelineMinDuration,
-		Limit:       timelineLimit,
+		Since:        since,
+		Until:        until,
+		Directory:    timelineDirectory, // AND filter
+		Ticket:       ticketInfo.Full,
+		SessionID:    timelineSessionID,
+		MinDuration:  timelineMinDuration,
+		Limit:        timelineLimit,
+		ProjectPaths: projectPaths, // OR logic with Ticket
 	}
 
 	if timelineExitCode != -1 {

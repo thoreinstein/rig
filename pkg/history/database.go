@@ -82,7 +82,8 @@ func (dm *DatabaseManager) QueryCommands(options QueryOptions) ([]Command, error
 		fmt.Printf("With args: %v\n", args)
 	}
 
-	rows, err := db.Query(query, args...)
+
+rows, err := db.Query(query, args...)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to execute query")
 	}
@@ -210,10 +211,23 @@ func (dm *DatabaseManager) buildZshHistdbQuery(options QueryOptions) (string, []
 		args = append(args, "%"+options.Pattern+"%")
 	}
 
-	// Filter by ticket if specified (look for ticket in environment or session)
-	if options.Ticket != "" && strings.TrimSpace(options.Ticket) != "" {
-		query += " AND (s.session LIKE ? OR c.argv LIKE ?)"
-		args = append(args, "%"+options.Ticket+"%", "%"+options.Ticket+"%")
+	// Filter by ticket or project paths
+	if (options.Ticket != "" && strings.TrimSpace(options.Ticket) != "") || len(options.ProjectPaths) > 0 {
+		var orConditions []string
+		
+		if options.Ticket != "" && strings.TrimSpace(options.Ticket) != "" {
+			orConditions = append(orConditions, "s.session LIKE ?", "c.argv LIKE ?")
+			args = append(args, "%"+options.Ticket+"%", "%"+options.Ticket+"%")
+		}
+		
+		for _, path := range options.ProjectPaths {
+			orConditions = append(orConditions, "p.dir LIKE ?")
+			args = append(args, path+"%")
+		}
+		
+		if len(orConditions) > 0 {
+			query += " AND (" + strings.Join(orConditions, " OR ") + ")"
+		}
 	}
 
 	query += " ORDER BY c.start_time ASC"
@@ -284,9 +298,23 @@ func (dm *DatabaseManager) buildAtuinQuery(options QueryOptions) (string, []inte
 		args = append(args, "%"+options.Pattern+"%")
 	}
 
-	if options.Ticket != "" {
-		query += " AND (session LIKE ? OR command LIKE ?)"
-		args = append(args, "%"+options.Ticket+"%", "%"+options.Ticket+"%")
+	// Filter by ticket or project paths
+	if (options.Ticket != "" && strings.TrimSpace(options.Ticket) != "") || len(options.ProjectPaths) > 0 {
+		var orConditions []string
+		
+		if options.Ticket != "" && strings.TrimSpace(options.Ticket) != "" {
+			orConditions = append(orConditions, "session LIKE ?", "command LIKE ?")
+			args = append(args, "%"+options.Ticket+"%", "%"+options.Ticket+"%")
+		}
+		
+		for _, path := range options.ProjectPaths {
+			orConditions = append(orConditions, "cwd LIKE ?")
+			args = append(args, path+"%")
+		}
+		
+		if len(orConditions) > 0 {
+			query += " AND (" + strings.Join(orConditions, " OR ") + ")"
+		}
 	}
 
 	query += " ORDER BY timestamp ASC"

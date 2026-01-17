@@ -362,3 +362,12 @@ func (wm *WorktreeManager) RemoveWorktree(ticketType, ticket string) error {
 	relativePath := filepath.Join(ticketType, ticket)
 	return wm.runner.Run(repoRoot, "git", "worktree", "remove", relativePath)
 }
+
+// GetWorktreePath returns the absolute path for a ticket's worktree
+func (wm *WorktreeManager) GetWorktreePath(ticketType, ticket string) (string, error) {
+	repoRoot, err := wm.GetRepoRoot()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(repoRoot, ticketType, ticket), nil
+}
