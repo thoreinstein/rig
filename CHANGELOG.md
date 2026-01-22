@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2026-01-22
+
+### Added
+
+- `ccc9b15` feat(pr): Add pagination support for PR listing
+- `0020f19` feat(timeline): Add worktree path auto-detection for timeline filtering
+- `063be3a` feat(cmd): Add --ticket flag to history query
+- `d69712b` feat(timeline): Integrate history formatter into rig timeline
+- `3b33389` feat(history): Implement timeline markdown formatter
+- `5e9a0be` feat(cmd): Update rig timeline command with new filters
+- `3ae3332` feat(cmd): Update rig history query command with new filters
+- `283fdad` feat(history): Implement SQL query builder updates for new filters
+- `b48a127` feat(history): Define new query parameters in pkg/history/types.go
+- `0e8c560` Add repository-local config support
+- `844ddc4` Add per-provider AI model defaults
+- `388f675` Add config validation and security warnings
+- `e8eb4f2` Add merge method validation to pr merge
+
+### Changed
+
+- `a674a56` refactor(pr): Use typed errors consistently
+- `42ca631` refactor(pr): Move global flags to struct for testability
+- `9c8c596` style: Fix formatting and whitespace
+
+### Fixed
+
+- `cf05afe` Fix rig work command to detect existing notes
+- `3a06909` Fix golangci-lint nits
+- `afff257` fix(cmd): Remove unused import in timeline.go
+
+### Tests
+
+- `d9da2a3` test(history): Verify public API with new filters
+- `66773a3` Add tests for repository-local config loading
+
+### Dependencies
+
+- `a189396` deps: bump modernc.org/sqlite from 1.43.0 to 1.44.1
+
 ## [0.9.0] - 2026-01-15
 
 ### Added
@@ -256,6 +295,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - bc72a00: Bump golangci/golangci-lint-action from 6 to 9
 - bbc29e2: Bump golangci/golangci-lint-action from 6 to 9
 
+[0.10.0]: https://github.com/thoreinstein/rig/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/thoreinstein/rig/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/thoreinstein/rig/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/thoreinstein/rig/compare/v0.7.0...v0.7.1

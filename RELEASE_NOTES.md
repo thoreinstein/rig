@@ -1,3 +1,70 @@
+# Release Notes: v0.10.0
+
+**Release Date:** 2026-01-22
+
+## Overview
+
+This release brings significant enhancements to the PR workflow with pagination support, a powerful new timeline formatter for history analysis, and improvements to configuration management including repository-local config support.
+
+## Installation
+
+### Homebrew (recommended)
+
+```bash
+brew upgrade rig
+```
+
+### Manual Installation
+
+Download the appropriate binary from the [releases page](https://github.com/thoreinstein/rig/releases/tag/v0.10.0).
+
+## Features
+
+### PR Workflow Enhancements
+- **Pagination support** for PR listing - handle repositories with many PRs efficiently
+- **Typed errors** throughout PR commands for better error handling
+- **Improved testability** with refactored global flags
+
+### History & Timeline
+- **Timeline markdown formatter** - generate beautiful markdown timelines from history data
+- **Worktree path auto-detection** - timeline automatically filters to current worktree context
+- **New query filters** - filter history by `--ticket` flag for focused analysis
+- **Enhanced SQL query builder** with support for new filter parameters
+
+### Configuration
+- **Repository-local config support** - override global config per-repository
+- **Per-provider AI model defaults** - sensible defaults for each AI provider
+- **Config validation and security warnings** - proactive warnings for insecure configurations
+
+## Bug Fixes
+
+- **Fixed `rig work` command** - now correctly detects existing notes and displays "Opened existing note" instead of always showing "Note created" (rig-qf2)
+- Fixed golangci-lint issues in PR commands
+- Removed unused import in timeline.go
+
+## Dependencies
+
+- Bumped modernc.org/sqlite from 1.43.0 to 1.44.1
+
+## Verification
+
+All release artifacts are signed with Sigstore. Verify with:
+
+```bash
+cosign verify-blob --signature rig-darwin-arm64.sig rig-darwin-arm64
+```
+
+## Rollback
+
+If issues occur, rollback to v0.9.0:
+
+```bash
+brew install rig@0.9.0
+# or download v0.9.0 from releases page
+```
+
+---
+
 # Release Notes: v0.9.0
 
 ## Overview
