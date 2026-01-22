@@ -209,11 +209,16 @@ func runWorkCommand(ticket string) error {
 			noteData.Description = jiraInfo.Description
 		}
 
-		notePath, err = noteManager.CreateTicketNote(noteData)
+		result, err := noteManager.CreateTicketNote(noteData)
 		if err != nil {
 			return errors.Wrap(err, "failed to create note")
 		}
-		fmt.Printf("Note created at: %s\n", notePath)
+		if result.Created {
+			fmt.Printf("Note created at: %s\n", result.Path)
+		} else {
+			fmt.Printf("Opened existing note: %s\n", result.Path)
+		}
+		notePath = result.Path
 	}
 
 	// Step 4: Update daily note

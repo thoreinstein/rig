@@ -73,23 +73,26 @@ func TestCreateTicketNote_Success(t *testing.T) {
 		WorktreePath: "/path/to/worktree",
 	}
 
-	notePath, err := m.CreateTicketNote(data)
+	result, err := m.CreateTicketNote(data)
 	if err != nil {
 		t.Fatalf("CreateTicketNote() error = %v, want nil", err)
 	}
 
 	expectedPath := filepath.Join(tmpDir, "proj", "proj-123.md")
-	if notePath != expectedPath {
-		t.Errorf("CreateTicketNote() path = %q, want %q", notePath, expectedPath)
+	if result.Path != expectedPath {
+		t.Errorf("CreateTicketNote() path = %q, want %q", result.Path, expectedPath)
+	}
+	if !result.Created {
+		t.Error("CreateTicketNote() Created = false, want true for new note")
 	}
 
 	// Verify file was created
-	if _, err := os.Stat(notePath); os.IsNotExist(err) {
+	if _, err := os.Stat(result.Path); os.IsNotExist(err) {
 		t.Error("Note file was not created")
 	}
 
 	// Verify content
-	content, err := os.ReadFile(notePath)
+	content, err := os.ReadFile(result.Path)
 	if err != nil {
 		t.Fatalf("Failed to read note: %v", err)
 	}
@@ -127,13 +130,16 @@ func TestCreateTicketNote_AlreadyExists(t *testing.T) {
 		TicketType: "proj",
 	}
 
-	returnedPath, err := m.CreateTicketNote(data)
+	result, err := m.CreateTicketNote(data)
 	if err != nil {
 		t.Fatalf("CreateTicketNote() error = %v, want nil", err)
 	}
 
-	if returnedPath != notePath {
-		t.Errorf("CreateTicketNote() path = %q, want %q", returnedPath, notePath)
+	if result.Path != notePath {
+		t.Errorf("CreateTicketNote() path = %q, want %q", result.Path, notePath)
+	}
+	if result.Created {
+		t.Error("CreateTicketNote() Created = true, want false for existing note")
 	}
 
 	// Verify content was NOT overwritten
@@ -159,12 +165,12 @@ func TestCreateTicketNote_HackTemplate(t *testing.T) {
 		WorktreePath: "/path/to/worktree",
 	}
 
-	notePath, err := m.CreateTicketNote(data)
+	result, err := m.CreateTicketNote(data)
 	if err != nil {
 		t.Fatalf("CreateTicketNote() error = %v, want nil", err)
 	}
 
-	content, err := os.ReadFile(notePath)
+	content, err := os.ReadFile(result.Path)
 	if err != nil {
 		t.Fatalf("Failed to read note: %v", err)
 	}

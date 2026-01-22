@@ -119,14 +119,19 @@ func runHackCommand(name string) error {
 			WorktreePath: worktreePath,
 		}
 
-		notePath, err = noteManager.CreateTicketNote(noteData)
+		result, err := noteManager.CreateTicketNote(noteData)
 		if err != nil {
 			// Don't fail if note creation fails
 			if verbose {
 				fmt.Printf("Warning: Could not create note: %v\n", err)
 			}
 		} else {
-			fmt.Printf("Note created at: %s\n", notePath)
+			if result.Created {
+				fmt.Printf("Note created at: %s\n", result.Path)
+			} else {
+				fmt.Printf("Opened existing note: %s\n", result.Path)
+			}
+			notePath = result.Path
 		}
 	}
 
