@@ -16,6 +16,12 @@ import (
 //go:embed templates/*.tmpl
 var defaultTemplates embed.FS
 
+// NoteResult contains the result of a note creation operation.
+type NoteResult struct {
+	Path    string
+	Created bool // true if newly created, false if already existed
+}
+
 // Manager handles markdown note operations
 type Manager struct {
 	BasePath    string // Root path for notes
@@ -59,8 +65,10 @@ func (m *Manager) GetDailyNotePath() string {
 	return filepath.Join(m.BasePath, m.DailyDir, today+".md")
 }
 
-// CreateTicketNote creates or returns existing ticket note
-func (m *Manager) CreateTicketNote(data TicketData) (string, error) {
+// CreateTicketNote creates or returns existing ticket note.
+// Returns NoteResult with Created=true if a new note was created,
+// or Created=false if the note already existed.
+func (m *Manager) CreateTicketNote(data TicketData) (NoteResult, error) {
 	notePath := m.GetNotePath(data.TicketType, data.Ticket)
 	noteDir := filepath.Dir(notePath)
 
@@ -70,12 +78,12 @@ func (m *Manager) CreateTicketNote(data TicketData) (string, error) {
 
 	// Check if base path exists
 	if _, err := os.Stat(m.BasePath); os.IsNotExist(err) {
-		return "", errors.Newf("notes directory does not exist: %s. Create it or update 'notes.path' in config", m.BasePath)
+		return NoteResult{}, errors.Newf("notes directory does not exist: %s. Create it or update 'notes.path' in config", m.BasePath)
 	}
 
 	// Create directory if it doesn't exist (0700 for user-only access)
 	if err := os.MkdirAll(noteDir, 0700); err != nil {
-		return "", errors.Wrap(err, "failed to create note directory")
+		return NoteResult{}, errors.Wrap(err, "failed to create note directory")
 	}
 
 	// Check if note already exists
@@ -83,7 +91,7 @@ func (m *Manager) CreateTicketNote(data TicketData) (string, error) {
 		if m.Verbose {
 			fmt.Printf("Note already exists at %s\n", notePath)
 		}
-		return notePath, nil
+		return NoteResult{Path: notePath, Created: false}, nil
 	}
 
 	// Determine which template to use
@@ -103,19 +111,19 @@ func (m *Manager) CreateTicketNote(data TicketData) (string, error) {
 	// Render template
 	content, err := m.renderTemplate(templateName, data)
 	if err != nil {
-		return "", errors.Wrap(err, "failed to render template")
+		return NoteResult{}, errors.Wrap(err, "failed to render template")
 	}
 
 	// Write the note with restricted permissions (may contain command history)
 	if err := os.WriteFile(notePath, []byte(content), 0600); err != nil {
-		return "", errors.Wrap(err, "failed to write note")
+		return NoteResult{}, errors.Wrap(err, "failed to write note")
 	}
 
 	if m.Verbose {
 		fmt.Printf("Note created successfully at %s\n", notePath)
 	}
 
-	return notePath, nil
+	return NoteResult{Path: notePath, Created: true}, nil
 }
 
 // UpdateDailyNote adds an entry to the daily note, creating it if necessary
