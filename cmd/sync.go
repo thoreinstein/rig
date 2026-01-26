@@ -56,7 +56,7 @@ func init() {
 
 func runSyncCommand(ticket string) error {
 	// Load configuration
-	cfg, err := config.Load()
+	cfg, err := loadConfig()
 	if err != nil {
 		return errors.Wrap(err, "failed to load configuration")
 	}

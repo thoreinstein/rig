@@ -7,7 +7,6 @@ import (
 	"github.com/cockroachdb/errors"
 	"github.com/spf13/cobra"
 
-	"thoreinstein.com/rig/pkg/config"
 	"thoreinstein.com/rig/pkg/git"
 	"thoreinstein.com/rig/pkg/notes"
 	"thoreinstein.com/rig/pkg/tmux"
@@ -64,7 +63,7 @@ func runHackCommand(name string) error {
 	}
 
 	// Load configuration
-	cfg, err := config.Load()
+	cfg, err := loadConfig()
 	if err != nil {
 		return errors.Wrap(err, "failed to load configuration")
 	}

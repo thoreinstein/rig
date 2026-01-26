@@ -115,6 +115,7 @@ func TestRunCloneCommand_ValidURL_Integration(t *testing.T) {
 
 	// Configure viper for the test
 	viper.Reset()
+	resetConfig()
 	viper.Set("clone.base_path", tmpDir)
 	defer viper.Reset()
 

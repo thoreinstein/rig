@@ -534,6 +534,7 @@ func setupSyncTestConfig(t *testing.T, notesPath string) {
 	t.Helper()
 
 	viper.Reset()
+	resetConfig()
 	viper.Set("notes.path", notesPath)
 	viper.Set("notes.daily_dir", "daily")
 	viper.Set("notes.template_dir", "") // Use embedded templates

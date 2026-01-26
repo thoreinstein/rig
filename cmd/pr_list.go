@@ -41,7 +41,7 @@ Examples:
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Load configuration
-		cfg, err := config.Load()
+		cfg, err := loadConfig()
 		if err != nil {
 			return rigerrors.NewConfigErrorWithCause("", "failed to load configuration", err)
 		}

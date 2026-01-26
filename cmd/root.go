@@ -14,6 +14,7 @@ import (
 
 var cfgFile string
 var verbose bool
+var appConfig *config.Config
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -87,7 +88,8 @@ func initConfig() {
 	loadRepoLocalConfig()
 
 	// Check for security warnings (tokens in config file)
-	cfg, err := config.Load()
+	var err error
+	appConfig, err = config.Load()
 	if err != nil {
 		if verbose {
 			fmt.Fprintf(os.Stderr, "Warning: could not load config for security checks: %v\n", err)
@@ -95,10 +97,25 @@ func initConfig() {
 		return
 	}
 
-	warnings := config.CheckSecurityWarnings(cfg)
+	warnings := config.CheckSecurityWarnings(appConfig)
 	for _, w := range warnings {
 		fmt.Fprintf(os.Stderr, "Warning: %s\n", w.Message)
 	}
+}
+
+// loadConfig returns the already loaded configuration or loads it if it hasn't been yet.
+// In test environments (detected via GO_TEST env var), it always reloads to ensure test isolation.
+func loadConfig() (*config.Config, error) {
+	if appConfig != nil && os.Getenv("GO_TEST") != "true" {
+		return appConfig, nil
+	}
+	return config.Load()
+}
+
+// resetConfig clears the cached configuration.
+// This is primarily used in tests to ensure each test starts with a fresh config.
+func resetConfig() {
+	appConfig = nil
 }
 
 // loadRepoLocalConfig loads .rig.toml from current directory or git root.

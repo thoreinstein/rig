@@ -8,8 +8,6 @@ import (
 
 	"github.com/cockroachdb/errors"
 	"github.com/spf13/cobra"
-
-	"thoreinstein.com/rig/pkg/config"
 )
 
 // configCmd represents the config command
@@ -130,7 +128,7 @@ working_dir = "{worktree_path}"
 }
 
 func showConfig() error {
-	cfg, err := config.Load()
+	cfg, err := loadConfig()
 	if err != nil {
 		return errors.Wrap(err, "failed to load configuration")
 	}

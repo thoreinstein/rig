@@ -6,7 +6,6 @@ import (
 	"github.com/cockroachdb/errors"
 	"github.com/spf13/cobra"
 
-	"thoreinstein.com/rig/pkg/config"
 	"thoreinstein.com/rig/pkg/git"
 )
 
@@ -61,7 +60,7 @@ func runCloneCommand(urlInput string) error {
 	}
 
 	// Load configuration to get base path (if configured)
-	cfg, err := config.Load()
+	cfg, err := loadConfig()
 	if err != nil {
 		return errors.Wrap(err, "failed to load configuration")
 	}
