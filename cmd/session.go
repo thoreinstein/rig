@@ -95,8 +95,19 @@ func runSessionAttachCommand(ticket string) error {
 		return errors.Wrap(err, "failed to load configuration")
 	}
 
+	// Parse ticket to handle optional project prefix
+	ticketInfo, err := parseTicket(ticket)
+	if err != nil {
+		return err
+	}
+
+	sessionID := ticketInfo.ID
+	if ticketInfo.Project != "" {
+		sessionID = ticketInfo.Project + "-" + ticketInfo.ID
+	}
+
 	sessionManager := tmux.NewSessionManager(cfg.Tmux.SessionPrefix, nil, verbose)
-	sessionName := sessionManager.GetSessionName(ticket)
+	sessionName := sessionManager.GetSessionName(sessionID)
 
 	// Check if session exists
 	if !sessionManager.SessionExists(sessionName) {
@@ -116,13 +127,24 @@ func runSessionKillCommand(ticket string) error {
 		return errors.Wrap(err, "failed to load configuration")
 	}
 
+	// Parse ticket to handle optional project prefix
+	ticketInfo, err := parseTicket(ticket)
+	if err != nil {
+		return err
+	}
+
+	sessionID := ticketInfo.ID
+	if ticketInfo.Project != "" {
+		sessionID = ticketInfo.Project + "-" + ticketInfo.ID
+	}
+
 	sessionManager := tmux.NewSessionManager(cfg.Tmux.SessionPrefix, nil, verbose)
 
 	if verbose {
 		fmt.Printf("Killing session for ticket: %s\n", ticket)
 	}
 
-	err = sessionManager.KillSession(ticket)
+	err = sessionManager.KillSession(sessionID)
 	if err != nil {
 		if strings.Contains(err.Error(), "does not exist") {
 			fmt.Printf("Session for ticket '%s' does not exist.\n", ticket)
