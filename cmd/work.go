@@ -59,6 +59,14 @@ type TicketInfo struct {
 	Number  string // Ticket number or alphanumeric identifier (e.g., "ID")
 }
 
+// SessionID returns a sanitized ticket identifier suitable for tmux session names
+func (t *TicketInfo) SessionID() string {
+	if t.Project != "" {
+		return t.Project + "-" + t.ID
+	}
+	return t.ID
+}
+
 // parseTicket parses a ticket string into type and number/identifier components.
 // Supports both traditional Jira-style tickets (proj-123) and beads-style tickets (rig-abc123).
 // Also supports optional project prefix (project:ticket).
@@ -279,10 +287,7 @@ func runWorkCommand(ticket string) error {
 	}
 
 	// Use sanitized ticket for session name (no colons)
-	sessionID := ticketInfo.ID
-	if ticketInfo.Project != "" {
-		sessionID = ticketInfo.Project + "-" + ticketInfo.ID
-	}
+	sessionID := ticketInfo.SessionID()
 
 	sessionManager := tmux.NewSessionManager(cfg.Tmux.SessionPrefix, tmuxWindows, verbose)
 	err = sessionManager.CreateSession(sessionID, worktreePath, notePath)
