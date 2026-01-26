@@ -75,7 +75,9 @@ func (a *Aggregator) Gather(ctx context.Context, prNumber int, ticket string) (*
 		}
 	}
 
-	// Calculate duration if we have start time info from commits
+	// Calculate duration if we have start time info from commits.
+	// NOTE: This assumes that "now" represents the work completion time,
+	// and the first commit represents the start time.
 	if len(debriefCtx.Commits) > 0 {
 		firstCommit := debriefCtx.Commits[0]
 		debriefCtx.Duration = time.Since(firstCommit.Date)
