@@ -99,6 +99,9 @@ func (e *Engine) Run(ctx context.Context, prNumber int, opts MergeOptions) error
 					e.logger.Warn("failed to save checkpoint", "error", saveErr)
 				}
 			}
+			if rigerrors.IsWorkflowError(err) {
+				return err
+			}
 			return rigerrors.NewWorkflowErrorWithCause(string(s.step), err.Error(), err)
 		}
 
@@ -182,6 +185,9 @@ func (e *Engine) Resume(ctx context.Context, checkpoint *Checkpoint) error {
 				if saveErr := SaveCheckpoint(wf.Worktree, e.workflowToCheckpoint(wf)); saveErr != nil {
 					e.logger.Warn("failed to save checkpoint", "error", saveErr)
 				}
+			}
+			if rigerrors.IsWorkflowError(err) {
+				return err
 			}
 			return rigerrors.NewWorkflowErrorWithCause(string(s.step), err.Error(), err)
 		}
