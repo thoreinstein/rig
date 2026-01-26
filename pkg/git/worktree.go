@@ -41,10 +41,11 @@ func (r *RealCommandRunner) Output(dir string, name string, args ...string) ([]b
 }
 
 // WorktreeManager handles Git worktree operations
-// Repository information is derived from git itself, not configuration
+// Repository information is derived from git itself, or an explicit path
 type WorktreeManager struct {
 	Verbose          bool
 	BaseBranchConfig string // Optional config override for base branch
+	RepoPath         string // Optional explicit repository path
 	runner           CommandRunner
 	getwd            func() (string, error) // For testing; defaults to os.Getwd
 }
@@ -52,6 +53,17 @@ type WorktreeManager struct {
 // NewWorktreeManager creates a new WorktreeManager
 func NewWorktreeManager(baseBranchConfig string, verbose bool) *WorktreeManager {
 	return &WorktreeManager{
+		Verbose:          verbose,
+		BaseBranchConfig: baseBranchConfig,
+		runner:           &RealCommandRunner{Verbose: verbose},
+		getwd:            os.Getwd,
+	}
+}
+
+// NewWorktreeManagerAtPath creates a new WorktreeManager for a specific repository path
+func NewWorktreeManagerAtPath(repoPath, baseBranchConfig string, verbose bool) *WorktreeManager {
+	return &WorktreeManager{
+		RepoPath:         repoPath,
 		Verbose:          verbose,
 		BaseBranchConfig: baseBranchConfig,
 		runner:           &RealCommandRunner{Verbose: verbose},
@@ -69,24 +81,34 @@ func NewWorktreeManagerWithRunner(baseBranchConfig string, verbose bool, runner 
 	}
 }
 
-// GetRepoRoot returns the bare repository root from the current working directory.
+// GetRepoRoot returns the bare repository root.
 // This works correctly from both bare repositories and worktrees by using
 // --git-common-dir which returns the shared git directory across all worktrees.
 func (wm *WorktreeManager) GetRepoRoot() (string, error) {
+	dir := "."
+	if wm.RepoPath != "" {
+		dir = wm.RepoPath
+	}
+
 	// Use --git-common-dir to get the shared git directory
 	// This works from both bare repos and worktrees
-	output, err := wm.runner.Output(".", "git", "rev-parse", "--git-common-dir")
+	output, err := wm.runner.Output(dir, "git", "rev-parse", "--git-common-dir")
 	if err != nil {
-		return "", errors.New("not inside a git repository. Run this command from within your repo")
+		return "", errors.New("not inside a git repository. Run this command from within your repo or specify a valid repo path")
 	}
 
 	commonDir := strings.TrimSpace(string(output))
 
 	// If it's a relative path (like "." in bare repos), resolve to absolute
 	if !filepath.IsAbs(commonDir) {
-		cwd, err := wm.getwd()
-		if err != nil {
-			return "", errors.Wrap(err, "failed to get working directory")
+		cwd := dir
+		if !filepath.IsAbs(cwd) {
+			var err error
+			cwd, err = wm.getwd()
+			if err != nil {
+				return "", errors.Wrap(err, "failed to get working directory")
+			}
+			cwd = filepath.Join(cwd, dir)
 		}
 		commonDir = filepath.Join(cwd, commonDir)
 	}

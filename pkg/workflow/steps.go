@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cockroachdb/errors"
+
 	"thoreinstein.com/rig/pkg/debrief"
 	rigerrors "thoreinstein.com/rig/pkg/errors"
 	"thoreinstein.com/rig/pkg/github"
@@ -440,15 +442,65 @@ func (e *Engine) appendDebriefNotes(notePath, notes string) (err error) {
 }
 
 // killTmuxSession kills a tmux session by ticket name.
+// It tries both the plain ticket ID and a project-prefixed version.
 func (e *Engine) killTmuxSession(ticket string) error {
-	// Construct session name using configured prefix
-	sessionName := ticket
-	if e.cfg.Tmux.SessionPrefix != "" {
-		sessionName = e.cfg.Tmux.SessionPrefix + ticket
+	var sessionNames []string
+
+	// Try plain ticket ID
+	sessionNames = append(sessionNames, ticket)
+
+	// Try project-prefixed ticket ID if we can determine the project
+	// We can try to get the project name from the git repository
+	if repoName, err := e.getRepoName(); err == nil && repoName != "" {
+		sessionNames = append(sessionNames, repoName+"-"+ticket)
 	}
 
-	cmd := exec.Command("tmux", "kill-session", "-t", sessionName)
-	return cmd.Run()
+	var lastErr error
+	for _, name := range sessionNames {
+		// Construct full session name using configured prefix
+		fullSessionName := name
+		if e.cfg.Tmux.SessionPrefix != "" {
+			fullSessionName = e.cfg.Tmux.SessionPrefix + name
+		}
+
+		cmd := exec.Command("tmux", "kill-session", "-t", fullSessionName)
+		if err := cmd.Run(); err == nil {
+			return nil // Successfully killed a session
+		} else {
+			lastErr = err
+		}
+	}
+
+	return lastErr
+}
+
+// getRepoName attempts to determine the repository name from the project path.
+func (e *Engine) getRepoName() (string, error) {
+	// Use git rev-parse --git-common-dir to find the repo root
+	cmd := exec.Command("git", "rev-parse", "--git-common-dir")
+	cmd.Dir = e.projectPath
+	output, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+
+	commonDir := strings.TrimSpace(string(output))
+	if commonDir == "" {
+		return "", errors.New("empty git common dir")
+	}
+
+	// Resolve to absolute path
+	var absPath string
+	if filepath.IsAbs(commonDir) {
+		absPath = commonDir
+	} else {
+		absPath = filepath.Join(e.projectPath, commonDir)
+	}
+	absPath, _ = filepath.Abs(absPath)
+
+	// For bare repos, commonDir might be ".", so basename is the repo name
+	// For worktrees, commonDir points to the .git dir of the main repo
+	return filepath.Base(absPath), nil
 }
 
 // queueWorktreeCleanup marks a worktree for later cleanup.
