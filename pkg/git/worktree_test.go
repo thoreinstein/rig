@@ -83,6 +83,53 @@ func TestGetRepoRoot_NotGitRepo(t *testing.T) {
 	}
 }
 
+func TestNewWorktreeManagerAtPath(t *testing.T) {
+	repoPath := "/custom/path/to/repo"
+	baseBranch := "develop"
+	wm := NewWorktreeManagerAtPath(repoPath, baseBranch, true)
+
+	if wm.RepoPath != repoPath {
+		t.Errorf("RepoPath = %q, want %q", wm.RepoPath, repoPath)
+	}
+	if wm.BaseBranchConfig != baseBranch {
+		t.Errorf("BaseBranchConfig = %q, want %q", wm.BaseBranchConfig, baseBranch)
+	}
+	if !wm.Verbose {
+		t.Error("Verbose = false, want true")
+	}
+	if wm.runner == nil {
+		t.Error("runner is nil")
+	}
+	if wm.getwd == nil {
+		t.Error("getwd is nil")
+	}
+}
+
+func TestGetRepoRoot_ExplicitPath(t *testing.T) {
+	mock := &MockCommandRunner{
+		OutputFunc: func(dir string, name string, args ...string) ([]byte, error) {
+			if dir != "/custom/path/to/repo" {
+				return nil, errors.New("called with wrong directory")
+			}
+			return []byte(".\n"), nil
+		},
+	}
+	wm := NewWorktreeManagerWithRunner("", false, mock)
+	wm.RepoPath = "/custom/path/to/repo"
+	wm.getwd = func() (string, error) {
+		return "/custom/path/to/repo", nil
+	}
+
+	root, err := wm.GetRepoRoot()
+	if err != nil {
+		t.Fatalf("GetRepoRoot() error = %v, want nil", err)
+	}
+
+	if root != "/custom/path/to/repo" {
+		t.Errorf("GetRepoRoot() = %q, want %q", root, "/custom/path/to/repo")
+	}
+}
+
 func TestGetRepoRoot_BareRepoRelativePath(t *testing.T) {
 	// In a bare repo, git rev-parse --git-common-dir returns "."
 	mock := &MockCommandRunner{

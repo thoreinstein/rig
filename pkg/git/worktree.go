@@ -101,16 +101,15 @@ func (wm *WorktreeManager) GetRepoRoot() (string, error) {
 
 	// If it's a relative path (like "." in bare repos), resolve to absolute
 	if !filepath.IsAbs(commonDir) {
-		cwd := dir
-		if !filepath.IsAbs(cwd) {
-			var err error
-			cwd, err = wm.getwd()
+		absDir := dir
+		if !filepath.IsAbs(absDir) {
+			cwd, err := wm.getwd()
 			if err != nil {
 				return "", errors.Wrap(err, "failed to get working directory")
 			}
-			cwd = filepath.Join(cwd, dir)
+			absDir = filepath.Join(cwd, dir)
 		}
-		commonDir = filepath.Join(cwd, commonDir)
+		commonDir = filepath.Join(absDir, commonDir)
 	}
 
 	// Clean the path to resolve any .. or . components
