@@ -56,6 +56,7 @@ const (
 	ProviderAnthropic = "anthropic"
 	ProviderGroq      = "groq"
 	ProviderOllama    = "ollama"
+	ProviderGemini    = "gemini"
 )
 
 // NewProvider creates an AI provider based on config.
@@ -115,9 +116,17 @@ func NewProvider(cfg *config.AIConfig, verbose bool) (Provider, error) {
 		}
 		return NewOllamaProvider(endpoint, model, logger), nil
 
+	case ProviderGemini:
+		model := cfg.Model
+		if model == "" {
+			model = cfg.GeminiModel
+		}
+		command := cfg.GeminiCommand
+		return NewGeminiProvider(command, model, logger), nil
+
 	default:
 		return nil, rigerrors.NewConfigError("ai.provider",
-			"unsupported AI provider: "+cfg.Provider+" (supported: anthropic, groq, ollama)")
+			"unsupported AI provider: "+cfg.Provider+" (supported: anthropic, groq, ollama, gemini)")
 	}
 }
 

@@ -99,6 +99,8 @@ type AIConfig struct {
 	GroqModel      string `mapstructure:"groq_model"`      // Default: llama-3.3-70b-versatile
 	OllamaModel    string `mapstructure:"ollama_model"`    // Default: llama3.2
 	OllamaEndpoint string `mapstructure:"ollama_endpoint"` // Default: http://localhost:11434
+	GeminiModel    string `mapstructure:"gemini_model"`
+	GeminiCommand  string `mapstructure:"gemini_command"` // Default: gemini
 }
 
 // WorkflowConfig holds PR workflow automation configuration
@@ -261,6 +263,8 @@ func setDefaults() {
 	viper.SetDefault("ai.groq_model", "llama-3.3-70b-versatile")
 	viper.SetDefault("ai.ollama_model", "llama3.2")
 	viper.SetDefault("ai.ollama_endpoint", "http://localhost:11434")
+	viper.SetDefault("ai.gemini_model", "")
+	viper.SetDefault("ai.gemini_command", "gemini")
 
 	// Workflow defaults
 	viper.SetDefault("workflow.transition_jira", true)
