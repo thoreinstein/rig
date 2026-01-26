@@ -26,13 +26,14 @@ SSH URLs (git@github.com:...):
 HTTPS URLs (https://github.com/...):
   - Performs a standard git clone
 
-Shorthand URLs (github.com/owner/repo):
+Shorthand URLs (github.com/owner/repo or owner/repo):
   - Interpreted as SSH by default
 
 Examples:
   rig clone git@github.com:thoreinstein/rig.git
   rig clone https://github.com/thoreinstein/rig
-  rig clone github.com/owner/repo`,
+  rig clone github.com/owner/repo
+  rig clone owner/repo`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runCloneCommand(args[0])

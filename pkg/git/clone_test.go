@@ -175,6 +175,51 @@ func TestParseGitHubURL_Shorthand(t *testing.T) {
 	}
 }
 
+func TestParseGitHubURL_OwnerRepoShorthand(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		want    *RepoURL
+		wantErr bool
+	}{
+		{
+			name:  "owner/repo shorthand",
+			input: "thoreinstein/rig",
+			want: &RepoURL{
+				Original:  "thoreinstein/rig",
+				Canonical: "git@github.com:thoreinstein/rig.git",
+				Protocol:  "ssh",
+				Owner:     "thoreinstein",
+				Repo:      "rig",
+			},
+		},
+		{
+			name:  "owner/repo shorthand with .git",
+			input: "owner/repo.git",
+			want: &RepoURL{
+				Original:  "owner/repo.git",
+				Canonical: "git@github.com:owner/repo.git",
+				Protocol:  "ssh",
+				Owner:     "owner",
+				Repo:      "repo",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ParseGitHubURL(tt.input)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ParseGitHubURL() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !tt.wantErr {
+				assertRepoURLEqual(t, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestParseGitHubURL_Invalid(t *testing.T) {
 	tests := []struct {
 		name    string

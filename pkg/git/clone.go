@@ -29,6 +29,10 @@ var (
 
 	// Shorthand format: github.com/owner/repo (no protocol)
 	shorthandURLRegex = regexp.MustCompile(`^github\.com/([a-zA-Z0-9_.-]+)/([a-zA-Z0-9_.-]+?)(?:\.git)?$`)
+
+	// Shorthand format: owner/repo (interpreted as SSH by default)
+	// Restrict owner to alphanumeric and hyphens to avoid matching domains like github.com/owner
+	ownerRepoRegex = regexp.MustCompile(`^([a-zA-Z0-9-]+)/([a-zA-Z0-9_.-]+?)(?:\.git)?$`)
 )
 
 // ParseGitHubURL parses various GitHub URL formats and returns a normalized RepoURL.
@@ -36,6 +40,7 @@ var (
 //   - SSH: git@github.com:owner/repo.git
 //   - HTTPS: https://github.com/owner/repo
 //   - Shorthand: github.com/owner/repo (interpreted as SSH by default)
+//   - Shorthand: owner/repo (interpreted as SSH by default)
 func ParseGitHubURL(input string) (*RepoURL, error) {
 	input = strings.TrimSpace(input)
 	if input == "" {
@@ -75,7 +80,18 @@ func ParseGitHubURL(input string) (*RepoURL, error) {
 		}, nil
 	}
 
-	return nil, errors.Newf("invalid GitHub URL format: %q\n\nSupported formats:\n  git@github.com:owner/repo.git (SSH)\n  https://github.com/owner/repo (HTTPS)\n  github.com/owner/repo (shorthand)", input)
+	// Try owner/repo shorthand (default to SSH)
+	if matches := ownerRepoRegex.FindStringSubmatch(input); len(matches) == 3 {
+		return &RepoURL{
+			Original:  input,
+			Canonical: fmt.Sprintf("git@github.com:%s/%s.git", matches[1], matches[2]),
+			Protocol:  "ssh",
+			Owner:     matches[1],
+			Repo:      matches[2],
+		}, nil
+	}
+
+	return nil, errors.Newf("invalid GitHub URL format: %q\n\nSupported formats:\n  git@github.com:owner/repo.git (SSH)\n  https://github.com/owner/repo (HTTPS)\n  github.com/owner/repo (shorthand)\n  owner/repo (shorthand)", input)
 }
 
 // CloneManager handles repository cloning operations
