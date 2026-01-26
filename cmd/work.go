@@ -326,8 +326,8 @@ func findRepoPath(project, ticketType string, cfg *config.Config) (string, error
 	}
 
 	// 2. Current directory check
-	cwd, _ := os.Getwd()
-	if isGitRepo(cwd) {
+	cwd, err := os.Getwd()
+	if err == nil && isGitRepo(cwd) {
 		return ".", nil
 	}
 
@@ -347,7 +347,10 @@ func findRepoPath(project, ticketType string, cfg *config.Config) (string, error
 func locateRepo(name string, cfg *config.Config) (string, error) {
 	basePath := cfg.Clone.BasePath
 	if basePath == "" {
-		home, _ := os.UserHomeDir()
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", errors.Wrap(err, "failed to determine user home directory")
+		}
 		basePath = filepath.Join(home, "src")
 	}
 
@@ -357,6 +360,7 @@ func locateRepo(name string, cfg *config.Config) (string, error) {
 		if isGitRepo(path) {
 			return path, nil
 		}
+		return "", errors.Newf("could not find repository %q at %s", name, path)
 	}
 
 	// Search one level deep for the repo name
@@ -388,9 +392,12 @@ func isGitRepo(path string) bool {
 	// Also check if it's a bare repo (contains HEAD, config, objects)
 	headPath := filepath.Join(path, "HEAD")
 	configPath := filepath.Join(path, "config")
+	objectsPath := filepath.Join(path, "objects")
 	if _, err := os.Stat(headPath); err == nil {
 		if _, err := os.Stat(configPath); err == nil {
-			return true
+			if info, err := os.Stat(objectsPath); err == nil && info.IsDir() {
+				return true
+			}
 		}
 	}
 

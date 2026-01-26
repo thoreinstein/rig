@@ -496,7 +496,10 @@ func (e *Engine) getRepoName() (string, error) {
 	} else {
 		absPath = filepath.Join(e.projectPath, commonDir)
 	}
-	absPath, _ = filepath.Abs(absPath)
+	absPath, err = filepath.Abs(absPath)
+	if err != nil {
+		return "", errors.Wrapf(err, "failed to resolve absolute path for %s", absPath)
+	}
 
 	// For bare repos, commonDir might be ".", so basename is the repo name
 	// For worktrees, commonDir points to the .git dir of the main repo
