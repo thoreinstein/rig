@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -50,26 +52,43 @@ func init() {
 
 // TicketInfo holds parsed ticket information
 type TicketInfo struct {
-	Full   string
-	Type   string
-	Number string
+	Full    string // Original user input (e.g., "project:TYPE-ID")
+	Project string // Optional project prefix (e.g., "project")
+	ID      string // Clean ticket identifier (e.g., "TYPE-ID")
+	Type    string // Ticket type, normalized to lowercase (e.g., "type")
+	Number  string // Ticket number or alphanumeric identifier (e.g., "ID")
 }
 
 // parseTicket parses a ticket string into type and number/identifier components.
 // Supports both traditional Jira-style tickets (proj-123) and beads-style tickets (rig-abc123).
+// Also supports optional project prefix (project:ticket).
 func parseTicket(ticket string) (*TicketInfo, error) {
+	var project string
+	fullInput := ticket
+
+	// Check for optional project prefix
+	if p, t, ok := strings.Cut(ticket, ":"); ok {
+		if p == "" {
+			return nil, errors.New("invalid ticket format. Project name cannot be empty when using ':'")
+		}
+		project = p
+		ticket = t
+	}
+
 	// Match pattern: TYPE-ID where ID can be digits or alphanumeric (e.g., proj-123, rig-abc, beads-42f)
 	re := regexp.MustCompile(`^([a-zA-Z]+)-([a-zA-Z0-9]+)$`)
 	matches := re.FindStringSubmatch(ticket)
 
 	if len(matches) != 3 {
-		return nil, errors.New("invalid ticket format. Expected format: TYPE-ID (e.g., proj-123 or rig-abc)")
+		return nil, errors.New("invalid ticket format. Expected format: [project:]TYPE-ID (e.g., proj-123, rig:proj-123 or rig-abc)")
 	}
 
 	return &TicketInfo{
-		Full:   ticket,
-		Type:   strings.ToLower(matches[1]),
-		Number: matches[2],
+		Full:    fullInput,
+		Project: project,
+		ID:      ticket,
+		Type:    strings.ToLower(matches[1]),
+		Number:  matches[2],
 	}, nil
 }
 
@@ -88,15 +107,24 @@ func runWorkCommand(ticket string) error {
 
 	if verbose {
 		fmt.Printf("Starting workflow for ticket: %s\n", ticketInfo.Full)
+		if ticketInfo.Project != "" {
+			fmt.Printf("  Project: %s\n", ticketInfo.Project)
+		}
 		fmt.Printf("  Type: %s\n", ticketInfo.Type)
 		fmt.Printf("  Number: %s\n", ticketInfo.Number)
 	}
 
-	// Step 1: Create git worktree (uses CWD to find repo)
-	if verbose {
-		fmt.Println("Creating git worktree...")
+	// Determine repository path
+	repoPath, err := findRepoPath(ticketInfo.Project, ticketInfo.Type, cfg)
+	if err != nil {
+		return err
 	}
-	gitManager := git.NewWorktreeManager(cfg.Git.BaseBranch, verbose)
+
+	// Step 1: Create git worktree
+	if verbose {
+		fmt.Printf("Creating git worktree in %s...\n", repoPath)
+	}
+	gitManager := git.NewWorktreeManagerAtPath(repoPath, cfg.Git.BaseBranch, verbose)
 
 	// Get repo info for notes
 	repoRoot, err := gitManager.GetRepoRoot()
@@ -108,7 +136,7 @@ func runWorkCommand(ticket string) error {
 		return err
 	}
 
-	worktreePath, err := gitManager.CreateWorktree(ticketInfo.Type, ticketInfo.Full)
+	worktreePath, err := gitManager.CreateWorktree(ticketInfo.Type, ticketInfo.ID)
 	if err != nil {
 		return errors.Wrap(err, "failed to create git worktree")
 	}
@@ -126,7 +154,7 @@ func runWorkCommand(ticket string) error {
 				fmt.Printf("Warning: Could not initialize JIRA client: %v\n", err)
 			}
 		} else {
-			jiraInfo, err = jiraClient.FetchTicketDetails(ticketInfo.Full)
+			jiraInfo, err = jiraClient.FetchTicketDetails(ticketInfo.ID)
 			if err != nil {
 				if verbose {
 					fmt.Printf("Warning: Could not fetch JIRA details: %v\n", err)
@@ -142,7 +170,7 @@ func runWorkCommand(ticket string) error {
 	// Step 2b: Update beads status (if beads project detected)
 	var beadsInfo *beads.IssueInfo
 	router := workflow.NewTicketRouter(cfg, worktreePath, verbose)
-	ticketSource := router.RouteTicket(ticketInfo.Full)
+	ticketSource := router.RouteTicket(ticketInfo.ID)
 
 	if ticketSource == workflow.TicketSourceBeads && cfg.Beads.Enabled {
 		if verbose {
@@ -155,7 +183,7 @@ func runWorkCommand(ticket string) error {
 			}
 		} else if beadsClient.IsAvailable() {
 			// First, fetch issue details for note integration
-			beadsInfo, err = beadsClient.Show(ticketInfo.Full)
+			beadsInfo, err = beadsClient.Show(ticketInfo.ID)
 			if err != nil {
 				if verbose {
 					fmt.Printf("Warning: Could not fetch beads issue details: %v\n", err)
@@ -163,7 +191,7 @@ func runWorkCommand(ticket string) error {
 			}
 
 			// Update status to in_progress
-			if err := beadsClient.UpdateStatus(ticketInfo.Full, "in_progress"); err != nil {
+			if err := beadsClient.UpdateStatus(ticketInfo.ID, "in_progress"); err != nil {
 				if verbose {
 					fmt.Printf("Warning: Could not update beads status: %v\n", err)
 				}
@@ -191,7 +219,7 @@ func runWorkCommand(ticket string) error {
 
 		// Build ticket data for template
 		noteData := notes.TicketData{
-			Ticket:       ticketInfo.Full,
+			Ticket:       ticketInfo.ID,
 			TicketType:   ticketInfo.Type,
 			RepoName:     repoName,
 			RepoPath:     repoRoot,
@@ -225,7 +253,7 @@ func runWorkCommand(ticket string) error {
 	if verbose {
 		fmt.Println("Updating daily note...")
 	}
-	err = noteManager.UpdateDailyNote(ticketInfo.Full, ticketInfo.Type)
+	err = noteManager.UpdateDailyNote(ticketInfo.ID, ticketInfo.Type)
 	if err != nil {
 		// Don't fail if daily note update fails
 		if verbose {
@@ -250,8 +278,14 @@ func runWorkCommand(ticket string) error {
 		})
 	}
 
+	// Use sanitized ticket for session name (no colons)
+	sessionID := ticketInfo.ID
+	if ticketInfo.Project != "" {
+		sessionID = ticketInfo.Project + "-" + ticketInfo.ID
+	}
+
 	sessionManager := tmux.NewSessionManager(cfg.Tmux.SessionPrefix, tmuxWindows, verbose)
-	err = sessionManager.CreateSession(ticketInfo.Full, worktreePath, notePath)
+	err = sessionManager.CreateSession(sessionID, worktreePath, notePath)
 	if err != nil {
 		// Don't fail the entire process if tmux session creation fails
 		if verbose {
@@ -269,4 +303,91 @@ func runWorkCommand(ticket string) error {
 	}
 
 	return nil
+}
+
+// findRepoPath determines the repository path to use.
+// Priority:
+// 1. Explicit project name from ticket (project:ticket-123)
+// 2. Current directory (if it's a git repo)
+// 3. Auto-detect based on ticket type/prefix in ~/src
+func findRepoPath(project, ticketType string, cfg *config.Config) (string, error) {
+	// 1. Explicit project name
+	if project != "" {
+		path, err := locateRepo(project, cfg)
+		if err == nil {
+			return path, nil
+		}
+		return "", err
+	}
+
+	// 2. Current directory check
+	cwd, _ := os.Getwd()
+	if isGitRepo(cwd) {
+		return ".", nil
+	}
+
+	// 3. Auto-detect based on ticket type
+	path, err := locateRepo(ticketType, cfg)
+	if err == nil {
+		if verbose {
+			fmt.Printf("Auto-detected repository for %s: %s\n", ticketType, path)
+		}
+		return path, nil
+	}
+
+	return "", errors.New("not inside a git repository and could not auto-detect one. Use 'project:ticket' or run from within a repo")
+}
+
+// locateRepo searches for a repository by name in the configured base path.
+func locateRepo(name string, cfg *config.Config) (string, error) {
+	basePath := cfg.Clone.BasePath
+	if basePath == "" {
+		home, _ := os.UserHomeDir()
+		basePath = filepath.Join(home, "src")
+	}
+
+	// Try direct path if name contains a slash (owner/repo)
+	if strings.Contains(name, "/") {
+		path := filepath.Join(basePath, name)
+		if isGitRepo(path) {
+			return path, nil
+		}
+	}
+
+	// Search one level deep for the repo name
+	entries, err := os.ReadDir(basePath)
+	if err != nil {
+		return "", errors.Wrapf(err, "failed to read base path: %s", basePath)
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			path := filepath.Join(basePath, entry.Name(), name)
+			if isGitRepo(path) {
+				return path, nil
+			}
+		}
+	}
+
+	return "", errors.Newf("could not find repository %q in %s", name, basePath)
+}
+
+// isGitRepo checks if a path is a git repository
+func isGitRepo(path string) bool {
+	// Check for .git directory or file (for worktrees)
+	gitPath := filepath.Join(path, ".git")
+	if info, err := os.Stat(gitPath); err == nil {
+		return info.IsDir() || info.Mode().IsRegular()
+	}
+
+	// Also check if it's a bare repo (contains HEAD, config, objects)
+	headPath := filepath.Join(path, "HEAD")
+	configPath := filepath.Join(path, "config")
+	if _, err := os.Stat(headPath); err == nil {
+		if _, err := os.Stat(configPath); err == nil {
+			return true
+		}
+	}
+
+	return false
 }

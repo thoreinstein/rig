@@ -16,13 +16,14 @@ import (
 
 // Engine orchestrates the merge workflow.
 type Engine struct {
-	github  github.Client
-	jira    jira.JiraClient
-	ai      ai.Provider
-	router  *TicketRouter
-	cfg     *config.Config
-	verbose bool
-	logger  *slog.Logger
+	github      github.Client
+	jira        jira.JiraClient
+	ai          ai.Provider
+	router      *TicketRouter
+	cfg         *config.Config
+	projectPath string
+	verbose     bool
+	logger      *slog.Logger
 }
 
 // NewEngine creates a workflow engine.
@@ -43,13 +44,14 @@ func NewEngine(gh github.Client, jiraClient jira.JiraClient, aiProvider ai.Provi
 	}
 
 	return &Engine{
-		github:  gh,
-		jira:    jiraClient,
-		ai:      aiProvider,
-		router:  NewTicketRouter(cfg, projectPath, verbose),
-		cfg:     cfg,
-		verbose: verbose,
-		logger:  logger,
+		github:      gh,
+		jira:        jiraClient,
+		ai:          aiProvider,
+		router:      NewTicketRouter(cfg, projectPath, verbose),
+		cfg:         cfg,
+		projectPath: projectPath,
+		verbose:     verbose,
+		logger:      logger,
 	}
 }
 
