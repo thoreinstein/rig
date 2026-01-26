@@ -253,7 +253,9 @@ func workflowToDebriefContext(wf *MergeWorkflow) *debrief.Context {
 		}
 	}
 
-	// Calculate duration: prefer workflow start time; fall back to commit range
+	// Calculate duration: prefer workflow start time; fall back to commit range.
+	// NOTE: This assumes that the last commit time represents workflow completion,
+	// which may not be accurate if the workflow was started long after the last commit.
 	if !wf.StartedAt.IsZero() && len(ctx.Commits) > 0 {
 		// Use the last commit time as an approximation of workflow completion time
 		lastCommitTime := ctx.Commits[len(ctx.Commits)-1].Date
