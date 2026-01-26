@@ -101,10 +101,7 @@ func runSessionAttachCommand(ticket string) error {
 		return err
 	}
 
-	sessionID := ticketInfo.ID
-	if ticketInfo.Project != "" {
-		sessionID = ticketInfo.Project + "-" + ticketInfo.ID
-	}
+	sessionID := ticketInfo.SessionID()
 
 	sessionManager := tmux.NewSessionManager(cfg.Tmux.SessionPrefix, nil, verbose)
 	sessionName := sessionManager.GetSessionName(sessionID)
@@ -133,10 +130,7 @@ func runSessionKillCommand(ticket string) error {
 		return err
 	}
 
-	sessionID := ticketInfo.ID
-	if ticketInfo.Project != "" {
-		sessionID = ticketInfo.Project + "-" + ticketInfo.ID
-	}
+	sessionID := ticketInfo.SessionID()
 
 	sessionManager := tmux.NewSessionManager(cfg.Tmux.SessionPrefix, nil, verbose)
 
