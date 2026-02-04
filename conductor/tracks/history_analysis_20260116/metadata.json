@@ -1,8 +1,0 @@
-{
-  "track_id": "history_analysis_20260116",
-  "type": "feature",
-  "status": "new",
-  "created_at": "2026-01-17T00:52:06Z",
-  "updated_at": "2026-01-17T00:52:06Z",
-  "description": "Refine History Analysis: Enhance the SQLite history query logic to support more complex filtering and improved timeline formatting."
-}

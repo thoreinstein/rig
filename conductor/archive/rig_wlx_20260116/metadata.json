@@ -1,8 +1,0 @@
-{
-  "track_id": "rig_wlx_20260116",
-  "type": "epic",
-  "status": "new",
-  "created_at": "2026-01-16T12:00:00Z",
-  "updated_at": "2026-01-16T12:00:00Z",
-  "description": "Epic: PR Workflow Robustness - Improve PR command reliability and testability."
-}
