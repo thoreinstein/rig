@@ -173,6 +173,11 @@ discovery:
 	if config.Discovery.MaxDepth != 5 {
 		t.Errorf("Discovery.MaxDepth = %d, want 5", config.Discovery.MaxDepth)
 	}
+	// Check default cache path (since we didn't set it in config file)
+	expectedCachePath := filepath.Join(homeDir, ".cache", "rig", "projects.json")
+	if config.Discovery.CachePath != expectedCachePath {
+		t.Errorf("Discovery.CachePath = %q, want %q", config.Discovery.CachePath, expectedCachePath)
+	}
 }
 
 func TestExpandPaths(t *testing.T) {
