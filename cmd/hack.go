@@ -40,6 +40,7 @@ func init() {
 	rootCmd.AddCommand(hackCmd)
 
 	hackCmd.Flags().BoolVar(&hackNoNotes, "no-notes", false, "Skip creating markdown note and note-related tmux window commands")
+	hackCmd.Flags().StringVarP(&projectFlag, "project", "p", "", "Override project directory")
 }
 
 // hackNameRegex validates hack names: must start with letter, contain only alphanumeric/hyphen/underscore, max 64 chars
@@ -71,6 +72,19 @@ func runHackCommand(name string) error {
 	if verbose {
 		fmt.Printf("Starting hack workflow for: %s\n", name)
 		fmt.Printf("  No-notes: %v\n", hackNoNotes)
+	}
+
+	// Determine project context and switch to it
+	projectPath, err := resolveProjectContext(cfg, projectFlag, "")
+	if err != nil {
+		return err
+	}
+
+	if verbose {
+		fmt.Printf("Switching to project root: %s\n", projectPath)
+	}
+	if err := os.Chdir(projectPath); err != nil {
+		return errors.Wrapf(err, "failed to chdir to %s", projectPath)
 	}
 
 	// Step 1: Create git worktree (uses CWD to find repo)

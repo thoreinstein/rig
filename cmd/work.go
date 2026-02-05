@@ -48,6 +48,7 @@ func init() {
 	rootCmd.AddCommand(workCmd)
 
 	workCmd.Flags().BoolVar(&workNoNotes, "no-notes", false, "Skip creating markdown note and note-related tmux window commands")
+	workCmd.Flags().StringVarP(&projectFlag, "project", "p", "", "Override project directory")
 }
 
 // TicketInfo holds parsed ticket information
@@ -122,10 +123,17 @@ func runWorkCommand(ticket string) error {
 		fmt.Printf("  Number: %s\n", ticketInfo.Number)
 	}
 
-	// Determine repository path
-	repoPath, err := findRepoPath(ticketInfo.Project, ticketInfo.Type, cfg)
+	// Determine project context and switch to it
+	repoPath, err := resolveProjectContext(cfg, projectFlag, ticketInfo.Project)
 	if err != nil {
 		return err
+	}
+
+	if verbose {
+		fmt.Printf("Switching to project root: %s\n", repoPath)
+	}
+	if err := os.Chdir(repoPath); err != nil {
+		return errors.Wrapf(err, "failed to chdir to %s", repoPath)
 	}
 
 	// Step 1: Create git worktree
@@ -310,74 +318,4 @@ func runWorkCommand(ticket string) error {
 	return nil
 }
 
-// findRepoPath determines the repository path to use.
-// Priority:
-// 1. Explicit project name from ticket (project:ticket-123)
-// 2. Current directory (if it's a git repo)
-// 3. Auto-detect based on ticket type/prefix in ~/src
-func findRepoPath(project, ticketType string, cfg *config.Config) (string, error) {
-	// 1. Explicit project name
-	if project != "" {
-		path, err := locateRepo(project, cfg)
-		if err == nil {
-			return path, nil
-		}
-		return "", err
-	}
-
-	// 2. Current directory check
-	cwd, err := os.Getwd()
-	if err == nil && isGitRepo(cwd) {
-		return ".", nil
-	}
-
-	// 3. Auto-detect based on ticket type
-	path, err := locateRepo(ticketType, cfg)
-	if err == nil {
-		if verbose {
-			fmt.Printf("Auto-detected repository for %s: %s\n", ticketType, path)
-		}
-		return path, nil
-	}
-
-	return "", errors.New("not inside a git repository and could not auto-detect one. Use 'project:ticket' or run from within a repo")
-}
-
-// locateRepo searches for a repository by name in the configured base path.
-func locateRepo(name string, cfg *config.Config) (string, error) {
-	basePath := cfg.Clone.BasePath
-	if basePath == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", errors.Wrap(err, "failed to determine user home directory")
-		}
-		basePath = filepath.Join(home, "src")
-	}
-
-	// Try direct path if name contains a slash (owner/repo)
-	if strings.Contains(name, "/") {
-		path := filepath.Join(basePath, name)
-		if isGitRepo(path) {
-			return path, nil
-		}
-		return "", errors.Newf("could not find repository %q at %s", name, path)
-	}
-
-	// Search one level deep for the repo name
-	entries, err := os.ReadDir(basePath)
-	if err != nil {
-		return "", errors.Wrapf(err, "failed to read base path: %s", basePath)
-	}
-
-	for _, entry := range entries {
-		if entry.IsDir() {
-			path := filepath.Join(basePath, entry.Name(), name)
-			if git.IsGitRepo(path) {
-				return path, nil
-			}
-		}
-	}
-
-	return "", errors.Newf("could not find repository %q in %s", name, basePath)
-}
 
