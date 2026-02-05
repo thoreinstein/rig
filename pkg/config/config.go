@@ -35,6 +35,7 @@ type NotesConfig struct {
 type DiscoveryConfig struct {
 	SearchPaths []string `mapstructure:"search_paths"` // Directories to scan for projects
 	MaxDepth    int      `mapstructure:"max_depth"`    // Max depth to scan (default: 3)
+	CachePath   string   `mapstructure:"cache_path"`   // Path to project cache file
 }
 
 // GitConfig holds optional git configuration overrides
@@ -281,6 +282,7 @@ func setDefaults() {
 	// Discovery defaults
 	viper.SetDefault("discovery.search_paths", []string{filepath.Join(homeDir, "src")})
 	viper.SetDefault("discovery.max_depth", 3)
+	viper.SetDefault("discovery.cache_path", filepath.Join(homeDir, ".cache", "rig", "projects.json"))
 }
 
 // expandPaths expands ~ and environment variables in paths
@@ -312,6 +314,11 @@ func expandPaths(config *Config) error {
 		if err != nil {
 			return err
 		}
+	}
+
+	config.Discovery.CachePath, err = expandPath(config.Discovery.CachePath)
+	if err != nil {
+		return err
 	}
 
 	return nil
