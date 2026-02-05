@@ -426,6 +426,8 @@ func TestRunWorkCommand_CreatesWorktreeAndNote(t *testing.T) {
 
 	// Change to repo directory
 	t.Chdir(repoDir)
+	projectFlag = repoDir
+	defer func() { projectFlag = "" }()
 
 	// Run the work command
 	err := runWorkCommand("proj-123")
@@ -490,6 +492,8 @@ func TestRunWorkCommand_InvalidTicketFormat(t *testing.T) {
 	defer viper.Reset()
 
 	t.Chdir(repoDir)
+	projectFlag = repoDir
+	defer func() { projectFlag = "" }()
 
 	tests := []struct {
 		name   string
@@ -549,6 +553,8 @@ func TestRunWorkCommand_UpdatesDailyNote(t *testing.T) {
 	defer viper.Reset()
 
 	t.Chdir(repoDir)
+	projectFlag = repoDir
+	defer func() { projectFlag = "" }()
 
 	// Run the work command
 	_ = runWorkCommand("ops-456")
@@ -590,6 +596,8 @@ func TestRunWorkCommand_IdempotentWorktree(t *testing.T) {
 	defer viper.Reset()
 
 	t.Chdir(repoDir)
+	projectFlag = repoDir
+	defer func() { projectFlag = "" }()
 
 	// Run the work command twice
 	_ = runWorkCommand("test-789")
@@ -644,6 +652,8 @@ func TestRunWorkCommand_DifferentTicketTypes(t *testing.T) {
 			defer viper.Reset()
 
 			t.Chdir(repoDir)
+			projectFlag = repoDir
+			defer func() { projectFlag = "" }()
 
 			_ = runWorkCommand(tt.ticket)
 
@@ -672,11 +682,14 @@ func TestRunWorkCommand_JiraDisabled(t *testing.T) {
 	notesDir := t.TempDir()
 	setupWorkTestConfig(t, notesDir)
 	viper.Set("jira.enabled", false) // Explicitly disable JIRA
-	defer viper.Reset()
+		defer viper.Reset()
 
-	t.Chdir(repoDir)
+		t.Chdir(repoDir)
+		projectFlag = repoDir
+		defer func() { projectFlag = "" }()
 
-	// Run the work command - should succeed without JIRA
+		// Run the work command
+	// should succeed without JIRA
 	_ = runWorkCommand("nojira-100")
 
 	// Worktree should still be created
@@ -714,6 +727,8 @@ func TestRunWorkCommand_PreservesOriginalTicketCase(t *testing.T) {
 	defer viper.Reset()
 
 	t.Chdir(repoDir)
+	projectFlag = repoDir
+	defer func() { projectFlag = "" }()
 
 	// Use uppercase ticket
 	_ = runWorkCommand("FRAAS-999")

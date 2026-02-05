@@ -321,6 +321,10 @@ func TestRunHackCommand_CreatesWorktree(t *testing.T) {
 	// Change to repo directory (t.Chdir handles cleanup)
 	t.Chdir(repoDir)
 
+	// Set project flag to bypass interactive picker
+	projectFlag = repoDir
+	defer func() { projectFlag = "" }()
+
 	// Reset hack flags for test
 	hackNoNotes = false
 
@@ -371,6 +375,9 @@ func TestRunHackCommand_InvalidName(t *testing.T) {
 	defer viper.Reset()
 
 	t.Chdir(repoDir)
+	// Set project flag to bypass interactive picker
+	projectFlag = repoDir
+	defer func() { projectFlag = "" }()
 
 	tests := []struct {
 		name     string
@@ -454,6 +461,8 @@ hack
 	defer viper.Reset()
 
 	t.Chdir(repoDir)
+	projectFlag = repoDir
+	defer func() { projectFlag = "" }()
 
 	// Notes should be enabled by default (hackNoNotes = false)
 	hackNoNotes = false
@@ -503,6 +512,8 @@ func TestRunHackCommand_WithNoNotesFlag(t *testing.T) {
 	defer viper.Reset()
 
 	t.Chdir(repoDir)
+	projectFlag = repoDir
+	defer func() { projectFlag = "" }()
 
 	// Disable notes with --no-notes flag
 	hackNoNotes = true
@@ -536,6 +547,8 @@ func TestRunHackCommand_IdempotentWorktree(t *testing.T) {
 	defer viper.Reset()
 
 	t.Chdir(repoDir)
+	projectFlag = repoDir
+	defer func() { projectFlag = "" }()
 
 	hackNoNotes = false
 

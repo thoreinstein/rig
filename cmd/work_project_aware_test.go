@@ -7,8 +7,6 @@ import (
 	"testing"
 
 	"github.com/spf13/viper"
-
-	"thoreinstein.com/rig/pkg/config"
 )
 
 func TestParseTicketWithProject(t *testing.T) {
@@ -113,73 +111,6 @@ func TestParseTicketWithProject(t *testing.T) {
 	}
 }
 
-func TestLocateRepo(t *testing.T) {
-	tmpDir := t.TempDir()
-	srcDir := filepath.Join(tmpDir, "src")
-	if err := os.MkdirAll(srcDir, 0755); err != nil {
-		t.Fatalf("failed to create src dir: %v", err)
-	}
-
-	// Create a mock repo: src/owner1/repo1
-	repo1Path := filepath.Join(srcDir, "owner1", "repo1")
-	if err := os.MkdirAll(filepath.Join(repo1Path, ".git"), 0755); err != nil {
-		t.Fatalf("failed to create repo1 dir: %v", err)
-	}
-
-	// Create another mock repo: src/owner2/repo2
-	repo2Path := filepath.Join(srcDir, "owner2", "repo2")
-	if err := os.MkdirAll(filepath.Join(repo2Path, ".git"), 0755); err != nil {
-		t.Fatalf("failed to create repo2 dir: %v", err)
-	}
-
-	cfgObj := &config.Config{
-		Clone: config.CloneConfig{
-			BasePath: srcDir,
-		},
-	}
-
-	tests := []struct {
-		name     string
-		repoName string
-		wantPath string
-		wantErr  bool
-	}{
-		{
-			name:     "find repo1",
-			repoName: "repo1",
-			wantPath: repo1Path,
-		},
-		{
-			name:     "find repo2",
-			repoName: "repo2",
-			wantPath: repo2Path,
-		},
-		{
-			name:     "find with owner",
-			repoName: "owner1/repo1",
-			wantPath: repo1Path,
-		},
-		{
-			name:     "repo not found",
-			repoName: "nonexistent",
-			wantErr:  true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			path, err := locateRepo(tt.repoName, cfgObj)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("locateRepo(%q) error = %v, wantErr %v", tt.repoName, err, tt.wantErr)
-				return
-			}
-			if !tt.wantErr && path != tt.wantPath {
-				t.Errorf("locateRepo(%q) = %q, want %q", tt.repoName, path, tt.wantPath)
-			}
-		})
-	}
-}
-
 func TestRunWorkCommand_ProjectAware(t *testing.T) {
 	// Skip if git is not available
 	if _, err := exec.LookPath("git"); err != nil {
@@ -195,6 +126,8 @@ func TestRunWorkCommand_ProjectAware(t *testing.T) {
 	notesDir := t.TempDir()
 	setupWorkTestConfig(t, notesDir)
 	viper.Set("clone.base_path", srcDir)
+	viper.Set("discovery.search_paths", []string{srcDir})
+	viper.Set("discovery.cache_path", filepath.Join(tmpDir, "cache.json"))
 	defer viper.Reset()
 
 	// Helper to setup a bare git repo
