@@ -109,6 +109,12 @@ jira:
 
 tmux:
   session_prefix: "test-"
+
+discovery:
+  search_paths:
+    - "/test/src"
+    - "~/projects"
+  max_depth: 5
 `
 
 	configPath := filepath.Join(tmpDir, "config.yaml")
@@ -149,6 +155,23 @@ tmux:
 	}
 	if config.Tmux.SessionPrefix != "test-" {
 		t.Errorf("Tmux.SessionPrefix = %q, want %q", config.Tmux.SessionPrefix, "test-")
+	}
+
+	// Verify discovery config
+	if len(config.Discovery.SearchPaths) != 2 {
+		t.Errorf("Discovery.SearchPaths len = %d, want 2", len(config.Discovery.SearchPaths))
+	}
+	if config.Discovery.SearchPaths[0] != "/test/src" {
+		t.Errorf("Discovery.SearchPaths[0] = %q, want %q", config.Discovery.SearchPaths[0], "/test/src")
+	}
+	// Note: ~/projects should have been expanded to /home/user/projects
+	homeDir, _ := os.UserHomeDir()
+	expectedProjectDir := filepath.Join(homeDir, "projects")
+	if config.Discovery.SearchPaths[1] != expectedProjectDir {
+		t.Errorf("Discovery.SearchPaths[1] = %q, want %q", config.Discovery.SearchPaths[1], expectedProjectDir)
+	}
+	if config.Discovery.MaxDepth != 5 {
+		t.Errorf("Discovery.MaxDepth = %d, want 5", config.Discovery.MaxDepth)
 	}
 }
 

@@ -21,6 +21,7 @@ type Config struct {
 	GitHub   GitHubConfig   `mapstructure:"github"`
 	AI       AIConfig       `mapstructure:"ai"`
 	Workflow WorkflowConfig `mapstructure:"workflow"`
+	Discovery DiscoveryConfig `mapstructure:"discovery"`
 }
 
 // NotesConfig holds markdown notes configuration
@@ -28,6 +29,12 @@ type NotesConfig struct {
 	Path        string `mapstructure:"path"`         // Base directory for notes
 	DailyDir    string `mapstructure:"daily_dir"`    // Subdirectory for daily notes
 	TemplateDir string `mapstructure:"template_dir"` // Optional user template directory
+}
+
+// DiscoveryConfig holds project discovery configuration
+type DiscoveryConfig struct {
+	SearchPaths []string `mapstructure:"search_paths"` // Directories to scan for projects
+	MaxDepth    int      `mapstructure:"max_depth"`    // Max depth to scan (default: 3)
 }
 
 // GitConfig holds optional git configuration overrides
@@ -270,6 +277,10 @@ func setDefaults() {
 	viper.SetDefault("workflow.transition_jira", true)
 	viper.SetDefault("workflow.kill_session", true)
 	viper.SetDefault("workflow.queue_worktree_cleanup", true)
+
+	// Discovery defaults
+	viper.SetDefault("discovery.search_paths", []string{filepath.Join(homeDir, "src")})
+	viper.SetDefault("discovery.max_depth", 3)
 }
 
 // expandPaths expands ~ and environment variables in paths
@@ -294,6 +305,13 @@ func expandPaths(config *Config) error {
 	config.Clone.BasePath, err = expandPath(config.Clone.BasePath)
 	if err != nil {
 		return err
+	}
+
+	for i, path := range config.Discovery.SearchPaths {
+		config.Discovery.SearchPaths[i], err = expandPath(path)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
