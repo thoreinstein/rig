@@ -11,16 +11,16 @@ import (
 // Config represents the application configuration
 // Repository information is derived from git, not configuration
 type Config struct {
-	Notes    NotesConfig    `mapstructure:"notes"`
-	Git      GitConfig      `mapstructure:"git"`
-	Clone    CloneConfig    `mapstructure:"clone"`
-	History  HistoryConfig  `mapstructure:"history"`
-	Jira     JiraConfig     `mapstructure:"jira"`
-	Beads    BeadsConfig    `mapstructure:"beads"`
-	Tmux     TmuxConfig     `mapstructure:"tmux"`
-	GitHub   GitHubConfig   `mapstructure:"github"`
-	AI       AIConfig       `mapstructure:"ai"`
-	Workflow WorkflowConfig `mapstructure:"workflow"`
+	Notes     NotesConfig     `mapstructure:"notes"`
+	Git       GitConfig       `mapstructure:"git"`
+	Clone     CloneConfig     `mapstructure:"clone"`
+	History   HistoryConfig   `mapstructure:"history"`
+	Jira      JiraConfig      `mapstructure:"jira"`
+	Beads     BeadsConfig     `mapstructure:"beads"`
+	Tmux      TmuxConfig      `mapstructure:"tmux"`
+	GitHub    GitHubConfig    `mapstructure:"github"`
+	AI        AIConfig        `mapstructure:"ai"`
+	Workflow  WorkflowConfig  `mapstructure:"workflow"`
 	Discovery DiscoveryConfig `mapstructure:"discovery"`
 }
 

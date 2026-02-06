@@ -682,13 +682,13 @@ func TestRunWorkCommand_JiraDisabled(t *testing.T) {
 	notesDir := t.TempDir()
 	setupWorkTestConfig(t, notesDir)
 	viper.Set("jira.enabled", false) // Explicitly disable JIRA
-		defer viper.Reset()
+	defer viper.Reset()
 
-		t.Chdir(repoDir)
-		projectFlag = repoDir
-		defer func() { projectFlag = "" }()
+	t.Chdir(repoDir)
+	projectFlag = repoDir
+	defer func() { projectFlag = "" }()
 
-		// Run the work command
+	// Run the work command
 	// should succeed without JIRA
 	_ = runWorkCommand("nojira-100")
 
