@@ -1,3 +1,71 @@
+# Release Notes: v0.11.0
+
+**Release Date:** 2026-02-05
+
+## Overview
+
+**Rig runs everywhere.**
+
+This release eliminates the "must be in directory" constraint. With the new **Project Discovery Engine**, you can run `rig work` or `rig hack` from anywhere on your system. If you aren't in a project, Rig will present a lightning-fast, fuzzy-searchable list of your projects (powered by `fzf`) and transport you there instantly.
+
+Additionally, we've added support for the **Gemini CLI** as an AI provider and simplified `rig clone` with shorthand syntax.
+
+## Installation
+
+### Homebrew (recommended)
+
+```bash
+brew upgrade rig
+```
+
+### Dependencies
+
+This release requires `fzf` for the interactive project picker:
+
+```bash
+brew install fzf
+```
+
+## Key Features
+
+### 🔍 Run From Anywhere
+Rig now scans your configured source directories (default `~/src`) to build a map of your projects.
+- **Auto-Discovery:** Finds both standard and bare git repositories.
+- **Interactive Picker:** Select your target project instantly with a fuzzy finder.
+- **Seamless Context Switch:** `rig work` transparently switches execution to the selected project root.
+
+### 🤖 Gemini CLI Provider
+You can now use the Google Gemini CLI as your AI backend.
+Configure it in `config.toml`:
+```toml
+[ai]
+provider = "gemini"
+gemini_command = "gemini" # Optional, defaults to "gemini"
+```
+
+### ⚡ Clone Shorthand
+Cloning is faster with GitHub shorthand support:
+```bash
+rig clone thoreinstein/rig  # Same as git@github.com:thoreinstein/rig.git
+```
+
+## Configuration Changes
+
+New `[discovery]` section available for customizing the project scanner:
+
+```toml
+[discovery]
+search_paths = ["~/src", "~/work"]  # Directories to scan
+max_depth = 3                       # How deep to search
+cache_path = "~/.cache/rig/projects.json"
+```
+
+## Bug Fixes & Improvements
+- **Performance:** Optimized configuration loading with caching.
+- **Stability:** Fixed error wrapping in workflow logic.
+- **Cleanup:** Enhanced repo detection logic for edge cases.
+
+---
 # Release Notes: v0.10.0
 
 **Release Date:** 2026-01-22

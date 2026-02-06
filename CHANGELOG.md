@@ -1,3 +1,29 @@
+## [0.11.0] - 2026-02-05
+
+### Added
+- `892988f` feat: Finalize project discovery integration and stabilize tests
+- `d907bf6` feat(workflow): integrate discovery and selection into work and hack commands
+- `027a546` feat(ui): implement interactive project selector
+- `f1a6200` feat(ui): add fzf dependency and ui package
+- `a85df1b` feat(discovery): add high-level engine and integration
+- `5bc6807` feat(discovery): implement caching mechanism
+- `f0b81af` feat(discovery): implement project scanner logic
+- `7993ad1` feat(discovery): add configuration and types for project discovery engine
+- `f33a44a` feat: Support owner/repo shorthand in clone
+- `fc68c77` feat: Add Gemini CLI AI provider adapter
+- `6e119e6` feat: make rig work project-aware
+
+### Changed
+- `cfbfb00` Switch from conductor to beads
+- `05a1bda` Docs: Clarify duration calculation assumptions
+- `cf6377f` chore: optimize config loading by caching it in cmd/root.go
+- `47ece37` pkg,cmd: Enhance git repo detection and path handling
+- `411fb43` cmd: Centralize tmux session ID generation in TicketInfo
+
+### Fixed
+- `9076cc6` fix: Fix linting issues and handle ignored errors properly
+- `a99eaa0` refactor: Prevent WorkflowError double-wrapping
+
 # Changelog
 
 All notable changes to this project will be documented in this file.
