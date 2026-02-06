@@ -12,7 +12,7 @@ func TestEngine(t *testing.T) {
 	tmpDir := t.TempDir()
 	srcDir := filepath.Join(tmpDir, "src")
 	cachePath := filepath.Join(tmpDir, "cache.json")
-	
+
 	mustMkdir(t, srcDir)
 	repoPath := filepath.Join(srcDir, "repo1")
 	mustMkdir(t, repoPath)
@@ -24,7 +24,7 @@ func TestEngine(t *testing.T) {
 		CachePath:   cachePath,
 	}
 
-	engine := NewEngine(cfg)
+	engine := NewEngine(cfg, false)
 
 	// First call - should scan
 	projects, err := engine.GetProjects(false)
@@ -68,7 +68,7 @@ func TestEngine(t *testing.T) {
 func TestEngine_ExpiredCache(t *testing.T) {
 	tmpDir := t.TempDir()
 	cachePath := filepath.Join(tmpDir, "cache.json")
-	
+
 	cfg := &config.DiscoveryConfig{
 		SearchPaths: []string{tmpDir}, // Empty scan
 		CachePath:   cachePath,
@@ -80,7 +80,7 @@ func TestEngine_ExpiredCache(t *testing.T) {
 		t.Fatalf("Failed to write cache file: %v", err)
 	}
 
-	engine := NewEngine(cfg)
+	engine := NewEngine(cfg, false)
 	projects, err := engine.GetProjects(false)
 	if err != nil {
 		t.Fatalf("GetProjects failed: %v", err)
