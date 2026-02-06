@@ -44,6 +44,7 @@ func SelectProject(projects []discovery.Project) (*discovery.Project, error) {
 	// --layout=reverse: Top-down list
 	// --delimiter=\t: Use tab as delimiter
 	// --with-nth=1,2: Display and search both name and path
+	// #nosec G204 - fzf binary is looked up in PATH, no user-controlled arguments are passed directly
 	cmd := exec.Command(fzfPath,
 		"--height=40%",
 		"--layout=reverse",
@@ -57,7 +58,8 @@ func SelectProject(projects []discovery.Project) (*discovery.Project, error) {
 	cmd.Stdout = &output
 
 	if err := cmd.Run(); err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
 			// fzf returns 130 on cancellation (ESC, Ctrl-C, Ctrl-G)
 			if exitErr.ExitCode() == 130 {
 				return nil, ErrCancelled

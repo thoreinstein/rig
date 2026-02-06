@@ -79,7 +79,7 @@ func TestScanner(t *testing.T) {
 	if found["ignored-project"] {
 		t.Error("Found ignored-project")
 	}
-	
+
 	// Duplicate check
 	// Since project-a is visited first, it should be found.
 	// z-link-to-a points to the same real path, so it should be skipped by visited check.

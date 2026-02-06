@@ -315,5 +315,3 @@ func runWorkCommand(ticket string) error {
 
 	return nil
 }
-
-
