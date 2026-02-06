@@ -1,6 +1,7 @@
 package discovery
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -13,6 +14,7 @@ type Scanner struct {
 	MaxDepth    int
 	SearchPaths []string
 	Exclusions  map[string]bool
+	Verbose     bool
 }
 
 // NewScanner creates a new scanner with default exclusions
@@ -47,7 +49,10 @@ func (s *Scanner) Scan() (*Result, error) {
 
 		_ = filepath.WalkDir(realRoot, func(path string, d os.DirEntry, err error) error {
 			if err != nil {
-				return nil // Ignore permission errors
+				if s.Verbose {
+					fmt.Fprintf(os.Stderr, "Discovery: skipping %s: %v\n", path, err)
+				}
+				return nil
 			}
 
 			scanned++
@@ -58,8 +63,11 @@ func (s *Scanner) Scan() (*Result, error) {
 			}
 
 			// Check depth
-			rel, err := filepath.Rel(realRoot, path)
-			if err != nil {
+			rel, walkErr := filepath.Rel(realRoot, path)
+			if walkErr != nil {
+				if s.Verbose {
+					fmt.Fprintf(os.Stderr, "Discovery: failed to get relative path for %s: %v\n", path, walkErr)
+				}
 				return nil
 			}
 			depth := 0
@@ -71,7 +79,7 @@ func (s *Scanner) Scan() (*Result, error) {
 					}
 				}
 			}
-			
+
 			if depth > s.MaxDepth {
 				if d.IsDir() {
 					return filepath.SkipDir
@@ -80,8 +88,11 @@ func (s *Scanner) Scan() (*Result, error) {
 			}
 
 			// Resolve symlinks
-			realPath, err := filepath.EvalSymlinks(path)
-			if err != nil {
+			realPath, linkErr := filepath.EvalSymlinks(path)
+			if linkErr != nil {
+				if s.Verbose {
+					fmt.Fprintf(os.Stderr, "Discovery: failed to resolve symlink %s: %v\n", path, linkErr)
+				}
 				return nil
 			}
 

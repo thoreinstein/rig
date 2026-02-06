@@ -8,15 +8,17 @@ import (
 
 // Engine orchestrates project discovery and caching
 type Engine struct {
-	Config *config.DiscoveryConfig
-	Cache  *Cache
+	Config  *config.DiscoveryConfig
+	Cache   *Cache
+	Verbose bool
 }
 
 // NewEngine creates a new discovery engine
-func NewEngine(cfg *config.DiscoveryConfig) *Engine {
+func NewEngine(cfg *config.DiscoveryConfig, verbose bool) *Engine {
 	return &Engine{
-		Config: cfg,
-		Cache:  NewCache(cfg.CachePath),
+		Config:  cfg,
+		Cache:   NewCache(cfg.CachePath),
+		Verbose: verbose,
 	}
 }
 
@@ -38,6 +40,7 @@ func (e *Engine) GetProjects(forceRefresh bool) ([]Project, error) {
 // Scan performs a fresh scan and updates the cache
 func (e *Engine) Scan() ([]Project, error) {
 	scanner := NewScanner(e.Config.SearchPaths, e.Config.MaxDepth)
+	scanner.Verbose = e.Verbose
 	result, err := scanner.Scan()
 	if err != nil {
 		return nil, err

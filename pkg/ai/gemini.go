@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"log/slog"
 	"os/exec"
@@ -57,31 +56,33 @@ func (p *GeminiProvider) Chat(ctx context.Context, messages []Message) (*Respons
 
 	p.logDebug("executing gemini cli", "command", p.command, "args", args)
 
+	// #nosec G204 - command is configurable by user in config file
 	cmd := exec.CommandContext(ctx, p.command, args...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return nil, rigerrors.NewAIErrorWithCause(ProviderGemini, "Chat",
-			fmt.Sprintf("gemini cli failed: %s", string(output)), err)
+			"gemini cli failed: "+string(output), err)
 	}
 
 	cleanOutput := p.stripNonJSON(string(output))
-	
+
 	// Try to parse as JSON
 	var res struct {
 		Content string `json:"content"`
 	}
 	if err := json.Unmarshal([]byte(cleanOutput), &res); err != nil {
 		// If JSON parsing fails, return the cleaned output as content
+		if p.logger != nil {
+			p.logger.Debug("failed to parse gemini JSON output", "error", err)
+		}
 		return &Response{
 			Content: cleanOutput,
-		},
-		nil
+		}, nil
 	}
 
 	return &Response{
 		Content: res.Content,
-	},
-	nil
+	}, nil
 }
 
 // StreamChat performs a streaming chat completion using the gemini CLI.
@@ -98,6 +99,7 @@ func (p *GeminiProvider) StreamChat(ctx context.Context, messages []Message) (<-
 
 	p.logDebug("executing gemini cli (streaming)", "command", p.command, "args", args)
 
+	// #nosec G204 - command is configurable by user in config file
 	cmd := exec.CommandContext(ctx, p.command, args...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -160,11 +162,12 @@ func (p *GeminiProvider) streamOutput(ctx context.Context, r io.Reader, cmd *exe
 func (p *GeminiProvider) buildPrompt(messages []Message) string {
 	var sb strings.Builder
 	for _, msg := range messages {
-		if msg.Role == "system" {
+		switch msg.Role {
+		case "system":
 			sb.WriteString("System: ")
-		} else if msg.Role == "assistant" {
+		case "assistant":
 			sb.WriteString("Assistant: ")
-		} else {
+		default:
 			sb.WriteString("User: ")
 		}
 		sb.WriteString(msg.Content)

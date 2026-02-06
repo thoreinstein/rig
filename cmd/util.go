@@ -4,6 +4,7 @@ import (
 	"os"
 
 	"github.com/cockroachdb/errors"
+
 	"thoreinstein.com/rig/pkg/config"
 	"thoreinstein.com/rig/pkg/discovery"
 	"thoreinstein.com/rig/pkg/ui"
@@ -24,7 +25,7 @@ func resolveProjectContext(cfg *config.Config, flagValue string, nameOverride st
 	}
 
 	// 2. Interactive Selection or Name Lookup
-	engine := discovery.NewEngine(&cfg.Discovery)
+	engine := discovery.NewEngine(&cfg.Discovery, verbose)
 	projects, err := engine.GetProjects(false)
 	if err != nil {
 		return "", errors.Wrap(err, "failed to discover projects")
