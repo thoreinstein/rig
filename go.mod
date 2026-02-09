@@ -10,7 +10,7 @@ require (
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/viper v1.21.0
 	github.com/zalando/go-keyring v0.2.6
-	golang.org/x/oauth2 v0.34.0
+	golang.org/x/oauth2 v0.35.0
 	modernc.org/sqlite v1.44.3
 )
 
