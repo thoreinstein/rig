@@ -12,40 +12,35 @@ import (
 	rigerrors "thoreinstein.com/rig/pkg/errors"
 )
 
-// GeminiProvider implements Provider using the gemini CLI.
+// GeminiProvider implements Provider using the Genkit SDK.
 type GeminiProvider struct {
-	command string
-	model   string
-	logger  *slog.Logger
+        apiKey string
+        model  string
+        logger *slog.Logger
 }
 
 // NewGeminiProvider creates a new Gemini provider.
-func NewGeminiProvider(command, model string, logger *slog.Logger) *GeminiProvider {
-	if command == "" {
-		command = "gemini"
-	}
-	return &GeminiProvider{
-		command: command,
-		model:   model,
-		logger:  logger,
-	}
+func NewGeminiProvider(apiKey, model string, logger *slog.Logger) *GeminiProvider {
+        return &GeminiProvider{
+                apiKey: apiKey,
+                model:  model,
+                logger: logger,
+        }
 }
-
 // Name returns the provider name.
 func (p *GeminiProvider) Name() string {
 	return ProviderGemini
 }
 
-// IsAvailable checks if the provider CLI is available.
+// IsAvailable checks if the provider is configured.
 func (p *GeminiProvider) IsAvailable() bool {
-	_, err := exec.LookPath(p.command)
-	return err == nil
+	return p.apiKey != ""
 }
 
 // Chat performs a single-turn chat completion using the gemini CLI.
 func (p *GeminiProvider) Chat(ctx context.Context, messages []Message) (*Response, error) {
 	if !p.IsAvailable() {
-		return nil, rigerrors.NewAIError(ProviderGemini, "Chat", "gemini CLI not found: "+p.command)
+		return nil, rigerrors.NewAIError(ProviderGemini, "Chat", "Gemini API key not set")
 	}
 
 	prompt := p.buildPrompt(messages)
@@ -54,10 +49,10 @@ func (p *GeminiProvider) Chat(ctx context.Context, messages []Message) (*Respons
 		args = append(args, "-m", p.model)
 	}
 
-	p.logDebug("executing gemini cli", "command", p.command, "args", args)
+	p.logDebug("executing gemini cli", "apiKey", p.apiKey, "args", args)
 
 	// #nosec G204 - command is configurable by user in config file
-	cmd := exec.CommandContext(ctx, p.command, args...)
+	cmd := exec.CommandContext(ctx, "gemini", args...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return nil, rigerrors.NewAIErrorWithCause(ProviderGemini, "Chat",
@@ -88,7 +83,7 @@ func (p *GeminiProvider) Chat(ctx context.Context, messages []Message) (*Respons
 // StreamChat performs a streaming chat completion using the gemini CLI.
 func (p *GeminiProvider) StreamChat(ctx context.Context, messages []Message) (<-chan StreamChunk, error) {
 	if !p.IsAvailable() {
-		return nil, rigerrors.NewAIError(ProviderGemini, "StreamChat", "gemini CLI not found: "+p.command)
+		return nil, rigerrors.NewAIError(ProviderGemini, "StreamChat", "Gemini API key not set")
 	}
 
 	prompt := p.buildPrompt(messages)
@@ -97,10 +92,10 @@ func (p *GeminiProvider) StreamChat(ctx context.Context, messages []Message) (<-
 		args = append(args, "-m", p.model)
 	}
 
-	p.logDebug("executing gemini cli (streaming)", "command", p.command, "args", args)
+	p.logDebug("executing gemini cli (streaming)", "apiKey", p.apiKey, "args", args)
 
 	// #nosec G204 - command is configurable by user in config file
-	cmd := exec.CommandContext(ctx, p.command, args...)
+	cmd := exec.CommandContext(ctx, "gemini", args...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, rigerrors.NewAIErrorWithCause(ProviderGemini, "StreamChat",
