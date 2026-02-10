@@ -102,15 +102,15 @@ type AIConfig struct {
 	APIKey   string `mapstructure:"api_key"`  // Provider API key (env var takes precedence)
 	Endpoint string `mapstructure:"endpoint"` // Custom endpoint URL (e.g., for Ollama: http://localhost:11434)
 
-	// Per-provider default models (used when Model is empty)
-	AnthropicModel string `mapstructure:"anthropic_model"` // Default: claude-sonnet-4-20250514
-	GroqModel      string `mapstructure:"groq_model"`      // Default: llama-3.3-70b-versatile
-	OllamaModel    string `mapstructure:"ollama_model"`    // Default: llama3.2
-	OllamaEndpoint string `mapstructure:"ollama_endpoint"` // Default: http://localhost:11434
-	GeminiModel    string `mapstructure:"gemini_model"`
-	GeminiCommand  string `mapstructure:"gemini_command"` // Default: gemini
-}
-
+	        // Per-provider default models (used when Model is empty)
+	        AnthropicModel string `mapstructure:"anthropic_model"` // Default: claude-sonnet-4-20250514
+	        GroqModel      string `mapstructure:"groq_model"`      // Default: llama-3.3-70b-versatile
+	        OllamaModel    string `mapstructure:"ollama_model"`    // Default: llama3.2
+	        OllamaEndpoint string `mapstructure:"ollama_endpoint"` // Default: http://localhost:11434
+	        GeminiModel    string `mapstructure:"gemini_model"`
+	        GeminiAPIKey   string `mapstructure:"gemini_api_key"` // Gemini API key (GOOGLE_GENAI_API_KEY env var takes precedence)
+	        GeminiCommand  string `mapstructure:"gemini_command"` // Deprecated: Use GeminiAPIKey instead
+	}
 // WorkflowConfig holds PR workflow automation configuration
 type WorkflowConfig struct {
 	TransitionJira       bool `mapstructure:"transition_jira"`        // Auto-transition Jira on merge
@@ -171,16 +171,23 @@ func CheckSecurityWarnings(config *Config) []SecurityWarning {
 		})
 	}
 
-	if config.AI.APIKey != "" && os.Getenv("RIG_AI_API_KEY") == "" &&
-		os.Getenv("ANTHROPIC_API_KEY") == "" && os.Getenv("GROQ_API_KEY") == "" {
-		warnings = append(warnings, SecurityWarning{
-			Field:   "ai.api_key",
-			Message: "AI API key is set in config file. For security, use environment variables (ANTHROPIC_API_KEY, GROQ_API_KEY, or RIG_AI_API_KEY) instead.",
-		})
-	}
-
-	return warnings
-}
+	        if config.AI.APIKey != "" && os.Getenv("RIG_AI_API_KEY") == "" &&
+	                os.Getenv("ANTHROPIC_API_KEY") == "" && os.Getenv("GROQ_API_KEY") == "" &&
+	                os.Getenv("GOOGLE_GENAI_API_KEY") == "" {
+	                warnings = append(warnings, SecurityWarning{
+	                        Field:   "ai.api_key",
+	                        Message: "AI API key is set in config file. For security, use environment variables (ANTHROPIC_API_KEY, GROQ_API_KEY, GOOGLE_GENAI_API_KEY, or RIG_AI_API_KEY) instead.",
+	                })
+	        }
+	
+	        if config.AI.GeminiAPIKey != "" && os.Getenv("GOOGLE_GENAI_API_KEY") == "" {
+	                warnings = append(warnings, SecurityWarning{
+	                        Field:   "ai.gemini_api_key",
+	                        Message: "Gemini API key is set in config file. For security, use GOOGLE_GENAI_API_KEY environment variable instead.",
+	                })
+	        }
+	
+	        return warnings}
 
 // ValidMergeMethods is the list of supported GitHub merge methods.
 var ValidMergeMethods = []string{"merge", "squash", "rebase"}

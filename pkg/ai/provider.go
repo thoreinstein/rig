@@ -116,34 +116,50 @@ func NewProvider(cfg *config.AIConfig, verbose bool) (Provider, error) {
 		}
 		return NewOllamaProvider(endpoint, model, logger), nil
 
-	case ProviderGemini:
-		model := cfg.Model
-		if model == "" {
-			model = cfg.GeminiModel
-		}
-		command := cfg.GeminiCommand
-		return NewGeminiProvider(command, model, logger), nil
-
-	default:
-		return nil, rigerrors.NewConfigError("ai.provider",
-			"unsupported AI provider: "+cfg.Provider+" (supported: anthropic, groq, ollama, gemini)")
+	        case ProviderGemini:
+	                apiKey := resolveGeminiAPIKey(cfg.GeminiAPIKey)
+	                if apiKey == "" {
+	                        apiKey = resolveAnthropicAPIKey(cfg.APIKey) // Fallback to global AI key
+	                }
+	                if apiKey == "" {
+	                        return nil, rigerrors.NewConfigError("ai.gemini_api_key",
+	                                "Gemini API key not set (set GOOGLE_GENAI_API_KEY or ai.gemini_api_key in config)")
+	                }
+	                model := cfg.Model
+	                if model == "" {
+	                        model = cfg.GeminiModel
+	                }
+	                return NewGeminiProvider(apiKey, model, logger), nil
+	
+	        default:
+	                return nil, rigerrors.NewConfigError("ai.provider",
+	                        "unsupported AI provider: "+cfg.Provider+" (supported: anthropic, groq, ollama, gemini)")
+	        }
 	}
-}
-
-// resolveAnthropicAPIKey returns the API key from ANTHROPIC_API_KEY environment
-// variable if set, otherwise falls back to the config value.
-func resolveAnthropicAPIKey(configKey string) string {
-	if envKey := os.Getenv("ANTHROPIC_API_KEY"); envKey != "" {
-		return envKey
+	
+	// resolveAnthropicAPIKey returns the API key from ANTHROPIC_API_KEY environment
+	// variable if set, otherwise falls back to the config value.
+	func resolveAnthropicAPIKey(configKey string) string {
+	        if envKey := os.Getenv("ANTHROPIC_API_KEY"); envKey != "" {
+	                return envKey
+	        }
+	        return configKey
 	}
-	return configKey
-}
-
-// resolveGroqAPIKey returns the API key from GROQ_API_KEY environment
-// variable if set, otherwise falls back to the config value.
-func resolveGroqAPIKey(configKey string) string {
-	if envKey := os.Getenv("GROQ_API_KEY"); envKey != "" {
-		return envKey
+	
+	// resolveGroqAPIKey returns the API key from GROQ_API_KEY environment
+	// variable if set, otherwise falls back to the config value.
+	func resolveGroqAPIKey(configKey string) string {
+	        if envKey := os.Getenv("GROQ_API_KEY"); envKey != "" {
+	                return envKey
+	        }
+	        return configKey
 	}
-	return configKey
-}
+	
+	// resolveGeminiAPIKey returns the API key from GOOGLE_GENAI_API_KEY environment
+	// variable if set, otherwise falls back to the config value.
+	func resolveGeminiAPIKey(configKey string) string {
+	        if envKey := os.Getenv("GOOGLE_GENAI_API_KEY"); envKey != "" {
+	                return envKey
+	        }
+	        return configKey
+	}
