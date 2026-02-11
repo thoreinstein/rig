@@ -90,3 +90,17 @@ Rig uses a TOML configuration file, typically located at `~/.config/rig/config.t
 - `rig sync <ticket>`: Update notes with latest JIRA/Beads info.
 - `rig timeline <ticket>`: Export command history for a ticket.
 - `rig history query`: Search through command history.
+
+## Lessons Learned & Architectural Truths
+
+### AI Provider Patterns
+- **Lazy Initialization:** Use `sync.Once` and an `init(ctx)` method for providers requiring SDK setup or context. This avoids passing `context.Context` to constructors and defers initialization until first use.
+- **Interface-Based Mocking:** Test AI providers by injecting and mocking the underlying SDK model interfaces (e.g., Genkit's `ai.Model`). This enables fast, deterministic testing of message mapping and token usage.
+- **Translation Layer:** Maintain internal `ai.Message` and `ai.Response` abstractions. Map these to SDK-specific types within the provider implementation to protect the codebase from underlying SDK breaking changes.
+
+### Configuration Traps
+- **Isolated Secret Resolution:** Use isolated resolution functions for each provider to prevent "cross-provider contamination" (e.g., using an Anthropic key for Gemini).
+- **Security Warning Accuracy:** When implementing security warnings for config-stored secrets, ensure all valid environment variable sources (e.g., `RIG_AI_*`) are checked to avoid false positives.
+
+### Architectural Decisions
+- **SDK-First:** Prefer official Go SDKs (like Genkit for Google AI) over CLI wrappers for stability and robust streaming support.
