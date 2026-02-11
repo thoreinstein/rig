@@ -123,3 +123,8 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 
 ### Architectural Decisions
 - **SDK-First:** Prefer official Go SDKs (like Genkit for Google AI) over CLI wrappers for stability and robust streaming support.
+- **Safe Deprecation:** Use non-blocking configuration warnings (via `CheckSecurityWarnings`) instead of silent removal when deprecating keys to ensure a smooth user migration.
+
+### Documentation Conventions
+- **Historical Accuracy:** Never modify old release notes or historical documentation to reflect current state. Always treat past records as immutable snapshots.
+- **Consolidated AI Context:** Keep AI provider configuration examples and architectural truths in `GEMINI.md` to provide a single source of truth for future agent sessions.
