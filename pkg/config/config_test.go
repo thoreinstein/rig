@@ -330,6 +330,65 @@ func TestCheckSecurityWarnings_GitHubTokenEnvVar(t *testing.T) {
 	}
 }
 
+func TestCheckSecurityWarnings_GeminiAPIKey(t *testing.T) {
+	tests := []struct {
+		name           string
+		configKey      string
+		googleGenaiEnv string
+		rigGeminiEnv   string
+		wantWarning    bool
+	}{
+		{
+			name:        "warning when set in config only",
+			configKey:   "secret",
+			wantWarning: true,
+		},
+		{
+			name:           "no warning when GOOGLE_GENAI_API_KEY set",
+			configKey:      "secret",
+			googleGenaiEnv: "env-secret",
+			wantWarning:    false,
+		},
+		{
+			name:         "no warning when RIG_AI_GEMINI_API_KEY set",
+			configKey:    "secret",
+			rigGeminiEnv: "env-secret",
+			wantWarning:  false,
+		},
+		{
+			name:        "no warning when both empty",
+			configKey:   "",
+			wantWarning: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := &Config{
+				AI: AIConfig{
+					GeminiAPIKey: tt.configKey,
+				},
+			}
+
+			t.Setenv("GOOGLE_GENAI_API_KEY", tt.googleGenaiEnv)
+			t.Setenv("RIG_AI_GEMINI_API_KEY", tt.rigGeminiEnv)
+
+			warnings := CheckSecurityWarnings(config)
+			gotWarning := false
+			for _, w := range warnings {
+				if w.Field == "ai.gemini_api_key" {
+					gotWarning = true
+					break
+				}
+			}
+
+			if gotWarning != tt.wantWarning {
+				t.Errorf("gotWarning = %v, want %v", gotWarning, tt.wantWarning)
+			}
+		})
+	}
+}
+
 func TestCheckSecurityWarnings_AllTokens(t *testing.T) {
 	// Config with all tokens set in config file
 	config := &Config{
