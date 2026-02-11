@@ -98,6 +98,25 @@ Rig uses a TOML configuration file, typically located at `~/.config/rig/config.t
 - **Interface-Based Mocking:** Test AI providers by injecting and mocking the underlying SDK model interfaces (e.g., Genkit's `ai.Model`). This enables fast, deterministic testing of message mapping and token usage.
 - **Translation Layer:** Maintain internal `ai.Message` and `ai.Response` abstractions. Map these to SDK-specific types within the provider implementation to protect the codebase from underlying SDK breaking changes.
 
+### AI Configuration
+Providers are configured in `~/.config/rig/config.toml`.
+
+#### Gemini (Google AI)
+Uses the native Genkit for Go SDK.
+```toml
+[ai]
+provider = "gemini"
+gemini_model = "gemini-1.5-flash" # Optional
+gemini_api_key = "your-api-key"   # Or use GOOGLE_GENAI_API_KEY
+```
+
+#### Anthropic / Groq
+```toml
+[ai]
+provider = "anthropic"
+api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
+```
+
 ### Configuration Traps
 - **Isolated Secret Resolution:** Use isolated resolution functions for each provider to prevent "cross-provider contamination" (e.g., using an Anthropic key for Gemini).
 - **Security Warning Accuracy:** When implementing security warnings for config-stored secrets, ensure all valid environment variable sources (e.g., `RIG_AI_*`) are checked to avoid false positives.
