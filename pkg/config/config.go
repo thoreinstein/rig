@@ -109,7 +109,6 @@ type AIConfig struct {
 	OllamaEndpoint string `mapstructure:"ollama_endpoint"` // Default: http://localhost:11434
 	GeminiModel    string `mapstructure:"gemini_model"`
 	GeminiAPIKey   string `mapstructure:"gemini_api_key"` // Gemini API key (GOOGLE_GENAI_API_KEY env var takes precedence)
-	GeminiCommand  string `mapstructure:"gemini_command"` // Deprecated: Use GeminiAPIKey instead
 }
 
 // WorkflowConfig holds PR workflow automation configuration
@@ -187,6 +186,15 @@ func CheckSecurityWarnings(config *Config) []SecurityWarning {
 			Message: "Gemini API key is set in config file. For security, use GOOGLE_GENAI_API_KEY or RIG_AI_GEMINI_API_KEY environment variable instead.",
 		})
 	}
+
+	// Check for deprecated gemini_command
+	if viper.IsSet("ai.gemini_command") {
+		warnings = append(warnings, SecurityWarning{
+			Field:   "ai.gemini_command",
+			Message: "Configuration key 'ai.gemini_command' is deprecated and no longer used. Rig now uses the native Genkit SDK for Gemini.",
+		})
+	}
+
 	return warnings
 }
 
@@ -280,7 +288,6 @@ func setDefaults() {
 	viper.SetDefault("ai.ollama_model", "llama3.2")
 	viper.SetDefault("ai.ollama_endpoint", "http://localhost:11434")
 	viper.SetDefault("ai.gemini_model", "")
-	viper.SetDefault("ai.gemini_command", "gemini")
 
 	// Workflow defaults
 	viper.SetDefault("workflow.transition_jira", true)
