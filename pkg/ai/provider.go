@@ -119,7 +119,7 @@ func NewProvider(cfg *config.AIConfig, verbose bool) (Provider, error) {
 	case ProviderGemini:
 		apiKey := resolveGeminiAPIKey(cfg.GeminiAPIKey)
 		if apiKey == "" {
-			apiKey = resolveAnthropicAPIKey(cfg.APIKey) // Fallback to global AI key
+			apiKey = cfg.APIKey // Provider-agnostic fallback to global key
 		}
 		if apiKey == "" {
 			return nil, rigerrors.NewConfigError("ai.gemini_api_key",
