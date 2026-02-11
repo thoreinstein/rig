@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/firebase/genkit/go/ai"
@@ -146,5 +147,77 @@ func TestGeminiProvider_toGenkitMessages(t *testing.T) {
 	}
 	if genkitMsgs[2].Role != ai.RoleModel {
 		t.Errorf("expected RoleModel, got %v", genkitMsgs[2].Role)
+	}
+}
+
+func TestGeminiProvider_StreamChat_Success(t *testing.T) {
+	mock := &mockModel{
+		generateFn: func(ctx context.Context, req *ai.ModelRequest, cb ai.ModelStreamCallback) (*ai.ModelResponse, error) {
+			if cb == nil {
+				t.Error("expected callback for StreamChat")
+			}
+			// Send chunks
+			_ = cb(ctx, &ai.ModelResponseChunk{Content: []*ai.Part{ai.NewTextPart("Hello")}})
+			_ = cb(ctx, &ai.ModelResponseChunk{Content: []*ai.Part{ai.NewTextPart(" world")}})
+			return &ai.ModelResponse{}, nil
+		},
+	}
+
+	p := NewGeminiProvider("key", "gemini-pro", nil)
+	p.model = mock
+
+	chunks, err := p.StreamChat(t.Context(), []Message{{Role: "user", Content: "hi"}})
+	if err != nil {
+		t.Fatalf("StreamChat() error = %v", err)
+	}
+
+	var content strings.Builder
+	var gotDone bool
+	for chunk := range chunks {
+		if chunk.Error != nil {
+			t.Fatalf("chunk error = %v", chunk.Error)
+		}
+		content.WriteString(chunk.Content)
+		if chunk.Done {
+			gotDone = true
+		}
+	}
+
+	if content.String() != "Hello world" {
+		t.Errorf("content = %q, want %q", content.String(), "Hello world")
+	}
+	if !gotDone {
+		t.Error("expected Done chunk")
+	}
+}
+
+func TestGeminiProvider_StreamChat_Error(t *testing.T) {
+	mock := &mockModel{
+		generateFn: func(ctx context.Context, req *ai.ModelRequest, cb ai.ModelStreamCallback) (*ai.ModelResponse, error) {
+			return nil, errors.New("stream failure")
+		},
+	}
+
+	p := NewGeminiProvider("key", "gemini-pro", nil)
+	p.model = mock
+
+	chunks, err := p.StreamChat(t.Context(), []Message{{Role: "user", Content: "hi"}})
+	if err != nil {
+		t.Fatalf("StreamChat() error = %v", err)
+	}
+
+	var gotError bool
+	for chunk := range chunks {
+		if chunk.Error != nil {
+			gotError = true
+			var aiErr *rigerrors.AIError
+			if !rigerrors.As(chunk.Error, &aiErr) {
+				t.Errorf("expected AIError, got %T", chunk.Error)
+			}
+		}
+	}
+
+	if !gotError {
+		t.Error("expected error chunk")
 	}
 }

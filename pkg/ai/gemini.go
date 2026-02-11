@@ -122,10 +122,55 @@ func (p *GeminiProvider) Chat(ctx context.Context, messages []Message) (*Respons
 	return res, nil
 }
 
-// StreamChat performs a streaming chat completion. (To be implemented in next phase)
+// StreamChat performs a streaming chat completion using the Genkit SDK.
 func (p *GeminiProvider) StreamChat(ctx context.Context, messages []Message) (<-chan StreamChunk, error) {
-	// Temporary stub for Phase 2
-	return nil, rigerrors.NewAIError(ProviderGemini, "StreamChat", "streaming not yet implemented for SDK provider")
+	if err := p.init(ctx); err != nil {
+		return nil, err
+	}
+
+	genkitMessages := p.toGenkitMessages(messages)
+	chunks := make(chan StreamChunk)
+
+	p.logDebug("sending streaming chat request to gemini", "message_count", len(genkitMessages))
+
+	go func() {
+		defer close(chunks)
+
+		_, err := p.model.Generate(ctx, &ai.ModelRequest{
+			Messages: genkitMessages,
+		}, func(ctx context.Context, chunk *ai.ModelResponseChunk) error {
+			var text strings.Builder
+			for _, part := range chunk.Content {
+				if part.IsText() {
+					text.WriteString(part.Text)
+				}
+			}
+
+			if text.Len() > 0 {
+				select {
+				case chunks <- StreamChunk{Content: text.String()}:
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+			}
+			return nil
+		})
+
+		if err != nil {
+			select {
+			case chunks <- StreamChunk{Error: rigerrors.NewAIErrorWithCause(ProviderGemini, "StreamChat", "genkit generate failed", err), Done: true}:
+			case <-ctx.Done():
+			}
+			return
+		}
+
+		select {
+		case chunks <- StreamChunk{Done: true}:
+		case <-ctx.Done():
+		}
+	}()
+
+	return chunks, nil
 }
 
 func (p *GeminiProvider) toGenkitMessages(messages []Message) []*ai.Message {
