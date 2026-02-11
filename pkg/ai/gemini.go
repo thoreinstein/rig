@@ -1,32 +1,38 @@
 package ai
 
 import (
-	"bufio"
 	"context"
-	"encoding/json"
-	"io"
 	"log/slog"
-	"os/exec"
 	"strings"
+	"sync"
+
+	"github.com/firebase/genkit/go/ai"
+	"github.com/firebase/genkit/go/genkit"
+	"github.com/firebase/genkit/go/plugins/googlegenai"
 
 	rigerrors "thoreinstein.com/rig/pkg/errors"
 )
 
 // GeminiProvider implements Provider using the Genkit SDK.
 type GeminiProvider struct {
-        apiKey string
-        model  string
-        logger *slog.Logger
+	apiKey    string
+	modelName string
+	logger    *slog.Logger
+
+	initOnce sync.Once
+	model    ai.Model
+	initErr  error
 }
 
 // NewGeminiProvider creates a new Gemini provider.
-func NewGeminiProvider(apiKey, model string, logger *slog.Logger) *GeminiProvider {
-        return &GeminiProvider{
-                apiKey: apiKey,
-                model:  model,
-                logger: logger,
-        }
+func NewGeminiProvider(apiKey, modelName string, logger *slog.Logger) *GeminiProvider {
+	return &GeminiProvider{
+		apiKey:    apiKey,
+		modelName: modelName,
+		logger:    logger,
+	}
 }
+
 // Name returns the provider name.
 func (p *GeminiProvider) Name() string {
 	return ProviderGemini
@@ -37,148 +43,107 @@ func (p *GeminiProvider) IsAvailable() bool {
 	return p.apiKey != ""
 }
 
-// Chat performs a single-turn chat completion using the gemini CLI.
+// init initializes the Genkit client and model.
+func (p *GeminiProvider) init(ctx context.Context) error {
+	p.initOnce.Do(func() {
+		// If model is already set (e.g. by a test), skip initialization
+		if p.model != nil {
+			return
+		}
+
+		if p.apiKey == "" {
+			p.initErr = rigerrors.NewAIError(ProviderGemini, "init", "API key not set")
+			return
+		}
+
+		// Initialize Genkit with the Google AI plugin
+		g := genkit.Init(ctx, genkit.WithPlugins(&googlegenai.GoogleAI{APIKey: p.apiKey}))
+
+		// Get the model
+		modelName := p.modelName
+		if modelName == "" {
+			modelName = "gemini-1.5-flash" // Default model
+		}
+
+		// Ensure model name has the provider prefix
+		fullModelName := modelName
+		if !strings.Contains(fullModelName, "/") {
+			fullModelName = "googleai/" + fullModelName
+		}
+
+		p.model = googlegenai.GoogleAIModel(g, fullModelName)
+		if p.model == nil {
+			p.initErr = rigerrors.NewAIError(ProviderGemini, "init", "failed to get model: "+fullModelName)
+			return
+		}
+
+		p.logDebug("gemini provider initialized", "model", fullModelName)
+	})
+
+	return p.initErr
+}
+
+// Chat performs a single-turn chat completion using the Genkit SDK.
 func (p *GeminiProvider) Chat(ctx context.Context, messages []Message) (*Response, error) {
-	if !p.IsAvailable() {
-		return nil, rigerrors.NewAIError(ProviderGemini, "Chat", "Gemini API key not set")
+	if err := p.init(ctx); err != nil {
+		return nil, err
 	}
 
-	prompt := p.buildPrompt(messages)
-	args := []string{"-p", prompt, "-o", "json"}
-	if p.model != "" {
-		args = append(args, "-m", p.model)
-	}
+	genkitMessages := p.toGenkitMessages(messages)
 
-	p.logDebug("executing gemini cli", "apiKey", p.apiKey, "args", args)
+	p.logDebug("sending chat request to gemini", "message_count", len(genkitMessages))
 
-	// #nosec G204 - command is configurable by user in config file
-	cmd := exec.CommandContext(ctx, "gemini", args...)
-	output, err := cmd.CombinedOutput()
+	resp, err := p.model.Generate(ctx, &ai.ModelRequest{
+		Messages: genkitMessages,
+	}, nil)
 	if err != nil {
-		return nil, rigerrors.NewAIErrorWithCause(ProviderGemini, "Chat",
-			"gemini cli failed: "+string(output), err)
+		return nil, rigerrors.NewAIErrorWithCause(ProviderGemini, "Chat", "genkit generate failed", err)
 	}
 
-	cleanOutput := p.stripNonJSON(string(output))
-
-	// Try to parse as JSON
-	var res struct {
-		Content string `json:"content"`
+	if resp.Message == nil {
+		return nil, rigerrors.NewAIError(ProviderGemini, "Chat", "received empty response from gemini")
 	}
-	if err := json.Unmarshal([]byte(cleanOutput), &res); err != nil {
-		// If JSON parsing fails, return the cleaned output as content
-		if p.logger != nil {
-			p.logger.Debug("failed to parse gemini JSON output", "error", err)
+
+	var content strings.Builder
+	for _, part := range resp.Message.Content {
+		if part.IsText() {
+			content.WriteString(part.Text)
 		}
-		return &Response{
-			Content: cleanOutput,
-		}, nil
 	}
 
-	return &Response{
-		Content: res.Content,
-	}, nil
+	res := &Response{
+		Content: content.String(),
+	}
+	if resp.Usage != nil {
+		res.InputTokens = resp.Usage.InputTokens
+		res.OutputTokens = resp.Usage.OutputTokens
+	}
+
+	return res, nil
 }
 
-// StreamChat performs a streaming chat completion using the gemini CLI.
+// StreamChat performs a streaming chat completion. (To be implemented in next phase)
 func (p *GeminiProvider) StreamChat(ctx context.Context, messages []Message) (<-chan StreamChunk, error) {
-	if !p.IsAvailable() {
-		return nil, rigerrors.NewAIError(ProviderGemini, "StreamChat", "Gemini API key not set")
-	}
-
-	prompt := p.buildPrompt(messages)
-	args := []string{"-p", prompt, "-o", "stream-json"}
-	if p.model != "" {
-		args = append(args, "-m", p.model)
-	}
-
-	p.logDebug("executing gemini cli (streaming)", "apiKey", p.apiKey, "args", args)
-
-	// #nosec G204 - command is configurable by user in config file
-	cmd := exec.CommandContext(ctx, "gemini", args...)
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return nil, rigerrors.NewAIErrorWithCause(ProviderGemini, "StreamChat",
-			"failed to create stdout pipe", err)
-	}
-
-	if err := cmd.Start(); err != nil {
-		return nil, rigerrors.NewAIErrorWithCause(ProviderGemini, "StreamChat",
-			"failed to start gemini cli", err)
-	}
-
-	chunks := make(chan StreamChunk)
-	go p.streamOutput(ctx, stdout, cmd, chunks)
-
-	return chunks, nil
+	// Temporary stub for Phase 2
+	return nil, rigerrors.NewAIError(ProviderGemini, "StreamChat", "streaming not yet implemented for SDK provider")
 }
 
-func (p *GeminiProvider) streamOutput(ctx context.Context, r io.Reader, cmd *exec.Cmd, chunks chan<- StreamChunk) {
-	defer close(chunks)
-
-	scanner := bufio.NewScanner(r)
-	for scanner.Scan() {
-		select {
-		case <-ctx.Done():
-			chunks <- StreamChunk{Error: ctx.Err(), Done: true}
-			return
-		default:
-		}
-
-		line := scanner.Text()
-		if line == "" || !strings.HasPrefix(strings.TrimSpace(line), "{") {
-			continue
-		}
-
-		var chunk struct {
-			Content string `json:"content"`
-			Done    bool   `json:"done"`
-		}
-		if err := json.Unmarshal([]byte(line), &chunk); err != nil {
-			continue
-		}
-
-		if chunk.Content != "" {
-			chunks <- StreamChunk{Content: chunk.Content}
-		}
-		if chunk.Done {
-			chunks <- StreamChunk{Done: true}
-			return
-		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		chunks <- StreamChunk{Error: err, Done: true}
-	}
-
-	_ = cmd.Wait()
-}
-
-func (p *GeminiProvider) buildPrompt(messages []Message) string {
-	var sb strings.Builder
-	for _, msg := range messages {
-		switch msg.Role {
+func (p *GeminiProvider) toGenkitMessages(messages []Message) []*ai.Message {
+	genkitMessages := make([]*ai.Message, len(messages))
+	for i, m := range messages {
+		role := ai.RoleUser
+		switch m.Role {
 		case "system":
-			sb.WriteString("System: ")
+			role = ai.RoleSystem
 		case "assistant":
-			sb.WriteString("Assistant: ")
-		default:
-			sb.WriteString("User: ")
+			role = ai.RoleModel
 		}
-		sb.WriteString(msg.Content)
-		sb.WriteString("\n\n")
+		genkitMessages[i] = &ai.Message{
+			Role:    role,
+			Content: []*ai.Part{ai.NewTextPart(m.Content)},
+		}
 	}
-	return strings.TrimSpace(sb.String())
-}
-
-func (p *GeminiProvider) stripNonJSON(output string) string {
-	// Simple heuristic to find the first '{' and last '}'
-	start := strings.Index(output, "{")
-	end := strings.LastIndex(output, "}")
-	if start != -1 && end != -1 && start < end {
-		return output[start : end+1]
-	}
-	return strings.TrimSpace(output)
+	return genkitMessages
 }
 
 func (p *GeminiProvider) logDebug(msg string, args ...any) {
