@@ -282,6 +282,32 @@ func NewWorkflowErrorWithCause(step, message string, cause error) *WorkflowError
 	}
 }
 
+// PluginError represents errors related to plugin execution and communication.
+type PluginError struct {
+	Plugin    string
+	Operation string // e.g., "Start", "Handshake", "Dial"
+	Message   string
+	Cause     error
+}
+
+// Error implements the error interface.
+func (e *PluginError) Error() string {
+	if e.Plugin != "" {
+		return fmt.Sprintf("plugin %s %s failed: %s", e.Plugin, e.Operation, e.Message)
+	}
+	return fmt.Sprintf("plugin %s failed: %s", e.Operation, e.Message)
+}
+
+// Unwrap returns the underlying cause for error chain traversal.
+func (e *PluginError) Unwrap() error {
+	return e.Cause
+}
+
+// NewPluginError creates a new PluginError.
+func NewPluginError(plugin, operation, message string) *PluginError {
+	return &PluginError{Plugin: plugin, Operation: operation, Message: message}
+}
+
 // IsRetryable checks if an error or any error in its chain is retryable.
 // It returns true if the error itself is retryable, or if any wrapped error
 // is marked as retryable.
@@ -357,6 +383,12 @@ func IsBeadsError(err error) bool {
 func IsWorkflowError(err error) bool {
 	var wfErr *WorkflowError
 	return errors.As(err, &wfErr)
+}
+
+// IsPluginError checks if an error or any error in its chain is a PluginError.
+func IsPluginError(err error) bool {
+	var pluginErr *PluginError
+	return errors.As(err, &pluginErr)
 }
 
 // isRetryableHTTPStatus returns true for HTTP status codes that are typically retryable.

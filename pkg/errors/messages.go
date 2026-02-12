@@ -42,6 +42,12 @@ func FormatUserError(err error) string {
 		return formatWorkflowError(wfErr)
 	}
 
+	// Check for PluginError
+	var pluginErr *PluginError
+	if As(err, &pluginErr) {
+		return formatPluginError(pluginErr)
+	}
+
 	// Default: return the error message as-is
 	return err.Error()
 }
@@ -280,6 +286,39 @@ func formatWorkflowError(err *WorkflowError) string {
 
 	if err.Retryable {
 		b.WriteString("\nThis error may be temporary. You can try running the command again.\n")
+	}
+
+	if err.Cause != nil {
+		fmt.Fprintf(&b, "\nUnderlying error: %v", err.Cause)
+	}
+
+	return b.String()
+}
+
+// formatPluginError formats a PluginError with actionable guidance.
+func formatPluginError(err *PluginError) string {
+	var b strings.Builder
+
+	if err.Plugin != "" {
+		fmt.Fprintf(&b, "Plugin error with '%s' during %s: %s\n", err.Plugin, err.Operation, err.Message)
+	} else {
+		fmt.Fprintf(&b, "Plugin error during %s: %s\n", err.Operation, err.Message)
+	}
+
+	b.WriteString("\nTo troubleshoot:\n")
+	switch err.Operation {
+	case "Start":
+		b.WriteString("  • Ensure the plugin binary is executable (chmod +x)\n")
+		b.WriteString("  • Check if the plugin requires specific environment variables or permissions\n")
+	case "Handshake":
+		b.WriteString("  • The plugin may be incompatible with this version of Rig\n")
+		b.WriteString("  • Ensure the plugin implements the Rig PluginService gRPC interface\n")
+	case "Dial":
+		b.WriteString("  • Ensure the plugin is starting its gRPC server on the UDS socket\n")
+		b.WriteString("  • Check for firewall or security software blocking local UDS connections\n")
+	default:
+		b.WriteString("  • Run with --verbose for more details\n")
+		b.WriteString("  • Check the plugin's stderr output for error messages\n")
 	}
 
 	if err.Cause != nil {
