@@ -140,6 +140,7 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 - **Platform-Dependent Testing:** Ensure platform-sensitive logic (like file detection) is "simulatable" in unit tests by avoiding strict OS-gating in helpers, allowing Windows logic to be tested on Unix hosts.
 - **Defensive Environment Resolution:** Always handle errors from system path lookups (e.g., `os.UserHomeDir()`). Failing to anchor to the home directory can cause silent drift into the current working directory, breaking "Safe Path" guarantees.
 - **Identity Theft (Global Fallbacks):** Avoid global metadata fallbacks (like a root `manifest.yaml`) in shared plugin directories. Use strictly scoped sidecars (`<name>.manifest.yaml`) to prevent binaries from inheriting incorrect metadata.
+- **Persist-Credentials Trade-off:** Setting `persist-credentials: false` in `actions/checkout` breaks subsequent authenticated Git checks (e.g., `git ls-remote`). Set to `true` if the job needs to talk back to `origin`.
 
 ## API & Plugin Architecture (gRPC)
 
