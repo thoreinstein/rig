@@ -131,11 +131,14 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 
 ### Plugin Architecture & Discovery
 - **Safe Path Discovery:** Restrict plugin discovery to `~/.config/rig/plugins` to maintain system security.
-- **Sidecar Manifests:** Use `<plugin>.manifest.yaml` sidecar files to provide metadata (Name, Version, Requirements) without executing the plugin binary.
+- **Sidecar Manifests:** Use `<plugin>.manifest.yaml` or `manifest.yaml` (inside subdirectories) to provide metadata (Name, Version, Requirements) without executing the plugin binary.
 - **Lazy Validation:** Perform compatibility validation during the discovery/listing phase using the current binary's version to ensure accurate SemVer checks.
+- **Cross-Platform Executability:** Detect plugins across platforms by checking for both common executable extensions (.exe, .bat, .cmd) and Unix execute bits.
 
 ### Workflow Traps
 - **Sparse-Checkout Staging:** In a `git sparse-checkout` environment, new files must be staged using `git add --sparse <path>` if they fall outside the current sparse index definition.
+- **Platform-Dependent Testing:** Ensure platform-sensitive logic (like file detection) is "simulatable" in unit tests by avoiding strict OS-gating in helpers, allowing Windows logic to be tested on Unix hosts.
+- **Defensive Environment Resolution:** Always handle errors from system path lookups (e.g., `os.UserHomeDir()`). Failing to anchor to the home directory can cause silent drift into the current working directory, breaking "Safe Path" guarantees.
 
 ## API & Plugin Architecture (gRPC)
 
