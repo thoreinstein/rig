@@ -39,7 +39,8 @@ func (e *Executor) Start(ctx context.Context, p *Plugin) error {
 	if err != nil {
 		return errors.Wrap(err, "failed to generate unique identifier for plugin socket")
 	}
-	p.socketPath = filepath.Join(os.TempDir(), fmt.Sprintf("rig-%s-%s.sock", p.Name, u.String()))
+	// Use shorter name to avoid AF_UNIX path length limits (typically 104-108 chars)
+	p.socketPath = filepath.Join(os.TempDir(), fmt.Sprintf("rig-%s.sock", u.String()[:8]))
 
 	// 2. Setup context for cancellation
 	ctx, cancel := context.WithCancel(ctx)
