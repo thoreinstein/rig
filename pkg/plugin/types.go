@@ -1,7 +1,11 @@
 package plugin
 
 import (
+	"context"
+	"os"
 	"time"
+
+	apiv1 "thoreinstein.com/rig/pkg/api/v1"
 )
 
 // Status represents the compatibility status of a plugin
@@ -34,6 +38,12 @@ type Plugin struct {
 	Manifest    *Manifest
 	Error       error
 	DiscoveryAt time.Time
+
+	// Runtime state
+	process    *os.Process
+	socketPath string
+	client     apiv1.PluginServiceClient
+	cancel     context.CancelFunc
 }
 
 // Result contains the outcome of a discovery scan
