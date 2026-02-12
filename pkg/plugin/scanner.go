@@ -25,22 +25,6 @@ func NewScanner() (*Scanner, error) {
 	}, nil
 }
 
-// isExecutable checks if a file is an executable binary
-func isExecutable(path string, info os.FileInfo) bool {
-	// Check common executable extensions regardless of platform to support tests
-	ext := strings.ToLower(filepath.Ext(path))
-	if ext == ".exe" || ext == ".bat" || ext == ".cmd" {
-		return true
-	}
-
-	// On Unix, also check execute bits
-	if os.PathSeparator == '/' {
-		return info.Mode()&0111 != 0
-	}
-
-	return false
-}
-
 // Scan finds plugins in the scanner's path
 func (s *Scanner) Scan() (*Result, error) {
 	start := time.Now()
@@ -99,8 +83,8 @@ func (s *Scanner) Scan() (*Result, error) {
 			continue
 		}
 
-		// Only check executable files
-		if !isExecutable(fullPath, info) {
+		// Only check executable files (strictly Unix execute bits)
+		if info.Mode()&0111 == 0 {
 			continue
 		}
 
@@ -114,9 +98,16 @@ func (s *Scanner) Scan() (*Result, error) {
 		}
 
 		// Look for manifest sidecar: <name>.manifest.yaml alongside the executable
+		// Strip common extensions (like .sh, .py) to find the logical manifest name
+		baseName := entry.Name()
+		if ext := filepath.Ext(baseName); ext != "" {
+			baseName = strings.TrimSuffix(baseName, ext)
+		}
+
+		manifestBase := filepath.Join(s.Path, baseName)
 		manifestPaths := []string{
-			fullPath + ".manifest.yaml",
-			fullPath + ".manifest.yml",
+			manifestBase + ".manifest.yaml",
+			manifestBase + ".manifest.yml",
 		}
 
 		var parseErr error
