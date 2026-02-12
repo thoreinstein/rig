@@ -139,6 +139,7 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 - **Sparse-Checkout Staging:** In a `git sparse-checkout` environment, new files must be staged using `git add --sparse <path>` if they fall outside the current sparse index definition.
 - **Platform-Dependent Testing:** Ensure platform-sensitive logic (like file detection) is "simulatable" in unit tests by avoiding strict OS-gating in helpers, allowing Windows logic to be tested on Unix hosts.
 - **Defensive Environment Resolution:** Always handle errors from system path lookups (e.g., `os.UserHomeDir()`). Failing to anchor to the home directory can cause silent drift into the current working directory, breaking "Safe Path" guarantees.
+- **Identity Theft (Global Fallbacks):** Avoid global metadata fallbacks (like a root `manifest.yaml`) in shared plugin directories. Use strictly scoped sidecars (`<name>.manifest.yaml`) to prevent binaries from inheriting incorrect metadata.
 
 ## API & Plugin Architecture (gRPC)
 
@@ -151,4 +152,3 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 - **Standard Linting:** Use `lint.use: [STANDARD]` in `buf.yaml`. Avoid legacy `DEFAULT`.
 - **Package Directory Match:** Explicitly exclude `PACKAGE_DIRECTORY_MATCH` lint rule if proto package structure (e.g., `rig.v1`) differs from file path (e.g., `pkg/api/v1`).
 - **Dependency Traps:** NEVER use raw git URLs (e.g., `github.com/...`) in `buf.yaml` `deps`. Use valid Buf Schema Registry module references (e.g., `buf.build/protocolbuffers/protobuf`).
-
