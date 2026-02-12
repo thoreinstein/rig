@@ -7,11 +7,7 @@ import (
 )
 
 func TestLoadManifest(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "rig-plugin-test-*")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	manifestPath := filepath.Join(tmpDir, "manifest.yaml")
 	content := `

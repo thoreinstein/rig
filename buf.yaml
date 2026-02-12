@@ -5,4 +5,3 @@ lint:
     - STANDARD
   except:
     - PACKAGE_DIRECTORY_MATCH
-

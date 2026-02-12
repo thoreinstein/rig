@@ -8,7 +8,7 @@ option go_package = "thoreinstein.com/rig/pkg/api/v1;apiv1";
 service GreeterService {
   // SayHello sends a greeting.
   rpc SayHello (SayHelloRequest) returns (SayHelloResponse);
-  
+
   // StreamHello sends multiple greetings.
   rpc StreamHello (StreamHelloRequest) returns (stream StreamHelloResponse);
 }

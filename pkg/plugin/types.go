@@ -15,10 +15,10 @@ const (
 
 // Manifest represents the metadata for a plugin found in manifest.yaml
 type Manifest struct {
-	Name        string `yaml:"name"`
-	Version     string `yaml:"version"`
-	Description string `yaml:"description"`
-	Author      string `yaml:"author"`
+	Name         string `yaml:"name"`
+	Version      string `yaml:"version"`
+	Description  string `yaml:"description"`
+	Author       string `yaml:"author"`
 	Requirements struct {
 		Rig string `yaml:"rig"` // SemVer requirement for Rig
 	} `yaml:"requirements"`

@@ -7,11 +7,7 @@ import (
 )
 
 func TestScanner_Scan(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "rig-plugin-scan-test-*")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	// Create a dummy executable plugin
 	pluginPath := filepath.Join(tmpDir, "test-bin")

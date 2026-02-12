@@ -32,19 +32,19 @@ func TestQueryCommands_WithNewFilters(t *testing.T) {
 		);
 		CREATE TABLE places (id INTEGER PRIMARY KEY, dir TEXT);
 		CREATE TABLE sessions (id INTEGER PRIMARY KEY, session TEXT);
-		
+
 		INSERT INTO places (id, dir) VALUES (1, '/home');
 		INSERT INTO sessions (id, session) VALUES (1, 'session1');
 		INSERT INTO sessions (id, session) VALUES (2, 'session2');
-		
+
 		-- Cmd 1: Short duration, session1
 		INSERT INTO commands (argv, start_time, duration, exit_status, place_id, session_id)
 		VALUES ('ls', 100, 1, 0, 1, 1);
-		
+
 		-- Cmd 2: Long duration (5s), session1
 		INSERT INTO commands (argv, start_time, duration, exit_status, place_id, session_id)
 		VALUES ('sleep 5', 200, 5, 0, 1, 1);
-		
+
 		-- Cmd 3: Short duration, session2
 		INSERT INTO commands (argv, start_time, duration, exit_status, place_id, session_id)
 		VALUES ('echo hi', 300, 1, 0, 1, 2);
