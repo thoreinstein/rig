@@ -73,23 +73,23 @@ func (s *Scanner) Scan() (*Result, error) {
 
 		// Handle subdirectories (each plugin in its own folder)
 		if entry.IsDir() {
-			// Check for manifest.yaml inside the directory
+			// Verify the directory contains at least one executable
+			if !hasExecutable(fullPath) {
+				continue
+			}
+
+			scanned++
+			plugin := Plugin{
+				Name:        entry.Name(),
+				Path:        fullPath,
+				Status:      StatusCompatible,
+				DiscoveryAt: time.Now(),
+			}
+
+			// Check for optional manifest.yaml inside the directory
 			manifestPath := filepath.Join(fullPath, "manifest.yaml")
 			if _, err := os.Stat(manifestPath); err == nil {
-				// Verify the directory contains at least one executable
-				if !hasExecutable(fullPath) {
-					continue
-				}
-
-				scanned++
 				manifest, err := loadManifest(manifestPath)
-				plugin := Plugin{
-					Name:        entry.Name(),
-					Path:        fullPath,
-					Status:      StatusCompatible,
-					DiscoveryAt: time.Now(),
-				}
-
 				if err != nil {
 					plugin.Status = StatusError
 					plugin.Error = fmt.Errorf("failed to load manifest: %w", err)
@@ -101,8 +101,9 @@ func (s *Scanner) Scan() (*Result, error) {
 					plugin.Description = manifest.Description
 					plugin.Manifest = manifest
 				}
-				plugins = append(plugins, plugin)
 			}
+
+			plugins = append(plugins, plugin)
 			continue
 		}
 
