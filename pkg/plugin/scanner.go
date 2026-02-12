@@ -52,7 +52,6 @@ func findExecutable(dir string) (string, bool) {
 // Scan finds plugins in the scanner's path
 func (s *Scanner) Scan() (*Result, error) {
 	start := time.Now()
-	var plugins []Plugin
 	scanned := 0
 
 	// Ensure the directory exists
@@ -64,6 +63,8 @@ func (s *Scanner) Scan() (*Result, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	plugins := make([]Plugin, 0, len(entries))
 
 	for _, entry := range entries {
 		fullPath := filepath.Join(s.Path, entry.Name())
