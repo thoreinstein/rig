@@ -69,22 +69,27 @@ func (s *Scanner) Scan() (*Result, error) {
 			// Check for manifest.yaml inside the directory
 			manifestPath := filepath.Join(fullPath, "manifest.yaml")
 			if _, err := os.Stat(manifestPath); err == nil {
+				scanned++
 				manifest, err := loadManifest(manifestPath)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "warning: failed to parse manifest %s: %v\n", manifestPath, err)
-				} else {
-					// Found a plugin directory with a manifest
-					scanned++
-					plugins = append(plugins, Plugin{
-						Name:        manifest.Name,
-						Version:     manifest.Version,
-						Path:        fullPath,
-						Status:      StatusCompatible,
-						Description: manifest.Description,
-						Manifest:    manifest,
-						DiscoveryAt: time.Now(),
-					})
+				plugin := Plugin{
+					Name:        entry.Name(),
+					Path:        fullPath,
+					Status:      StatusCompatible,
+					DiscoveryAt: time.Now(),
 				}
+
+				if err != nil {
+					plugin.Status = StatusError
+					plugin.Error = fmt.Errorf("failed to load manifest: %w", err)
+				} else {
+					if manifest.Name != "" {
+						plugin.Name = manifest.Name
+					}
+					plugin.Version = manifest.Version
+					plugin.Description = manifest.Description
+					plugin.Manifest = manifest
+				}
+				plugins = append(plugins, plugin)
 			}
 			continue
 		}
