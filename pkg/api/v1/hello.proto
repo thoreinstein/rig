@@ -1,0 +1,34 @@
+syntax = "proto3";
+
+package rig.v1;
+
+option go_package = "thoreinstein.com/rig/pkg/api/v1;apiv1";
+
+// GreeterService is a simple service to verify the gRPC pipeline.
+service GreeterService {
+  // SayHello sends a greeting.
+  rpc SayHello (SayHelloRequest) returns (SayHelloResponse);
+  
+  // StreamHello sends multiple greetings.
+  rpc StreamHello (StreamHelloRequest) returns (stream StreamHelloResponse);
+}
+
+// SayHelloRequest contains the name of the person to greet.
+message SayHelloRequest {
+  string name = 1;
+}
+
+// SayHelloResponse contains the greeting message.
+message SayHelloResponse {
+  string message = 1;
+}
+
+// StreamHelloRequest contains the name of the person to greet for streaming.
+message StreamHelloRequest {
+  string name = 1;
+}
+
+// StreamHelloResponse contains the greeting message for streaming.
+message StreamHelloResponse {
+  string message = 1;
+}
