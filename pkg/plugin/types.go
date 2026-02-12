@@ -56,9 +56,12 @@ type Plugin struct {
 	cancel     context.CancelFunc
 }
 
-// Result contains the outcome of a discovery scan
+// Result contains the outcome of a discovery scan, including found plugins and metadata.
 type Result struct {
-	Plugins  []*Plugin
-	Scanned  int
+	// Plugins is the list of discovered plugins.
+	Plugins []*Plugin
+	// Scanned is the total number of items scanned.
+	Scanned int
+	// Duration is the time taken to complete the scan.
 	Duration time.Duration
 }

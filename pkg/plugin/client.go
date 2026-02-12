@@ -21,6 +21,10 @@ func (e *Executor) PrepareClient(p *Plugin) error {
 		return errors.NewPluginError(p.Name, "Dial", "plugin socket path not set")
 	}
 
+	if p.conn != nil {
+		return errors.NewPluginError(p.Name, "Dial", "plugin client already initialized; call Stop/cleanup first")
+	}
+
 	// Dial the Unix Domain Socket using grpc.NewClient (preferred over DialContext)
 	conn, err := grpc.NewClient("unix://"+p.socketPath,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
