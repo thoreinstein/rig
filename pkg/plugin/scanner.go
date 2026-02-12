@@ -25,6 +25,29 @@ func NewScanner() (*Scanner, error) {
 	}, nil
 }
 
+// hasExecutable checks if a directory contains at least one executable file
+func hasExecutable(dir string) bool {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return false
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+		// Strictly Unix execute bits
+		if info.Mode()&0111 != 0 {
+			return true
+		}
+	}
+	return false
+}
+
 // Scan finds plugins in the scanner's path
 func (s *Scanner) Scan() (*Result, error) {
 	start := time.Now()
@@ -53,6 +76,11 @@ func (s *Scanner) Scan() (*Result, error) {
 			// Check for manifest.yaml inside the directory
 			manifestPath := filepath.Join(fullPath, "manifest.yaml")
 			if _, err := os.Stat(manifestPath); err == nil {
+				// Verify the directory contains at least one executable
+				if !hasExecutable(fullPath) {
+					continue
+				}
+
 				scanned++
 				manifest, err := loadManifest(manifestPath)
 				plugin := Plugin{
