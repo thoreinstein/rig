@@ -129,6 +129,14 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 - **Historical Accuracy:** Never modify old release notes or historical documentation to reflect current state. Always treat past records as immutable snapshots.
 - **Consolidated AI Context:** Keep AI provider configuration examples and architectural truths in `GEMINI.md` to provide a single source of truth for future agent sessions.
 
+### Plugin Architecture & Discovery
+- **Safe Path Discovery:** Restrict plugin discovery to `~/.config/rig/plugins` to maintain system security.
+- **Sidecar Manifests:** Use `<plugin>.manifest.yaml` sidecar files to provide metadata (Name, Version, Requirements) without executing the plugin binary.
+- **Lazy Validation:** Perform compatibility validation during the discovery/listing phase using the current binary's version to ensure accurate SemVer checks.
+
+### Workflow Traps
+- **Sparse-Checkout Staging:** In a `git sparse-checkout` environment, new files must be staged using `git add --sparse <path>` if they fall outside the current sparse index definition.
+
 ## API & Plugin Architecture (gRPC)
 
 ### Governance (v1)
