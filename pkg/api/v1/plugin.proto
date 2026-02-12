@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package rig.v1;
+
+option go_package = "thoreinstein.com/rig/pkg/api/v1;apiv1";
+
+// PluginService is the core interface that all Rig plugins must implement.
+service PluginService {
+  // Handshake is the first call made by the host to verify compatibility and establish connection state.
+  rpc Handshake(HandshakeRequest) returns (HandshakeResponse);
+}
+
+message HandshakeRequest {
+  // rig_version is the version of the Rig host.
+  string rig_version = 1;
+}
+
+message HandshakeResponse {
+  // plugin_version is the version of the plugin.
+  string plugin_version = 1;
+  // capabilities is a list of features the plugin supports.
+  repeated string capabilities = 2;
+}
