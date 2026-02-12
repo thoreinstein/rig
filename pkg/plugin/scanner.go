@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -27,7 +28,7 @@ func NewScanner() (*Scanner, error) {
 // isExecutable checks if a file is an executable binary
 func isExecutable(path string, info os.FileInfo) bool {
 	// Check common executable extensions regardless of platform to support tests
-	ext := filepath.Ext(path)
+	ext := strings.ToLower(filepath.Ext(path))
 	if ext == ".exe" || ext == ".bat" || ext == ".cmd" {
 		return true
 	}
@@ -89,7 +90,7 @@ func (s *Scanner) Scan() (*Result, error) {
 		}
 
 		// Skip manifest files themselves
-		if filepath.Ext(entry.Name()) == ".yaml" || filepath.Ext(entry.Name()) == ".yml" {
+		if strings.HasSuffix(strings.ToLower(entry.Name()), ".yaml") || strings.HasSuffix(strings.ToLower(entry.Name()), ".yml") {
 			continue
 		}
 
@@ -113,17 +114,23 @@ func (s *Scanner) Scan() (*Result, error) {
 			fullPath + ".manifest.yml",
 		}
 
+		var parseErr error
 		var manifest *Manifest
 		for _, mp := range manifestPaths {
 			if _, err := os.Stat(mp); err == nil {
-				manifest, err = loadManifest(mp)
-				if err == nil {
+				manifest, parseErr = loadManifest(mp)
+				if parseErr == nil {
 					break
 				}
+				// If we found a manifest file but it failed to parse, stop and report it
+				break
 			}
 		}
 
-		if manifest != nil {
+		if parseErr != nil {
+			plugin.Status = StatusError
+			plugin.Error = fmt.Errorf("failed to load manifest: %w", parseErr)
+		} else if manifest != nil {
 			plugin.Manifest = manifest
 			if manifest.Name != "" {
 				plugin.Name = manifest.Name
