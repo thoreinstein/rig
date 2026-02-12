@@ -133,7 +133,8 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 - **Safe Path Discovery:** Restrict plugin discovery to `~/.config/rig/plugins` to maintain system security.
 - **Sidecar Manifests:** Use `<plugin>.manifest.yaml` or `manifest.yaml` (inside subdirectories) to provide metadata (Name, Version, Requirements) without executing the plugin binary.
 - **Lazy Validation:** Perform compatibility validation during the discovery/listing phase using the current binary's version to ensure accurate SemVer checks.
-- **Cross-Platform Executability:** Detect plugins across platforms by checking for both common executable extensions (.exe, .bat, .cmd) and Unix execute bits.
+- **Cross-Platform Executability:** Detect plugins across platforms by checking for both common executable extensions (.exe, .bat, .cmd) and Unix execute bits. Ensure extension checks are case-insensitive.
+- **Surfacing Metadata Errors:** If a plugin's manifest file exists but is malformed, report an error rather than silently ignoring it. This prevents bypassing version checks due to configuration errors.
 
 ### Workflow Traps
 - **Sparse-Checkout Staging:** In a `git sparse-checkout` environment, new files must be staged using `git add --sparse <path>` if they fall outside the current sparse index definition.
