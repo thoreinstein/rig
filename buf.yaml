@@ -1,0 +1,23 @@
+version: v1 # buf config version
+
+lint:
+  use:
+    - DEFAULT
+  except:
+    - PACKAGE_DIRECTORY_MATCH
+
+deps:
+  - github.com/bufbuild/reflect-workspace
+  - github.com/bufbuild/buf # For buf lint and breaking change detection
+  - github.com/bufbuild/protovalidate # For runtime validation (optional but good practice)
+
+# Add a module reference for google.golang.org/protobuf
+# This assumes buf will be used to manage dependencies.
+# If not using buf as a module, protoc will need to find it via GOPATH or protoc's include paths.
+# For simplicity, we'll assume buf handles this via its module resolution.
+# If buf is installed locally and protoc is used directly, proto paths need careful configuration.
+# For now, let's assume buf will be able to resolve it.
+# The 'deps' above might be sufficient for buf to manage these.
+# If not, we might need to add specific directories or use a 'plugins' section.
+# Let's check buf documentation for best practices on Go module integration.
+# For now, a minimal config.
