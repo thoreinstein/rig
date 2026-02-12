@@ -308,6 +308,12 @@ func NewPluginError(plugin, operation, message string) *PluginError {
 	return &PluginError{Plugin: plugin, Operation: operation, Message: message}
 }
 
+// WithCause adds an underlying cause to the PluginError.
+func (e *PluginError) WithCause(cause error) *PluginError {
+	e.Cause = cause
+	return e
+}
+
 // IsRetryable checks if an error or any error in its chain is retryable.
 // It returns true if the error itself is retryable, or if any wrapped error
 // is marked as retryable.

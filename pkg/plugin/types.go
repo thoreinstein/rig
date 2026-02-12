@@ -3,6 +3,7 @@ package plugin
 import (
 	"context"
 	"os"
+	"sync"
 	"time"
 
 	"google.golang.org/grpc"
@@ -30,18 +31,24 @@ type Manifest struct {
 	} `yaml:"requirements"`
 }
 
-// Plugin represents a discovered plugin
+// Plugin represents a discovered plugin.
+//
+// Plugin instances are not safe for concurrent use across multiple goroutines
+// during Start/Stop operations without external synchronization, although
+// internal state is protected by a mutex for basic safety.
 type Plugin struct {
-	Name        string
-	Version     string
-	Path        string
-	Status      Status
-	Description string
-	Manifest    *Manifest
-	Error       error
-	DiscoveryAt time.Time
+	Name         string
+	Version      string
+	Path         string
+	Status       Status
+	Description  string
+	Manifest     *Manifest
+	Error        error
+	DiscoveryAt  time.Time
+	Capabilities []string
 
 	// Runtime state
+	mu         sync.Mutex
 	process    *os.Process
 	socketPath string
 	client     apiv1.PluginServiceClient
@@ -51,7 +58,7 @@ type Plugin struct {
 
 // Result contains the outcome of a discovery scan
 type Result struct {
-	Plugins  []Plugin
+	Plugins  []*Plugin
 	Scanned  int
 	Duration time.Duration
 }

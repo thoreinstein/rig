@@ -9,8 +9,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/cockroachdb/errors"
 	"github.com/google/uuid"
+
+	"thoreinstein.com/rig/pkg/errors"
 )
 
 const (
@@ -30,25 +31,29 @@ func NewExecutor() *Executor {
 
 // Start launches the plugin process and establishes the IPC handshake.
 func (e *Executor) Start(ctx context.Context, p *Plugin) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	if p.process != nil {
-		return errors.Newf("plugin %s is already running", p.Name)
+		return errors.NewPluginError(p.Name, "Start", "plugin is already running")
 	}
 
 	// 1. Generate unique UDS path
 	u, err := uuid.NewRandom()
 	if err != nil {
-		return errors.Wrap(err, "failed to generate unique identifier for plugin socket")
+		return errors.NewPluginError(p.Name, "Start", "failed to generate unique identifier for plugin socket").WithCause(err)
 	}
 	// Use shorter name to avoid AF_UNIX path length limits (typically 104-108 chars)
 	p.socketPath = filepath.Join(os.TempDir(), fmt.Sprintf("rig-%s.sock", u.String()[:8]))
 
-	// 2. Setup context for cancellation
-	ctx, cancel := context.WithCancel(ctx)
+	// 2. Setup internal context for the process lifecycle
+	// We don't shadow the incoming ctx so waitForSocket can respect its deadline.
+	procCtx, cancel := context.WithCancel(context.Background())
 	p.cancel = cancel
 
 	// 3. Prepare the command
 	// #nosec G204
-	cmd := exec.CommandContext(ctx, p.Path)
+	cmd := exec.CommandContext(procCtx, p.Path)
 	cmd.Env = append(os.Environ(), "RIG_PLUGIN_ENDPOINT="+p.socketPath)
 
 	// Ensure we can capture some output if needed for debugging
@@ -56,21 +61,15 @@ func (e *Executor) Start(ctx context.Context, p *Plugin) error {
 
 	// 4. Start the process
 	if err := cmd.Start(); err != nil {
-		p.cancel()
-		p.process = nil
-		p.cancel = nil
-		return errors.Wrapf(err, "failed to start plugin process: %s", p.Name)
+		_ = p.cleanup()
+		return errors.NewPluginError(p.Name, "Start", "failed to launch plugin process").WithCause(err)
 	}
 	p.process = cmd.Process
 
 	// 5. Handshake: Wait for the socket to appear
 	if err := e.waitForSocket(ctx, p.socketPath); err != nil {
-		_ = p.process.Kill()
-		p.cancel()
-		p.process = nil
-		p.socketPath = ""
-		p.cancel = nil
-		return errors.Wrapf(err, "plugin %s failed to establish gRPC server within timeout", p.Name)
+		_ = p.cleanup()
+		return errors.NewPluginError(p.Name, "Start", "handshake failed").WithCause(err)
 	}
 
 	return nil
@@ -78,6 +77,13 @@ func (e *Executor) Start(ctx context.Context, p *Plugin) error {
 
 // Stop terminates the plugin process and cleans up resources.
 func (e *Executor) Stop(p *Plugin) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.cleanup()
+}
+
+// cleanup performs resource cleanup for a plugin. mu must be held.
+func (p *Plugin) cleanup() error {
 	if p.cancel != nil {
 		p.cancel()
 		p.cancel = nil
@@ -90,7 +96,10 @@ func (e *Executor) Stop(p *Plugin) error {
 
 	var err error
 	if p.process != nil {
-		err = p.process.Kill()
+		// Signal termination
+		_ = p.process.Kill()
+		// Wait to prevent zombies
+		_, err = p.process.Wait()
 		p.process = nil
 	}
 
@@ -104,7 +113,12 @@ func (e *Executor) Stop(p *Plugin) error {
 }
 
 func (e *Executor) waitForSocket(ctx context.Context, path string) error {
-	timeout := time.After(HandshakeTimeout)
+	// Create a combined deadline: use HandshakeTimeout unless ctx has an earlier one.
+	handshakeDeadline := time.Now().Add(HandshakeTimeout)
+	if d, ok := ctx.Deadline(); ok && d.Before(handshakeDeadline) {
+		handshakeDeadline = d
+	}
+
 	ticker := time.NewTicker(HandshakePollInterval)
 	defer ticker.Stop()
 
@@ -112,8 +126,8 @@ func (e *Executor) waitForSocket(ctx context.Context, path string) error {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-timeout:
-			return errors.New("timeout waiting for plugin socket")
+		case <-time.After(time.Until(handshakeDeadline)):
+			return errors.NewPluginError("", "Handshake", "timeout waiting for plugin socket")
 		case <-ticker.C:
 			if _, err := os.Stat(path); err == nil {
 				// Socket file exists, try to dial it to ensure it's ready

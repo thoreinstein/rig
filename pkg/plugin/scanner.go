@@ -3,6 +3,7 @@ package plugin
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -26,12 +27,19 @@ func NewScanner() (*Scanner, error) {
 	}, nil
 }
 
-// findExecutable returns the path of the first executable file in a directory
+// findExecutable returns the path of the first executable file in a directory.
+// Entries are sorted alphabetically to ensure consistent behavior across different
+// filesystems and platforms.
 func findExecutable(dir string) (string, bool) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return "", false
 	}
+
+	// Sort entries to ensure deterministic selection of the primary executable
+	slices.SortFunc(entries, func(a, b os.DirEntry) int {
+		return strings.Compare(a.Name(), b.Name())
+	})
 
 	for _, entry := range entries {
 		if entry.IsDir() {
@@ -64,7 +72,7 @@ func (s *Scanner) Scan() (*Result, error) {
 		return nil, err
 	}
 
-	plugins := make([]Plugin, 0, len(entries))
+	plugins := make([]*Plugin, 0, len(entries))
 
 	for _, entry := range entries {
 		fullPath := filepath.Join(s.Path, entry.Name())
@@ -82,7 +90,7 @@ func (s *Scanner) Scan() (*Result, error) {
 			}
 
 			scanned++
-			plugin := Plugin{
+			plugin := &Plugin{
 				Name:        entry.Name(),
 				Path:        execPath,
 				Status:      StatusCompatible,
@@ -122,7 +130,7 @@ func (s *Scanner) Scan() (*Result, error) {
 
 		scanned++
 
-		plugin := Plugin{
+		plugin := &Plugin{
 			Name:        entry.Name(),
 			Path:        fullPath,
 			DiscoveryAt: time.Now(),

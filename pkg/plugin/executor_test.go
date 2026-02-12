@@ -3,6 +3,7 @@ package plugin
 import (
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -10,6 +11,13 @@ import (
 )
 
 func TestExecutor_StartStop(t *testing.T) {
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("python3 not found, skipping test")
+	}
+	if _, err := exec.LookPath("bash"); err != nil {
+		t.Skip("bash not found, skipping test")
+	}
+
 	tmpDir := t.TempDir()
 
 	// Create a script that acts as a plugin and creates a UDS socket
@@ -54,6 +62,7 @@ exit 1
 	}
 
 	// Stop the plugin
+	savedSocket := p.socketPath
 	err = e.Stop(p)
 	if err != nil {
 		t.Errorf("Stop() failed: %v", err)
@@ -66,12 +75,16 @@ exit 1
 	if p.socketPath != "" {
 		t.Error("p.socketPath is not empty after Stop")
 	}
-	if _, err := os.Stat(p.socketPath); err == nil {
-		t.Errorf("socket file %s still exists after Stop", p.socketPath)
+	if _, err := os.Stat(savedSocket); err == nil {
+		t.Errorf("socket file %s still exists after Stop", savedSocket)
 	}
 }
 
 func TestExecutor_Start_Timeout(t *testing.T) {
+	if _, err := exec.LookPath("bash"); err != nil {
+		t.Skip("bash not found, skipping test")
+	}
+
 	// Create a plugin that will never create a socket
 	tmpDir := t.TempDir()
 	pluginPath := filepath.Join(tmpDir, "slow-plugin")

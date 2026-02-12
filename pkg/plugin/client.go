@@ -3,17 +3,22 @@ package plugin
 import (
 	"context"
 
-	"github.com/cockroachdb/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
 	apiv1 "thoreinstein.com/rig/pkg/api/v1"
+	"thoreinstein.com/rig/pkg/errors"
 )
 
-// Dial establishes a gRPC connection to the plugin's UDS socket.
-func (e *Executor) Dial(ctx context.Context, p *Plugin) error {
+// PrepareClient sets up the gRPC client for the plugin.
+// Note that it does not actually establish a network connection; gRPC connections
+// are created lazily when the first RPC is invoked.
+func (e *Executor) PrepareClient(p *Plugin) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	if p.socketPath == "" {
-		return errors.New("plugin socket path not set")
+		return errors.NewPluginError(p.Name, "Dial", "plugin socket path not set")
 	}
 
 	// Dial the Unix Domain Socket using grpc.NewClient (preferred over DialContext)
@@ -21,7 +26,7 @@ func (e *Executor) Dial(ctx context.Context, p *Plugin) error {
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 	if err != nil {
-		return errors.Wrapf(err, "failed to create gRPC client for plugin %s at %s", p.Name, p.socketPath)
+		return errors.NewPluginError(p.Name, "Dial", "failed to create gRPC client").WithCause(err)
 	}
 
 	p.conn = conn
@@ -31,21 +36,29 @@ func (e *Executor) Dial(ctx context.Context, p *Plugin) error {
 
 // Handshake performs the initial handshake with the plugin to verify compatibility.
 func (e *Executor) Handshake(ctx context.Context, p *Plugin, rigVersion string) error {
-	if p.client == nil {
-		return errors.New("plugin client not initialized; call Dial first")
+	p.mu.Lock()
+	client := p.client
+	p.mu.Unlock()
+
+	if client == nil {
+		return errors.NewPluginError(p.Name, "Handshake", "plugin client not initialized; call PrepareClient first")
 	}
 
-	resp, err := p.client.Handshake(ctx, &apiv1.HandshakeRequest{
+	resp, err := client.Handshake(ctx, &apiv1.HandshakeRequest{
 		RigVersion: rigVersion,
 	})
 	if err != nil {
-		return errors.Wrapf(err, "handshake failed for plugin %s", p.Name)
+		return errors.NewPluginError(p.Name, "Handshake", "failed to verify plugin compatibility").WithCause(err)
 	}
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
 
 	// Update plugin metadata if provided by the handshake
 	if resp.PluginVersion != "" {
 		p.Version = resp.PluginVersion
 	}
+	p.Capabilities = resp.Capabilities
 
 	return nil
 }
