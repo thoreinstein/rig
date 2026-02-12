@@ -1,11 +1,12 @@
 package plugin
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/cockroachdb/errors"
 )
 
 // Scanner scans a directory for plugins
@@ -17,7 +18,7 @@ type Scanner struct {
 func NewScanner() (*Scanner, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		return nil, fmt.Errorf("failed to determine home directory: %w", err)
+		return nil, errors.Wrap(err, "failed to determine home directory")
 	}
 	path := filepath.Join(homeDir, ".config", "rig", "plugins")
 	return &Scanner{
@@ -92,7 +93,7 @@ func (s *Scanner) Scan() (*Result, error) {
 				manifest, err := loadManifest(manifestPath)
 				if err != nil {
 					plugin.Status = StatusError
-					plugin.Error = fmt.Errorf("failed to load manifest: %w", err)
+					plugin.Error = errors.Wrap(err, "failed to load manifest")
 				} else {
 					if manifest.Name != "" {
 						plugin.Name = manifest.Name
@@ -154,7 +155,7 @@ func (s *Scanner) Scan() (*Result, error) {
 
 		if parseErr != nil {
 			plugin.Status = StatusError
-			plugin.Error = fmt.Errorf("failed to load manifest: %w", parseErr)
+			plugin.Error = errors.Wrap(parseErr, "failed to load manifest")
 		} else if manifest != nil {
 			plugin.Manifest = manifest
 			if manifest.Name != "" {

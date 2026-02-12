@@ -27,4 +27,4 @@ install-tools:
 # Clean generated files
 clean:
 	@echo "Cleaning generated files..."
-	@find pkg/api -name "*.pb.go" -delete
+	@find pkg/api -type f -name "*.pb.go" -delete
