@@ -5,6 +5,8 @@ import (
 	"os"
 	"time"
 
+	"google.golang.org/grpc"
+
 	apiv1 "thoreinstein.com/rig/pkg/api/v1"
 )
 
@@ -43,6 +45,7 @@ type Plugin struct {
 	process    *os.Process
 	socketPath string
 	client     apiv1.PluginServiceClient
+	conn       *grpc.ClientConn
 	cancel     context.CancelFunc
 }
 

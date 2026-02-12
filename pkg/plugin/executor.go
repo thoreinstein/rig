@@ -57,6 +57,8 @@ func (e *Executor) Start(ctx context.Context, p *Plugin) error {
 	// 4. Start the process
 	if err := cmd.Start(); err != nil {
 		p.cancel()
+		p.process = nil
+		p.cancel = nil
 		return errors.Wrapf(err, "failed to start plugin process: %s", p.Name)
 	}
 	p.process = cmd.Process
@@ -65,6 +67,9 @@ func (e *Executor) Start(ctx context.Context, p *Plugin) error {
 	if err := e.waitForSocket(ctx, p.socketPath); err != nil {
 		_ = p.process.Kill()
 		p.cancel()
+		p.process = nil
+		p.socketPath = ""
+		p.cancel = nil
 		return errors.Wrapf(err, "plugin %s failed to establish gRPC server within timeout", p.Name)
 	}
 
@@ -75,6 +80,12 @@ func (e *Executor) Start(ctx context.Context, p *Plugin) error {
 func (e *Executor) Stop(p *Plugin) error {
 	if p.cancel != nil {
 		p.cancel()
+		p.cancel = nil
+	}
+
+	if p.conn != nil {
+		_ = p.conn.Close()
+		p.conn = nil
 	}
 
 	var err error
