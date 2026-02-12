@@ -34,7 +34,7 @@ func init() {
 }
 
 func runPluginsListCommand() error {
-	scanner, err := plugin.NewScanner(verbose)
+	scanner, err := plugin.NewScanner()
 	if err != nil {
 		return errors.Wrap(err, "failed to initialize plugin scanner")
 	}

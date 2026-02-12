@@ -9,20 +9,18 @@ import (
 
 // Scanner scans a directory for plugins
 type Scanner struct {
-	Path    string
-	Verbose bool
+	Path string
 }
 
 // NewScanner creates a new scanner for the default plugin path
-func NewScanner(verbose bool) (*Scanner, error) {
+func NewScanner() (*Scanner, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return nil, fmt.Errorf("failed to determine home directory: %w", err)
 	}
 	path := filepath.Join(homeDir, ".config", "rig", "plugins")
 	return &Scanner{
-		Path:    path,
-		Verbose: verbose,
+		Path: path,
 	}, nil
 }
 
@@ -38,7 +36,7 @@ func isExecutable(path string, info os.FileInfo) bool {
 	if os.PathSeparator == '/' {
 		return info.Mode()&0111 != 0
 	}
-	
+
 	return false
 }
 
@@ -71,7 +69,9 @@ func (s *Scanner) Scan() (*Result, error) {
 			manifestPath := filepath.Join(fullPath, "manifest.yaml")
 			if _, err := os.Stat(manifestPath); err == nil {
 				manifest, err := loadManifest(manifestPath)
-				if err == nil {
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "warning: failed to parse manifest %s: %v\n", manifestPath, err)
+				} else {
 					// Found a plugin directory with a manifest
 					scanned++
 					plugins = append(plugins, Plugin{
@@ -107,11 +107,10 @@ func (s *Scanner) Scan() (*Result, error) {
 			Status:      StatusCompatible,
 		}
 
-		// Look for manifest sidecar: <name>.manifest.yaml or manifest.yaml in the same dir
+		// Look for manifest sidecar: <name>.manifest.yaml alongside the executable
 		manifestPaths := []string{
 			fullPath + ".manifest.yaml",
 			fullPath + ".manifest.yml",
-			filepath.Join(s.Path, "manifest.yaml"), // Only makes sense if there's only one plugin
 		}
 
 		var manifest *Manifest
