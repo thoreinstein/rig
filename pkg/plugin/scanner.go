@@ -26,11 +26,11 @@ func NewScanner() (*Scanner, error) {
 	}, nil
 }
 
-// hasExecutable checks if a directory contains at least one executable file
-func hasExecutable(dir string) bool {
+// findExecutable returns the path of the first executable file in a directory
+func findExecutable(dir string) (string, bool) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return false
+		return "", false
 	}
 
 	for _, entry := range entries {
@@ -43,10 +43,10 @@ func hasExecutable(dir string) bool {
 		}
 		// Strictly Unix execute bits
 		if info.Mode()&0111 != 0 {
-			return true
+			return filepath.Join(dir, entry.Name()), true
 		}
 	}
-	return false
+	return "", false
 }
 
 // Scan finds plugins in the scanner's path
@@ -75,14 +75,15 @@ func (s *Scanner) Scan() (*Result, error) {
 		// Handle subdirectories (each plugin in its own folder)
 		if entry.IsDir() {
 			// Verify the directory contains at least one executable
-			if !hasExecutable(fullPath) {
+			execPath, found := findExecutable(fullPath)
+			if !found {
 				continue
 			}
 
 			scanned++
 			plugin := Plugin{
 				Name:        entry.Name(),
-				Path:        fullPath,
+				Path:        execPath,
 				Status:      StatusCompatible,
 				DiscoveryAt: time.Now(),
 			}

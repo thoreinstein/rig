@@ -51,3 +51,34 @@ version: 1.0.0
 		t.Errorf("p.Version = %q, want %q", p.Version, "1.0.0")
 	}
 }
+
+func TestScanner_ScanDirectoryPluginPath(t *testing.T) {
+	tmpDir := t.TempDir()
+	pluginDir := filepath.Join(tmpDir, "my-plugin")
+	if err := os.MkdirAll(pluginDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	execPath := filepath.Join(pluginDir, "run-me")
+	if err := os.WriteFile(execPath, []byte("#!/bin/sh\necho hi"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	s := &Scanner{
+		Path: tmpDir,
+	}
+
+	result, err := s.Scan()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(result.Plugins) != 1 {
+		t.Fatalf("expected 1 plugin, got %d", len(result.Plugins))
+	}
+
+	p := result.Plugins[0]
+	if p.Path != execPath {
+		t.Errorf("p.Path = %q, want %q", p.Path, execPath)
+	}
+}

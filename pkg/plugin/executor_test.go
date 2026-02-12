@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -95,5 +96,17 @@ sleep 10
 	err := e.Start(ctx, p)
 	if err == nil {
 		t.Error("expected timeout error, got nil")
+	}
+
+	// Verify that we can retry after a failure
+	// If the bug exists, this will fail with "already running"
+	ctx2, cancel2 := context.WithTimeout(t.Context(), 100*time.Millisecond)
+	defer cancel2()
+	err = e.Start(ctx2, p)
+	if err == nil {
+		t.Error("expected second timeout error, got nil")
+	}
+	if err != nil && strings.Contains(err.Error(), "already running") {
+		t.Errorf("Stale state detected: got %v, want timeout error", err)
 	}
 }

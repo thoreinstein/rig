@@ -24,6 +24,7 @@ func (e *Executor) Dial(ctx context.Context, p *Plugin) error {
 		return errors.Wrapf(err, "failed to create gRPC client for plugin %s at %s", p.Name, p.socketPath)
 	}
 
+	p.conn = conn
 	p.client = apiv1.NewPluginServiceClient(conn)
 	return nil
 }
