@@ -131,7 +131,7 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 
 ### Plugin Architecture & Discovery
 - **Safe Path Discovery:** Restrict plugin discovery to `~/.config/rig/plugins` to maintain system security.
-- **Sidecar Manifests:** Use `<plugin>.manifest.yaml` or `manifest.yaml` (inside subdirectories) to provide metadata (Name, Version, Requirements) without executing the plugin binary.
+- **Sidecar Manifests:** Use `<plugin>.manifest.yaml` or `manifest.yaml` (inside subdirectories) to provide metadata (Name, Version, Requirements) without executing the plugin binary. Metadata is optional; directory-based plugins with valid executables are discovered even if a manifest is missing.
 - **Lazy Validation:** Perform compatibility validation during the discovery/listing phase using the current binary's version to ensure accurate SemVer checks.
 - **Unix-Only Execution:** Plugins must be Unix executable files (marked with execute bits). Non-executable files and those with unknown extensions are ignored. Subdirectories must contain at least one executable file to be considered valid plugins.
 - **Manifest Resolution:** Sidecar manifests are matched against the logical plugin name (stripping extensions like `.sh` or `.py`).
