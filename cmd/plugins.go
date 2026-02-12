@@ -50,7 +50,7 @@ func runPluginsListCommand() error {
 
 	// Validate compatibility for all found plugins
 	for i := range result.Plugins {
-		_ = plugin.ValidateCompatibility(&result.Plugins[i], GetVersion())
+		plugin.ValidateCompatibility(&result.Plugins[i], GetVersion())
 	}
 
 	fmt.Printf("Found %d plugin(s) in %s:\n\n", len(result.Plugins), scanner.Path)

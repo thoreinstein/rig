@@ -53,9 +53,9 @@ func TestValidateCompatibility(t *testing.T) {
 					}{Rig: tt.requirement},
 				},
 			}
-			err := ValidateCompatibility(p, tt.rigVersion)
+			ValidateCompatibility(p, tt.rigVersion)
 			if p.Status != tt.wantStatus {
-				t.Errorf("ValidateCompatibility() status = %v, want %v (err: %v)", p.Status, tt.wantStatus, err)
+				t.Errorf("ValidateCompatibility() status = %v, want %v (err: %v)", p.Status, tt.wantStatus, p.Error)
 			}
 		})
 	}
