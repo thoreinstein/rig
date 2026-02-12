@@ -3,7 +3,7 @@ package plugin
 import (
 	"os"
 
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
 )
 
 // loadManifest reads and parses a manifest.yaml file

@@ -7,11 +7,7 @@ import (
 )
 
 func TestScanner_ManifestInheritanceBug(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "rig-plugin-inheritance-*")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	// Create Plugin A with its own manifest
 	pluginAPath := filepath.Join(tmpDir, "plugin-a")

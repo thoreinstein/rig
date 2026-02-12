@@ -68,7 +68,7 @@ func runPluginsListCommand() error {
 		if p.Status != plugin.StatusCompatible && p.Error != nil {
 			status = fmt.Sprintf("%s (%v)", status, p.Error)
 		}
-		
+
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", p.Name, version, status, p.Path)
 	}
 	w.Flush()

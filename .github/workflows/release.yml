@@ -91,6 +91,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
+          persist-credentials: false
           # Note: persist-credentials must be true (default) for v6+
           # v6 changed credential handling - see actions/checkout#2318
 
