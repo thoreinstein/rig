@@ -82,7 +82,7 @@ func (e *Executor) Stop(p *Plugin) error {
 	return p.cleanup()
 }
 
-// cleanup performs resource cleanup for a plugin. mu must be held.
+// cleanup performs resource cleanup for a plugin. mu must be held by the caller.
 func (p *Plugin) cleanup() error {
 	if p.cancel != nil {
 		p.cancel()
@@ -112,6 +112,8 @@ func (p *Plugin) cleanup() error {
 	return err
 }
 
+// waitForSocket waits for the plugin's Unix Domain Socket to be created and becomes ready
+// for connections, respecting the provided context's deadline and HandshakeTimeout.
 func (e *Executor) waitForSocket(ctx context.Context, path string) error {
 	// Create a combined deadline: use HandshakeTimeout unless ctx has an earlier one.
 	handshakeDeadline := time.Now().Add(HandshakeTimeout)
@@ -122,11 +124,18 @@ func (e *Executor) waitForSocket(ctx context.Context, path string) error {
 	ticker := time.NewTicker(HandshakePollInterval)
 	defer ticker.Stop()
 
+	remaining := time.Until(handshakeDeadline)
+	if remaining <= 0 {
+		return errors.NewPluginError("", "Handshake", "timeout waiting for plugin socket")
+	}
+	timer := time.NewTimer(remaining)
+	defer timer.Stop()
+
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(time.Until(handshakeDeadline)):
+		case <-timer.C:
 			return errors.NewPluginError("", "Handshake", "timeout waiting for plugin socket")
 		case <-ticker.C:
 			if _, err := os.Stat(path); err == nil {
