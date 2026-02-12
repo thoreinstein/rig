@@ -128,3 +128,16 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 ### Documentation Conventions
 - **Historical Accuracy:** Never modify old release notes or historical documentation to reflect current state. Always treat past records as immutable snapshots.
 - **Consolidated AI Context:** Keep AI provider configuration examples and architectural truths in `GEMINI.md` to provide a single source of truth for future agent sessions.
+
+## API & Plugin Architecture (gRPC)
+
+### Governance (v1)
+- **Versioning:** Strict `Major.Minor.Patch` schema enforced via package names (e.g., `rig.v1`).
+- **Deprecation:** 3-version policy: Deprecate (N) -> Warn (N+1) -> Remove (N+2).
+- **Breaking Changes:** Only allowed in new major versions (e.g., `v2`).
+
+### Buf Configuration Patterns
+- **Standard Linting:** Use `lint.use: [STANDARD]` in `buf.yaml`. Avoid legacy `DEFAULT`.
+- **Package Directory Match:** Explicitly exclude `PACKAGE_DIRECTORY_MATCH` lint rule if proto package structure (e.g., `rig.v1`) differs from file path (e.g., `pkg/api/v1`).
+- **Dependency Traps:** NEVER use raw git URLs (e.g., `github.com/...`) in `buf.yaml` `deps`. Use valid Buf Schema Registry module references (e.g., `buf.build/protocolbuffers/protobuf`).
+
