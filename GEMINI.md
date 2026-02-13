@@ -151,3 +151,9 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 - **Standard Linting:** Use `lint.use: [STANDARD]` in `buf.yaml`. Avoid legacy `DEFAULT`.
 - **Package Directory Match:** Explicitly exclude `PACKAGE_DIRECTORY_MATCH` lint rule if proto package structure (e.g., `rig.v1`) differs from file path (e.g., `pkg/api/v1`).
 - **Dependency Traps:** NEVER use raw git URLs (e.g., `github.com/...`) in `buf.yaml` `deps`. Use valid Buf Schema Registry module references (e.g., `buf.build/protocolbuffers/protobuf`).
+
+### Plugin Execution & Handshake
+- **Unique IPC Endpoints:** Always generate unique Unix Domain Socket (UDS) paths for concurrent plugin instances. Use truncated UUIDs (first 8 chars) to avoid exceeding the 104-108 character limit for socket paths on Darwin/Linux.
+- **Environment Handshake:** Pass the socket path to the plugin via the `RIG_PLUGIN_ENDPOINT` environment variable.
+- **Readiness Polling:** The host must poll for the socket file and verify readiness with a `net.Dial` before attempting the gRPC `Handshake` RPC.
+- **Insecure Local Transport:** Use `insecure.NewCredentials()` for gRPC over UDS, as communication is restricted to the local host.
