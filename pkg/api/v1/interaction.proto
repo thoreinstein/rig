@@ -56,13 +56,18 @@ message ConfirmResponse {
 // SelectRequest asks the user to choose from a list of options.
 message SelectRequest {
   string label = 1;
+  // options is the list of choices presented to the user. Must contain at least one element.
   repeated string options = 2;
+  // multiselect allows the user to select more than one option.
   bool multiselect = 3;
 }
 
 // SelectResponse contains the indices of the selected options.
 message SelectResponse {
-  repeated int32 selected_indices = 1;
+  // selected_indices are the 0-based indices matching the options in the request.
+  // If multiselect was false, this must contain exactly one index.
+  // All indices must be within the bounds of the original options list.
+  repeated uint32 selected_indices = 1;
 }
 
 // ProgressUpdate provides real-time status updates for a long-running task.
@@ -78,12 +83,13 @@ message ProgressUpdate {
   }
   Type type = 2;
 
-  // progress is the completion percentage (0-100), used for BAR type.
+  // progress is the completion percentage (0-100), used for TYPE_BAR.
+  // Must be ignored if indeterminate is true.
   int32 progress = 3;
   
-  // indeterminate is true if the total progress is unknown.
+  // indeterminate is true if the total progress is unknown (e.g., a searching spinner).
   bool indeterminate = 4;
 
-  // done is true if the progress is complete.
+  // done is true if the progress is complete and the TUI element should be cleared or finalized.
   bool done = 5;
 }

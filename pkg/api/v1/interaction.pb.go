@@ -520,10 +520,12 @@ func (x *ConfirmResponse) GetConfirmed() bool {
 
 // SelectRequest asks the user to choose from a list of options.
 type SelectRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Label         string                 `protobuf:"bytes,1,opt,name=label,proto3" json:"label,omitempty"`
-	Options       []string               `protobuf:"bytes,2,rep,name=options,proto3" json:"options,omitempty"`
-	Multiselect   bool                   `protobuf:"varint,3,opt,name=multiselect,proto3" json:"multiselect,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Label string                 `protobuf:"bytes,1,opt,name=label,proto3" json:"label,omitempty"`
+	// options is the list of choices presented to the user. Must contain at least one element.
+	Options []string `protobuf:"bytes,2,rep,name=options,proto3" json:"options,omitempty"`
+	// multiselect allows the user to select more than one option.
+	Multiselect   bool `protobuf:"varint,3,opt,name=multiselect,proto3" json:"multiselect,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -581,8 +583,11 @@ func (x *SelectRequest) GetMultiselect() bool {
 
 // SelectResponse contains the indices of the selected options.
 type SelectResponse struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	SelectedIndices []int32                `protobuf:"varint,1,rep,packed,name=selected_indices,json=selectedIndices,proto3" json:"selected_indices,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// selected_indices are the 0-based indices matching the options in the request.
+	// If multiselect was false, this must contain exactly one index.
+	// All indices must be within the bounds of the original options list.
+	SelectedIndices []uint32 `protobuf:"varint,1,rep,packed,name=selected_indices,json=selectedIndices,proto3" json:"selected_indices,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -617,7 +622,7 @@ func (*SelectResponse) Descriptor() ([]byte, []int) {
 	return file_pkg_api_v1_interaction_proto_rawDescGZIP(), []int{7}
 }
 
-func (x *SelectResponse) GetSelectedIndices() []int32 {
+func (x *SelectResponse) GetSelectedIndices() []uint32 {
 	if x != nil {
 		return x.SelectedIndices
 	}
@@ -629,11 +634,12 @@ type ProgressUpdate struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
 	Message string                 `protobuf:"bytes,1,opt,name=message,proto3" json:"message,omitempty"`
 	Type    ProgressUpdate_Type    `protobuf:"varint,2,opt,name=type,proto3,enum=rig.v1.ProgressUpdate_Type" json:"type,omitempty"`
-	// progress is the completion percentage (0-100), used for BAR type.
+	// progress is the completion percentage (0-100), used for TYPE_BAR.
+	// Must be ignored if indeterminate is true.
 	Progress int32 `protobuf:"varint,3,opt,name=progress,proto3" json:"progress,omitempty"`
-	// indeterminate is true if the total progress is unknown.
+	// indeterminate is true if the total progress is unknown (e.g., a searching spinner).
 	Indeterminate bool `protobuf:"varint,4,opt,name=indeterminate,proto3" json:"indeterminate,omitempty"`
-	// done is true if the progress is complete.
+	// done is true if the progress is complete and the TUI element should be cleared or finalized.
 	Done          bool `protobuf:"varint,5,opt,name=done,proto3" json:"done,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -740,7 +746,7 @@ const file_pkg_api_v1_interaction_proto_rawDesc = "" +
 	"\aoptions\x18\x02 \x03(\tR\aoptions\x12 \n" +
 	"\vmultiselect\x18\x03 \x01(\bR\vmultiselect\";\n" +
 	"\x0eSelectResponse\x12)\n" +
-	"\x10selected_indices\x18\x01 \x03(\x05R\x0fselectedIndices\"\x80\x02\n" +
+	"\x10selected_indices\x18\x01 \x03(\rR\x0fselectedIndices\"\x80\x02\n" +
 	"\x0eProgressUpdate\x12\x18\n" +
 	"\amessage\x18\x01 \x01(\tR\amessage\x12/\n" +
 	"\x04type\x18\x02 \x01(\x0e2\x1b.rig.v1.ProgressUpdate.TypeR\x04type\x12\x1a\n" +
