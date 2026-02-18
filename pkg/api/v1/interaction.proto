@@ -1,0 +1,89 @@
+syntax = "proto3";
+
+package rig.v1;
+
+option go_package = "thoreinstein.com/rig/pkg/api/v1;apiv1";
+
+// InteractionRequest is sent from the Plugin to the Host to request 
+// UI interactions or report progress.
+message InteractResponse {
+  // id is a unique identifier for this request/response pair.
+  string id = 1;
+  
+  oneof payload {
+    PromptRequest prompt = 2;
+    ConfirmRequest confirm = 3;
+    SelectRequest select = 4;
+    ProgressUpdate progress = 5;
+  }
+}
+
+message InteractRequest {
+  // response_to matches the id of the InteractResponse.
+  string response_to = 1;
+  
+  oneof payload {
+    PromptResponse prompt = 2;
+    ConfirmResponse confirm = 3;
+    SelectResponse select = 4;
+  }
+}
+
+// PromptRequest asks the user for a text input.
+message PromptRequest {
+  string label = 1;
+  string placeholder = 2;
+  string default_value = 3;
+  bool sensitive = 4; // If true, input should be masked (e.g., password)
+}
+
+// PromptResponse contains the text entered by the user.
+message PromptResponse {
+  string value = 1;
+}
+
+// ConfirmRequest asks the user for a yes/no confirmation.
+message ConfirmRequest {
+  string label = 1;
+  bool default_value = 2;
+}
+
+// ConfirmResponse contains the user's choice.
+message ConfirmResponse {
+  bool confirmed = 1;
+}
+
+// SelectRequest asks the user to choose from a list of options.
+message SelectRequest {
+  string label = 1;
+  repeated string options = 2;
+  bool multiselect = 3;
+}
+
+// SelectResponse contains the indices of the selected options.
+message SelectResponse {
+  repeated int32 selected_indices = 1;
+}
+
+// ProgressUpdate provides real-time status updates for a long-running task.
+message ProgressUpdate {
+  string message = 1;
+  
+  // type determines how the progress is displayed.
+  enum Type {
+    TYPE_UNSPECIFIED = 0; // Default unspecified status
+    TYPE_STATUS = 1;      // Simple text status update
+    TYPE_SPINNER = 2;     // Display a spinner with the message
+    TYPE_BAR = 3;         // Display a progress bar
+  }
+  Type type = 2;
+
+  // progress is the completion percentage (0-100), used for BAR type.
+  int32 progress = 3;
+  
+  // indeterminate is true if the total progress is unknown.
+  bool indeterminate = 4;
+
+  // done is true if the progress is complete.
+  bool done = 5;
+}

@@ -20,6 +20,7 @@ const _ = grpc.SupportPackageIsVersion9
 
 const (
 	PluginService_Handshake_FullMethodName = "/rig.v1.PluginService/Handshake"
+	PluginService_Interact_FullMethodName  = "/rig.v1.PluginService/Interact"
 )
 
 // PluginServiceClient is the client API for PluginService service.
@@ -30,6 +31,10 @@ const (
 type PluginServiceClient interface {
 	// Handshake is the first call made by the host to verify compatibility and establish connection state.
 	Handshake(ctx context.Context, in *HandshakeRequest, opts ...grpc.CallOption) (*HandshakeResponse, error)
+	// Interact opens a bi-directional stream for TUI interactions.
+	// The Host (client) sends InteractRequests (user answers/control signals) and
+	// the Plugin (server) sends InteractResponses (prompts, progress updates).
+	Interact(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[InteractRequest, InteractResponse], error)
 }
 
 type pluginServiceClient struct {
@@ -50,6 +55,19 @@ func (c *pluginServiceClient) Handshake(ctx context.Context, in *HandshakeReques
 	return out, nil
 }
 
+func (c *pluginServiceClient) Interact(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[InteractRequest, InteractResponse], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &PluginService_ServiceDesc.Streams[0], PluginService_Interact_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[InteractRequest, InteractResponse]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type PluginService_InteractClient = grpc.BidiStreamingClient[InteractRequest, InteractResponse]
+
 // PluginServiceServer is the server API for PluginService service.
 // All implementations must embed UnimplementedPluginServiceServer
 // for forward compatibility.
@@ -58,6 +76,10 @@ func (c *pluginServiceClient) Handshake(ctx context.Context, in *HandshakeReques
 type PluginServiceServer interface {
 	// Handshake is the first call made by the host to verify compatibility and establish connection state.
 	Handshake(context.Context, *HandshakeRequest) (*HandshakeResponse, error)
+	// Interact opens a bi-directional stream for TUI interactions.
+	// The Host (client) sends InteractRequests (user answers/control signals) and
+	// the Plugin (server) sends InteractResponses (prompts, progress updates).
+	Interact(grpc.BidiStreamingServer[InteractRequest, InteractResponse]) error
 	mustEmbedUnimplementedPluginServiceServer()
 }
 
@@ -70,6 +92,9 @@ type UnimplementedPluginServiceServer struct{}
 
 func (UnimplementedPluginServiceServer) Handshake(context.Context, *HandshakeRequest) (*HandshakeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Handshake not implemented")
+}
+func (UnimplementedPluginServiceServer) Interact(grpc.BidiStreamingServer[InteractRequest, InteractResponse]) error {
+	return status.Errorf(codes.Unimplemented, "method Interact not implemented")
 }
 func (UnimplementedPluginServiceServer) mustEmbedUnimplementedPluginServiceServer() {}
 func (UnimplementedPluginServiceServer) testEmbeddedByValue()                       {}
@@ -110,6 +135,13 @@ func _PluginService_Handshake_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PluginService_Interact_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(PluginServiceServer).Interact(&grpc.GenericServerStream[InteractRequest, InteractResponse]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type PluginService_InteractServer = grpc.BidiStreamingServer[InteractRequest, InteractResponse]
+
 // PluginService_ServiceDesc is the grpc.ServiceDesc for PluginService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -122,6 +154,13 @@ var PluginService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _PluginService_Handshake_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "Interact",
+			Handler:       _PluginService_Interact_Handler,
+			ServerStreams: true,
+			ClientStreams: true,
+		},
+	},
 	Metadata: "pkg/api/v1/plugin.proto",
 }

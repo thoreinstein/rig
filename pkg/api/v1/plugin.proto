@@ -2,12 +2,19 @@ syntax = "proto3";
 
 package rig.v1;
 
+import "pkg/api/v1/interaction.proto";
+
 option go_package = "thoreinstein.com/rig/pkg/api/v1;apiv1";
 
 // PluginService is the core interface that all Rig plugins must implement.
 service PluginService {
   // Handshake is the first call made by the host to verify compatibility and establish connection state.
   rpc Handshake(HandshakeRequest) returns (HandshakeResponse);
+
+  // Interact opens a bi-directional stream for TUI interactions.
+  // The Host (client) sends InteractRequests (user answers/control signals) and
+  // the Plugin (server) sends InteractResponses (prompts, progress updates).
+  rpc Interact(stream InteractRequest) returns (stream InteractResponse);
 }
 
 message HandshakeRequest {

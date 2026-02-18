@@ -81,13 +81,14 @@ func (x *HandshakeRequest) GetApiVersion() string {
 
 type HandshakeResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// plugin_version is the legacy version field.
-	// Deprecated: Use plugin_semver (tag 6) for binary version or api_version (tag 4) for API contract.
+	// plugin_version is the legacy version field which previously mixed binary and API versions.
+	// Deprecated: Use plugin_semver (tag 6) for the plugin binary's semantic version,
+	// and api_version (tag 4) for the Plugin API contract version.
 	//
 	// Deprecated: Marked as deprecated in pkg/api/v1/plugin.proto.
 	PluginVersion string `protobuf:"bytes,1,opt,name=plugin_version,json=pluginVersion,proto3" json:"plugin_version,omitempty"`
-	// capabilities_deprecated is the legacy capabilities field.
-	// Deprecated: Use capabilities (tag 5) instead.
+	// capabilities_deprecated is the legacy capabilities field using simple strings.
+	// Deprecated: Use capabilities (tag 5) for structured capability information.
 	//
 	// Deprecated: Marked as deprecated in pkg/api/v1/plugin.proto.
 	CapabilitiesDeprecated []string `protobuf:"bytes,2,rep,name=capabilities_deprecated,json=capabilitiesDeprecated,proto3" json:"capabilities_deprecated,omitempty"`
@@ -236,7 +237,7 @@ var File_pkg_api_v1_plugin_proto protoreflect.FileDescriptor
 
 const file_pkg_api_v1_plugin_proto_rawDesc = "" +
 	"\n" +
-	"\x17pkg/api/v1/plugin.proto\x12\x06rig.v1\"X\n" +
+	"\x17pkg/api/v1/plugin.proto\x12\x06rig.v1\x1a\x1cpkg/api/v1/interaction.proto\"X\n" +
 	"\x10HandshakeRequest\x12#\n" +
 	"\vrig_version\x18\x01 \x01(\tB\x02\x18\x01R\n" +
 	"rigVersion\x12\x1f\n" +
@@ -253,9 +254,10 @@ const file_pkg_api_v1_plugin_proto_rawDesc = "" +
 	"\n" +
 	"Capability\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
-	"\aversion\x18\x02 \x01(\tR\aversion2Q\n" +
+	"\aversion\x18\x02 \x01(\tR\aversion2\x94\x01\n" +
 	"\rPluginService\x12@\n" +
-	"\tHandshake\x12\x18.rig.v1.HandshakeRequest\x1a\x19.rig.v1.HandshakeResponseB'Z%thoreinstein.com/rig/pkg/api/v1;apiv1b\x06proto3"
+	"\tHandshake\x12\x18.rig.v1.HandshakeRequest\x1a\x19.rig.v1.HandshakeResponse\x12A\n" +
+	"\bInteract\x12\x17.rig.v1.InteractRequest\x1a\x18.rig.v1.InteractResponse(\x010\x01B'Z%thoreinstein.com/rig/pkg/api/v1;apiv1b\x06proto3"
 
 var (
 	file_pkg_api_v1_plugin_proto_rawDescOnce sync.Once
@@ -274,13 +276,17 @@ var file_pkg_api_v1_plugin_proto_goTypes = []any{
 	(*HandshakeRequest)(nil),  // 0: rig.v1.HandshakeRequest
 	(*HandshakeResponse)(nil), // 1: rig.v1.HandshakeResponse
 	(*Capability)(nil),        // 2: rig.v1.Capability
+	(*InteractRequest)(nil),   // 3: rig.v1.InteractRequest
+	(*InteractResponse)(nil),  // 4: rig.v1.InteractResponse
 }
 var file_pkg_api_v1_plugin_proto_depIdxs = []int32{
 	2, // 0: rig.v1.HandshakeResponse.capabilities:type_name -> rig.v1.Capability
 	0, // 1: rig.v1.PluginService.Handshake:input_type -> rig.v1.HandshakeRequest
-	1, // 2: rig.v1.PluginService.Handshake:output_type -> rig.v1.HandshakeResponse
-	2, // [2:3] is the sub-list for method output_type
-	1, // [1:2] is the sub-list for method input_type
+	3, // 2: rig.v1.PluginService.Interact:input_type -> rig.v1.InteractRequest
+	1, // 3: rig.v1.PluginService.Handshake:output_type -> rig.v1.HandshakeResponse
+	4, // 4: rig.v1.PluginService.Interact:output_type -> rig.v1.InteractResponse
+	3, // [3:5] is the sub-list for method output_type
+	1, // [1:3] is the sub-list for method input_type
 	1, // [1:1] is the sub-list for extension type_name
 	1, // [1:1] is the sub-list for extension extendee
 	0, // [0:1] is the sub-list for field type_name
@@ -291,6 +297,7 @@ func file_pkg_api_v1_plugin_proto_init() {
 	if File_pkg_api_v1_plugin_proto != nil {
 		return
 	}
+	file_pkg_api_v1_interaction_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
