@@ -59,13 +59,30 @@ func (e *Executor) Handshake(ctx context.Context, p *Plugin, apiVersion string) 
 	defer p.mu.Unlock()
 
 	// Update plugin metadata from handshake response
+	// Priority: New fields (3, 4, 5) then legacy fields (1, 2)
 	if resp.ApiVersion != "" {
 		p.ApiVersion = resp.ApiVersion
+	}
+	if resp.PluginVersion != "" {
+		p.Version = resp.PluginVersion
 	}
 	if resp.PluginId != "" {
 		p.Name = resp.PluginId
 	}
-	p.Capabilities = resp.Capabilities
+
+	// Handle capabilities transition
+	if len(resp.Capabilities) > 0 {
+		p.Capabilities = resp.Capabilities
+	} else if len(resp.CapabilitiesDeprecated) > 0 {
+		// Translate old string capabilities to new structured ones
+		p.Capabilities = make([]*apiv1.Capability, len(resp.CapabilitiesDeprecated))
+		for i, name := range resp.CapabilitiesDeprecated {
+			p.Capabilities[i] = &apiv1.Capability{
+				Name:    name,
+				Version: "v0.0.0", // Default version for legacy capabilities
+			}
+		}
+	}
 
 	return nil
 }
