@@ -31,9 +31,9 @@ func TestExecutor_Handshake_Logic(t *testing.T) {
 				},
 			},
 			wantPlugin: &Plugin{
-				Name:        "test-plugin",
-				API_Version: "v1.0.0",
-				Version:     "1.2.3",
+				Name:       "test-plugin",
+				APIVersion: "v1.0.0",
+				Version:    "1.2.3",
 				Capabilities: []*apiv1.Capability{
 					{Name: "git.clone", Version: "1.0.0"},
 				},
@@ -67,18 +67,20 @@ func TestExecutor_Handshake_Logic(t *testing.T) {
 				CapabilitiesDeprecated: []string{"old.cap"},
 			},
 			wantPlugin: &Plugin{
-				Name:        "new-name",
-				Version:     "new-version",
-				API_Version: "v1.0.0",
+				Name:       "new-name",
+				Version:    "new-version",
+				APIVersion: "v1.0.0",
 				Capabilities: []*apiv1.Capability{
 					{Name: "new.cap", Version: "1.0.0"},
 				},
 			},
 		},
 		{
-			name: "Empty response clears capabilities",
+			name: "Empty response clears capabilities and version",
 			initialPlugin: &Plugin{
-				Name: "stale-plugin",
+				Name:       "stale-plugin",
+				Version:    "1.2.3",
+				APIVersion: "v1.0.0",
 				Capabilities: []*apiv1.Capability{
 					{Name: "stale.cap", Version: "1.0.0"},
 				},
@@ -86,6 +88,8 @@ func TestExecutor_Handshake_Logic(t *testing.T) {
 			mockResp: &apiv1.HandshakeResponse{},
 			wantPlugin: &Plugin{
 				Name:         "stale-plugin",
+				Version:      "",
+				APIVersion:   "",
 				Capabilities: nil,
 			},
 		},
@@ -124,8 +128,8 @@ func TestExecutor_Handshake_Logic(t *testing.T) {
 			if p.Version != tt.wantPlugin.Version {
 				t.Errorf("Plugin.Version = %q, want %q", p.Version, tt.wantPlugin.Version)
 			}
-			if p.API_Version != tt.wantPlugin.API_Version {
-				t.Errorf("Plugin.API_Version = %q, want %q", p.API_Version, tt.wantPlugin.API_Version)
+			if p.APIVersion != tt.wantPlugin.APIVersion {
+				t.Errorf("Plugin.APIVersion = %q, want %q", p.APIVersion, tt.wantPlugin.APIVersion)
 			}
 
 			if !reflect.DeepEqual(p.Capabilities, tt.wantPlugin.Capabilities) {
