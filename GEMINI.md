@@ -164,3 +164,5 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 - **Tag Immortality:** Field tags in protobuf messages are permanent identities. Never reuse or repurpose a tag number for a different semantic meaning, even if renamed. Use `reserved` for removed tags to prevent future accidental reuse.
 - **Hybrid Snake_Case Mapping:** Follow Go naming idioms for internal struct fields (e.g., `APIVersion` with all-caps initialisms) while using explicit struct tags (`json:"api_version"`) to satisfy project-wide `snake_case` requirements for external serialization.
 - **API Standardisation:** Prefer industry-standard protocols (e.g., `grpc.health.v1`) over custom implementations for common infrastructure needs like health monitoring.
+- **Fail-Fast Mocking:** When mocking complex gRPC interfaces, implementations MUST fail loudly (return error) for unset function fields rather than returning `nil`.
+- **Stream Naming Inversion:** For bi-directional streams, name messages by *direction* (Request=Client->Server, Response=Server->Client) rather than payload semantics, but document the inversion clearly.
