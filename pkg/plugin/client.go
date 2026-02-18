@@ -82,6 +82,10 @@ func (e *Executor) Handshake(ctx context.Context, p *Plugin, apiVersion string) 
 				Version: "v0.0.0", // Default version for legacy capabilities
 			}
 		}
+	} else {
+		// Explicitly clear capabilities if neither field is populated.
+		// This prevents stale state from previous handshakes.
+		p.Capabilities = nil
 	}
 
 	return nil
