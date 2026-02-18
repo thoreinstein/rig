@@ -82,7 +82,7 @@ func (x *HandshakeRequest) GetApiVersion() string {
 type HandshakeResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// plugin_version is the legacy version field.
-	// Deprecated: Use api_version (tag 4) instead.
+	// Deprecated: Use plugin_semver (tag 6) for binary version or api_version (tag 4) for API contract.
 	//
 	// Deprecated: Marked as deprecated in pkg/api/v1/plugin.proto.
 	PluginVersion string `protobuf:"bytes,1,opt,name=plugin_version,json=pluginVersion,proto3" json:"plugin_version,omitempty"`
@@ -93,10 +93,12 @@ type HandshakeResponse struct {
 	CapabilitiesDeprecated []string `protobuf:"bytes,2,rep,name=capabilities_deprecated,json=capabilitiesDeprecated,proto3" json:"capabilities_deprecated,omitempty"`
 	// plugin_id is the unique identifier for the plugin.
 	PluginId string `protobuf:"bytes,3,opt,name=plugin_id,json=pluginId,proto3" json:"plugin_id,omitempty"`
-	// api_version is the version of the Plugin API implemented by the plugin.
+	// api_version is the version of the Plugin API (contract) implemented by the plugin.
 	ApiVersion string `protobuf:"bytes,4,opt,name=api_version,json=apiVersion,proto3" json:"api_version,omitempty"`
 	// capabilities is a list of features the plugin supports.
-	Capabilities  []*Capability `protobuf:"bytes,5,rep,name=capabilities,proto3" json:"capabilities,omitempty"`
+	Capabilities []*Capability `protobuf:"bytes,5,rep,name=capabilities,proto3" json:"capabilities,omitempty"`
+	// plugin_semver is the semantic version of the plugin binary itself.
+	PluginSemver  string `protobuf:"bytes,6,opt,name=plugin_semver,json=pluginSemver,proto3" json:"plugin_semver,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -168,6 +170,13 @@ func (x *HandshakeResponse) GetCapabilities() []*Capability {
 	return nil
 }
 
+func (x *HandshakeResponse) GetPluginSemver() string {
+	if x != nil {
+		return x.PluginSemver
+	}
+	return ""
+}
+
 // Capability represents a specific feature or integration point provided by a plugin.
 type Capability struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -232,14 +241,15 @@ const file_pkg_api_v1_plugin_proto_rawDesc = "" +
 	"\vrig_version\x18\x01 \x01(\tB\x02\x18\x01R\n" +
 	"rigVersion\x12\x1f\n" +
 	"\vapi_version\x18\x02 \x01(\tR\n" +
-	"apiVersion\"\xf1\x01\n" +
+	"apiVersion\"\x96\x02\n" +
 	"\x11HandshakeResponse\x12)\n" +
 	"\x0eplugin_version\x18\x01 \x01(\tB\x02\x18\x01R\rpluginVersion\x12;\n" +
 	"\x17capabilities_deprecated\x18\x02 \x03(\tB\x02\x18\x01R\x16capabilitiesDeprecated\x12\x1b\n" +
 	"\tplugin_id\x18\x03 \x01(\tR\bpluginId\x12\x1f\n" +
 	"\vapi_version\x18\x04 \x01(\tR\n" +
 	"apiVersion\x126\n" +
-	"\fcapabilities\x18\x05 \x03(\v2\x12.rig.v1.CapabilityR\fcapabilities\":\n" +
+	"\fcapabilities\x18\x05 \x03(\v2\x12.rig.v1.CapabilityR\fcapabilities\x12#\n" +
+	"\rplugin_semver\x18\x06 \x01(\tR\fpluginSemver\":\n" +
 	"\n" +
 	"Capability\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +

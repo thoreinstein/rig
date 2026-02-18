@@ -59,14 +59,26 @@ func (e *Executor) Handshake(ctx context.Context, p *Plugin, rigVersion, apiVers
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	// Update plugin metadata from handshake response
-	// Priority: New fields (3, 4, 5) then legacy fields (1, 2)
+	// Update plugin metadata from handshake response.
+	// Priority: New fields (3, 4, 5, 6) then legacy fields (1, 2).
+
+	// APIVersion is the Plugin API contract version implemented by the plugin.
 	if resp.ApiVersion != "" {
-		p.ApiVersion = resp.ApiVersion
+		p.APIVersion = resp.ApiVersion
 	}
-	if resp.PluginVersion != "" { //nolint:staticcheck // intentional use of deprecated field for compatibility
+
+	// Source: Source plugin semantic version (binary version).
+	// TODO: plugin semantic version is sourced from the deprecated resp.PluginVersion
+	// until a non-deprecated response field (e.g., plugin_semver) or manifest-based
+	// source is available.
+	if resp.PluginSemver != "" {
+		p.Version = resp.PluginSemver
+	} else if resp.PluginVersion != "" { //nolint:staticcheck // intentional use of deprecated field for compatibility
 		p.Version = resp.PluginVersion //nolint:staticcheck // intentional use of deprecated field for compatibility
 	}
+
+	// Intent: resp.PluginId is intentionally used as the plugin's display name (p.Name)
+	// for backward compatibility with existing Rig naming patterns.
 	if resp.PluginId != "" {
 		p.Name = resp.PluginId
 	}
