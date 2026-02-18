@@ -3,6 +3,7 @@ package plugin
 import (
 	"context"
 
+	"github.com/cockroachdb/errors"
 	"google.golang.org/grpc"
 
 	apiv1 "thoreinstein.com/rig/pkg/api/v1"
@@ -25,5 +26,5 @@ func (m *MockPluginServiceClient) Interact(ctx context.Context, opts ...grpc.Cal
 	if m.InteractFunc != nil {
 		return m.InteractFunc(ctx, opts...)
 	}
-	return nil, nil
+	return nil, errors.New("MockPluginServiceClient.Interact called but InteractFunc is nil")
 }

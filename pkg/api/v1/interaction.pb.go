@@ -74,7 +74,7 @@ func (ProgressUpdate_Type) EnumDescriptor() ([]byte, []int) {
 	return file_pkg_api_v1_interaction_proto_rawDescGZIP(), []int{8, 0}
 }
 
-// InteractionRequest is sent from the Plugin to the Host to request
+// InteractResponse is sent from the Plugin to the Host to request
 // UI interactions or report progress.
 type InteractResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`

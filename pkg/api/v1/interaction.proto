@@ -4,7 +4,7 @@ package rig.v1;
 
 option go_package = "thoreinstein.com/rig/pkg/api/v1;apiv1";
 
-// InteractionRequest is sent from the Plugin to the Host to request 
+// InteractResponse is sent from the Plugin to the Host to request 
 // UI interactions or report progress.
 message InteractResponse {
   // id is a unique identifier for this request/response pair.
