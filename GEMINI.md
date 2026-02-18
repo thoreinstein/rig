@@ -157,3 +157,10 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 - **Environment Handshake:** Pass the socket path to the plugin via the `RIG_PLUGIN_ENDPOINT` environment variable.
 - **Readiness Polling:** The host must poll for the socket file and verify readiness with a `net.Dial` before attempting the gRPC `Handshake` RPC.
 - **Insecure Local Transport:** Use `insecure.NewCredentials()` for gRPC over UDS, as communication is restricted to the local host.
+- **Total State Reset Pattern:** Handshake logic must explicitly clear all internal state (capabilities, versions) if corresponding response fields are absent. This prevents "ghost state" where Rig retains stale information from previous sessions.
+- **Compatibility Translation Layer:** The host client should act as a translation shim, prioritizing modern structured fields (e.g., `plugin_semver`) but providing fallbacks/translation for legacy tags (e.g., `plugin_version`) to maintain wire compatibility during V1 migration.
+
+### Protobuf & API Evolution
+- **Tag Immortality:** Field tags in protobuf messages are permanent identities. Never reuse or repurpose a tag number for a different semantic meaning, even if renamed. Use `reserved` for removed tags to prevent future accidental reuse.
+- **Hybrid Snake_Case Mapping:** Follow Go naming idioms for internal struct fields (e.g., `APIVersion` with all-caps initialisms) while using explicit struct tags (`json:"api_version"`) to satisfy project-wide `snake_case` requirements for external serialization.
+- **API Standardisation:** Prefer industry-standard protocols (e.g., `grpc.health.v1`) over custom implementations for common infrastructure needs like health monitoring.
