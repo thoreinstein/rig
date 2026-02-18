@@ -62,15 +62,14 @@ func (e *Executor) Handshake(ctx context.Context, p *Plugin, rigVersion, apiVers
 	// Update plugin metadata from handshake response.
 	// Priority: New fields (3, 4, 5, 6) then legacy fields (1, 2).
 
-	// APIVersion is the Plugin API contract version implemented by the plugin.
+	// API_Version is the Plugin API contract version implemented by the plugin.
 	if resp.ApiVersion != "" {
-		p.APIVersion = resp.ApiVersion
+		p.API_Version = resp.ApiVersion
 	}
 
-	// Source: Source plugin semantic version (binary version).
-	// TODO: plugin semantic version is sourced from the deprecated resp.PluginVersion
-	// until a non-deprecated response field (e.g., plugin_semver) or manifest-based
-	// source is available.
+	// Source: The plugin's semantic version (p.Version) is sourced preferentially
+	// from resp.PluginSemver, with a fallback to the deprecated resp.PluginVersion
+	// to maintain compatibility with older plugins.
 	if resp.PluginSemver != "" {
 		p.Version = resp.PluginSemver
 	} else if resp.PluginVersion != "" { //nolint:staticcheck // intentional use of deprecated field for compatibility
