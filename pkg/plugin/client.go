@@ -62,23 +62,23 @@ func (e *Executor) Handshake(ctx context.Context, p *Plugin, rigVersion, apiVers
 	// Update plugin metadata from handshake response.
 	// Priority: New fields (3, 4, 5, 6) then legacy fields (1, 2).
 
-	// API_Version is the Plugin API contract version implemented by the plugin.
+	// APIVersion is the Plugin API contract version implemented by the plugin.
 	if resp.ApiVersion != "" {
-		p.API_Version = resp.ApiVersion
+		p.APIVersion = resp.ApiVersion
 	}
 
-	// Source: The plugin's semantic version (p.Version) is sourced preferentially
-	// from resp.PluginSemver, with a fallback to the deprecated resp.PluginVersion
-	// to maintain compatibility with older plugins.
+	// Sourcing of the plugin's semantic version (p.Version):
+	// Prefers resp.PluginSemver and falls back to the deprecated resp.PluginVersion
+	// for backward compatibility with older plugins.
 	if resp.PluginSemver != "" {
 		p.Version = resp.PluginSemver
 	} else if resp.PluginVersion != "" { //nolint:staticcheck // intentional use of deprecated field for compatibility
 		p.Version = resp.PluginVersion //nolint:staticcheck // intentional use of deprecated field for compatibility
 	}
 
-	// Intent: resp.PluginId is intentionally used as the plugin's display name (p.Name)
-	// for backward compatibility with existing Rig naming patterns.
-	if resp.PluginId != "" {
+	// Intent: resp.PluginId is used as the plugin's display name (p.Name)
+	// only if p.Name is currently empty, ensuring stability if discovery already set it.
+	if p.Name == "" && resp.PluginId != "" {
 		p.Name = resp.PluginId
 	}
 
@@ -91,7 +91,7 @@ func (e *Executor) Handshake(ctx context.Context, p *Plugin, rigVersion, apiVers
 		for i, name := range resp.CapabilitiesDeprecated {                           //nolint:staticcheck // intentional use of deprecated field for compatibility
 			p.Capabilities[i] = &apiv1.Capability{
 				Name:    name,
-				Version: "v0.0.0", // Default version for legacy capabilities
+				Version: "0.0.0", // Default version for legacy capabilities
 			}
 		}
 	} else {
