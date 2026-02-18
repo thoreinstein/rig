@@ -39,13 +39,14 @@ type Manifest struct {
 type Plugin struct {
 	Name         string
 	Version      string
+	ApiVersion   string
 	Path         string
 	Status       Status
 	Description  string
 	Manifest     *Manifest
 	Error        error
 	DiscoveryAt  time.Time
-	Capabilities []string
+	Capabilities []*apiv1.Capability
 
 	// Runtime state
 	mu         sync.Mutex

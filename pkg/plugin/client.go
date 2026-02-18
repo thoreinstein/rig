@@ -39,7 +39,7 @@ func (e *Executor) PrepareClient(p *Plugin) error {
 }
 
 // Handshake performs the initial handshake with the plugin to verify compatibility.
-func (e *Executor) Handshake(ctx context.Context, p *Plugin, rigVersion string) error {
+func (e *Executor) Handshake(ctx context.Context, p *Plugin, apiVersion string) error {
 	p.mu.Lock()
 	client := p.client
 	p.mu.Unlock()
@@ -49,7 +49,7 @@ func (e *Executor) Handshake(ctx context.Context, p *Plugin, rigVersion string) 
 	}
 
 	resp, err := client.Handshake(ctx, &apiv1.HandshakeRequest{
-		RigVersion: rigVersion,
+		ApiVersion: apiVersion,
 	})
 	if err != nil {
 		return errors.NewPluginError(p.Name, "Handshake", "failed to verify plugin compatibility").WithCause(err)
@@ -58,9 +58,12 @@ func (e *Executor) Handshake(ctx context.Context, p *Plugin, rigVersion string) 
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	// Update plugin metadata if provided by the handshake
-	if resp.PluginVersion != "" {
-		p.Version = resp.PluginVersion
+	// Update plugin metadata from handshake response
+	if resp.ApiVersion != "" {
+		p.ApiVersion = resp.ApiVersion
+	}
+	if resp.PluginId != "" {
+		p.Name = resp.PluginId
 	}
 	p.Capabilities = resp.Capabilities
 
