@@ -11,8 +11,11 @@ service PluginService {
 }
 
 message HandshakeRequest {
+  // rig_version is the version of the Rig host.
+  // Deprecated: Use api_version (tag 2) instead.
+  string rig_version = 1 [deprecated = true];
   // api_version is the version of the Plugin API supported by the Rig host.
-  string api_version = 1;
+  string api_version = 2;
 }
 
 message HandshakeResponse {

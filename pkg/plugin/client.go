@@ -39,7 +39,7 @@ func (e *Executor) PrepareClient(p *Plugin) error {
 }
 
 // Handshake performs the initial handshake with the plugin to verify compatibility.
-func (e *Executor) Handshake(ctx context.Context, p *Plugin, apiVersion string) error {
+func (e *Executor) Handshake(ctx context.Context, p *Plugin, rigVersion, apiVersion string) error {
 	p.mu.Lock()
 	client := p.client
 	p.mu.Unlock()
@@ -49,6 +49,7 @@ func (e *Executor) Handshake(ctx context.Context, p *Plugin, apiVersion string) 
 	}
 
 	resp, err := client.Handshake(ctx, &apiv1.HandshakeRequest{
+		RigVersion: rigVersion,
 		ApiVersion: apiVersion,
 	})
 	if err != nil {
