@@ -64,8 +64,8 @@ func (e *Executor) Handshake(ctx context.Context, p *Plugin, rigVersion, apiVers
 	if resp.ApiVersion != "" {
 		p.ApiVersion = resp.ApiVersion
 	}
-	if resp.PluginVersion != "" {
-		p.Version = resp.PluginVersion
+	if resp.PluginVersion != "" { //nolint:staticcheck // intentional use of deprecated field for compatibility
+		p.Version = resp.PluginVersion //nolint:staticcheck // intentional use of deprecated field for compatibility
 	}
 	if resp.PluginId != "" {
 		p.Name = resp.PluginId
@@ -74,10 +74,10 @@ func (e *Executor) Handshake(ctx context.Context, p *Plugin, rigVersion, apiVers
 	// Handle capabilities transition
 	if len(resp.Capabilities) > 0 {
 		p.Capabilities = resp.Capabilities
-	} else if len(resp.CapabilitiesDeprecated) > 0 {
+	} else if len(resp.CapabilitiesDeprecated) > 0 { //nolint:staticcheck // intentional use of deprecated field for compatibility
 		// Translate old string capabilities to new structured ones
-		p.Capabilities = make([]*apiv1.Capability, len(resp.CapabilitiesDeprecated))
-		for i, name := range resp.CapabilitiesDeprecated {
+		p.Capabilities = make([]*apiv1.Capability, len(resp.CapabilitiesDeprecated)) //nolint:staticcheck // intentional use of deprecated field for compatibility
+		for i, name := range resp.CapabilitiesDeprecated {                           //nolint:staticcheck // intentional use of deprecated field for compatibility
 			p.Capabilities[i] = &apiv1.Capability{
 				Name:    name,
 				Version: "v0.0.0", // Default version for legacy capabilities
