@@ -39,7 +39,7 @@ type Manifest struct {
 type Plugin struct {
 	Name         string
 	Version      string
-	APIVersion   string
+	API_Version  string `json:"api_version"`
 	Path         string
 	Status       Status
 	Description  string

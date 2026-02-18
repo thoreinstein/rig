@@ -15,6 +15,8 @@ func TestExecutor_Handshake_Logic(t *testing.T) {
 		name          string
 		initialPlugin *Plugin
 		mockResp      *apiv1.HandshakeResponse
+		mockErr       error
+		wantErr       bool
 		wantPlugin    *Plugin
 	}{
 		{
@@ -29,9 +31,9 @@ func TestExecutor_Handshake_Logic(t *testing.T) {
 				},
 			},
 			wantPlugin: &Plugin{
-				Name:       "test-plugin",
-				APIVersion: "v1.0.0",
-				Version:    "1.2.3",
+				Name:        "test-plugin",
+				API_Version: "v1.0.0",
+				Version:     "1.2.3",
 				Capabilities: []*apiv1.Capability{
 					{Name: "git.clone", Version: "1.0.0"},
 				},
@@ -45,7 +47,7 @@ func TestExecutor_Handshake_Logic(t *testing.T) {
 				CapabilitiesDeprecated: []string{"git.clone", "git.push"},
 			},
 			wantPlugin: &Plugin{
-				Name:    "my-plugin", // Name preserved if not returned in new fields and already set
+				Name:    "my-plugin",
 				Version: "0.1.0",
 				Capabilities: []*apiv1.Capability{
 					{Name: "git.clone", Version: "0.0.0"},
@@ -65,9 +67,9 @@ func TestExecutor_Handshake_Logic(t *testing.T) {
 				CapabilitiesDeprecated: []string{"old.cap"},
 			},
 			wantPlugin: &Plugin{
-				Name:       "new-name",
-				Version:    "new-version",
-				APIVersion: "v1.0.0",
+				Name:        "new-name",
+				Version:     "new-version",
+				API_Version: "v1.0.0",
 				Capabilities: []*apiv1.Capability{
 					{Name: "new.cap", Version: "1.0.0"},
 				},
@@ -87,13 +89,19 @@ func TestExecutor_Handshake_Logic(t *testing.T) {
 				Capabilities: nil,
 			},
 		},
+		{
+			name:          "Error propagation",
+			initialPlugin: &Plugin{Name: "error-plugin"},
+			mockErr:       context.DeadlineExceeded,
+			wantErr:       true,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockClient := &MockPluginServiceClient{
 				HandshakeFunc: func(ctx context.Context, in *apiv1.HandshakeRequest, opts ...grpc.CallOption) (*apiv1.HandshakeResponse, error) {
-					return tt.mockResp, nil
+					return tt.mockResp, tt.mockErr
 				},
 			}
 
@@ -102,8 +110,12 @@ func TestExecutor_Handshake_Logic(t *testing.T) {
 
 			e := NewExecutor()
 			err := e.Handshake(t.Context(), p, "1.0.0", "v1")
-			if err != nil {
-				t.Fatalf("Handshake() failed: %v", err)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("Handshake() error = %v, wantErr %v", err, tt.wantErr)
+			}
+
+			if tt.wantErr {
+				return
 			}
 
 			if p.Name != tt.wantPlugin.Name {
@@ -112,8 +124,8 @@ func TestExecutor_Handshake_Logic(t *testing.T) {
 			if p.Version != tt.wantPlugin.Version {
 				t.Errorf("Plugin.Version = %q, want %q", p.Version, tt.wantPlugin.Version)
 			}
-			if p.APIVersion != tt.wantPlugin.APIVersion {
-				t.Errorf("Plugin.APIVersion = %q, want %q", p.APIVersion, tt.wantPlugin.APIVersion)
+			if p.API_Version != tt.wantPlugin.API_Version {
+				t.Errorf("Plugin.API_Version = %q, want %q", p.API_Version, tt.wantPlugin.API_Version)
 			}
 
 			if !reflect.DeepEqual(p.Capabilities, tt.wantPlugin.Capabilities) {

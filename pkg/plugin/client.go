@@ -62,9 +62,11 @@ func (e *Executor) Handshake(ctx context.Context, p *Plugin, rigVersion, apiVers
 	// Update plugin metadata from handshake response.
 	// Priority: New fields (3, 4, 5, 6) then legacy fields (1, 2).
 
-	// APIVersion is the Plugin API contract version implemented by the plugin.
+	// API_Version is the Plugin API contract version implemented by the plugin.
 	if resp.ApiVersion != "" {
-		p.APIVersion = resp.ApiVersion
+		p.API_Version = resp.ApiVersion
+	} else {
+		p.API_Version = "" // Explicitly clear stale values
 	}
 
 	// Sourcing of the plugin's semantic version (p.Version):
