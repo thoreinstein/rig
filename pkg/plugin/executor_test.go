@@ -95,9 +95,9 @@ if [ "$RIG_HOST_ENDPOINT" != "` + hostSocket + `" ]; then
     echo "Expected RIG_HOST_ENDPOINT=` + hostSocket + `, got $RIG_HOST_ENDPOINT" >&2
     exit 1
 fi
-# Satisfy handshake by creating the socket file and exiting
+# Satisfy handshake by creating a real listening UDS socket
 if [ -n "$RIG_PLUGIN_ENDPOINT" ]; then
-    touch "$RIG_PLUGIN_ENDPOINT"
+    python3 -c "import socket, time; s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM); s.bind('$RIG_PLUGIN_ENDPOINT'); s.listen(1); time.sleep(2)"
 fi
 exit 0
 `
