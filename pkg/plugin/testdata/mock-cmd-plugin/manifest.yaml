@@ -1,0 +1,10 @@
+name: mock-cmd
+version: 0.1.0
+description: Mock command plugin for testing
+author: thoreinstein
+requirements:
+  rig: ">=0.1.0"
+commands:
+  - name: echo
+    short: "Echo arguments"
+    long: "Echoes all provided arguments back to stdout"
