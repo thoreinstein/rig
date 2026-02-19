@@ -12,7 +12,7 @@ type mockExecutor struct {
 	startFunc         func(ctx context.Context, p *Plugin) error
 	stopFunc          func(p *Plugin) error
 	prepareClientFunc func(p *Plugin) error
-	handshakeFunc     func(ctx context.Context, p *Plugin, rigVersion, apiVersion string) error
+	handshakeFunc     func(ctx context.Context, p *Plugin, rigVersion, apiVersion string, configJSON []byte) error
 }
 
 func (m *mockExecutor) Start(ctx context.Context, p *Plugin) error {
@@ -36,9 +36,9 @@ func (m *mockExecutor) PrepareClient(p *Plugin) error {
 	return nil
 }
 
-func (m *mockExecutor) Handshake(ctx context.Context, p *Plugin, rigVersion, apiVersion string) error {
+func (m *mockExecutor) Handshake(ctx context.Context, p *Plugin, rigVersion, apiVersion string, configJSON []byte) error {
 	if m.handshakeFunc != nil {
-		return m.handshakeFunc(ctx, p, rigVersion, apiVersion)
+		return m.handshakeFunc(ctx, p, rigVersion, apiVersion, configJSON)
 	}
 	return nil
 }
@@ -97,7 +97,7 @@ requirements:
 		t.Run(tc.name, func(t *testing.T) {
 			var capturedPlugin *Plugin
 			executor := &mockExecutor{
-				handshakeFunc: func(ctx context.Context, p *Plugin, rigVersion, apiVersion string) error {
+				handshakeFunc: func(ctx context.Context, p *Plugin, rigVersion, apiVersion string, configJSON []byte) error {
 					// Handshake normally updates metadata
 					p.Version = "1.0.0"
 					capturedPlugin = p
@@ -105,7 +105,7 @@ requirements:
 				},
 			}
 
-			m, err := NewManager(NewExecutor(""), scanner, tc.rigVersion)
+			m, err := NewManager(NewExecutor(""), scanner, tc.rigVersion, nil)
 			if err != nil {
 				t.Fatalf("NewManager() failed: %v", err)
 			}

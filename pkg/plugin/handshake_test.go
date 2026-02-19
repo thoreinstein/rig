@@ -18,7 +18,19 @@ func TestExecutor_Handshake_Logic(t *testing.T) {
 		mockErr       error
 		wantErr       bool
 		wantPlugin    *Plugin
+		configJSON    []byte
 	}{
+		{
+			name:       "Config JSON is passed correctly",
+			configJSON: []byte(`{"foo":"bar"}`),
+			mockResp: &apiv1.HandshakeResponse{
+				PluginId: "config-plugin",
+			},
+			initialPlugin: &Plugin{},
+			wantPlugin: &Plugin{
+				Name: "config-plugin",
+			},
+		},
 		{
 			name:          "Modern plugin with all new fields",
 			initialPlugin: &Plugin{Name: ""},
@@ -103,8 +115,10 @@ func TestExecutor_Handshake_Logic(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			var capturedConfig []byte
 			mockClient := &MockPluginServiceClient{
 				HandshakeFunc: func(ctx context.Context, in *apiv1.HandshakeRequest, opts ...grpc.CallOption) (*apiv1.HandshakeResponse, error) {
+					capturedConfig = in.ConfigJson
 					return tt.mockResp, tt.mockErr
 				},
 			}
@@ -113,7 +127,13 @@ func TestExecutor_Handshake_Logic(t *testing.T) {
 			p.client = mockClient
 
 			e := NewExecutor("")
-			err := e.Handshake(t.Context(), p, "1.0.0", "v1")
+			err := e.Handshake(t.Context(), p, "1.0.0", "v1", tt.configJSON)
+
+			if tt.configJSON != nil {
+				if string(capturedConfig) != string(tt.configJSON) {
+					t.Errorf("Handshake() configJSON = %s, want %s", string(capturedConfig), string(tt.configJSON))
+				}
+			}
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("Handshake() error = %v, wantErr %v", err, tt.wantErr)
 			}

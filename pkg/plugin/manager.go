@@ -20,15 +20,19 @@ type pluginExecutor interface {
 	Start(ctx context.Context, p *Plugin) error
 	Stop(p *Plugin) error
 	PrepareClient(p *Plugin) error
-	Handshake(ctx context.Context, p *Plugin, rigVersion, apiVersion string) error
+	Handshake(ctx context.Context, p *Plugin, rigVersion, apiVersion string, configJSON []byte) error
 	SetHostEndpoint(path string)
 }
 
+// ConfigProvider is a function that returns the JSON-serialized configuration for a plugin.
+type ConfigProvider func(pluginName string) ([]byte, error)
+
 // Manager manages a pool of active plugins.
 type Manager struct {
-	executor   pluginExecutor
-	scanner    *Scanner
-	rigVersion string
+	executor       pluginExecutor
+	scanner        *Scanner
+	rigVersion     string
+	configProvider ConfigProvider
 
 	// Host-side UI Proxy Service
 	hostServer *grpc.Server
@@ -42,7 +46,7 @@ type Manager struct {
 }
 
 // NewManager creates a new plugin manager and starts the host-side UI Proxy Service.
-func NewManager(executor *Executor, scanner *Scanner, rigVersion string) (*Manager, error) {
+func NewManager(executor *Executor, scanner *Scanner, rigVersion string, configProvider ConfigProvider) (*Manager, error) {
 	// 1. Create a private directory and generate unique UDS path for the host server
 	hostDir, err := os.MkdirTemp("", "rig-h-")
 	if err != nil {
@@ -88,15 +92,16 @@ func NewManager(executor *Executor, scanner *Scanner, rigVersion string) (*Manag
 	executor.SetHostEndpoint(hostPath)
 
 	return &Manager{
-		executor:   executor,
-		scanner:    scanner,
-		rigVersion: rigVersion,
-		hostServer: srv,
-		hostUI:     uiServer,
-		hostL:      lis,
-		hostPath:   hostPath,
-		hostDir:    hostDir,
-		plugins:    make(map[string]*Plugin),
+		executor:       executor,
+		scanner:        scanner,
+		rigVersion:     rigVersion,
+		configProvider: configProvider,
+		hostServer:     srv,
+		hostUI:         uiServer,
+		hostL:          lis,
+		hostPath:       hostPath,
+		hostDir:        hostDir,
+		plugins:        make(map[string]*Plugin),
 	}, nil
 }
 
@@ -177,8 +182,19 @@ func (m *Manager) getOrStartPlugin(ctx context.Context, name string) (*Plugin, e
 		return nil, errors.Wrapf(err, "failed to prepare client for plugin %q", name)
 	}
 
+	// Fetch plugin configuration if provider is available
+	var configJSON []byte
+	if m.configProvider != nil {
+		var err error
+		configJSON, err = m.configProvider(name)
+		if err != nil {
+			// Don't fail if config provider fails, just use empty config
+			configJSON = []byte("{}")
+		}
+	}
+
 	// Perform handshake with host version and API contract version
-	if err := m.executor.Handshake(ctx, target, m.rigVersion, APIVersion); err != nil {
+	if err := m.executor.Handshake(ctx, target, m.rigVersion, APIVersion, configJSON); err != nil {
 		_ = m.executor.Stop(target)
 		return nil, errors.Wrapf(err, "handshake failed for plugin %q", name)
 	}
