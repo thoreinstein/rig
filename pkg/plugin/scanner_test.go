@@ -31,7 +31,7 @@ version: 1.0.0
 	}
 
 	s := &Scanner{
-		Path: tmpDir,
+		Paths: []string{tmpDir},
 	}
 
 	result, err := s.Scan()
@@ -65,7 +65,7 @@ func TestScanner_ScanDirectoryPluginPath(t *testing.T) {
 	}
 
 	s := &Scanner{
-		Path: tmpDir,
+		Paths: []string{tmpDir},
 	}
 
 	result, err := s.Scan()
@@ -80,5 +80,107 @@ func TestScanner_ScanDirectoryPluginPath(t *testing.T) {
 	p := result.Plugins[0]
 	if p.Path != execPath {
 		t.Errorf("p.Path = %q, want %q", p.Path, execPath)
+	}
+}
+
+func TestScanner_ScanMultiplePaths(t *testing.T) {
+	systemDir := t.TempDir()
+	projectDir := t.TempDir()
+
+	// System plugin
+	sysPlugin := filepath.Join(systemDir, "sys-plugin")
+	if err := os.WriteFile(sysPlugin, []byte("#!/bin/sh\necho sys"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Project plugin (different name)
+	projPlugin := filepath.Join(projectDir, "proj-plugin")
+	if err := os.WriteFile(projPlugin, []byte("#!/bin/sh\necho proj"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	s := &Scanner{
+		Paths: []string{systemDir, projectDir},
+	}
+
+	result, err := s.Scan()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(result.Plugins) != 2 {
+		t.Fatalf("expected 2 plugins, got %d", len(result.Plugins))
+	}
+
+	names := map[string]bool{}
+	for _, p := range result.Plugins {
+		names[p.Name] = true
+	}
+	if !names["sys-plugin"] || !names["proj-plugin"] {
+		t.Errorf("expected both sys-plugin and proj-plugin, got %v", names)
+	}
+}
+
+func TestScanner_ProjectOverridesSystem(t *testing.T) {
+	systemDir := t.TempDir()
+	projectDir := t.TempDir()
+
+	// System plugin named "shared"
+	sysPlugin := filepath.Join(systemDir, "shared")
+	if err := os.WriteFile(sysPlugin, []byte("#!/bin/sh\necho sys"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Project plugin also named "shared" — should override
+	projPlugin := filepath.Join(projectDir, "shared")
+	if err := os.WriteFile(projPlugin, []byte("#!/bin/sh\necho proj"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	s := &Scanner{
+		Paths: []string{systemDir, projectDir},
+	}
+
+	result, err := s.Scan()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(result.Plugins) != 1 {
+		t.Fatalf("expected 1 plugin (deduped), got %d", len(result.Plugins))
+	}
+
+	p := result.Plugins[0]
+	if p.Path != projPlugin {
+		t.Errorf("expected project plugin path %q, got %q", projPlugin, p.Path)
+	}
+	if p.Source != "project" {
+		t.Errorf("expected source %q, got %q", "project", p.Source)
+	}
+}
+
+func TestScanner_EmptyPathSkipped(t *testing.T) {
+	validDir := t.TempDir()
+	missingDir := filepath.Join(t.TempDir(), "does-not-exist")
+
+	plugin := filepath.Join(validDir, "test-bin")
+	if err := os.WriteFile(plugin, []byte("#!/bin/sh\necho hi"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	s := &Scanner{
+		Paths: []string{missingDir, validDir},
+	}
+
+	result, err := s.Scan()
+	if err != nil {
+		t.Fatalf("Scan() should not error on missing path: %v", err)
+	}
+
+	if len(result.Plugins) != 1 {
+		t.Fatalf("expected 1 plugin, got %d", len(result.Plugins))
+	}
+	if result.Plugins[0].Name != "test-bin" {
+		t.Errorf("expected plugin name %q, got %q", "test-bin", result.Plugins[0].Name)
 	}
 }

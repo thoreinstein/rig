@@ -32,7 +32,7 @@ func TestScanner_ManifestInheritanceBug(t *testing.T) {
 	}
 
 	s := &Scanner{
-		Path: tmpDir,
+		Paths: []string{tmpDir},
 	}
 
 	result, err := s.Scan()

@@ -20,6 +20,11 @@ const (
 	StatusError        Status = "Error"
 )
 
+const (
+	// AssistantCapability is the name of the capability for AI completion plugins.
+	AssistantCapability = "assistant"
+)
+
 // Manifest represents the metadata for a plugin found in manifest.yaml
 type Manifest struct {
 	Name         string `yaml:"name"`
@@ -41,6 +46,7 @@ type Plugin struct {
 	Version      string
 	APIVersion   string `json:"api_version"`
 	Path         string
+	Source       string // Origin of the plugin: "system" or "project"
 	Status       Status
 	Description  string
 	Manifest     *Manifest
@@ -49,12 +55,13 @@ type Plugin struct {
 	Capabilities []*apiv1.Capability
 
 	// Runtime state
-	mu         sync.Mutex
-	process    *os.Process
-	socketPath string
-	client     apiv1.PluginServiceClient
-	conn       *grpc.ClientConn
-	cancel     context.CancelFunc
+	mu              sync.Mutex
+	process         *os.Process
+	socketPath      string
+	client          apiv1.PluginServiceClient
+	AssistantClient apiv1.AssistantServiceClient
+	conn            *grpc.ClientConn
+	cancel          context.CancelFunc
 }
 
 // Result contains the outcome of a discovery scan, including found plugins and metadata.

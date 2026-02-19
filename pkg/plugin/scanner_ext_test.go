@@ -26,7 +26,7 @@ version: 2.0.0
 	}
 
 	s := &Scanner{
-		Path: tmpDir,
+		Paths: []string{tmpDir},
 	}
 
 	result, err := s.Scan()
