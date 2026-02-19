@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"os"
 
+	apiv1 "thoreinstein.com/rig/pkg/api/v1"
 	"thoreinstein.com/rig/pkg/config"
 	rigerrors "thoreinstein.com/rig/pkg/errors"
 )
@@ -57,12 +58,24 @@ const (
 	ProviderGroq      = "groq"
 	ProviderOllama    = "ollama"
 	ProviderGemini    = "gemini"
+	ProviderPlugin    = "plugin"
 )
+
+// PluginManager is a minimal interface for starting and getting an assistant plugin.
+// This avoids circular dependencies with pkg/plugin.
+type PluginManager interface {
+	GetAssistantClient(ctx context.Context, name string) (apiv1.AssistantServiceClient, error)
+}
 
 // NewProvider creates an AI provider based on config.
 // Environment variables take precedence over config file values for API keys.
 // When model is empty, provider-specific default models from config are used.
 func NewProvider(cfg *config.AIConfig, verbose bool) (Provider, error) {
+	return NewProviderWithManager(nil, cfg, verbose)
+}
+
+// NewProviderWithManager creates an AI provider with an optional PluginManager for plugin-based providers.
+func NewProviderWithManager(mgr PluginManager, cfg *config.AIConfig, verbose bool) (Provider, error) {
 	if cfg == nil {
 		return nil, rigerrors.NewConfigError("ai", "config is nil")
 	}
@@ -131,9 +144,24 @@ func NewProvider(cfg *config.AIConfig, verbose bool) (Provider, error) {
 		}
 		return NewGeminiProvider(apiKey, model, logger), nil
 
+	case ProviderPlugin:
+		if mgr == nil {
+			return nil, rigerrors.NewConfigError("ai.provider", "plugin provider requested but no plugin manager provided")
+		}
+		// In config, use model field to specify the plugin name/ID
+		pluginName := cfg.Model
+		if pluginName == "" {
+			return nil, rigerrors.NewConfigError("ai.model", "plugin provider requires the plugin name to be specified in the 'model' field")
+		}
+		client, err := mgr.GetAssistantClient(context.Background(), pluginName)
+		if err != nil {
+			return nil, rigerrors.NewAIErrorWithCause(ProviderPlugin, "GetAssistantClient", "failed to get assistant client from plugin", err)
+		}
+		return NewPluginAssistantProvider(pluginName, client, logger), nil
+
 	default:
 		return nil, rigerrors.NewConfigError("ai.provider",
-			"unsupported AI provider: "+cfg.Provider+" (supported: anthropic, groq, ollama, gemini)")
+			"unsupported AI provider: "+cfg.Provider+" (supported: anthropic, groq, ollama, gemini, plugin)")
 	}
 }
 
