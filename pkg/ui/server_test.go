@@ -33,11 +33,11 @@ func (m *mockReader) Read(p []byte) (n int, err error) {
 
 func TestUIServer_StandardOps(t *testing.T) {
 	cases := []struct {
-		name     string
-		input    string
-		op       func(context.Context, *UIServer) (any, error)
-		want     any
-		wantErr  bool
+		name    string
+		input   string
+		op      func(context.Context, *UIServer) (any, error)
+		want    any
+		wantErr bool
 	}{
 		{
 			name:  "Prompt basic",
@@ -123,7 +123,7 @@ func TestUIServer_Coordination(t *testing.T) {
 	mr := &mockReader{lines: make(chan string, 2), readStarted: make(chan struct{}, 10)}
 	srv := NewUIServerWithReader(mr)
 	defer srv.Stop()
-	
+
 	t.Log("Starting first prompt (blocking)")
 	promptStarted := make(chan struct{})
 	promptDone := make(chan struct{})
@@ -135,7 +135,7 @@ func TestUIServer_Coordination(t *testing.T) {
 
 	// Ensure first prompt has started and theoretically has the lock
 	<-promptStarted
-	
+
 	// Wait for the mock reader to confirm it has been invoked
 	select {
 	case <-mr.readStarted:
@@ -161,7 +161,7 @@ func TestUIServer_Coordination(t *testing.T) {
 
 	t.Log("Unblocking first prompt")
 	mr.lines <- "done\n"
-	
+
 	select {
 	case <-promptDone:
 		t.Log("First prompt finished")
@@ -184,13 +184,13 @@ func TestUIServer_Cancellation(t *testing.T) {
 	mr := &mockReader{lines: make(chan string, 2), readStarted: make(chan struct{}, 10)}
 	srv := NewUIServerWithReader(mr)
 	defer srv.Stop()
-	
+
 	t.Log("Starting prompt with short timeout")
 	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
 	defer cancel()
 
 	_, err := srv.Prompt(ctx, &apiv1.PromptRequest{Label: "Timed out prompt:"})
-	
+
 	if err == nil {
 		t.Error("expected context timeout error, got nil")
 	}
