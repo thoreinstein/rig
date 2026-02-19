@@ -22,11 +22,19 @@ const (
 )
 
 // Executor manages the lifecycle of a plugin process.
-type Executor struct{}
+type Executor struct {
+	hostEndpoint string
+}
 
-// NewExecutor creates a new plugin executor.
-func NewExecutor() *Executor {
-	return &Executor{}
+// NewExecutor creates a new plugin executor. If hostEndpoint is provided,
+// it will be passed to plugins via the RIG_HOST_ENDPOINT environment variable.
+func NewExecutor(hostEndpoint string) *Executor {
+	return &Executor{hostEndpoint: hostEndpoint}
+}
+
+// SetHostEndpoint sets the host gRPC server endpoint path.
+func (e *Executor) SetHostEndpoint(path string) {
+	e.hostEndpoint = path
 }
 
 // Start launches the plugin process and establishes the IPC handshake.
@@ -38,13 +46,13 @@ func (e *Executor) Start(ctx context.Context, p *Plugin) error {
 		return errors.NewPluginError(p.Name, "Start", "plugin is already running")
 	}
 
-	// 1. Generate unique UDS path
+	// 1. Generate unique UDS path for the plugin's server
 	u, err := uuid.NewRandom()
 	if err != nil {
 		return errors.NewPluginError(p.Name, "Start", "failed to generate unique identifier for plugin socket").WithCause(err)
 	}
 	// Use shorter name to avoid AF_UNIX path length limits (typically 104-108 chars)
-	p.socketPath = filepath.Join(os.TempDir(), fmt.Sprintf("rig-%s.sock", u.String()[:8]))
+	p.socketPath = filepath.Join(os.TempDir(), fmt.Sprintf("rig-p-%s.sock", u.String()[:8]))
 
 	// 2. Setup internal context for the process lifecycle
 	// We don't shadow the incoming ctx so waitForSocket can respect its deadline.
@@ -55,6 +63,9 @@ func (e *Executor) Start(ctx context.Context, p *Plugin) error {
 	// #nosec G204
 	cmd := exec.CommandContext(procCtx, p.Path)
 	cmd.Env = append(os.Environ(), "RIG_PLUGIN_ENDPOINT="+p.socketPath)
+	if e.hostEndpoint != "" {
+		cmd.Env = append(cmd.Env, "RIG_HOST_ENDPOINT="+e.hostEndpoint)
+	}
 
 	// Ensure we can capture some output if needed for debugging
 	cmd.Stderr = os.Stderr

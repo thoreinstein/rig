@@ -112,7 +112,7 @@ func TestExecutor_Handshake_Logic(t *testing.T) {
 			p := tt.initialPlugin
 			p.client = mockClient
 
-			e := NewExecutor()
+			e := NewExecutor("")
 			err := e.Handshake(t.Context(), p, "1.0.0", "v1")
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("Handshake() error = %v, wantErr %v", err, tt.wantErr)

@@ -39,7 +39,7 @@ exit 1
 		Path: pluginPath,
 	}
 
-	e := NewExecutor()
+	e := NewExecutor("")
 
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
@@ -100,7 +100,7 @@ sleep 10
 		Path: pluginPath,
 	}
 
-	e := NewExecutor()
+	e := NewExecutor("")
 
 	// Set short timeout
 	ctx, cancel := context.WithTimeout(t.Context(), 500*time.Millisecond)

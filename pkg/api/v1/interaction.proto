@@ -2,7 +2,21 @@ syntax = "proto3";
 
 package rig.v1;
 
+import "google/protobuf/empty.proto";
+
 option go_package = "thoreinstein.com/rig/pkg/api/v1;apiv1";
+
+// UIService allows plugins to call back into the host to perform UI operations.
+service UIService {
+  // Prompt asks the user for a text input.
+  rpc Prompt(PromptRequest) returns (PromptResponse);
+  // Confirm asks the user for a yes/no confirmation.
+  rpc Confirm(ConfirmRequest) returns (ConfirmResponse);
+  // Select asks the user to choose from a list of options.
+  rpc Select(SelectRequest) returns (SelectResponse);
+  // UpdateProgress provides real-time status updates for a long-running task.
+  rpc UpdateProgress(ProgressUpdate) returns (google.protobuf.Empty);
+}
 
 // NOTE: The naming of InteractResponse and InteractRequest reflects the gRPC 
 // stream direction (Plugin-as-server vs. Host-as-client) rather than the 

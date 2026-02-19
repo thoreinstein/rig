@@ -71,13 +71,13 @@ Rig uses a TOML configuration file, typically located at `~/.config/rig/config.t
 
 - **Style:** Follow standard Go idioms.
 - **Naming:**
-  - Fields/Files: `snake_case`
+  - Fields/Files: `snake_case` (Internal identifiers prefer `camelCase`).
   - Directories: `kebab-case`
   - Enums: `SCREAMING_SNAKE`
 - **Testing:**
   - Mandatory for new features.
   - Prefer table-driven tests.
-  - Use interfaces for mocking external dependencies (Git, JIRA, Tmux).
+  - Use interfaces for mocking external dependencies (Git, JIRA, Tmux, Plugin Executors).
 - **Architecture:** Keep CLI logic in `cmd/` minimal; delegate business logic to `pkg/`.
 - **Linting:** Strict mode using `golangci-lint`.
 
@@ -137,10 +137,12 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 - **Lazy Validation:** Perform compatibility validation during the discovery/listing phase using the current binary's version to ensure accurate SemVer checks.
 - **Unix-Only Execution:** Plugins must be Unix executable files (marked with execute bits). Non-executable files and those with unknown extensions are ignored. Subdirectories must contain at least one executable file to be considered valid plugins.
 - **Manifest Resolution:** Sidecar manifests are matched against the logical plugin name (stripping extensions like `.sh` or `.py`).
+- **Fail-Fast Plugin Initialization Pattern**: Establish a mandatory validation gate during the initial handshake. The `Manager` MUST call `ValidateCompatibility` immediately after the handshake and reject (Stop) any plugin returning `StatusIncompatible` or `StatusError` before it enters the active pool.
 
 ### Workflow Traps
 - **Sparse-Checkout Staging:** In a `git sparse-checkout` environment, new files must be staged using `git add --sparse <path>` if they fall outside the current sparse index definition.
 - **Surfacing Metadata Errors:** If a plugin's manifest file exists but is malformed, report an error rather than silently ignoring it. This prevents bypassing version checks due to configuration errors. Ensure consistent error reporting across all discovery paths (e.g., both single-binary and directory-based plugins).
+- **Automated Reviewer Naming Conflicts**: Conflicting bot suggestions (e.g., snake_case vs. camelCase) should be resolved by prioritizing Go idioms and established codebase patterns over generic bot rules.
 
 ## API & Plugin Architecture (gRPC)
 

@@ -9,6 +9,7 @@ package apiv1
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	emptypb "google.golang.org/protobuf/types/known/emptypb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -714,7 +715,7 @@ var File_pkg_api_v1_interaction_proto protoreflect.FileDescriptor
 
 const file_pkg_api_v1_interaction_proto_rawDesc = "" +
 	"\n" +
-	"\x1cpkg/api/v1/interaction.proto\x12\x06rig.v1\"\xf9\x01\n" +
+	"\x1cpkg/api/v1/interaction.proto\x12\x06rig.v1\x1a\x1bgoogle/protobuf/empty.proto\"\xf9\x01\n" +
 	"\x10InteractResponse\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12/\n" +
 	"\x06prompt\x18\x02 \x01(\v2\x15.rig.v1.PromptRequestH\x00R\x06prompt\x122\n" +
@@ -757,7 +758,12 @@ const file_pkg_api_v1_interaction_proto_rawDesc = "" +
 	"\x10TYPE_UNSPECIFIED\x10\x00\x12\x0f\n" +
 	"\vTYPE_STATUS\x10\x01\x12\x10\n" +
 	"\fTYPE_SPINNER\x10\x02\x12\f\n" +
-	"\bTYPE_BAR\x10\x03B'Z%thoreinstein.com/rig/pkg/api/v1;apiv1b\x06proto3"
+	"\bTYPE_BAR\x10\x032\xfb\x01\n" +
+	"\tUIService\x127\n" +
+	"\x06Prompt\x12\x15.rig.v1.PromptRequest\x1a\x16.rig.v1.PromptResponse\x12:\n" +
+	"\aConfirm\x12\x16.rig.v1.ConfirmRequest\x1a\x17.rig.v1.ConfirmResponse\x127\n" +
+	"\x06Select\x12\x15.rig.v1.SelectRequest\x1a\x16.rig.v1.SelectResponse\x12@\n" +
+	"\x0eUpdateProgress\x12\x16.rig.v1.ProgressUpdate\x1a\x16.google.protobuf.EmptyB'Z%thoreinstein.com/rig/pkg/api/v1;apiv1b\x06proto3"
 
 var (
 	file_pkg_api_v1_interaction_proto_rawDescOnce sync.Once
@@ -784,21 +790,30 @@ var file_pkg_api_v1_interaction_proto_goTypes = []any{
 	(*SelectRequest)(nil),    // 7: rig.v1.SelectRequest
 	(*SelectResponse)(nil),   // 8: rig.v1.SelectResponse
 	(*ProgressUpdate)(nil),   // 9: rig.v1.ProgressUpdate
+	(*emptypb.Empty)(nil),    // 10: google.protobuf.Empty
 }
 var file_pkg_api_v1_interaction_proto_depIdxs = []int32{
-	3, // 0: rig.v1.InteractResponse.prompt:type_name -> rig.v1.PromptRequest
-	5, // 1: rig.v1.InteractResponse.confirm:type_name -> rig.v1.ConfirmRequest
-	7, // 2: rig.v1.InteractResponse.select:type_name -> rig.v1.SelectRequest
-	9, // 3: rig.v1.InteractResponse.progress:type_name -> rig.v1.ProgressUpdate
-	4, // 4: rig.v1.InteractRequest.prompt:type_name -> rig.v1.PromptResponse
-	6, // 5: rig.v1.InteractRequest.confirm:type_name -> rig.v1.ConfirmResponse
-	8, // 6: rig.v1.InteractRequest.select:type_name -> rig.v1.SelectResponse
-	0, // 7: rig.v1.ProgressUpdate.type:type_name -> rig.v1.ProgressUpdate.Type
-	8, // [8:8] is the sub-list for method output_type
-	8, // [8:8] is the sub-list for method input_type
-	8, // [8:8] is the sub-list for extension type_name
-	8, // [8:8] is the sub-list for extension extendee
-	0, // [0:8] is the sub-list for field type_name
+	3,  // 0: rig.v1.InteractResponse.prompt:type_name -> rig.v1.PromptRequest
+	5,  // 1: rig.v1.InteractResponse.confirm:type_name -> rig.v1.ConfirmRequest
+	7,  // 2: rig.v1.InteractResponse.select:type_name -> rig.v1.SelectRequest
+	9,  // 3: rig.v1.InteractResponse.progress:type_name -> rig.v1.ProgressUpdate
+	4,  // 4: rig.v1.InteractRequest.prompt:type_name -> rig.v1.PromptResponse
+	6,  // 5: rig.v1.InteractRequest.confirm:type_name -> rig.v1.ConfirmResponse
+	8,  // 6: rig.v1.InteractRequest.select:type_name -> rig.v1.SelectResponse
+	0,  // 7: rig.v1.ProgressUpdate.type:type_name -> rig.v1.ProgressUpdate.Type
+	3,  // 8: rig.v1.UIService.Prompt:input_type -> rig.v1.PromptRequest
+	5,  // 9: rig.v1.UIService.Confirm:input_type -> rig.v1.ConfirmRequest
+	7,  // 10: rig.v1.UIService.Select:input_type -> rig.v1.SelectRequest
+	9,  // 11: rig.v1.UIService.UpdateProgress:input_type -> rig.v1.ProgressUpdate
+	4,  // 12: rig.v1.UIService.Prompt:output_type -> rig.v1.PromptResponse
+	6,  // 13: rig.v1.UIService.Confirm:output_type -> rig.v1.ConfirmResponse
+	8,  // 14: rig.v1.UIService.Select:output_type -> rig.v1.SelectResponse
+	10, // 15: rig.v1.UIService.UpdateProgress:output_type -> google.protobuf.Empty
+	12, // [12:16] is the sub-list for method output_type
+	8,  // [8:12] is the sub-list for method input_type
+	8,  // [8:8] is the sub-list for extension type_name
+	8,  // [8:8] is the sub-list for extension extendee
+	0,  // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_pkg_api_v1_interaction_proto_init() }
@@ -825,7 +840,7 @@ func file_pkg_api_v1_interaction_proto_init() {
 			NumEnums:      1,
 			NumMessages:   9,
 			NumExtensions: 0,
-			NumServices:   0,
+			NumServices:   1,
 		},
 		GoTypes:           file_pkg_api_v1_interaction_proto_goTypes,
 		DependencyIndexes: file_pkg_api_v1_interaction_proto_depIdxs,

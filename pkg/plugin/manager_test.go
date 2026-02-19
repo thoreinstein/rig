@@ -43,6 +43,8 @@ func (m *mockExecutor) Handshake(ctx context.Context, p *Plugin, rigVersion, api
 	return nil
 }
 
+func (m *mockExecutor) SetHostEndpoint(path string) {}
+
 func TestManager_GetOrStartPlugin_Compatibility(t *testing.T) {
 	// Setup a temporary plugin directory
 	tmpDir := t.TempDir()
@@ -103,7 +105,10 @@ requirements:
 				},
 			}
 
-			m := NewManager(&Executor{}, scanner, tc.rigVersion)
+			m, err := NewManager(NewExecutor(""), scanner, tc.rigVersion)
+			if err != nil {
+				t.Fatalf("NewManager() failed: %v", err)
+			}
 			m.executor = executor // Inject mock
 
 			p, err := m.getOrStartPlugin(t.Context(), "test-plugin")

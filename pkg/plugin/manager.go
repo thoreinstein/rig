@@ -2,10 +2,18 @@ package plugin
 
 import (
 	"context"
+	"fmt"
+	"net"
+	"os"
+	"path/filepath"
 	"sync"
+
+	"github.com/google/uuid"
+	"google.golang.org/grpc"
 
 	apiv1 "thoreinstein.com/rig/pkg/api/v1"
 	"thoreinstein.com/rig/pkg/errors"
+	"thoreinstein.com/rig/pkg/ui"
 )
 
 type pluginExecutor interface {
@@ -13,6 +21,7 @@ type pluginExecutor interface {
 	Stop(p *Plugin) error
 	PrepareClient(p *Plugin) error
 	Handshake(ctx context.Context, p *Plugin, rigVersion, apiVersion string) error
+	SetHostEndpoint(path string)
 }
 
 // Manager manages a pool of active plugins.
@@ -21,18 +30,52 @@ type Manager struct {
 	scanner    *Scanner
 	rigVersion string
 
+	// Host-side UI Proxy Service
+	hostServer *grpc.Server
+	hostL      net.Listener
+	hostPath   string
+
 	mu      sync.Mutex
 	plugins map[string]*Plugin
 }
 
-// NewManager creates a new plugin manager.
-func NewManager(executor *Executor, scanner *Scanner, rigVersion string) *Manager {
+// NewManager creates a new plugin manager and starts the host-side UI Proxy Service.
+func NewManager(executor *Executor, scanner *Scanner, rigVersion string) (*Manager, error) {
+	// 1. Generate unique UDS path for the host server
+	u, err := uuid.NewRandom()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to generate unique identifier for host socket")
+	}
+	hostPath := filepath.Join(os.TempDir(), fmt.Sprintf("rig-h-%s.sock", u.String()[:8]))
+
+	// 2. Start host gRPC server
+	lis, err := net.Listen("unix", hostPath)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to listen on host socket %q", hostPath)
+	}
+
+	srv := grpc.NewServer()
+	apiv1.RegisterUIServiceServer(srv, ui.NewUIServer())
+
+	go func() {
+		if err := srv.Serve(lis); err != nil && err != grpc.ErrServerStopped {
+			// In a real CLI, we might log this or handle it more gracefully
+			fmt.Fprintf(os.Stderr, "Host UI server failed: %v\n", err)
+		}
+	}()
+
+	// 3. Configure executor with host endpoint
+	executor.SetHostEndpoint(hostPath)
+
 	return &Manager{
 		executor:   executor,
 		scanner:    scanner,
 		rigVersion: rigVersion,
+		hostServer: srv,
+		hostL:      lis,
+		hostPath:   hostPath,
 		plugins:    make(map[string]*Plugin),
-	}
+	}, nil
 }
 
 // GetAssistantClient returns a gRPC client for the specified assistant plugin.
@@ -136,7 +179,7 @@ func (m *Manager) getOrStartPlugin(ctx context.Context, name string) (*Plugin, e
 	return target, nil
 }
 
-// StopAll stops all managed plugins.
+// StopAll stops all managed plugins and the host UI server.
 func (m *Manager) StopAll() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -145,4 +188,14 @@ func (m *Manager) StopAll() {
 		_ = m.executor.Stop(p)
 	}
 	m.plugins = make(map[string]*Plugin)
+
+	if m.hostServer != nil {
+		m.hostServer.GracefulStop()
+		m.hostServer = nil
+	}
+
+	if m.hostPath != "" {
+		_ = os.Remove(m.hostPath)
+		m.hostPath = ""
+	}
 }
