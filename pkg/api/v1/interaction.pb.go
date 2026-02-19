@@ -9,7 +9,6 @@ package apiv1
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
-	_ "google.golang.org/protobuf/types/known/emptypb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -795,7 +794,7 @@ var File_pkg_api_v1_interaction_proto protoreflect.FileDescriptor
 
 const file_pkg_api_v1_interaction_proto_rawDesc = "" +
 	"\n" +
-	"\x1cpkg/api/v1/interaction.proto\x12\x06rig.v1\x1a\x1bgoogle/protobuf/empty.proto\"K\n" +
+	"\x1cpkg/api/v1/interaction.proto\x12\x06rig.v1\"K\n" +
 	"\x15UpdateProgressRequest\x122\n" +
 	"\bprogress\x18\x01 \x01(\v2\x16.rig.v1.ProgressUpdateR\bprogress\"\x18\n" +
 	"\x16UpdateProgressResponse\"\xf9\x01\n" +

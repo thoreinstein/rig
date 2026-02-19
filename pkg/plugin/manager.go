@@ -32,8 +32,10 @@ type Manager struct {
 
 	// Host-side UI Proxy Service
 	hostServer *grpc.Server
+	hostUI     *ui.UIServer
 	hostL      net.Listener
 	hostPath   string
+	hostDir    string
 
 	mu      sync.Mutex
 	plugins map[string]*Plugin
@@ -41,21 +43,39 @@ type Manager struct {
 
 // NewManager creates a new plugin manager and starts the host-side UI Proxy Service.
 func NewManager(executor *Executor, scanner *Scanner, rigVersion string) (*Manager, error) {
-	// 1. Generate unique UDS path for the host server
+	// 1. Create a private directory and generate unique UDS path for the host server
+	hostDir, err := os.MkdirTemp("", "rig-h-")
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to create temporary directory for host socket")
+	}
+	if err := os.Chmod(hostDir, 0o700); err != nil {
+		_ = os.RemoveAll(hostDir)
+		return nil, errors.Wrap(err, "failed to set permissions on temporary directory for host socket")
+	}
+
 	u, err := uuid.NewRandom()
 	if err != nil {
+		_ = os.RemoveAll(hostDir)
 		return nil, errors.Wrap(err, "failed to generate unique identifier for host socket")
 	}
-	hostPath := filepath.Join(os.TempDir(), fmt.Sprintf("rig-h-%s.sock", u.String()[:8]))
+	hostPath := filepath.Join(hostDir, fmt.Sprintf("rig-h-%s.sock", u.String()[:8]))
 
 	// 2. Start host gRPC server
 	lis, err := net.Listen("unix", hostPath)
 	if err != nil {
+		_ = os.RemoveAll(hostDir)
 		return nil, errors.Wrapf(err, "failed to listen on host socket %q", hostPath)
 	}
+	// Restrict socket permissions to the current user only.
+	if err := os.Chmod(hostPath, 0o600); err != nil {
+		lis.Close()
+		_ = os.RemoveAll(hostDir)
+		return nil, errors.Wrapf(err, "failed to set permissions on host socket %q", hostPath)
+	}
 
+	uiServer := ui.NewUIServer()
 	srv := grpc.NewServer()
-	apiv1.RegisterUIServiceServer(srv, ui.NewUIServer())
+	apiv1.RegisterUIServiceServer(srv, uiServer)
 
 	go func() {
 		if err := srv.Serve(lis); err != nil && err != grpc.ErrServerStopped {
@@ -72,8 +92,10 @@ func NewManager(executor *Executor, scanner *Scanner, rigVersion string) (*Manag
 		scanner:    scanner,
 		rigVersion: rigVersion,
 		hostServer: srv,
+		hostUI:     uiServer,
 		hostL:      lis,
 		hostPath:   hostPath,
+		hostDir:    hostDir,
 		plugins:    make(map[string]*Plugin),
 	}, nil
 }
@@ -194,8 +216,19 @@ func (m *Manager) StopAll() {
 		m.hostServer = nil
 	}
 
-	if m.hostPath != "" {
-		_ = os.Remove(m.hostPath)
+	if m.hostUI != nil {
+		m.hostUI.Stop()
+		m.hostUI = nil
+	}
+
+	if m.hostL != nil {
+		_ = m.hostL.Close()
+		m.hostL = nil
+	}
+
+	if m.hostDir != "" {
+		_ = os.RemoveAll(m.hostDir)
+		m.hostDir = ""
 		m.hostPath = ""
 	}
 

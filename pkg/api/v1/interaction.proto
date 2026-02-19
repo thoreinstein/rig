@@ -2,9 +2,8 @@ syntax = "proto3";
 
 package rig.v1;
 
-import "google/protobuf/empty.proto";
-
 option go_package = "thoreinstein.com/rig/pkg/api/v1;apiv1";
+
 // UIService allows plugins to call back into the host to perform UI operations.
 service UIService {
   // Prompt asks the user for a text input.
@@ -23,16 +22,15 @@ message UpdateProgressRequest {
 
 message UpdateProgressResponse {}
 
-// PromptRequest asks the user for a text input.
-// NOTE: The naming of InteractResponse and InteractRequest reflects the gRPC
-// stream direction (Plugin-as-server vs. Host-as-client) rather than the
-// semantic payload types.
-// InteractResponse contains UI requests (PromptRequest, ConfirmRequest, etc.)
+// NOTE: The naming of InteractResponse and InteractRequest reflects the gRPC 
+// stream direction (Plugin-as-server vs. Host-as-client) rather than the 
+// semantic payload types. 
+// InteractResponse contains UI requests (PromptRequest, ConfirmRequest, etc.) 
 // initiated by the Plugin.
-// InteractRequest contains UI responses (PromptResponse, ConfirmResponse, etc.)
+// InteractRequest contains UI responses (PromptResponse, ConfirmResponse, etc.) 
 // sent by the Host.
 
-// InteractResponse is sent from the Plugin to the Host to request
+// InteractResponse is sent from the Plugin to the Host to request 
 // UI interactions or report progress.
 message InteractResponse {
   // id is a unique identifier for this request/response pair.

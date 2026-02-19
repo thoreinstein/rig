@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -23,6 +24,7 @@ const (
 
 // Executor manages the lifecycle of a plugin process.
 type Executor struct {
+	mu           sync.RWMutex
 	hostEndpoint string
 }
 
@@ -34,6 +36,8 @@ func NewExecutor(hostEndpoint string) *Executor {
 
 // SetHostEndpoint sets the host gRPC server endpoint path.
 func (e *Executor) SetHostEndpoint(path string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	e.hostEndpoint = path
 }
 
@@ -62,9 +66,14 @@ func (e *Executor) Start(ctx context.Context, p *Plugin) error {
 	// 3. Prepare the command
 	// #nosec G204
 	cmd := exec.CommandContext(procCtx, p.Path)
-	cmd.Env = append(os.Environ(), "RIG_PLUGIN_ENDPOINT="+p.socketPath)
-	if e.hostEndpoint != "" {
-		cmd.Env = append(cmd.Env, "RIG_HOST_ENDPOINT="+e.hostEndpoint)
+	cmd.Env = os.Environ()
+	cmd.Env = append(cmd.Env, "RIG_PLUGIN_ENDPOINT="+p.socketPath)
+
+	e.mu.RLock()
+	hostEndpoint := e.hostEndpoint
+	e.mu.RUnlock()
+	if hostEndpoint != "" {
+		cmd.Env = append(cmd.Env, "RIG_HOST_ENDPOINT="+hostEndpoint)
 	}
 
 	// Ensure we can capture some output if needed for debugging

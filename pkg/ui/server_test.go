@@ -12,10 +12,18 @@ import (
 
 // mockReader allows controlled line-by-line input for tests.
 type mockReader struct {
-	lines chan string
+	lines       chan string
+	readStarted chan struct{}
 }
 
 func (m *mockReader) Read(p []byte) (n int, err error) {
+	if m.readStarted != nil {
+		select {
+		case m.readStarted <- struct{}{}:
+		default:
+			// Buffer full, signal ignored to avoid deadlock
+		}
+	}
 	line, ok := <-m.lines
 	if !ok {
 		return 0, io.EOF
@@ -25,11 +33,11 @@ func (m *mockReader) Read(p []byte) (n int, err error) {
 
 func TestUIServer_StandardOps(t *testing.T) {
 	cases := []struct {
-		name    string
-		input   string
-		op      func(context.Context, *UIServer) (any, error)
-		want    any
-		wantErr bool
+		name     string
+		input    string
+		op       func(context.Context, *UIServer) (any, error)
+		want     any
+		wantErr  bool
 	}{
 		{
 			name:  "Prompt basic",
@@ -75,7 +83,7 @@ func TestUIServer_StandardOps(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			mr := &mockReader{lines: make(chan string, 1)}
+			mr := &mockReader{lines: make(chan string, 1), readStarted: make(chan struct{}, 10)}
 			srv := NewUIServerWithReader(mr)
 			defer srv.Stop()
 
@@ -112,10 +120,10 @@ func TestUIServer_StandardOps(t *testing.T) {
 }
 
 func TestUIServer_Coordination(t *testing.T) {
-	mr := &mockReader{lines: make(chan string, 2)}
+	mr := &mockReader{lines: make(chan string, 2), readStarted: make(chan struct{}, 10)}
 	srv := NewUIServerWithReader(mr)
 	defer srv.Stop()
-
+	
 	t.Log("Starting first prompt (blocking)")
 	promptStarted := make(chan struct{})
 	promptDone := make(chan struct{})
@@ -127,7 +135,14 @@ func TestUIServer_Coordination(t *testing.T) {
 
 	// Ensure first prompt has started and theoretically has the lock
 	<-promptStarted
-	time.Sleep(100 * time.Millisecond)
+	
+	// Wait for the mock reader to confirm it has been invoked
+	select {
+	case <-mr.readStarted:
+		t.Log("First prompt has acquired lock and started reading")
+	case <-time.After(1 * time.Second):
+		t.Fatal("first prompt failed to start reading")
+	}
 
 	t.Log("Starting second prompt (should block)")
 	secondDone := make(chan bool, 1)
@@ -146,7 +161,7 @@ func TestUIServer_Coordination(t *testing.T) {
 
 	t.Log("Unblocking first prompt")
 	mr.lines <- "done\n"
-
+	
 	select {
 	case <-promptDone:
 		t.Log("First prompt finished")
@@ -166,16 +181,16 @@ func TestUIServer_Coordination(t *testing.T) {
 }
 
 func TestUIServer_Cancellation(t *testing.T) {
-	mr := &mockReader{lines: make(chan string, 2)}
+	mr := &mockReader{lines: make(chan string, 2), readStarted: make(chan struct{}, 10)}
 	srv := NewUIServerWithReader(mr)
 	defer srv.Stop()
-
+	
 	t.Log("Starting prompt with short timeout")
 	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
 	defer cancel()
 
 	_, err := srv.Prompt(ctx, &apiv1.PromptRequest{Label: "Timed out prompt:"})
-
+	
 	if err == nil {
 		t.Error("expected context timeout error, got nil")
 	}

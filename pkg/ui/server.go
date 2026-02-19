@@ -54,7 +54,9 @@ func NewUIServerWithReader(in io.Reader) *UIServer {
 
 // Stop shuts down the UI server and its background reader.
 func (s *UIServer) Stop() {
-	close(s.readCh)
+	// We don't close readCh here to avoid panics in in-flight readInput calls.
+	// Instead, we let the background reader naturally age out or be GC'd.
+	// In a CLI, the server lifetime usually matches the process lifetime.
 }
 
 // runReader is the singleton background goroutine that owns the input reader.
@@ -84,10 +86,12 @@ func (s *UIServer) runReader() {
 		}
 
 		// Send response. If the requester has already timed out or canceled,
-		// we use a non-blocking send or just let it drop if the channel is closed.
-		// However, we want to give the requester a chance to receive it if they are
-		// just slightly behind.
-		req.respCh <- readResponse{value: val, err: err}
+		// we use a non-blocking send.
+		select {
+		case req.respCh <- readResponse{value: val, err: err}:
+		default:
+			// Requester is gone, discard the input
+		}
 	}
 }
 
@@ -131,7 +135,6 @@ func (s *UIServer) Prompt(ctx context.Context, req *apiv1.PromptRequest) (*apiv1
 	} else if req.DefaultValue != "" {
 		fmt.Printf("(default: %s) ", req.DefaultValue)
 	}
-	os.Stdout.Sync()
 
 	input, err := s.readInput(ctx, req.Sensitive)
 	if err != nil {
@@ -159,7 +162,6 @@ func (s *UIServer) Confirm(ctx context.Context, req *apiv1.ConfirmRequest) (*api
 	}
 
 	fmt.Printf("%s %s ", req.Label, suffix)
-	os.Stdout.Sync()
 
 	input, err := s.readInput(ctx, false)
 	if err != nil {
@@ -183,8 +185,12 @@ func (s *UIServer) Select(ctx context.Context, req *apiv1.SelectRequest) (*apiv1
 	}
 	defer unlock()
 
+	if req.Multiselect {
+		return nil, rigerrors.New("multiselect is not yet supported")
+	}
+
 	if len(req.Options) == 0 {
-		return &apiv1.SelectResponse{}, nil
+		return nil, rigerrors.New("select requires at least one option")
 	}
 
 	fmt.Println(req.Label)
