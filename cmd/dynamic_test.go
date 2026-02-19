@@ -312,3 +312,38 @@ commands:
 		}
 	}
 }
+
+func TestPreParseGlobalFlags(t *testing.T) {
+	oldArgs := os.Args
+	defer func() { os.Args = oldArgs }()
+
+	// Reset global variables
+	cfgFile = ""
+	verbose = false
+
+	os.Args = []string{"rig", "--config", "custom.toml", "-v"}
+	preParseGlobalFlags()
+
+	if cfgFile != "custom.toml" {
+		t.Errorf("cfgFile = %q, want %q", cfgFile, "custom.toml")
+	}
+	if !verbose {
+		t.Error("verbose should be true")
+	}
+
+	// Test shorthand config
+	cfgFile = ""
+	os.Args = []string{"rig", "-c", "short.toml"}
+	preParseGlobalFlags()
+	if cfgFile != "short.toml" {
+		t.Errorf("cfgFile = %q, want %q", cfgFile, "short.toml")
+	}
+
+	// Test flag with equals
+	cfgFile = ""
+	os.Args = []string{"rig", "--config=equals.toml"}
+	preParseGlobalFlags()
+	if cfgFile != "equals.toml" {
+		t.Errorf("cfgFile = %q, want %q", cfgFile, "equals.toml")
+	}
+}

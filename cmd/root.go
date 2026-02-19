@@ -15,6 +15,7 @@ import (
 var cfgFile string
 var verbose bool
 var appConfig *config.Config
+var configInitialized bool
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -33,12 +34,38 @@ environment with better error handling and scriptability.`,
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
-	// Register dynamic commands from plugins
+	// 1. Pre-parse global flags to initialize config early.
+	// This is needed because registerPluginCommands depends on the loaded config.
+	preParseGlobalFlags()
+
+	// 2. Initialize configuration
+	initConfig()
+
+	// 3. Register dynamic commands from plugins
 	registerPluginCommands()
 
 	err := rootCmd.Execute()
 	if err != nil {
 		os.Exit(1)
+	}
+}
+
+// preParseGlobalFlags manually scans os.Args for --config and --verbose flags
+// before the main Cobra execution. This is a bootstrap step for configuration.
+func preParseGlobalFlags() {
+	for i := 1; i < len(os.Args); i++ {
+		arg := os.Args[i]
+		switch {
+		case arg == "--config" || arg == "-c":
+			if i+1 < len(os.Args) {
+				cfgFile = os.Args[i+1]
+				i++
+			}
+		case strings.HasPrefix(arg, "--config="):
+			cfgFile = strings.TrimPrefix(arg, "--config=")
+		case arg == "--verbose" || arg == "-v":
+			verbose = true
+		}
 	}
 }
 
@@ -63,6 +90,11 @@ func init() {
 // 3. User config (~/.config/rig/config.toml)
 // 4. Defaults
 func initConfig() {
+	if configInitialized && os.Getenv("GO_TEST") != "true" {
+		return
+	}
+	configInitialized = true
+
 	if cfgFile != "" {
 		// Use config file from the flag.
 		viper.SetConfigFile(cfgFile)
@@ -119,6 +151,7 @@ func loadConfig() (*config.Config, error) {
 // This is primarily used in tests to ensure each test starts with a fresh config.
 func resetConfig() {
 	appConfig = nil
+	configInitialized = false
 }
 
 // loadRepoLocalConfig loads .rig.toml from current directory or git root.

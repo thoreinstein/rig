@@ -123,6 +123,13 @@ func registerPluginCommands() {
 
 // runPluginCommand starts the plugin and executes the specified command.
 func runPluginCommand(ctx context.Context, pluginName, commandName string, args []string) error {
+	// Re-parse host persistent flags from args to catch flags appearing after the command name.
+	// This ensures rig --verbose <cmd> and rig <cmd> --verbose both work for host logic.
+	// We ignore errors and unknown flags because they belong to the plugin.
+	fs := rootCmd.PersistentFlags()
+	fs.ParseErrorsWhitelist.UnknownFlags = true
+	_ = fs.Parse(args)
+
 	cfg, err := loadConfig()
 	if err != nil {
 		return errors.Wrap(err, "failed to load configuration")
