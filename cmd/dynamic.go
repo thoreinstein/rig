@@ -51,6 +51,14 @@ func registerPluginCommands() {
 		}
 	}
 
+	// Explicitly reserve built-in commands that might be added lazily by Cobra
+	reserved := []string{"help", "h", "completion"}
+	for _, r := range reserved {
+		if _, exists := collisionMap[r]; !exists {
+			collisionMap[r] = "built-in"
+		}
+	}
+
 	for _, p := range result.Plugins {
 		if p.Manifest == nil || len(p.Manifest.Commands) == 0 {
 			continue

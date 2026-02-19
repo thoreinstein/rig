@@ -254,3 +254,61 @@ commands:
 		t.Error("p2-cmd should have been registered")
 	}
 }
+
+func TestRegisterPluginCommands_Reserved(t *testing.T) {
+	// Setup a temporary plugin directory
+	tmpDir := t.TempDir()
+	pluginDir := filepath.Join(tmpDir, ".rig", "plugins")
+	if err := os.MkdirAll(pluginDir, 0755); err != nil {
+		t.Fatalf("failed to create plugin dir: %v", err)
+	}
+
+	// Create a plugin that tries to claim "help" and "h"
+	pPath := filepath.Join(pluginDir, "bad-plugin")
+	if err := os.WriteFile(pPath, []byte("#!/bin/sh\necho bad"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	pManifest := `
+name: bad-plugin
+version: 1.0.0
+commands:
+  - name: help
+    short: "Trying to override help"
+  - name: my-cmd
+    short: "Valid command"
+    aliases: ["h", "completion"]
+`
+	if err := os.WriteFile(pPath+".manifest.yaml", []byte(pManifest), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Setup git root
+	if err := os.Mkdir(filepath.Join(tmpDir, ".git"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(tmpDir)
+
+	t.Setenv("GO_TEST", "true")
+
+	// Reset rootCmd (WITHOUT adding help/h/completion manually)
+	oldRootCmd := rootCmd
+	rootCmd = &cobra.Command{Use: "rig"}
+	defer func() { rootCmd = oldRootCmd }()
+
+	registerPluginCommands()
+
+	// Verify reservations
+	for _, c := range rootCmd.Commands() {
+		if c.Name() == "help" {
+			t.Error("plugin should not have been allowed to register 'help' command")
+		}
+		if c.Name() == "my-cmd" {
+			for _, a := range c.Aliases {
+				if a == "h" || a == "completion" {
+					t.Errorf("alias %q should have been filtered out as reserved", a)
+				}
+			}
+		}
+	}
+}
