@@ -481,3 +481,43 @@ func TestConfig_Validate(t *testing.T) {
 		})
 	}
 }
+
+func TestPluginConfig_Present(t *testing.T) {
+	config := &Config{
+		Plugins: map[string]map[string]interface{}{
+			"deploy": {
+				"environment": "production",
+				"retries":     3,
+			},
+		},
+	}
+
+	data, err := config.PluginConfig("deploy")
+	if err != nil {
+		t.Fatalf("PluginConfig() error: %v", err)
+	}
+
+	// Order of keys in JSON might vary, but content should be the same
+	expected := `{"environment":"production","retries":3}`
+	// Marshalling map[string]interface{} might result in different order,
+	// so we verify by unmarshaling back or just checking for substrings.
+	sData := string(data)
+	if sData != expected && sData != `{"retries":3,"environment":"production"}` {
+		t.Errorf("PluginConfig() = %s, want %s", sData, expected)
+	}
+}
+
+func TestPluginConfig_Missing(t *testing.T) {
+	config := &Config{
+		Plugins: map[string]map[string]interface{}{},
+	}
+
+	data, err := config.PluginConfig("missing")
+	if err != nil {
+		t.Fatalf("PluginConfig() error: %v", err)
+	}
+
+	if string(data) != "{}" {
+		t.Errorf("PluginConfig() = %s, want {}", string(data))
+	}
+}

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 
@@ -11,17 +12,18 @@ import (
 // Config represents the application configuration
 // Repository information is derived from git, not configuration
 type Config struct {
-	Notes     NotesConfig     `mapstructure:"notes"`
-	Git       GitConfig       `mapstructure:"git"`
-	Clone     CloneConfig     `mapstructure:"clone"`
-	History   HistoryConfig   `mapstructure:"history"`
-	Jira      JiraConfig      `mapstructure:"jira"`
-	Beads     BeadsConfig     `mapstructure:"beads"`
-	Tmux      TmuxConfig      `mapstructure:"tmux"`
-	GitHub    GitHubConfig    `mapstructure:"github"`
-	AI        AIConfig        `mapstructure:"ai"`
-	Workflow  WorkflowConfig  `mapstructure:"workflow"`
-	Discovery DiscoveryConfig `mapstructure:"discovery"`
+	Notes     NotesConfig                       `mapstructure:"notes"`
+	Git       GitConfig                         `mapstructure:"git"`
+	Clone     CloneConfig                       `mapstructure:"clone"`
+	History   HistoryConfig                     `mapstructure:"history"`
+	Jira      JiraConfig                        `mapstructure:"jira"`
+	Beads     BeadsConfig                       `mapstructure:"beads"`
+	Tmux      TmuxConfig                        `mapstructure:"tmux"`
+	GitHub    GitHubConfig                      `mapstructure:"github"`
+	AI        AIConfig                          `mapstructure:"ai"`
+	Workflow  WorkflowConfig                    `mapstructure:"workflow"`
+	Discovery DiscoveryConfig                   `mapstructure:"discovery"`
+	Plugins   map[string]map[string]interface{} `mapstructure:"plugins"`
 }
 
 // NotesConfig holds markdown notes configuration
@@ -223,6 +225,22 @@ func (c *Config) Validate() error {
 	return nil
 }
 
+// PluginConfig returns the JSON-serialized configuration for a specific plugin.
+// If the plugin has no configuration, it returns an empty JSON object "{}".
+func (c *Config) PluginConfig(name string) ([]byte, error) {
+	config, ok := c.Plugins[name]
+	if !ok || config == nil {
+		return []byte("{}"), nil
+	}
+
+	data, err := json.Marshal(config)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to marshal config for plugin %q", name)
+	}
+
+	return data, nil
+}
+
 // setDefaults sets default configuration values
 func setDefaults() {
 	homeDir, err := os.UserHomeDir()
@@ -298,6 +316,9 @@ func setDefaults() {
 	viper.SetDefault("discovery.search_paths", []string{filepath.Join(homeDir, "src")})
 	viper.SetDefault("discovery.max_depth", 3)
 	viper.SetDefault("discovery.cache_path", filepath.Join(homeDir, ".cache", "rig", "projects.json"))
+
+	// Plugin defaults
+	viper.SetDefault("plugins", map[string]interface{}{})
 }
 
 // expandPaths expands ~ and environment variables in paths
