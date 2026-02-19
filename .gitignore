@@ -35,3 +35,4 @@ roadmap.json
 # bv (beads viewer) local config and caches
 .bv/
 discovery.db
+rig-assistant-plugin
