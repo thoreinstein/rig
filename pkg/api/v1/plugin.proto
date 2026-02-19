@@ -24,6 +24,8 @@ message HandshakeRequest {
   string rig_version = 1 [deprecated = true];
   // api_version is the version of the Plugin API supported by the Rig host.
   string api_version = 2;
+  // config_json is the plugin-scoped configuration serialized as JSON.
+  bytes config_json = 3;
 }
 
 message HandshakeResponse {
@@ -44,6 +46,20 @@ message HandshakeResponse {
   repeated Capability capabilities = 5;
   // plugin_semver is the semantic version of the plugin binary itself.
   string plugin_semver = 6;
+  // commands is a list of CLI commands provided by the plugin.
+  repeated CommandDescriptorProto commands = 7;
+}
+
+// CommandDescriptorProto represents a CLI command provided by a plugin.
+message CommandDescriptorProto {
+  // name is the unique name of the command.
+  string name = 1;
+  // short is a brief description of the command.
+  string short = 2;
+  // long is a detailed description of the command.
+  string long = 3;
+  // aliases is a list of alternative names for the command.
+  repeated string aliases = 4;
 }
 
 // Capability represents a specific feature or integration point provided by a plugin.

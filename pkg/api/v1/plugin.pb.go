@@ -29,7 +29,9 @@ type HandshakeRequest struct {
 	// Deprecated: Marked as deprecated in pkg/api/v1/plugin.proto.
 	RigVersion string `protobuf:"bytes,1,opt,name=rig_version,json=rigVersion,proto3" json:"rig_version,omitempty"`
 	// api_version is the version of the Plugin API supported by the Rig host.
-	ApiVersion    string `protobuf:"bytes,2,opt,name=api_version,json=apiVersion,proto3" json:"api_version,omitempty"`
+	ApiVersion string `protobuf:"bytes,2,opt,name=api_version,json=apiVersion,proto3" json:"api_version,omitempty"`
+	// config_json is the plugin-scoped configuration serialized as JSON.
+	ConfigJson    []byte `protobuf:"bytes,3,opt,name=config_json,json=configJson,proto3" json:"config_json,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -79,6 +81,13 @@ func (x *HandshakeRequest) GetApiVersion() string {
 	return ""
 }
 
+func (x *HandshakeRequest) GetConfigJson() []byte {
+	if x != nil {
+		return x.ConfigJson
+	}
+	return nil
+}
+
 type HandshakeResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// plugin_version is the legacy version field which previously mixed binary and API versions.
@@ -99,7 +108,9 @@ type HandshakeResponse struct {
 	// capabilities is a list of features the plugin supports.
 	Capabilities []*Capability `protobuf:"bytes,5,rep,name=capabilities,proto3" json:"capabilities,omitempty"`
 	// plugin_semver is the semantic version of the plugin binary itself.
-	PluginSemver  string `protobuf:"bytes,6,opt,name=plugin_semver,json=pluginSemver,proto3" json:"plugin_semver,omitempty"`
+	PluginSemver string `protobuf:"bytes,6,opt,name=plugin_semver,json=pluginSemver,proto3" json:"plugin_semver,omitempty"`
+	// commands is a list of CLI commands provided by the plugin.
+	Commands      []*CommandDescriptorProto `protobuf:"bytes,7,rep,name=commands,proto3" json:"commands,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -178,6 +189,86 @@ func (x *HandshakeResponse) GetPluginSemver() string {
 	return ""
 }
 
+func (x *HandshakeResponse) GetCommands() []*CommandDescriptorProto {
+	if x != nil {
+		return x.Commands
+	}
+	return nil
+}
+
+// CommandDescriptorProto represents a CLI command provided by a plugin.
+type CommandDescriptorProto struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// name is the unique name of the command.
+	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	// short is a brief description of the command.
+	Short string `protobuf:"bytes,2,opt,name=short,proto3" json:"short,omitempty"`
+	// long is a detailed description of the command.
+	Long string `protobuf:"bytes,3,opt,name=long,proto3" json:"long,omitempty"`
+	// aliases is a list of alternative names for the command.
+	Aliases       []string `protobuf:"bytes,4,rep,name=aliases,proto3" json:"aliases,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CommandDescriptorProto) Reset() {
+	*x = CommandDescriptorProto{}
+	mi := &file_pkg_api_v1_plugin_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CommandDescriptorProto) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CommandDescriptorProto) ProtoMessage() {}
+
+func (x *CommandDescriptorProto) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_api_v1_plugin_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CommandDescriptorProto.ProtoReflect.Descriptor instead.
+func (*CommandDescriptorProto) Descriptor() ([]byte, []int) {
+	return file_pkg_api_v1_plugin_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *CommandDescriptorProto) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *CommandDescriptorProto) GetShort() string {
+	if x != nil {
+		return x.Short
+	}
+	return ""
+}
+
+func (x *CommandDescriptorProto) GetLong() string {
+	if x != nil {
+		return x.Long
+	}
+	return ""
+}
+
+func (x *CommandDescriptorProto) GetAliases() []string {
+	if x != nil {
+		return x.Aliases
+	}
+	return nil
+}
+
 // Capability represents a specific feature or integration point provided by a plugin.
 type Capability struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -191,7 +282,7 @@ type Capability struct {
 
 func (x *Capability) Reset() {
 	*x = Capability{}
-	mi := &file_pkg_api_v1_plugin_proto_msgTypes[2]
+	mi := &file_pkg_api_v1_plugin_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -203,7 +294,7 @@ func (x *Capability) String() string {
 func (*Capability) ProtoMessage() {}
 
 func (x *Capability) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_api_v1_plugin_proto_msgTypes[2]
+	mi := &file_pkg_api_v1_plugin_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -216,7 +307,7 @@ func (x *Capability) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Capability.ProtoReflect.Descriptor instead.
 func (*Capability) Descriptor() ([]byte, []int) {
-	return file_pkg_api_v1_plugin_proto_rawDescGZIP(), []int{2}
+	return file_pkg_api_v1_plugin_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *Capability) GetName() string {
@@ -237,12 +328,14 @@ var File_pkg_api_v1_plugin_proto protoreflect.FileDescriptor
 
 const file_pkg_api_v1_plugin_proto_rawDesc = "" +
 	"\n" +
-	"\x17pkg/api/v1/plugin.proto\x12\x06rig.v1\x1a\x1cpkg/api/v1/interaction.proto\"X\n" +
+	"\x17pkg/api/v1/plugin.proto\x12\x06rig.v1\x1a\x1cpkg/api/v1/interaction.proto\"y\n" +
 	"\x10HandshakeRequest\x12#\n" +
 	"\vrig_version\x18\x01 \x01(\tB\x02\x18\x01R\n" +
 	"rigVersion\x12\x1f\n" +
 	"\vapi_version\x18\x02 \x01(\tR\n" +
-	"apiVersion\"\x96\x02\n" +
+	"apiVersion\x12\x1f\n" +
+	"\vconfig_json\x18\x03 \x01(\fR\n" +
+	"configJson\"\xd2\x02\n" +
 	"\x11HandshakeResponse\x12)\n" +
 	"\x0eplugin_version\x18\x01 \x01(\tB\x02\x18\x01R\rpluginVersion\x12;\n" +
 	"\x17capabilities_deprecated\x18\x02 \x03(\tB\x02\x18\x01R\x16capabilitiesDeprecated\x12\x1b\n" +
@@ -250,7 +343,13 @@ const file_pkg_api_v1_plugin_proto_rawDesc = "" +
 	"\vapi_version\x18\x04 \x01(\tR\n" +
 	"apiVersion\x126\n" +
 	"\fcapabilities\x18\x05 \x03(\v2\x12.rig.v1.CapabilityR\fcapabilities\x12#\n" +
-	"\rplugin_semver\x18\x06 \x01(\tR\fpluginSemver\":\n" +
+	"\rplugin_semver\x18\x06 \x01(\tR\fpluginSemver\x12:\n" +
+	"\bcommands\x18\a \x03(\v2\x1e.rig.v1.CommandDescriptorProtoR\bcommands\"p\n" +
+	"\x16CommandDescriptorProto\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
+	"\x05short\x18\x02 \x01(\tR\x05short\x12\x12\n" +
+	"\x04long\x18\x03 \x01(\tR\x04long\x12\x18\n" +
+	"\aaliases\x18\x04 \x03(\tR\aaliases\":\n" +
 	"\n" +
 	"Capability\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
@@ -271,25 +370,27 @@ func file_pkg_api_v1_plugin_proto_rawDescGZIP() []byte {
 	return file_pkg_api_v1_plugin_proto_rawDescData
 }
 
-var file_pkg_api_v1_plugin_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_pkg_api_v1_plugin_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_pkg_api_v1_plugin_proto_goTypes = []any{
-	(*HandshakeRequest)(nil),  // 0: rig.v1.HandshakeRequest
-	(*HandshakeResponse)(nil), // 1: rig.v1.HandshakeResponse
-	(*Capability)(nil),        // 2: rig.v1.Capability
-	(*InteractRequest)(nil),   // 3: rig.v1.InteractRequest
-	(*InteractResponse)(nil),  // 4: rig.v1.InteractResponse
+	(*HandshakeRequest)(nil),       // 0: rig.v1.HandshakeRequest
+	(*HandshakeResponse)(nil),      // 1: rig.v1.HandshakeResponse
+	(*CommandDescriptorProto)(nil), // 2: rig.v1.CommandDescriptorProto
+	(*Capability)(nil),             // 3: rig.v1.Capability
+	(*InteractRequest)(nil),        // 4: rig.v1.InteractRequest
+	(*InteractResponse)(nil),       // 5: rig.v1.InteractResponse
 }
 var file_pkg_api_v1_plugin_proto_depIdxs = []int32{
-	2, // 0: rig.v1.HandshakeResponse.capabilities:type_name -> rig.v1.Capability
-	0, // 1: rig.v1.PluginService.Handshake:input_type -> rig.v1.HandshakeRequest
-	3, // 2: rig.v1.PluginService.Interact:input_type -> rig.v1.InteractRequest
-	1, // 3: rig.v1.PluginService.Handshake:output_type -> rig.v1.HandshakeResponse
-	4, // 4: rig.v1.PluginService.Interact:output_type -> rig.v1.InteractResponse
-	3, // [3:5] is the sub-list for method output_type
-	1, // [1:3] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	3, // 0: rig.v1.HandshakeResponse.capabilities:type_name -> rig.v1.Capability
+	2, // 1: rig.v1.HandshakeResponse.commands:type_name -> rig.v1.CommandDescriptorProto
+	0, // 2: rig.v1.PluginService.Handshake:input_type -> rig.v1.HandshakeRequest
+	4, // 3: rig.v1.PluginService.Interact:input_type -> rig.v1.InteractRequest
+	1, // 4: rig.v1.PluginService.Handshake:output_type -> rig.v1.HandshakeResponse
+	5, // 5: rig.v1.PluginService.Interact:output_type -> rig.v1.InteractResponse
+	4, // [4:6] is the sub-list for method output_type
+	2, // [2:4] is the sub-list for method input_type
+	2, // [2:2] is the sub-list for extension type_name
+	2, // [2:2] is the sub-list for extension extendee
+	0, // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_pkg_api_v1_plugin_proto_init() }
@@ -304,7 +405,7 @@ func file_pkg_api_v1_plugin_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pkg_api_v1_plugin_proto_rawDesc), len(file_pkg_api_v1_plugin_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   3,
+			NumMessages:   4,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
