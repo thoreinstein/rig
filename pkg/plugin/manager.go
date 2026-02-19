@@ -17,21 +17,21 @@ type pluginExecutor interface {
 
 // Manager manages a pool of active plugins.
 type Manager struct {
-	executor    pluginExecutor
-	scanner     *Scanner
-	rig_version string
+	executor   pluginExecutor
+	scanner    *Scanner
+	rigVersion string
 
 	mu      sync.Mutex
 	plugins map[string]*Plugin
 }
 
 // NewManager creates a new plugin manager.
-func NewManager(executor *Executor, scanner *Scanner, rig_version string) *Manager {
+func NewManager(executor *Executor, scanner *Scanner, rigVersion string) *Manager {
 	return &Manager{
-		executor:    executor,
-		scanner:     scanner,
-		rig_version: rig_version,
-		plugins:     make(map[string]*Plugin),
+		executor:   executor,
+		scanner:    scanner,
+		rigVersion: rigVersion,
+		plugins:    make(map[string]*Plugin),
 	}
 }
 
@@ -113,14 +113,14 @@ func (m *Manager) getOrStartPlugin(ctx context.Context, name string) (*Plugin, e
 	}
 
 	// Perform handshake with host version and API contract version
-	if err := m.executor.Handshake(ctx, target, m.rig_version, APIVersion); err != nil {
+	if err := m.executor.Handshake(ctx, target, m.rigVersion, APIVersion); err != nil {
 		_ = m.executor.Stop(target)
 		return nil, errors.Wrapf(err, "handshake failed for plugin %q", name)
 	}
 
 	// Validate compatibility with host Rig version after handshake
 	// (which might have updated the plugin's metadata/version).
-	ValidateCompatibility(target, m.rig_version)
+	ValidateCompatibility(target, m.rigVersion)
 	if target.Status == StatusIncompatible || target.Status == StatusError {
 		_ = m.executor.Stop(target)
 		if target.Error != nil {
