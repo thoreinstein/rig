@@ -86,7 +86,7 @@ func (s *UIServer) runReader() {
 		// Send response. If the requester has already timed out or canceled,
 		// we use a non-blocking send or just let it drop if the channel is closed.
 		// However, we want to give the requester a chance to receive it if they are
-		// just slightly behind. 
+		// just slightly behind.
 		req.respCh <- readResponse{value: val, err: err}
 	}
 }

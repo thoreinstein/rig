@@ -24,20 +24,20 @@ message UpdateProgressRequest {
 message UpdateProgressResponse {}
 
 // PromptRequest asks the user for a text input.
-// NOTE: The naming of InteractResponse and InteractRequest reflects the gRPC 
-// stream direction (Plugin-as-server vs. Host-as-client) rather than the 
-// semantic payload types. 
-// InteractResponse contains UI requests (PromptRequest, ConfirmRequest, etc.) 
+// NOTE: The naming of InteractResponse and InteractRequest reflects the gRPC
+// stream direction (Plugin-as-server vs. Host-as-client) rather than the
+// semantic payload types.
+// InteractResponse contains UI requests (PromptRequest, ConfirmRequest, etc.)
 // initiated by the Plugin.
-// InteractRequest contains UI responses (PromptResponse, ConfirmResponse, etc.) 
+// InteractRequest contains UI responses (PromptResponse, ConfirmResponse, etc.)
 // sent by the Host.
 
-// InteractResponse is sent from the Plugin to the Host to request 
+// InteractResponse is sent from the Plugin to the Host to request
 // UI interactions or report progress.
 message InteractResponse {
   // id is a unique identifier for this request/response pair.
   string id = 1;
-  
+
   oneof payload {
     PromptRequest prompt = 2;
     ConfirmRequest confirm = 3;
@@ -49,7 +49,7 @@ message InteractResponse {
 message InteractRequest {
   // response_to matches the id of the InteractResponse.
   string response_to = 1;
-  
+
   oneof payload {
     PromptResponse prompt = 2;
     ConfirmResponse confirm = 3;
@@ -101,7 +101,7 @@ message SelectResponse {
 // ProgressUpdate provides real-time status updates for a long-running task.
 message ProgressUpdate {
   string message = 1;
-  
+
   // type determines how the progress is displayed.
   enum Type {
     TYPE_UNSPECIFIED = 0; // Default unspecified status
@@ -114,7 +114,7 @@ message ProgressUpdate {
   // progress is the completion percentage (0-100), used for TYPE_BAR.
   // Must be ignored if indeterminate is true.
   int32 progress = 3;
-  
+
   // indeterminate is true if the total progress is unknown (e.g., a searching spinner).
   bool indeterminate = 4;
 

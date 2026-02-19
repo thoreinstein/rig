@@ -87,7 +87,7 @@ func TestExecutor_HostEndpoint(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	hostSocket := filepath.Join(tmpDir, "host.sock")
-	
+
 	// Create a script that fails if RIG_HOST_ENDPOINT is not set correctly
 	pluginPath := filepath.Join(tmpDir, "env-check-plugin")
 	script := `#!/bin/bash
@@ -120,7 +120,7 @@ exit 0
 	if err != nil {
 		t.Fatalf("Start() failed: %v", err)
 	}
-	defer e.Stop(p)
+	defer func() { _ = e.Stop(p) }()
 }
 
 func TestExecutor_Start_Timeout(t *testing.T) {

@@ -28,10 +28,10 @@ message HandshakeRequest {
 
 message HandshakeResponse {
   // plugin_version is the legacy version field which previously mixed binary and API versions.
-  // Deprecated: Use plugin_semver (tag 6) for the plugin binary's semantic version, 
+  // Deprecated: Use plugin_semver (tag 6) for the plugin binary's semantic version,
   // and api_version (tag 4) for the Plugin API contract version.
   string plugin_version = 1 [deprecated = true];
-  
+
   // capabilities_deprecated is the legacy capabilities field using simple strings.
   // Deprecated: Use capabilities (tag 5) for structured capability information.
   repeated string capabilities_deprecated = 2 [deprecated = true];
