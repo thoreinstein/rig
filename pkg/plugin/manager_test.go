@@ -63,43 +63,60 @@ requirements:
 
 	scanner := &Scanner{Paths: []string{pluginDir}}
 
-	t.Run("Incompatible plugin is rejected", func(t *testing.T) {
-		executor := &mockExecutor{
-			handshakeFunc: func(ctx context.Context, p *Plugin, rigVersion, apiVersion string) error {
-				// Handshake normally updates metadata
-				p.Version = "1.0.0"
-				return nil
-			},
-		}
+	cases := []struct {
+		name       string
+		rigVersion string
+		wantErr    bool
+		wantStatus Status
+	}{
+		{
+			name:       "Incompatible plugin is rejected",
+			rigVersion: "1.5.0", // Rig 1.5.0 < 2.0.0
+			wantErr:    true,
+			wantStatus: StatusIncompatible,
+		},
+		{
+			name:       "Compatible plugin is accepted",
+			rigVersion: "2.1.0", // Rig 2.1.0 >= 2.0.0
+			wantErr:    false,
+			wantStatus: StatusCompatible,
+		},
+	}
 
-		m := NewManager(&Executor{}, scanner, "1.5.0") // Rig 1.5.0 < 2.0.0
-		m.executor = executor                          // Inject mock
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			executor := &mockExecutor{
+				handshakeFunc: func(ctx context.Context, p *Plugin, rigVersion, apiVersion string) error {
+					// Handshake normally updates metadata
+					p.Version = "1.0.0"
+					return nil
+				},
+			}
 
-		_, err := m.getOrStartPlugin(t.Context(), "test-plugin")
-		if err == nil {
-			t.Fatal("expected error for incompatible plugin, got nil")
-		}
+			m := NewManager(&Executor{}, scanner, tc.rigVersion)
+			m.executor = executor // Inject mock
 
-		if !strings.Contains(err.Error(), "incompatible") {
-			t.Errorf("expected incompatibility error, got: %v", err)
-		}
-	})
+			p, err := m.getOrStartPlugin(t.Context(), "test-plugin")
+			if tc.wantErr {
+				if err == nil {
+					t.Fatal("expected error for incompatible plugin, got nil")
+				}
+				if !strings.Contains(err.Error(), "incompatible") {
+					t.Errorf("expected incompatibility error, got: %v", err)
+				}
+				return
+			}
 
-	t.Run("Compatible plugin is accepted", func(t *testing.T) {
-		executor := &mockExecutor{}
-		m := NewManager(&Executor{}, scanner, "2.1.0") // Rig 2.1.0 >= 2.0.0
-		m.executor = executor
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
-		p, err := m.getOrStartPlugin(t.Context(), "test-plugin")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-
-		if p.Name != "test-plugin" {
-			t.Errorf("expected plugin name test-plugin, got %q", p.Name)
-		}
-		if p.Status != StatusCompatible {
-			t.Errorf("expected status Compatible, got %q", p.Status)
-		}
-	})
+			if p.Name != "test-plugin" {
+				t.Errorf("expected plugin name test-plugin, got %q", p.Name)
+			}
+			if p.Status != tc.wantStatus {
+				t.Errorf("expected status %q, got %q", tc.wantStatus, p.Status)
+			}
+		})
+	}
 }
