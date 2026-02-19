@@ -254,10 +254,10 @@ const file_pkg_api_v1_plugin_proto_rawDesc = "" +
 	"\n" +
 	"Capability\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
-	"\aversion\x18\x02 \x01(\tR\aversion2\x94\x01\n" +
+	"\aversion\x18\x02 \x01(\tR\aversion2\x99\x01\n" +
 	"\rPluginService\x12@\n" +
-	"\tHandshake\x12\x18.rig.v1.HandshakeRequest\x1a\x19.rig.v1.HandshakeResponse\x12A\n" +
-	"\bInteract\x12\x17.rig.v1.InteractRequest\x1a\x18.rig.v1.InteractResponse(\x010\x01B'Z%thoreinstein.com/rig/pkg/api/v1;apiv1b\x06proto3"
+	"\tHandshake\x12\x18.rig.v1.HandshakeRequest\x1a\x19.rig.v1.HandshakeResponse\x12F\n" +
+	"\bInteract\x12\x17.rig.v1.InteractRequest\x1a\x18.rig.v1.InteractResponse\"\x03\x88\x02\x01(\x010\x01B'Z%thoreinstein.com/rig/pkg/api/v1;apiv1b\x06proto3"
 
 var (
 	file_pkg_api_v1_plugin_proto_rawDescOnce sync.Once

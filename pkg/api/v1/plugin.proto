@@ -12,9 +12,10 @@ service PluginService {
   rpc Handshake(HandshakeRequest) returns (HandshakeResponse);
 
   // Interact opens a bi-directional stream for TUI interactions.
-  // The Host (client) sends InteractRequests (user answers/control signals) and
-  // the Plugin (server) sends InteractResponses (prompts, progress updates).
-  rpc Interact(stream InteractRequest) returns (stream InteractResponse);
+  // Deprecated: Use UIService callback pattern instead.
+  rpc Interact(stream InteractRequest) returns (stream InteractResponse) {
+    option deprecated = true;
+  }
 }
 
 message HandshakeRequest {

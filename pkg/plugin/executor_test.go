@@ -80,6 +80,49 @@ exit 1
 	}
 }
 
+func TestExecutor_HostEndpoint(t *testing.T) {
+	if _, err := exec.LookPath("bash"); err != nil {
+		t.Skip("bash not found, skipping test")
+	}
+
+	tmpDir := t.TempDir()
+	hostSocket := filepath.Join(tmpDir, "host.sock")
+	
+	// Create a script that fails if RIG_HOST_ENDPOINT is not set correctly
+	pluginPath := filepath.Join(tmpDir, "env-check-plugin")
+	script := `#!/bin/bash
+if [ "$RIG_HOST_ENDPOINT" != "` + hostSocket + `" ]; then
+    echo "Expected RIG_HOST_ENDPOINT=` + hostSocket + `, got $RIG_HOST_ENDPOINT" >&2
+    exit 1
+fi
+# Satisfy handshake by creating the socket file and exiting
+if [ -n "$RIG_PLUGIN_ENDPOINT" ]; then
+    touch "$RIG_PLUGIN_ENDPOINT"
+fi
+exit 0
+`
+	if err := os.WriteFile(pluginPath, []byte(script), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	p := &Plugin{
+		Name: "env-plugin",
+		Path: pluginPath,
+	}
+
+	e := NewExecutor(hostSocket)
+
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+	defer cancel()
+
+	// Use a modified waitForSocket check for this test since we're just touching the file
+	err := e.Start(ctx, p)
+	if err != nil {
+		t.Fatalf("Start() failed: %v", err)
+	}
+	defer e.Stop(p)
+}
+
 func TestExecutor_Start_Timeout(t *testing.T) {
 	if _, err := exec.LookPath("bash"); err != nil {
 		t.Skip("bash not found, skipping test")

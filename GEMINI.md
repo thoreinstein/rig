@@ -71,7 +71,7 @@ Rig uses a TOML configuration file, typically located at `~/.config/rig/config.t
 
 - **Style:** Follow standard Go idioms.
 - **Naming:**
-  - Fields/Files: `snake_case` (Internal identifiers prefer `camelCase`).
+  - Fields/Files: `snake_case`
   - Directories: `kebab-case`
   - Enums: `SCREAMING_SNAKE`
 - **Testing:**

@@ -9,7 +9,7 @@ package apiv1
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
-	emptypb "google.golang.org/protobuf/types/known/emptypb"
+	_ "google.golang.org/protobuf/types/known/emptypb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -72,7 +72,87 @@ func (x ProgressUpdate_Type) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ProgressUpdate_Type.Descriptor instead.
 func (ProgressUpdate_Type) EnumDescriptor() ([]byte, []int) {
-	return file_pkg_api_v1_interaction_proto_rawDescGZIP(), []int{8, 0}
+	return file_pkg_api_v1_interaction_proto_rawDescGZIP(), []int{10, 0}
+}
+
+type UpdateProgressRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Progress      *ProgressUpdate        `protobuf:"bytes,1,opt,name=progress,proto3" json:"progress,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateProgressRequest) Reset() {
+	*x = UpdateProgressRequest{}
+	mi := &file_pkg_api_v1_interaction_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateProgressRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateProgressRequest) ProtoMessage() {}
+
+func (x *UpdateProgressRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_api_v1_interaction_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateProgressRequest.ProtoReflect.Descriptor instead.
+func (*UpdateProgressRequest) Descriptor() ([]byte, []int) {
+	return file_pkg_api_v1_interaction_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *UpdateProgressRequest) GetProgress() *ProgressUpdate {
+	if x != nil {
+		return x.Progress
+	}
+	return nil
+}
+
+type UpdateProgressResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateProgressResponse) Reset() {
+	*x = UpdateProgressResponse{}
+	mi := &file_pkg_api_v1_interaction_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateProgressResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateProgressResponse) ProtoMessage() {}
+
+func (x *UpdateProgressResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_api_v1_interaction_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateProgressResponse.ProtoReflect.Descriptor instead.
+func (*UpdateProgressResponse) Descriptor() ([]byte, []int) {
+	return file_pkg_api_v1_interaction_proto_rawDescGZIP(), []int{1}
 }
 
 // InteractResponse is sent from the Plugin to the Host to request
@@ -94,7 +174,7 @@ type InteractResponse struct {
 
 func (x *InteractResponse) Reset() {
 	*x = InteractResponse{}
-	mi := &file_pkg_api_v1_interaction_proto_msgTypes[0]
+	mi := &file_pkg_api_v1_interaction_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -106,7 +186,7 @@ func (x *InteractResponse) String() string {
 func (*InteractResponse) ProtoMessage() {}
 
 func (x *InteractResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_api_v1_interaction_proto_msgTypes[0]
+	mi := &file_pkg_api_v1_interaction_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -119,7 +199,7 @@ func (x *InteractResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InteractResponse.ProtoReflect.Descriptor instead.
 func (*InteractResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_api_v1_interaction_proto_rawDescGZIP(), []int{0}
+	return file_pkg_api_v1_interaction_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *InteractResponse) GetId() string {
@@ -216,7 +296,7 @@ type InteractRequest struct {
 
 func (x *InteractRequest) Reset() {
 	*x = InteractRequest{}
-	mi := &file_pkg_api_v1_interaction_proto_msgTypes[1]
+	mi := &file_pkg_api_v1_interaction_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -228,7 +308,7 @@ func (x *InteractRequest) String() string {
 func (*InteractRequest) ProtoMessage() {}
 
 func (x *InteractRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_api_v1_interaction_proto_msgTypes[1]
+	mi := &file_pkg_api_v1_interaction_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -241,7 +321,7 @@ func (x *InteractRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InteractRequest.ProtoReflect.Descriptor instead.
 func (*InteractRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_api_v1_interaction_proto_rawDescGZIP(), []int{1}
+	return file_pkg_api_v1_interaction_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *InteractRequest) GetResponseTo() string {
@@ -320,7 +400,7 @@ type PromptRequest struct {
 
 func (x *PromptRequest) Reset() {
 	*x = PromptRequest{}
-	mi := &file_pkg_api_v1_interaction_proto_msgTypes[2]
+	mi := &file_pkg_api_v1_interaction_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -332,7 +412,7 @@ func (x *PromptRequest) String() string {
 func (*PromptRequest) ProtoMessage() {}
 
 func (x *PromptRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_api_v1_interaction_proto_msgTypes[2]
+	mi := &file_pkg_api_v1_interaction_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -345,7 +425,7 @@ func (x *PromptRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PromptRequest.ProtoReflect.Descriptor instead.
 func (*PromptRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_api_v1_interaction_proto_rawDescGZIP(), []int{2}
+	return file_pkg_api_v1_interaction_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *PromptRequest) GetLabel() string {
@@ -386,7 +466,7 @@ type PromptResponse struct {
 
 func (x *PromptResponse) Reset() {
 	*x = PromptResponse{}
-	mi := &file_pkg_api_v1_interaction_proto_msgTypes[3]
+	mi := &file_pkg_api_v1_interaction_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -398,7 +478,7 @@ func (x *PromptResponse) String() string {
 func (*PromptResponse) ProtoMessage() {}
 
 func (x *PromptResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_api_v1_interaction_proto_msgTypes[3]
+	mi := &file_pkg_api_v1_interaction_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -411,7 +491,7 @@ func (x *PromptResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PromptResponse.ProtoReflect.Descriptor instead.
 func (*PromptResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_api_v1_interaction_proto_rawDescGZIP(), []int{3}
+	return file_pkg_api_v1_interaction_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *PromptResponse) GetValue() string {
@@ -432,7 +512,7 @@ type ConfirmRequest struct {
 
 func (x *ConfirmRequest) Reset() {
 	*x = ConfirmRequest{}
-	mi := &file_pkg_api_v1_interaction_proto_msgTypes[4]
+	mi := &file_pkg_api_v1_interaction_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -444,7 +524,7 @@ func (x *ConfirmRequest) String() string {
 func (*ConfirmRequest) ProtoMessage() {}
 
 func (x *ConfirmRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_api_v1_interaction_proto_msgTypes[4]
+	mi := &file_pkg_api_v1_interaction_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -457,7 +537,7 @@ func (x *ConfirmRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConfirmRequest.ProtoReflect.Descriptor instead.
 func (*ConfirmRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_api_v1_interaction_proto_rawDescGZIP(), []int{4}
+	return file_pkg_api_v1_interaction_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *ConfirmRequest) GetLabel() string {
@@ -484,7 +564,7 @@ type ConfirmResponse struct {
 
 func (x *ConfirmResponse) Reset() {
 	*x = ConfirmResponse{}
-	mi := &file_pkg_api_v1_interaction_proto_msgTypes[5]
+	mi := &file_pkg_api_v1_interaction_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -496,7 +576,7 @@ func (x *ConfirmResponse) String() string {
 func (*ConfirmResponse) ProtoMessage() {}
 
 func (x *ConfirmResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_api_v1_interaction_proto_msgTypes[5]
+	mi := &file_pkg_api_v1_interaction_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -509,7 +589,7 @@ func (x *ConfirmResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConfirmResponse.ProtoReflect.Descriptor instead.
 func (*ConfirmResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_api_v1_interaction_proto_rawDescGZIP(), []int{5}
+	return file_pkg_api_v1_interaction_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *ConfirmResponse) GetConfirmed() bool {
@@ -533,7 +613,7 @@ type SelectRequest struct {
 
 func (x *SelectRequest) Reset() {
 	*x = SelectRequest{}
-	mi := &file_pkg_api_v1_interaction_proto_msgTypes[6]
+	mi := &file_pkg_api_v1_interaction_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -545,7 +625,7 @@ func (x *SelectRequest) String() string {
 func (*SelectRequest) ProtoMessage() {}
 
 func (x *SelectRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_api_v1_interaction_proto_msgTypes[6]
+	mi := &file_pkg_api_v1_interaction_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -558,7 +638,7 @@ func (x *SelectRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SelectRequest.ProtoReflect.Descriptor instead.
 func (*SelectRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_api_v1_interaction_proto_rawDescGZIP(), []int{6}
+	return file_pkg_api_v1_interaction_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *SelectRequest) GetLabel() string {
@@ -595,7 +675,7 @@ type SelectResponse struct {
 
 func (x *SelectResponse) Reset() {
 	*x = SelectResponse{}
-	mi := &file_pkg_api_v1_interaction_proto_msgTypes[7]
+	mi := &file_pkg_api_v1_interaction_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -607,7 +687,7 @@ func (x *SelectResponse) String() string {
 func (*SelectResponse) ProtoMessage() {}
 
 func (x *SelectResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_api_v1_interaction_proto_msgTypes[7]
+	mi := &file_pkg_api_v1_interaction_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -620,7 +700,7 @@ func (x *SelectResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SelectResponse.ProtoReflect.Descriptor instead.
 func (*SelectResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_api_v1_interaction_proto_rawDescGZIP(), []int{7}
+	return file_pkg_api_v1_interaction_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *SelectResponse) GetSelectedIndices() []uint32 {
@@ -648,7 +728,7 @@ type ProgressUpdate struct {
 
 func (x *ProgressUpdate) Reset() {
 	*x = ProgressUpdate{}
-	mi := &file_pkg_api_v1_interaction_proto_msgTypes[8]
+	mi := &file_pkg_api_v1_interaction_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -660,7 +740,7 @@ func (x *ProgressUpdate) String() string {
 func (*ProgressUpdate) ProtoMessage() {}
 
 func (x *ProgressUpdate) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_api_v1_interaction_proto_msgTypes[8]
+	mi := &file_pkg_api_v1_interaction_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -673,7 +753,7 @@ func (x *ProgressUpdate) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProgressUpdate.ProtoReflect.Descriptor instead.
 func (*ProgressUpdate) Descriptor() ([]byte, []int) {
-	return file_pkg_api_v1_interaction_proto_rawDescGZIP(), []int{8}
+	return file_pkg_api_v1_interaction_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *ProgressUpdate) GetMessage() string {
@@ -715,7 +795,10 @@ var File_pkg_api_v1_interaction_proto protoreflect.FileDescriptor
 
 const file_pkg_api_v1_interaction_proto_rawDesc = "" +
 	"\n" +
-	"\x1cpkg/api/v1/interaction.proto\x12\x06rig.v1\x1a\x1bgoogle/protobuf/empty.proto\"\xf9\x01\n" +
+	"\x1cpkg/api/v1/interaction.proto\x12\x06rig.v1\x1a\x1bgoogle/protobuf/empty.proto\"K\n" +
+	"\x15UpdateProgressRequest\x122\n" +
+	"\bprogress\x18\x01 \x01(\v2\x16.rig.v1.ProgressUpdateR\bprogress\"\x18\n" +
+	"\x16UpdateProgressResponse\"\xf9\x01\n" +
 	"\x10InteractResponse\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12/\n" +
 	"\x06prompt\x18\x02 \x01(\v2\x15.rig.v1.PromptRequestH\x00R\x06prompt\x122\n" +
@@ -758,12 +841,12 @@ const file_pkg_api_v1_interaction_proto_rawDesc = "" +
 	"\x10TYPE_UNSPECIFIED\x10\x00\x12\x0f\n" +
 	"\vTYPE_STATUS\x10\x01\x12\x10\n" +
 	"\fTYPE_SPINNER\x10\x02\x12\f\n" +
-	"\bTYPE_BAR\x10\x032\xfb\x01\n" +
+	"\bTYPE_BAR\x10\x032\x8a\x02\n" +
 	"\tUIService\x127\n" +
 	"\x06Prompt\x12\x15.rig.v1.PromptRequest\x1a\x16.rig.v1.PromptResponse\x12:\n" +
 	"\aConfirm\x12\x16.rig.v1.ConfirmRequest\x1a\x17.rig.v1.ConfirmResponse\x127\n" +
-	"\x06Select\x12\x15.rig.v1.SelectRequest\x1a\x16.rig.v1.SelectResponse\x12@\n" +
-	"\x0eUpdateProgress\x12\x16.rig.v1.ProgressUpdate\x1a\x16.google.protobuf.EmptyB'Z%thoreinstein.com/rig/pkg/api/v1;apiv1b\x06proto3"
+	"\x06Select\x12\x15.rig.v1.SelectRequest\x1a\x16.rig.v1.SelectResponse\x12O\n" +
+	"\x0eUpdateProgress\x12\x1d.rig.v1.UpdateProgressRequest\x1a\x1e.rig.v1.UpdateProgressResponseB'Z%thoreinstein.com/rig/pkg/api/v1;apiv1b\x06proto3"
 
 var (
 	file_pkg_api_v1_interaction_proto_rawDescOnce sync.Once
@@ -778,42 +861,44 @@ func file_pkg_api_v1_interaction_proto_rawDescGZIP() []byte {
 }
 
 var file_pkg_api_v1_interaction_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_pkg_api_v1_interaction_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_pkg_api_v1_interaction_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
 var file_pkg_api_v1_interaction_proto_goTypes = []any{
-	(ProgressUpdate_Type)(0), // 0: rig.v1.ProgressUpdate.Type
-	(*InteractResponse)(nil), // 1: rig.v1.InteractResponse
-	(*InteractRequest)(nil),  // 2: rig.v1.InteractRequest
-	(*PromptRequest)(nil),    // 3: rig.v1.PromptRequest
-	(*PromptResponse)(nil),   // 4: rig.v1.PromptResponse
-	(*ConfirmRequest)(nil),   // 5: rig.v1.ConfirmRequest
-	(*ConfirmResponse)(nil),  // 6: rig.v1.ConfirmResponse
-	(*SelectRequest)(nil),    // 7: rig.v1.SelectRequest
-	(*SelectResponse)(nil),   // 8: rig.v1.SelectResponse
-	(*ProgressUpdate)(nil),   // 9: rig.v1.ProgressUpdate
-	(*emptypb.Empty)(nil),    // 10: google.protobuf.Empty
+	(ProgressUpdate_Type)(0),       // 0: rig.v1.ProgressUpdate.Type
+	(*UpdateProgressRequest)(nil),  // 1: rig.v1.UpdateProgressRequest
+	(*UpdateProgressResponse)(nil), // 2: rig.v1.UpdateProgressResponse
+	(*InteractResponse)(nil),       // 3: rig.v1.InteractResponse
+	(*InteractRequest)(nil),        // 4: rig.v1.InteractRequest
+	(*PromptRequest)(nil),          // 5: rig.v1.PromptRequest
+	(*PromptResponse)(nil),         // 6: rig.v1.PromptResponse
+	(*ConfirmRequest)(nil),         // 7: rig.v1.ConfirmRequest
+	(*ConfirmResponse)(nil),        // 8: rig.v1.ConfirmResponse
+	(*SelectRequest)(nil),          // 9: rig.v1.SelectRequest
+	(*SelectResponse)(nil),         // 10: rig.v1.SelectResponse
+	(*ProgressUpdate)(nil),         // 11: rig.v1.ProgressUpdate
 }
 var file_pkg_api_v1_interaction_proto_depIdxs = []int32{
-	3,  // 0: rig.v1.InteractResponse.prompt:type_name -> rig.v1.PromptRequest
-	5,  // 1: rig.v1.InteractResponse.confirm:type_name -> rig.v1.ConfirmRequest
-	7,  // 2: rig.v1.InteractResponse.select:type_name -> rig.v1.SelectRequest
-	9,  // 3: rig.v1.InteractResponse.progress:type_name -> rig.v1.ProgressUpdate
-	4,  // 4: rig.v1.InteractRequest.prompt:type_name -> rig.v1.PromptResponse
-	6,  // 5: rig.v1.InteractRequest.confirm:type_name -> rig.v1.ConfirmResponse
-	8,  // 6: rig.v1.InteractRequest.select:type_name -> rig.v1.SelectResponse
-	0,  // 7: rig.v1.ProgressUpdate.type:type_name -> rig.v1.ProgressUpdate.Type
-	3,  // 8: rig.v1.UIService.Prompt:input_type -> rig.v1.PromptRequest
-	5,  // 9: rig.v1.UIService.Confirm:input_type -> rig.v1.ConfirmRequest
-	7,  // 10: rig.v1.UIService.Select:input_type -> rig.v1.SelectRequest
-	9,  // 11: rig.v1.UIService.UpdateProgress:input_type -> rig.v1.ProgressUpdate
-	4,  // 12: rig.v1.UIService.Prompt:output_type -> rig.v1.PromptResponse
-	6,  // 13: rig.v1.UIService.Confirm:output_type -> rig.v1.ConfirmResponse
-	8,  // 14: rig.v1.UIService.Select:output_type -> rig.v1.SelectResponse
-	10, // 15: rig.v1.UIService.UpdateProgress:output_type -> google.protobuf.Empty
-	12, // [12:16] is the sub-list for method output_type
-	8,  // [8:12] is the sub-list for method input_type
-	8,  // [8:8] is the sub-list for extension type_name
-	8,  // [8:8] is the sub-list for extension extendee
-	0,  // [0:8] is the sub-list for field type_name
+	11, // 0: rig.v1.UpdateProgressRequest.progress:type_name -> rig.v1.ProgressUpdate
+	5,  // 1: rig.v1.InteractResponse.prompt:type_name -> rig.v1.PromptRequest
+	7,  // 2: rig.v1.InteractResponse.confirm:type_name -> rig.v1.ConfirmRequest
+	9,  // 3: rig.v1.InteractResponse.select:type_name -> rig.v1.SelectRequest
+	11, // 4: rig.v1.InteractResponse.progress:type_name -> rig.v1.ProgressUpdate
+	6,  // 5: rig.v1.InteractRequest.prompt:type_name -> rig.v1.PromptResponse
+	8,  // 6: rig.v1.InteractRequest.confirm:type_name -> rig.v1.ConfirmResponse
+	10, // 7: rig.v1.InteractRequest.select:type_name -> rig.v1.SelectResponse
+	0,  // 8: rig.v1.ProgressUpdate.type:type_name -> rig.v1.ProgressUpdate.Type
+	5,  // 9: rig.v1.UIService.Prompt:input_type -> rig.v1.PromptRequest
+	7,  // 10: rig.v1.UIService.Confirm:input_type -> rig.v1.ConfirmRequest
+	9,  // 11: rig.v1.UIService.Select:input_type -> rig.v1.SelectRequest
+	1,  // 12: rig.v1.UIService.UpdateProgress:input_type -> rig.v1.UpdateProgressRequest
+	6,  // 13: rig.v1.UIService.Prompt:output_type -> rig.v1.PromptResponse
+	8,  // 14: rig.v1.UIService.Confirm:output_type -> rig.v1.ConfirmResponse
+	10, // 15: rig.v1.UIService.Select:output_type -> rig.v1.SelectResponse
+	2,  // 16: rig.v1.UIService.UpdateProgress:output_type -> rig.v1.UpdateProgressResponse
+	13, // [13:17] is the sub-list for method output_type
+	9,  // [9:13] is the sub-list for method input_type
+	9,  // [9:9] is the sub-list for extension type_name
+	9,  // [9:9] is the sub-list for extension extendee
+	0,  // [0:9] is the sub-list for field type_name
 }
 
 func init() { file_pkg_api_v1_interaction_proto_init() }
@@ -821,13 +906,13 @@ func file_pkg_api_v1_interaction_proto_init() {
 	if File_pkg_api_v1_interaction_proto != nil {
 		return
 	}
-	file_pkg_api_v1_interaction_proto_msgTypes[0].OneofWrappers = []any{
+	file_pkg_api_v1_interaction_proto_msgTypes[2].OneofWrappers = []any{
 		(*InteractResponse_Prompt)(nil),
 		(*InteractResponse_Confirm)(nil),
 		(*InteractResponse_Select)(nil),
 		(*InteractResponse_Progress)(nil),
 	}
-	file_pkg_api_v1_interaction_proto_msgTypes[1].OneofWrappers = []any{
+	file_pkg_api_v1_interaction_proto_msgTypes[3].OneofWrappers = []any{
 		(*InteractRequest_Prompt)(nil),
 		(*InteractRequest_Confirm)(nil),
 		(*InteractRequest_Select)(nil),
@@ -838,7 +923,7 @@ func file_pkg_api_v1_interaction_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pkg_api_v1_interaction_proto_rawDesc), len(file_pkg_api_v1_interaction_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   9,
+			NumMessages:   11,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

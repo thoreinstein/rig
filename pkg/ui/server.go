@@ -7,11 +7,12 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 
 	"golang.org/x/term"
-	"google.golang.org/protobuf/types/known/emptypb"
 
 	apiv1 "thoreinstein.com/rig/pkg/api/v1"
+	rigerrors "thoreinstein.com/rig/pkg/errors"
 )
 
 type readRequest struct {
@@ -85,7 +86,7 @@ func (s *UIServer) runReader() {
 		// Send response. If the requester has already timed out or canceled,
 		// we use a non-blocking send or just let it drop if the channel is closed.
 		// However, we want to give the requester a chance to receive it if they are
-		// just slightly behind.
+		// just slightly behind. 
 		req.respCh <- readResponse{value: val, err: err}
 	}
 }
@@ -100,19 +101,19 @@ func (s *UIServer) readInput(ctx context.Context, sensitive bool) (string, error
 	// Request a read from the singleton reader
 	select {
 	case <-ctx.Done():
-		return "", ctx.Err()
+		return "", rigerrors.Wrap(ctx.Err(), "input request canceled")
 	case s.readCh <- req:
 	}
 
 	// Wait for the response or cancellation
 	select {
 	case <-ctx.Done():
-		// The background reader is still blocked on os.Stdin, but it's the
-		// ONLY one. The next call to readInput will simply wait for it
-		// to finish or send a new request.
-		return "", ctx.Err()
+		return "", rigerrors.Wrap(ctx.Err(), "input read timed out or canceled")
 	case res := <-respCh:
-		return res.value, res.err
+		if res.err != nil {
+			return "", rigerrors.Wrap(res.err, "failed to read input")
+		}
+		return res.value, nil
 	}
 }
 
@@ -120,7 +121,7 @@ func (s *UIServer) readInput(ctx context.Context, sensitive bool) (string, error
 func (s *UIServer) Prompt(ctx context.Context, req *apiv1.PromptRequest) (*apiv1.PromptResponse, error) {
 	unlock, err := s.coord.Lock(ctx)
 	if err != nil {
-		return nil, err
+		return nil, rigerrors.Wrap(err, "failed to acquire terminal lock for prompt")
 	}
 	defer unlock()
 
@@ -130,6 +131,7 @@ func (s *UIServer) Prompt(ctx context.Context, req *apiv1.PromptRequest) (*apiv1
 	} else if req.DefaultValue != "" {
 		fmt.Printf("(default: %s) ", req.DefaultValue)
 	}
+	os.Stdout.Sync()
 
 	input, err := s.readInput(ctx, req.Sensitive)
 	if err != nil {
@@ -147,7 +149,7 @@ func (s *UIServer) Prompt(ctx context.Context, req *apiv1.PromptRequest) (*apiv1
 func (s *UIServer) Confirm(ctx context.Context, req *apiv1.ConfirmRequest) (*apiv1.ConfirmResponse, error) {
 	unlock, err := s.coord.Lock(ctx)
 	if err != nil {
-		return nil, err
+		return nil, rigerrors.Wrap(err, "failed to acquire terminal lock for confirmation")
 	}
 	defer unlock()
 
@@ -157,6 +159,7 @@ func (s *UIServer) Confirm(ctx context.Context, req *apiv1.ConfirmRequest) (*api
 	}
 
 	fmt.Printf("%s %s ", req.Label, suffix)
+	os.Stdout.Sync()
 
 	input, err := s.readInput(ctx, false)
 	if err != nil {
@@ -176,7 +179,7 @@ func (s *UIServer) Confirm(ctx context.Context, req *apiv1.ConfirmRequest) (*api
 func (s *UIServer) Select(ctx context.Context, req *apiv1.SelectRequest) (*apiv1.SelectResponse, error) {
 	unlock, err := s.coord.Lock(ctx)
 	if err != nil {
-		return nil, err
+		return nil, rigerrors.Wrap(err, "failed to acquire terminal lock for selection")
 	}
 	defer unlock()
 
@@ -192,7 +195,7 @@ func (s *UIServer) Select(ctx context.Context, req *apiv1.SelectRequest) (*apiv1
 	for {
 		select {
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			return nil, rigerrors.Wrap(ctx.Err(), "selection canceled")
 		default:
 			fmt.Printf("Select (1-%d): ", len(req.Options))
 			input, err := s.readInput(ctx, false)
@@ -219,10 +222,21 @@ func (s *UIServer) Select(ctx context.Context, req *apiv1.SelectRequest) (*apiv1
 }
 
 // UpdateProgress provides real-time status updates for a long-running task.
-func (s *UIServer) UpdateProgress(ctx context.Context, req *apiv1.ProgressUpdate) (*emptypb.Empty, error) {
-	// Progress updates are non-blocking and do not require the coordinator lock.
-	if req.Message != "" {
-		fmt.Fprintf(os.Stderr, "--> %s\n", req.Message)
+func (s *UIServer) UpdateProgress(ctx context.Context, req *apiv1.UpdateProgressRequest) (*apiv1.UpdateProgressResponse, error) {
+	// Acquire lock to ensure progress messages don't interleave with blocking UI or other messages.
+	// We use a short timeout for progress updates to avoid stalling the plugin if the terminal is held.
+	lockCtx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+	defer cancel()
+
+	unlock, err := s.coord.Lock(lockCtx)
+	if err != nil {
+		// If we can't get the lock quickly, we skip the update to keep the terminal consistent.
+		return &apiv1.UpdateProgressResponse{}, nil
 	}
-	return &emptypb.Empty{}, nil
+	defer unlock()
+
+	if req.Progress != nil && req.Progress.Message != "" {
+		fmt.Fprintf(os.Stderr, "--> %s\n", req.Progress.Message)
+	}
+	return &apiv1.UpdateProgressResponse{}, nil
 }

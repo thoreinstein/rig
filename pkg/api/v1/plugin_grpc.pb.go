@@ -31,9 +31,9 @@ const (
 type PluginServiceClient interface {
 	// Handshake is the first call made by the host to verify compatibility and establish connection state.
 	Handshake(ctx context.Context, in *HandshakeRequest, opts ...grpc.CallOption) (*HandshakeResponse, error)
+	// Deprecated: Do not use.
 	// Interact opens a bi-directional stream for TUI interactions.
-	// The Host (client) sends InteractRequests (user answers/control signals) and
-	// the Plugin (server) sends InteractResponses (prompts, progress updates).
+	// Deprecated: Use UIService callback pattern instead.
 	Interact(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[InteractRequest, InteractResponse], error)
 }
 
@@ -55,6 +55,7 @@ func (c *pluginServiceClient) Handshake(ctx context.Context, in *HandshakeReques
 	return out, nil
 }
 
+// Deprecated: Do not use.
 func (c *pluginServiceClient) Interact(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[InteractRequest, InteractResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &PluginService_ServiceDesc.Streams[0], PluginService_Interact_FullMethodName, cOpts...)
@@ -76,9 +77,9 @@ type PluginService_InteractClient = grpc.BidiStreamingClient[InteractRequest, In
 type PluginServiceServer interface {
 	// Handshake is the first call made by the host to verify compatibility and establish connection state.
 	Handshake(context.Context, *HandshakeRequest) (*HandshakeResponse, error)
+	// Deprecated: Do not use.
 	// Interact opens a bi-directional stream for TUI interactions.
-	// The Host (client) sends InteractRequests (user answers/control signals) and
-	// the Plugin (server) sends InteractResponses (prompts, progress updates).
+	// Deprecated: Use UIService callback pattern instead.
 	Interact(grpc.BidiStreamingServer[InteractRequest, InteractResponse]) error
 	mustEmbedUnimplementedPluginServiceServer()
 }

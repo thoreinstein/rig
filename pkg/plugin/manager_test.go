@@ -109,6 +109,7 @@ requirements:
 			if err != nil {
 				t.Fatalf("NewManager() failed: %v", err)
 			}
+			defer m.StopAll()
 			m.executor = executor // Inject mock
 
 			p, err := m.getOrStartPlugin(t.Context(), "test-plugin")
