@@ -217,13 +217,10 @@ func (m *Manager) getOrStartPlugin(ctx context.Context, name string) (*Plugin, e
 	}
 
 	// Fetch plugin configuration if provider is available
-	var configJSON []byte
+	configJSON := []byte("{}")
 	if m.configProvider != nil {
-		var err error
-		configJSON, err = m.configProvider(name)
-		if err != nil {
-			// Don't fail if config provider fails, just use empty config
-			configJSON = []byte("{}")
+		if data, err := m.configProvider(name); err == nil && len(data) > 0 {
+			configJSON = data
 		}
 	}
 

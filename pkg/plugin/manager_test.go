@@ -143,3 +143,71 @@ requirements:
 		})
 	}
 }
+
+func TestManager_ConfigDefaulting(t *testing.T) {
+	// Setup a temporary plugin directory
+	tmpDir := t.TempDir()
+	pluginDir := filepath.Join(tmpDir, "plugins")
+	if err := os.Mkdir(pluginDir, 0755); err != nil {
+		t.Fatalf("failed to create plugin dir: %v", err)
+	}
+
+	// Create a dummy executable
+	pluginPath := filepath.Join(pluginDir, "config-test-plugin")
+	if err := os.WriteFile(pluginPath, []byte("#!/bin/sh\necho test"), 0755); err != nil {
+		t.Fatalf("failed to write dummy plugin: %v", err)
+	}
+
+	// Create a manifest
+	manifestPath := filepath.Join(pluginDir, "config-test-plugin.manifest.yaml")
+	manifestContent := "name: config-test-plugin\nversion: 1.0.0\n"
+	if err := os.WriteFile(manifestPath, []byte(manifestContent), 0644); err != nil {
+		t.Fatalf("failed to write manifest: %v", err)
+	}
+
+	scanner := &Scanner{Paths: []string{pluginDir}}
+
+	var capturedConfig []byte
+	executor := &mockExecutor{
+		handshakeFunc: func(ctx context.Context, p *Plugin, rigVersion, apiVersion string, configJSON []byte) error {
+			capturedConfig = configJSON
+			return nil
+		},
+	}
+
+	// Case 1: Nil config provider should result in "{}"
+	m, err := NewManager(NewExecutor(""), scanner, "1.0.0", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.StopAll()
+	m.executor = executor
+
+	_, err = m.getOrStartPlugin(t.Context(), "config-test-plugin")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if string(capturedConfig) != "{}" {
+		t.Errorf("expected config '{}' when provider is nil, got %q", string(capturedConfig))
+	}
+
+	// Case 2: Provider returning error should result in "{}"
+	m2, err := NewManager(NewExecutor(""), scanner, "1.0.0", func(name string) ([]byte, error) {
+		return nil, os.ErrNotExist
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m2.StopAll()
+	m2.executor = executor
+
+	_, err = m2.getOrStartPlugin(t.Context(), "config-test-plugin")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if string(capturedConfig) != "{}" {
+		t.Errorf("expected config '{}' when provider fails, got %q", string(capturedConfig))
+	}
+}
