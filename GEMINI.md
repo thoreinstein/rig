@@ -97,6 +97,8 @@ Rig uses a TOML configuration file, typically located at `~/.config/rig/config.t
 - **Lazy Initialization:** Use `sync.Once` and an `init(ctx)` method for providers requiring SDK setup or context. This avoids passing `context.Context` to constructors and defers initialization until first use.
 - **Interface-Based Mocking:** Test AI providers by injecting and mocking the underlying SDK model interfaces (e.g., Genkit's `ai.Model`). This enables fast, deterministic testing of message mapping and token usage.
 - **Translation Layer:** Maintain internal `ai.Message` and `ai.Response` abstractions. Map these to SDK-specific types within the provider implementation to protect the codebase from underlying SDK breaking changes.
+- **Plugin-First Architecture:** AI providers can be offloaded to standalone gRPC plugins implementing the `AssistantService`. This allows for high-performance gRPC streaming and decoupled provider lifecycles.
+- **Plugin Assistant Provider:** A specialized `ai.Provider` implementation (`PluginAssistantProvider`) acts as a gRPC client to "Assistant" plugins, translating between internal `ai` types and gRPC proto messages.
 
 ### AI Configuration
 Providers are configured in `~/.config/rig/config.toml`.
@@ -159,6 +161,11 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 - **Insecure Local Transport:** Use `insecure.NewCredentials()` for gRPC over UDS, as communication is restricted to the local host.
 - **Total State Reset Pattern:** Handshake logic must explicitly clear all internal state (capabilities, versions) if corresponding response fields are absent. This prevents "ghost state" where Rig retains stale information from previous sessions.
 - **Compatibility Translation Layer:** The host client should act as a translation shim, prioritizing modern structured fields (e.g., `plugin_semver`) but providing fallbacks/translation for legacy tags (e.g., `plugin_version`) to maintain wire compatibility during V1 migration.
+
+#### Capability Modeling & AI
+- **Assistant Capability:** Plugins advertising the `assistant` capability must implement the `AssistantService` (defined in `assistant.proto`) to provide AI completion and streaming services.
+- **Discovery & Lifecycle:** The host's `PluginManager` discovers plugins via `Scanner`, starts them via `Executor`, and manages the connection state. Clients for specific capabilities (like `AssistantServiceClient`) are lazily initialized from the shared gRPC connection.
+- **Dynamic Routing:** The AI factory (`NewProviderWithManager`) can route requests to specific assistant plugins by specifying the `plugin` provider and the plugin's name in the configuration.
 
 ### Protobuf & API Evolution
 - **Tag Immortality:** Field tags in protobuf messages are permanent identities. Never reuse or repurpose a tag number for a different semantic meaning, even if renamed. Use `reserved` for removed tags to prevent future accidental reuse.
