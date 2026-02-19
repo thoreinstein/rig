@@ -15,7 +15,6 @@ import (
 var cfgFile string
 var verbose bool
 var appConfig *config.Config
-var configInitialized bool
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -38,7 +37,7 @@ func Execute() {
 	// This is needed because registerPluginCommands depends on the loaded config.
 	preParseGlobalFlags()
 
-	// 2. Initialize configuration
+	// 2. Initialize configuration (bootstrap)
 	initConfig()
 
 	// 3. Register dynamic commands from plugins
@@ -83,7 +82,7 @@ func init() {
 	// Cobra supports persistent flags, which, if defined here,
 	// will be global for your application.
 
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.config/rig/config.toml)")
+	rootCmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", "", "config file (default is $HOME/.config/rig/config.toml)")
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "verbose output")
 
 	// Remove the example toggle flag
@@ -97,11 +96,6 @@ func init() {
 // 3. User config (~/.config/rig/config.toml)
 // 4. Defaults
 func initConfig() {
-	if configInitialized && os.Getenv("GO_TEST") != "true" {
-		return
-	}
-	configInitialized = true
-
 	if cfgFile != "" {
 		// Use config file from the flag.
 		viper.SetConfigFile(cfgFile)
@@ -130,14 +124,14 @@ func initConfig() {
 	loadRepoLocalConfig()
 
 	// Check for security warnings (tokens in config file)
-	var err error
-	appConfig, err = config.Load()
+	cfg, err := config.Load()
 	if err != nil {
 		if verbose {
 			fmt.Fprintf(os.Stderr, "Warning: could not load config for security checks: %v\n", err)
 		}
 		return
 	}
+	appConfig = cfg
 
 	warnings := config.CheckSecurityWarnings(appConfig)
 	for _, w := range warnings {
@@ -146,11 +140,8 @@ func initConfig() {
 }
 
 // loadConfig returns the already loaded configuration or loads it if it hasn't been yet.
-// In test environments (detected via GO_TEST env var), it always reloads to ensure test isolation.
+// It always returns the latest configuration derived from viper.
 func loadConfig() (*config.Config, error) {
-	if appConfig != nil && os.Getenv("GO_TEST") != "true" {
-		return appConfig, nil
-	}
 	return config.Load()
 }
 
@@ -158,7 +149,7 @@ func loadConfig() (*config.Config, error) {
 // This is primarily used in tests to ensure each test starts with a fresh config.
 func resetConfig() {
 	appConfig = nil
-	configInitialized = false
+	viper.Reset()
 }
 
 // loadRepoLocalConfig loads .rig.toml from current directory or git root.

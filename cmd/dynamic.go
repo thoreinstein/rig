@@ -130,38 +130,13 @@ func runPluginCommand(ctx context.Context, pluginName, commandName string, args 
 	fs.ParseErrorsWhitelist.UnknownFlags = true
 	_ = fs.Parse(args)
 
+	// Re-initialize configuration if host flags were parsed.
+	// This ensures --config or --verbose provided after the subcommand are respected.
+	initConfig()
+
 	// Identify which args are host persistent flags so we can filter them out
 	// before forwarding to the plugin.
-	var pluginArgs []string
-	for i := 0; i < len(args); i++ {
-		arg := args[i]
-		if !strings.HasPrefix(arg, "-") {
-			pluginArgs = append(pluginArgs, arg)
-			continue
-		}
-
-		// Check if this flag or its shorthand is known to the host
-		name := strings.TrimLeft(arg, "-")
-		if strings.Contains(name, "=") {
-			name = strings.Split(name, "=")[0]
-		}
-
-		f := fs.Lookup(name)
-		if f == nil && len(name) == 1 {
-			f = fs.ShorthandLookup(name)
-		}
-
-		if f != nil {
-			// It's a host flag. If it's not a boolean, skip its value too.
-			if f.Value.Type() != "bool" && !strings.Contains(arg, "=") {
-				i++
-			}
-			continue
-		}
-
-		// Unknown flag, belongs to the plugin
-		pluginArgs = append(pluginArgs, arg)
-	}
+	pluginArgs := filterHostFlags(args)
 
 	cfg, err := loadConfig()
 	if err != nil {
@@ -228,4 +203,56 @@ func runPluginCommand(ctx context.Context, pluginName, commandName string, args 
 	}
 
 	return nil
+}
+
+// filterHostFlags removes host persistent flags and their values from the provided arguments.
+// It respects the '--' separator, stopping all filtering once it's encountered.
+func filterHostFlags(args []string) []string {
+	fs := rootCmd.PersistentFlags()
+	var result []string
+	stopFiltering := false
+
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+
+		if stopFiltering {
+			result = append(result, arg)
+			continue
+		}
+
+		if arg == "--" {
+			stopFiltering = true
+			result = append(result, arg)
+			continue
+		}
+
+		if !strings.HasPrefix(arg, "-") {
+			result = append(result, arg)
+			continue
+		}
+
+		// Check if this flag or its shorthand is known to the host
+		name := strings.TrimLeft(arg, "-")
+		if strings.Contains(name, "=") {
+			name = strings.Split(name, "=")[0]
+		}
+
+		f := fs.Lookup(name)
+		if f == nil && len(name) == 1 {
+			f = fs.ShorthandLookup(name)
+		}
+
+		if f != nil {
+			// It's a host flag. If it's not a boolean, skip its value too.
+			if f.Value.Type() != "bool" && !strings.Contains(arg, "=") {
+				i++
+			}
+			continue
+		}
+
+		// Unknown flag, belongs to the plugin
+		result = append(result, arg)
+	}
+
+	return result
 }

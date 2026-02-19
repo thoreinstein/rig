@@ -368,3 +368,66 @@ func TestPreParseGlobalFlags_StopsAtSubcommand(t *testing.T) {
 		t.Errorf("cfgFile should be empty (intercepted plugin flag), got %q", cfgFile)
 	}
 }
+
+func TestFilterHostFlags(t *testing.T) {
+	// Setup test args
+	// --verbose is boolean host flag
+	// --config is non-boolean host flag
+	tests := []struct {
+		name string
+		args []string
+		want []string
+	}{
+		{
+			name: "No host flags",
+			args: []string{"arg1", "arg2"},
+			want: []string{"arg1", "arg2"},
+		},
+		{
+			name: "Boolean host flag",
+			args: []string{"--verbose", "arg1"},
+			want: []string{"arg1"},
+		},
+		{
+			name: "Non-boolean host flag with value",
+			args: []string{"--config", "custom.toml", "arg1"},
+			want: []string{"arg1"},
+		},
+		{
+			name: "Mixed flags",
+			args: []string{"--verbose", "arg1", "--config", "c.toml", "--plugin-flag"},
+			want: []string{"arg1", "--plugin-flag"},
+		},
+		{
+			name: "Double dash preserves everything after",
+			args: []string{"--verbose", "--", "--verbose", "arg1"},
+			want: []string{"--", "--verbose", "arg1"},
+		},
+		{
+			name: "Shorthand flags",
+			args: []string{"-v", "-c", "c.toml", "arg1"},
+			want: []string{"arg1"},
+		},
+		{
+			name: "Flag with equals sign",
+			args: []string{"--config=c.toml", "arg1"},
+			want: []string{"arg1"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := filterHostFlags(tt.args)
+			if len(got) != len(tt.want) {
+				t.Errorf("filterHostFlags() = %v, want %v", got, tt.want)
+				return
+			}
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Errorf("filterHostFlags() = %v, want %v", got, tt.want)
+					break
+				}
+			}
+		})
+	}
+}
