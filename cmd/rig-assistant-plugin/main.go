@@ -21,9 +21,9 @@ type server struct {
 
 func (s *server) Handshake(ctx context.Context, req *apiv1.HandshakeRequest) (*apiv1.HandshakeResponse, error) {
 	return &apiv1.HandshakeResponse{
-		PluginId:      "sample-assistant",
-		ApiVersion:    "v1",
-		PluginSemver:  "v0.1.0",
+		PluginId:     "sample-assistant",
+		ApiVersion:   "v1",
+		PluginSemver: "v0.1.0",
 		Capabilities: []*apiv1.Capability{
 			{Name: "assistant", Version: "1.0.0"},
 		},
