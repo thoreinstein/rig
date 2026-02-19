@@ -9,36 +9,36 @@ import (
 )
 
 type mockExecutor struct {
-	start_func          func(ctx context.Context, p *Plugin) error
-	stop_func           func(p *Plugin) error
-	prepare_client_func func(p *Plugin) error
-	handshake_func      func(ctx context.Context, p *Plugin, rigVersion, apiVersion string) error
+	startFunc         func(ctx context.Context, p *Plugin) error
+	stopFunc          func(p *Plugin) error
+	prepareClientFunc func(p *Plugin) error
+	handshakeFunc     func(ctx context.Context, p *Plugin, rigVersion, apiVersion string) error
 }
 
 func (m *mockExecutor) Start(ctx context.Context, p *Plugin) error {
-	if m.start_func != nil {
-		return m.start_func(ctx, p)
+	if m.startFunc != nil {
+		return m.startFunc(ctx, p)
 	}
 	return nil
 }
 
 func (m *mockExecutor) Stop(p *Plugin) error {
-	if m.stop_func != nil {
-		return m.stop_func(p)
+	if m.stopFunc != nil {
+		return m.stopFunc(p)
 	}
 	return nil
 }
 
 func (m *mockExecutor) PrepareClient(p *Plugin) error {
-	if m.prepare_client_func != nil {
-		return m.prepare_client_func(p)
+	if m.prepareClientFunc != nil {
+		return m.prepareClientFunc(p)
 	}
 	return nil
 }
 
 func (m *mockExecutor) Handshake(ctx context.Context, p *Plugin, rigVersion, apiVersion string) error {
-	if m.handshake_func != nil {
-		return m.handshake_func(ctx, p, rigVersion, apiVersion)
+	if m.handshakeFunc != nil {
+		return m.handshakeFunc(ctx, p, rigVersion, apiVersion)
 	}
 	return nil
 }
@@ -95,7 +95,7 @@ requirements:
 		t.Run(tc.name, func(t *testing.T) {
 			var capturedPlugin *Plugin
 			executor := &mockExecutor{
-				handshake_func: func(ctx context.Context, p *Plugin, rigVersion, apiVersion string) error {
+				handshakeFunc: func(ctx context.Context, p *Plugin, rigVersion, apiVersion string) error {
 					// Handshake normally updates metadata
 					p.Version = "1.0.0"
 					capturedPlugin = p
@@ -115,7 +115,10 @@ requirements:
 					t.Errorf("expected incompatibility error, got: %v", err)
 				}
 				// Verify the status was set correctly on the plugin object
-				if capturedPlugin != nil && capturedPlugin.Status != tc.wantStatus {
+				if capturedPlugin == nil {
+					t.Fatal("expected handshake to have been called and captured plugin")
+				}
+				if capturedPlugin.Status != tc.wantStatus {
 					t.Errorf("expected plugin status %q, got %q", tc.wantStatus, capturedPlugin.Status)
 				}
 				return
