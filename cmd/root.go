@@ -15,6 +15,8 @@ import (
 var cfgFile string
 var verbose bool
 var appConfig *config.Config
+var lastLoadedConfig string
+var lastLoadedVerbose bool
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -80,6 +82,8 @@ func preParseGlobalFlags() {
 }
 
 func init() {
+	cobra.OnInitialize(initConfig)
+
 	// Here you will define your flags and configuration settings.
 	// Cobra supports persistent flags, which, if defined here,
 	// will be global for your application.
@@ -98,6 +102,11 @@ func init() {
 // 3. User config (~/.config/rig/config.toml)
 // 4. Defaults
 func initConfig() {
+	// Skip if already loaded with same parameters (unless in test)
+	if os.Getenv("GO_TEST") != "true" && appConfig != nil && cfgFile == lastLoadedConfig && verbose == lastLoadedVerbose {
+		return
+	}
+
 	if cfgFile != "" {
 		// Use config file from the flag.
 		viper.SetConfigFile(cfgFile)
@@ -117,13 +126,18 @@ func initConfig() {
 	viper.AutomaticEnv()                                   // read in environment variables that match
 
 	// If a config file is found, read it in.
-	if err := viper.ReadInConfig(); err == nil && verbose {
+	err := viper.ReadInConfig()
+	if err == nil && verbose {
 		fmt.Fprintln(os.Stderr, "Using config file:", viper.ConfigFileUsed())
 	}
 
 	// Load repository-local config (.rig.toml) if present
 	// This merges on top of the user config, allowing per-repo overrides
 	loadRepoLocalConfig()
+
+	// Update state
+	lastLoadedConfig = cfgFile
+	lastLoadedVerbose = verbose
 
 	// Check for security warnings (tokens in config file)
 	cfg, err := config.Load()

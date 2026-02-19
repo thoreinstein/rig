@@ -444,6 +444,12 @@ func TestFilterHostFlags(t *testing.T) {
 			wantPlugin: []string{"-cfoo", "arg1"},
 			wantHost:   []string{},
 		},
+		{
+			name:       "Attached host shorthand consumed",
+			args:       []string{"-Cattached.toml", "arg1"},
+			wantPlugin: []string{"arg1"},
+			wantHost:   []string{"-Cattached.toml"},
+		},
 	}
 
 	for _, tt := range tests {

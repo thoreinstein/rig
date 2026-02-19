@@ -9,6 +9,7 @@ import (
 
 	"github.com/cockroachdb/errors"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 
 	apiv1 "thoreinstein.com/rig/pkg/api/v1"
 	"thoreinstein.com/rig/pkg/plugin"
@@ -131,7 +132,7 @@ func runPluginCommand(ctx context.Context, pluginName, commandName string, args 
 
 	// Re-parse host persistent flags from extracted hostArgs.
 	fs := rootCmd.PersistentFlags()
-	fs.ParseErrorsWhitelist.UnknownFlags = true
+	fs.ParseErrorsAllowlist.UnknownFlags = true
 	if err := fs.Parse(hostArgs); err != nil {
 		return errors.Wrap(err, "failed to parse host flags")
 	}
@@ -235,29 +236,47 @@ func filterHostFlags(args []string) ([]string, []string) {
 			continue
 		}
 
-		if !strings.HasPrefix(arg, "-") {
+		if !strings.HasPrefix(arg, "-") || arg == "-" {
 			pluginArgs = append(pluginArgs, arg)
 			continue
 		}
 
-		// Check if this flag or its shorthand is known to the host
+		// Handle long flags (--flag) and shorthand (-f)
+		isLong := strings.HasPrefix(arg, "--")
 		name := strings.TrimLeft(arg, "-")
 		if strings.Contains(name, "=") {
 			name = strings.Split(name, "=")[0]
 		}
 
-		f := fs.Lookup(name)
-		if f == nil && len(name) == 1 {
-			f = fs.ShorthandLookup(name)
+		var f *pflag.Flag
+		if isLong {
+			f = fs.Lookup(name)
+		} else if len(name) > 0 {
+			// Check if the first character is a valid shorthand
+			f = fs.ShorthandLookup(name[:1])
 		}
 
 		if f != nil {
 			// It's a host flag.
 			hostArgs = append(hostArgs, arg)
-			// If it's not a boolean and has no inline value, the next arg is its value.
-			if f.Value.Type() != "bool" && !strings.Contains(arg, "=") && i+1 < len(args) {
-				hostArgs = append(hostArgs, args[i+1])
-				i++
+
+			// Handle value for non-boolean flags
+			if f.Value.Type() != "bool" {
+				if isLong {
+					// --config file OR --config=file
+					if !strings.Contains(arg, "=") && i+1 < len(args) {
+						hostArgs = append(hostArgs, args[i+1])
+						i++
+					}
+				} else {
+					// -Cfile OR -C file
+					if len(name) == 1 && i+1 < len(args) {
+						// -C file
+						hostArgs = append(hostArgs, args[i+1])
+						i++
+					}
+					// -Cfile is already part of hostArgs via 'arg'
+				}
 			}
 			continue
 		}
