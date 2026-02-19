@@ -76,7 +76,7 @@ func (x *Message) GetContent() string {
 	return ""
 }
 
-// ChatRequest is the input for both Chat and StreamChat.
+// ChatRequest is the input for Chat.
 type ChatRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// messages is the conversation history.
@@ -195,31 +195,29 @@ func (x *ChatResponse) GetOutputTokens() int32 {
 	return 0
 }
 
-// ChatChunk is a fragment of a streaming response.
-type ChatChunk struct {
+// StreamChatRequest is the input for StreamChat.
+type StreamChatRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// content is the fragment of text generated in this chunk.
-	Content string `protobuf:"bytes,1,opt,name=content,proto3" json:"content,omitempty"`
-	// done is true if this is the final chunk of the stream.
-	Done          bool `protobuf:"varint,2,opt,name=done,proto3" json:"done,omitempty"`
+	// messages is the conversation history.
+	Messages      []*Message `protobuf:"bytes,1,rep,name=messages,proto3" json:"messages,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *ChatChunk) Reset() {
-	*x = ChatChunk{}
+func (x *StreamChatRequest) Reset() {
+	*x = StreamChatRequest{}
 	mi := &file_pkg_api_v1_assistant_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ChatChunk) String() string {
+func (x *StreamChatRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ChatChunk) ProtoMessage() {}
+func (*StreamChatRequest) ProtoMessage() {}
 
-func (x *ChatChunk) ProtoReflect() protoreflect.Message {
+func (x *StreamChatRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_pkg_api_v1_assistant_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -231,19 +229,67 @@ func (x *ChatChunk) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ChatChunk.ProtoReflect.Descriptor instead.
-func (*ChatChunk) Descriptor() ([]byte, []int) {
+// Deprecated: Use StreamChatRequest.ProtoReflect.Descriptor instead.
+func (*StreamChatRequest) Descriptor() ([]byte, []int) {
 	return file_pkg_api_v1_assistant_proto_rawDescGZIP(), []int{3}
 }
 
-func (x *ChatChunk) GetContent() string {
+func (x *StreamChatRequest) GetMessages() []*Message {
+	if x != nil {
+		return x.Messages
+	}
+	return nil
+}
+
+// StreamChatResponse is a fragment of a streaming response.
+type StreamChatResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// content is the fragment of text generated in this chunk.
+	Content string `protobuf:"bytes,1,opt,name=content,proto3" json:"content,omitempty"`
+	// done is true if this is the final chunk of the stream.
+	Done          bool `protobuf:"varint,2,opt,name=done,proto3" json:"done,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StreamChatResponse) Reset() {
+	*x = StreamChatResponse{}
+	mi := &file_pkg_api_v1_assistant_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StreamChatResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StreamChatResponse) ProtoMessage() {}
+
+func (x *StreamChatResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_api_v1_assistant_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StreamChatResponse.ProtoReflect.Descriptor instead.
+func (*StreamChatResponse) Descriptor() ([]byte, []int) {
+	return file_pkg_api_v1_assistant_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *StreamChatResponse) GetContent() string {
 	if x != nil {
 		return x.Content
 	}
 	return ""
 }
 
-func (x *ChatChunk) GetDone() bool {
+func (x *StreamChatResponse) GetDone() bool {
 	if x != nil {
 		return x.Done
 	}
@@ -265,14 +311,16 @@ const file_pkg_api_v1_assistant_proto_rawDesc = "" +
 	"\vstop_reason\x18\x02 \x01(\tR\n" +
 	"stopReason\x12!\n" +
 	"\finput_tokens\x18\x03 \x01(\x05R\vinputTokens\x12#\n" +
-	"\routput_tokens\x18\x04 \x01(\x05R\foutputTokens\"9\n" +
-	"\tChatChunk\x12\x18\n" +
+	"\routput_tokens\x18\x04 \x01(\x05R\foutputTokens\"@\n" +
+	"\x11StreamChatRequest\x12+\n" +
+	"\bmessages\x18\x01 \x03(\v2\x0f.rig.v1.MessageR\bmessages\"B\n" +
+	"\x12StreamChatResponse\x12\x18\n" +
 	"\acontent\x18\x01 \x01(\tR\acontent\x12\x12\n" +
-	"\x04done\x18\x02 \x01(\bR\x04done2}\n" +
+	"\x04done\x18\x02 \x01(\bR\x04done2\x8c\x01\n" +
 	"\x10AssistantService\x121\n" +
-	"\x04Chat\x12\x13.rig.v1.ChatRequest\x1a\x14.rig.v1.ChatResponse\x126\n" +
+	"\x04Chat\x12\x13.rig.v1.ChatRequest\x1a\x14.rig.v1.ChatResponse\x12E\n" +
 	"\n" +
-	"StreamChat\x12\x13.rig.v1.ChatRequest\x1a\x11.rig.v1.ChatChunk0\x01B'Z%thoreinstein.com/rig/pkg/api/v1;apiv1b\x06proto3"
+	"StreamChat\x12\x19.rig.v1.StreamChatRequest\x1a\x1a.rig.v1.StreamChatResponse0\x01B'Z%thoreinstein.com/rig/pkg/api/v1;apiv1b\x06proto3"
 
 var (
 	file_pkg_api_v1_assistant_proto_rawDescOnce sync.Once
@@ -286,24 +334,26 @@ func file_pkg_api_v1_assistant_proto_rawDescGZIP() []byte {
 	return file_pkg_api_v1_assistant_proto_rawDescData
 }
 
-var file_pkg_api_v1_assistant_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_pkg_api_v1_assistant_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_pkg_api_v1_assistant_proto_goTypes = []any{
-	(*Message)(nil),      // 0: rig.v1.Message
-	(*ChatRequest)(nil),  // 1: rig.v1.ChatRequest
-	(*ChatResponse)(nil), // 2: rig.v1.ChatResponse
-	(*ChatChunk)(nil),    // 3: rig.v1.ChatChunk
+	(*Message)(nil),            // 0: rig.v1.Message
+	(*ChatRequest)(nil),        // 1: rig.v1.ChatRequest
+	(*ChatResponse)(nil),       // 2: rig.v1.ChatResponse
+	(*StreamChatRequest)(nil),  // 3: rig.v1.StreamChatRequest
+	(*StreamChatResponse)(nil), // 4: rig.v1.StreamChatResponse
 }
 var file_pkg_api_v1_assistant_proto_depIdxs = []int32{
 	0, // 0: rig.v1.ChatRequest.messages:type_name -> rig.v1.Message
-	1, // 1: rig.v1.AssistantService.Chat:input_type -> rig.v1.ChatRequest
-	1, // 2: rig.v1.AssistantService.StreamChat:input_type -> rig.v1.ChatRequest
-	2, // 3: rig.v1.AssistantService.Chat:output_type -> rig.v1.ChatResponse
-	3, // 4: rig.v1.AssistantService.StreamChat:output_type -> rig.v1.ChatChunk
-	3, // [3:5] is the sub-list for method output_type
-	1, // [1:3] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	0, // 1: rig.v1.StreamChatRequest.messages:type_name -> rig.v1.Message
+	1, // 2: rig.v1.AssistantService.Chat:input_type -> rig.v1.ChatRequest
+	3, // 3: rig.v1.AssistantService.StreamChat:input_type -> rig.v1.StreamChatRequest
+	2, // 4: rig.v1.AssistantService.Chat:output_type -> rig.v1.ChatResponse
+	4, // 5: rig.v1.AssistantService.StreamChat:output_type -> rig.v1.StreamChatResponse
+	4, // [4:6] is the sub-list for method output_type
+	2, // [2:4] is the sub-list for method input_type
+	2, // [2:2] is the sub-list for extension type_name
+	2, // [2:2] is the sub-list for extension extendee
+	0, // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_pkg_api_v1_assistant_proto_init() }
@@ -317,7 +367,7 @@ func file_pkg_api_v1_assistant_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pkg_api_v1_assistant_proto_rawDesc), len(file_pkg_api_v1_assistant_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   4,
+			NumMessages:   5,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

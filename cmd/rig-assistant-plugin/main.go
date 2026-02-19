@@ -39,10 +39,10 @@ func (s *server) Chat(ctx context.Context, req *apiv1.ChatRequest) (*apiv1.ChatR
 	}, nil
 }
 
-func (s *server) StreamChat(req *apiv1.ChatRequest, stream apiv1.AssistantService_StreamChatServer) error {
+func (s *server) StreamChat(req *apiv1.StreamChatRequest, stream apiv1.AssistantService_StreamChatServer) error {
 	words := []string{"Hello,", " I", " am", " a", " sample", " AI", " plugin!"}
 	for i, word := range words {
-		if err := stream.Send(&apiv1.ChatChunk{
+		if err := stream.Send(&apiv1.StreamChatResponse{
 			Content: word,
 			Done:    i == len(words)-1,
 		}); err != nil {

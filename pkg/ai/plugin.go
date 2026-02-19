@@ -51,7 +51,7 @@ func (p *PluginAssistantProvider) Chat(ctx context.Context, messages []Message) 
 
 // StreamChat performs a streaming chat completion via gRPC.
 func (p *PluginAssistantProvider) StreamChat(ctx context.Context, messages []Message) (<-chan StreamChunk, error) {
-	req := &apiv1.ChatRequest{
+	req := &apiv1.StreamChatRequest{
 		Messages: p.toProtoMessages(messages),
 	}
 

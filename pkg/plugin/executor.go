@@ -65,7 +65,7 @@ func (e *Executor) Start(ctx context.Context, p *Plugin) error {
 
 	// 3. Prepare the command
 	// #nosec G204
-	cmd := exec.CommandContext(procCtx, p.Path)
+	cmd := exec.CommandContext(procCtx, p.Path, p.Args...)
 	cmd.Env = os.Environ()
 	cmd.Env = append(cmd.Env, "RIG_PLUGIN_ENDPOINT="+p.socketPath)
 

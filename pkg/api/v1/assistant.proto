@@ -10,7 +10,7 @@ service AssistantService {
   rpc Chat(ChatRequest) returns (ChatResponse);
 
   // StreamChat performs a streaming chat completion.
-  rpc StreamChat(ChatRequest) returns (stream ChatChunk);
+  rpc StreamChat(StreamChatRequest) returns (stream StreamChatResponse);
 }
 
 // Message represents a single message in a conversation.
@@ -21,7 +21,7 @@ message Message {
   string content = 2;
 }
 
-// ChatRequest is the input for both Chat and StreamChat.
+// ChatRequest is the input for Chat.
 message ChatRequest {
   // messages is the conversation history.
   repeated Message messages = 1;
@@ -39,8 +39,14 @@ message ChatResponse {
   int32 output_tokens = 4;
 }
 
-// ChatChunk is a fragment of a streaming response.
-message ChatChunk {
+// StreamChatRequest is the input for StreamChat.
+message StreamChatRequest {
+  // messages is the conversation history.
+  repeated Message messages = 1;
+}
+
+// StreamChatResponse is a fragment of a streaming response.
+message StreamChatResponse {
   // content is the fragment of text generated in this chunk.
   string content = 1;
   // done is true if this is the final chunk of the stream.

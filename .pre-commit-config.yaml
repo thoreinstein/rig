@@ -6,13 +6,13 @@ repos:
     hooks:
       - id: golangci-lint
         name: golangci-lint
-        entry: sh -c 'GOFLAGS=-buildvcs=false golangci-lint run --timeout=5m'
+        entry: sh -c 'GOFLAGS=-buildvcs=false golangci-lint run --timeout=5m ./...'
         language: system
         types: [go]
         pass_filenames: false
       - id: golangci-lint-fmt
         name: golangci-lint fmt
-        entry: sh -c 'GOFLAGS=-buildvcs=false golangci-lint fmt'
+        entry: sh -c 'GOFLAGS=-buildvcs=false golangci-lint fmt ./...'
         language: system
         types: [go]
         pass_filenames: false
@@ -28,10 +28,22 @@ repos:
     hooks:
       - id: go-build
         name: go build
-        entry: go build -buildvcs=false -o /dev/null .
+        entry: go build -buildvcs=false -o /dev/null ./...
         language: system
         pass_filenames: false
         types: [go]
+      - id: go-test
+        name: go test
+        entry: sh -c 'unset $(env | grep -o "^GIT_[^=]*" | xargs); go test ./...'
+        language: system
+        pass_filenames: false
+        types: [go]
+      - id: buf-lint
+        name: buf lint
+        entry: buf lint
+        language: system
+        types: [proto]
+        pass_filenames: false
 
   # General file hygiene
   - repo: https://github.com/pre-commit/pre-commit-hooks

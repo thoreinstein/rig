@@ -32,7 +32,7 @@ type AssistantServiceClient interface {
 	// Chat performs a single-turn chat completion.
 	Chat(ctx context.Context, in *ChatRequest, opts ...grpc.CallOption) (*ChatResponse, error)
 	// StreamChat performs a streaming chat completion.
-	StreamChat(ctx context.Context, in *ChatRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ChatChunk], error)
+	StreamChat(ctx context.Context, in *StreamChatRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[StreamChatResponse], error)
 }
 
 type assistantServiceClient struct {
@@ -53,13 +53,13 @@ func (c *assistantServiceClient) Chat(ctx context.Context, in *ChatRequest, opts
 	return out, nil
 }
 
-func (c *assistantServiceClient) StreamChat(ctx context.Context, in *ChatRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ChatChunk], error) {
+func (c *assistantServiceClient) StreamChat(ctx context.Context, in *StreamChatRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[StreamChatResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &AssistantService_ServiceDesc.Streams[0], AssistantService_StreamChat_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &grpc.GenericClientStream[ChatRequest, ChatChunk]{ClientStream: stream}
+	x := &grpc.GenericClientStream[StreamChatRequest, StreamChatResponse]{ClientStream: stream}
 	if err := x.ClientStream.SendMsg(in); err != nil {
 		return nil, err
 	}
@@ -70,7 +70,7 @@ func (c *assistantServiceClient) StreamChat(ctx context.Context, in *ChatRequest
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type AssistantService_StreamChatClient = grpc.ServerStreamingClient[ChatChunk]
+type AssistantService_StreamChatClient = grpc.ServerStreamingClient[StreamChatResponse]
 
 // AssistantServiceServer is the server API for AssistantService service.
 // All implementations must embed UnimplementedAssistantServiceServer
@@ -81,7 +81,7 @@ type AssistantServiceServer interface {
 	// Chat performs a single-turn chat completion.
 	Chat(context.Context, *ChatRequest) (*ChatResponse, error)
 	// StreamChat performs a streaming chat completion.
-	StreamChat(*ChatRequest, grpc.ServerStreamingServer[ChatChunk]) error
+	StreamChat(*StreamChatRequest, grpc.ServerStreamingServer[StreamChatResponse]) error
 	mustEmbedUnimplementedAssistantServiceServer()
 }
 
@@ -95,7 +95,7 @@ type UnimplementedAssistantServiceServer struct{}
 func (UnimplementedAssistantServiceServer) Chat(context.Context, *ChatRequest) (*ChatResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Chat not implemented")
 }
-func (UnimplementedAssistantServiceServer) StreamChat(*ChatRequest, grpc.ServerStreamingServer[ChatChunk]) error {
+func (UnimplementedAssistantServiceServer) StreamChat(*StreamChatRequest, grpc.ServerStreamingServer[StreamChatResponse]) error {
 	return status.Errorf(codes.Unimplemented, "method StreamChat not implemented")
 }
 func (UnimplementedAssistantServiceServer) mustEmbedUnimplementedAssistantServiceServer() {}
@@ -138,15 +138,15 @@ func _AssistantService_Chat_Handler(srv interface{}, ctx context.Context, dec fu
 }
 
 func _AssistantService_StreamChat_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(ChatRequest)
+	m := new(StreamChatRequest)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(AssistantServiceServer).StreamChat(m, &grpc.GenericServerStream[ChatRequest, ChatChunk]{ServerStream: stream})
+	return srv.(AssistantServiceServer).StreamChat(m, &grpc.GenericServerStream[StreamChatRequest, StreamChatResponse]{ServerStream: stream})
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type AssistantService_StreamChatServer = grpc.ServerStreamingServer[ChatChunk]
+type AssistantService_StreamChatServer = grpc.ServerStreamingServer[StreamChatResponse]
 
 // AssistantService_ServiceDesc is the grpc.ServiceDesc for AssistantService service.
 // It's only intended for direct use with grpc.RegisterService,

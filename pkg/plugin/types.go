@@ -49,6 +49,7 @@ type Plugin struct {
 	Version      string
 	APIVersion   string `json:"api_version"`
 	Path         string
+	Args         []string
 	Source       string // Origin of the plugin: "system" or "project"
 	Status       Status
 	Description  string

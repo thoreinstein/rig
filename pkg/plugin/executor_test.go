@@ -81,48 +81,31 @@ exit 1
 }
 
 func TestExecutor_HostEndpoint(t *testing.T) {
-	if _, err := exec.LookPath("bash"); err != nil {
-		t.Skip("bash not found, skipping test")
-	}
-
 	tmpDir := t.TempDir()
 	hostSocket := filepath.Join(tmpDir, "host.sock")
 
-	// Create a script that fails if RIG_HOST_ENDPOINT is not set correctly
-	pluginPath := filepath.Join(tmpDir, "env-check-plugin")
-	script := `#!/bin/bash
-if [ "$RIG_HOST_ENDPOINT" != "` + hostSocket + `" ]; then
-    echo "Expected RIG_HOST_ENDPOINT=` + hostSocket + `, got $RIG_HOST_ENDPOINT" >&2
-    exit 1
-fi
-# Satisfy handshake by creating a real listening UDS socket
-if [ -n "$RIG_PLUGIN_ENDPOINT" ]; then
-    python3 -c "import socket, time; s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM); s.bind('$RIG_PLUGIN_ENDPOINT'); s.listen(1); time.sleep(2)"
-fi
-exit 0
-`
-	if err := os.WriteFile(pluginPath, []byte(script), 0755); err != nil {
-		t.Fatal(err)
-	}
-
 	p := &Plugin{
 		Name: "env-plugin",
-		Path: pluginPath,
+		Path: "go", // We'll use 'go run'
 	}
 
 	e := NewExecutor(hostSocket)
 
-	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+	// Update path to run our mock plugin
+	p.Path = "go"
+	oldArgs := p.Args
+	p.Args = []string{"run", "testdata/mock_plugin.go"}
+	defer func() { p.Args = oldArgs }()
+
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 
-	// Use a modified waitForSocket check for this test since we're just touching the file
 	err := e.Start(ctx, p)
 	if err != nil {
 		t.Fatalf("Start() failed: %v", err)
 	}
-	defer func() { _ = e.Stop(p) }()
+	_ = e.Stop(p)
 }
-
 func TestExecutor_Start_Timeout(t *testing.T) {
 	if _, err := exec.LookPath("bash"); err != nil {
 		t.Skip("bash not found, skipping test")

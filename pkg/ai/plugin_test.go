@@ -14,14 +14,14 @@ import (
 type mockAssistantServer struct {
 	apiv1.UnimplementedAssistantServiceServer
 	chatFn       func(ctx context.Context, req *apiv1.ChatRequest) (*apiv1.ChatResponse, error)
-	streamChatFn func(req *apiv1.ChatRequest, stream apiv1.AssistantService_StreamChatServer) error
+	streamChatFn func(req *apiv1.StreamChatRequest, stream apiv1.AssistantService_StreamChatServer) error
 }
 
 func (m *mockAssistantServer) Chat(ctx context.Context, req *apiv1.ChatRequest) (*apiv1.ChatResponse, error) {
 	return m.chatFn(ctx, req)
 }
 
-func (m *mockAssistantServer) StreamChat(req *apiv1.ChatRequest, stream apiv1.AssistantService_StreamChatServer) error {
+func (m *mockAssistantServer) StreamChat(req *apiv1.StreamChatRequest, stream apiv1.AssistantService_StreamChatServer) error {
 	return m.streamChatFn(req, stream)
 }
 
@@ -34,29 +34,26 @@ func (m *mockAssistantClient) Chat(ctx context.Context, in *apiv1.ChatRequest, o
 	return m.server.Chat(ctx, in)
 }
 
-func (m *mockAssistantClient) StreamChat(ctx context.Context, in *apiv1.ChatRequest, opts ...grpc.CallOption) (apiv1.AssistantService_StreamChatClient, error) {
-	// For testing StreamChat, we need a way to pipe results.
-	// This is a bit complex for a simple mock, so we'll use a real pipe if needed,
-	// but for now let's try a simplified approach.
+func (m *mockAssistantClient) StreamChat(ctx context.Context, in *apiv1.StreamChatRequest, opts ...grpc.CallOption) (apiv1.AssistantService_StreamChatClient, error) {
 	return &mockStreamClient{ctx: ctx, req: in, server: m.server}, nil
 }
 
 type mockStreamClient struct {
 	grpc.ClientStream
 	ctx    context.Context
-	req    *apiv1.ChatRequest
+	req    *apiv1.StreamChatRequest
 	server *mockAssistantServer
 
 	// Internal state to simulate the stream
-	chunks  chan *apiv1.ChatChunk
+	chunks  chan *apiv1.StreamChatResponse
 	err     error
 	started bool
 }
 
-func (m *mockStreamClient) Recv() (*apiv1.ChatChunk, error) {
+func (m *mockStreamClient) Recv() (*apiv1.StreamChatResponse, error) {
 	if !m.started {
 		m.started = true
-		m.chunks = make(chan *apiv1.ChatChunk, 10)
+		m.chunks = make(chan *apiv1.StreamChatResponse, 10)
 		go func() {
 			err := m.server.StreamChat(m.req, &mockStreamServer{chunks: m.chunks, ctx: m.ctx})
 			if err != nil && err != io.EOF {
@@ -78,11 +75,11 @@ func (m *mockStreamClient) Recv() (*apiv1.ChatChunk, error) {
 
 type mockStreamServer struct {
 	grpc.ServerStream
-	chunks chan *apiv1.ChatChunk
+	chunks chan *apiv1.StreamChatResponse
 	ctx    context.Context
 }
 
-func (m *mockStreamServer) Send(chunk *apiv1.ChatChunk) error {
+func (m *mockStreamServer) Send(chunk *apiv1.StreamChatResponse) error {
 	m.chunks <- chunk
 	return nil
 }
@@ -121,9 +118,9 @@ func TestPluginAssistantProvider_Chat(t *testing.T) {
 
 func TestPluginAssistantProvider_StreamChat(t *testing.T) {
 	mockServer := &mockAssistantServer{
-		streamChatFn: func(req *apiv1.ChatRequest, stream apiv1.AssistantService_StreamChatServer) error {
-			_ = stream.Send(&apiv1.ChatChunk{Content: "Part 1"})
-			_ = stream.Send(&apiv1.ChatChunk{Content: " Part 2", Done: true})
+		streamChatFn: func(req *apiv1.StreamChatRequest, stream apiv1.AssistantService_StreamChatServer) error {
+			_ = stream.Send(&apiv1.StreamChatResponse{Content: "Part 1"})
+			_ = stream.Send(&apiv1.StreamChatResponse{Content: " Part 2", Done: true})
 			return nil
 		},
 	}
