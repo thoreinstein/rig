@@ -151,3 +151,106 @@ commands:
 		}
 	}
 }
+
+func TestRegisterPluginCommands_Collision(t *testing.T) {
+	// Setup a temporary plugin directory
+	tmpDir := t.TempDir()
+	pluginDir := filepath.Join(tmpDir, ".rig", "plugins")
+	if err := os.MkdirAll(pluginDir, 0755); err != nil {
+		t.Fatalf("failed to create plugin dir: %v", err)
+	}
+
+	// Create two plugins: one that collides with built-in, and one that collides with another plugin
+
+	// Plugin 1: name collides with built-in "version", alias collides with built-in "v" (fake alias)
+	// Actually, let's just use "help" as it's built-in.
+	p1Path := filepath.Join(pluginDir, "p1")
+	if err := os.WriteFile(p1Path, []byte("#!/bin/sh\necho p1"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	p1Manifest := `
+name: p1
+version: 1.0.0
+commands:
+  - name: version
+    short: "Collides with built-in"
+  - name: p1-cmd
+    short: "Should be registered"
+    aliases: ["help"]
+`
+	if err := os.WriteFile(p1Path+".manifest.yaml", []byte(p1Manifest), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Plugin 2: alias collides with p1-cmd
+	p2Path := filepath.Join(pluginDir, "p2")
+	if err := os.WriteFile(p2Path, []byte("#!/bin/sh\necho p2"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	p2Manifest := `
+name: p2
+version: 1.0.0
+commands:
+  - name: p2-cmd
+    short: "Should be registered"
+    aliases: ["p1-cmd"]
+`
+	if err := os.WriteFile(p2Path+".manifest.yaml", []byte(p2Manifest), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Setup git root
+	if err := os.Mkdir(filepath.Join(tmpDir, ".git"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(tmpDir)
+
+	t.Setenv("GO_TEST", "true")
+
+	// Reset rootCmd
+	oldRootCmd := rootCmd
+	rootCmd = &cobra.Command{Use: "rig"}
+	// Add dummy built-in commands to test against
+	rootCmd.AddCommand(&cobra.Command{Use: "version"})
+	rootCmd.AddCommand(&cobra.Command{Use: "help"})
+	defer func() { rootCmd = oldRootCmd }()
+
+	registerPluginCommands()
+
+	// Verify p1 collisions
+	foundP1 := false
+	for _, c := range rootCmd.Commands() {
+		if c.Name() == "version" && c.Short == "Collides with built-in" {
+			t.Error("plugin command 'version' should have been skipped")
+		}
+		if c.Name() == "p1-cmd" {
+			foundP1 = true
+			for _, a := range c.Aliases {
+				if a == "help" {
+					t.Error("alias 'help' should have been filtered out")
+				}
+			}
+		}
+	}
+	if !foundP1 {
+		t.Error("p1-cmd should have been registered (only its alias was bad)")
+	}
+
+	// Verify p2 collisions
+	foundP2 := false
+	for _, c := range rootCmd.Commands() {
+		if c.Name() == "p2-cmd" {
+			foundP2 = true
+			for _, a := range c.Aliases {
+				if a == "p1-cmd" {
+					t.Error("alias 'p1-cmd' should have been filtered out (collides with p1-cmd name)")
+				}
+			}
+		}
+	}
+	if !foundP2 {
+		t.Error("p2-cmd should have been registered")
+	}
+}

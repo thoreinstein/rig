@@ -42,9 +42,13 @@ func registerPluginCommands() {
 	}
 
 	// 3. Register commands
-	existingCommands := make(map[string]bool)
+	// Track both names and aliases to prevent collisions
+	collisionMap := make(map[string]string) // name/alias -> plugin/built-in name
 	for _, c := range rootCmd.Commands() {
-		existingCommands[c.Name()] = true
+		collisionMap[c.Name()] = "built-in"
+		for _, alias := range c.Aliases {
+			collisionMap[alias] = "built-in"
+		}
 	}
 
 	for _, p := range result.Plugins {
@@ -64,11 +68,23 @@ func registerPluginCommands() {
 
 		pluginName := p.Name
 		for _, cmdDesc := range p.Manifest.Commands {
-			if existingCommands[cmdDesc.Name] {
+			if owner, exists := collisionMap[cmdDesc.Name]; exists {
 				if verbose {
-					fmt.Fprintf(os.Stderr, "Warning: skipping plugin command %q from %q: already exists\n", cmdDesc.Name, pluginName)
+					fmt.Fprintf(os.Stderr, "Warning: skipping plugin command %q from %q: already exists (owned by %s)\n", cmdDesc.Name, pluginName, owner)
 				}
 				continue
+			}
+
+			// Check aliases for collisions and filter them
+			var filteredAliases []string
+			for _, alias := range cmdDesc.Aliases {
+				if owner, exists := collisionMap[alias]; exists {
+					if verbose {
+						fmt.Fprintf(os.Stderr, "Warning: skipping alias %q for plugin command %q (%q): already exists (owned by %s)\n", alias, cmdDesc.Name, pluginName, owner)
+					}
+					continue
+				}
+				filteredAliases = append(filteredAliases, alias)
 			}
 
 			// Capture loop variables for the closure
@@ -79,7 +95,7 @@ func registerPluginCommands() {
 				Use:                cDesc.Name,
 				Short:              cDesc.Short,
 				Long:               cDesc.Long,
-				Aliases:            cDesc.Aliases,
+				Aliases:            filteredAliases,
 				DisableFlagParsing: true, // Let the plugin handle its own flags
 				RunE: func(cmd *cobra.Command, args []string) error {
 					return runPluginCommand(cmd.Context(), pName, cDesc.Name, args)
@@ -87,7 +103,12 @@ func registerPluginCommands() {
 			}
 
 			rootCmd.AddCommand(cobraCmd)
-			existingCommands[cDesc.Name] = true
+
+			// Add name and filtered aliases to collision map
+			collisionMap[cDesc.Name] = pluginName
+			for _, alias := range filteredAliases {
+				collisionMap[alias] = pluginName
+			}
 		}
 	}
 }
