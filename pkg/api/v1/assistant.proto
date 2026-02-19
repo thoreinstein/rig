@@ -1,0 +1,48 @@
+syntax = "proto3";
+
+package rig.v1;
+
+option go_package = "thoreinstein.com/rig/pkg/api/v1;apiv1";
+
+// AssistantService provides AI-powered chat and completion capabilities.
+service AssistantService {
+  // Chat performs a single-turn chat completion.
+  rpc Chat(ChatRequest) returns (ChatResponse);
+
+  // StreamChat performs a streaming chat completion.
+  rpc StreamChat(ChatRequest) returns (stream ChatChunk);
+}
+
+// Message represents a single message in a conversation.
+message Message {
+  // role is the sender's role: "user", "assistant", or "system".
+  string role = 1;
+  // content is the text of the message.
+  string content = 2;
+}
+
+// ChatRequest is the input for both Chat and StreamChat.
+message ChatRequest {
+  // messages is the conversation history.
+  repeated Message messages = 1;
+}
+
+// ChatResponse is the final result of a non-streaming Chat call.
+message ChatResponse {
+  // content is the generated text.
+  string content = 1;
+  // stop_reason indicates why the generation stopped (e.g., "end_turn").
+  string stop_reason = 2;
+  // input_tokens is the number of tokens in the prompt.
+  int32 input_tokens = 3;
+  // output_tokens is the number of tokens in the response.
+  int32 output_tokens = 4;
+}
+
+// ChatChunk is a fragment of a streaming response.
+message ChatChunk {
+  // content is the fragment of text generated in this chunk.
+  string content = 1;
+  // done is true if this is the final chunk of the stream.
+  bool done = 2;
+}
