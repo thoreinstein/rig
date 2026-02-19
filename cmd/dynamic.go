@@ -132,7 +132,9 @@ func runPluginCommand(ctx context.Context, pluginName, commandName string, args 
 	// Re-parse host persistent flags from extracted hostArgs.
 	fs := rootCmd.PersistentFlags()
 	fs.ParseErrorsWhitelist.UnknownFlags = true
-	_ = fs.Parse(hostArgs)
+	if err := fs.Parse(hostArgs); err != nil {
+		return errors.Wrap(err, "failed to parse host flags")
+	}
 
 	// Re-initialize configuration if host flags were parsed.
 	// This ensures --config or --verbose provided after the subcommand are respected.
@@ -178,6 +180,7 @@ func runPluginCommand(ctx context.Context, pluginName, commandName string, args 
 		return errors.Wrapf(err, "failed to execute command %q on plugin %q", commandName, pluginName)
 	}
 
+	var gotDone bool
 	for {
 		resp, err := stream.Recv()
 		if err == io.EOF {
@@ -195,11 +198,16 @@ func runPluginCommand(ctx context.Context, pluginName, commandName string, args 
 		}
 
 		if resp.Done {
+			gotDone = true
 			if resp.ExitCode != 0 {
 				return fmt.Errorf("plugin command %q exited with code %d", commandName, resp.ExitCode)
 			}
 			break
 		}
+	}
+
+	if !gotDone {
+		return fmt.Errorf("plugin command %q terminated prematurely (no done message received)", commandName)
 	}
 
 	return nil
