@@ -17,7 +17,7 @@ import (
 
 const (
 	// HandshakeTimeout is the maximum time to wait for a plugin to start and establish a socket.
-	HandshakeTimeout = 5 * time.Second
+	HandshakeTimeout = 10 * time.Second
 	// HandshakePollInterval is how often to check for the existence of the UDS socket.
 	HandshakePollInterval = 100 * time.Millisecond
 )

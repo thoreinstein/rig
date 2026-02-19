@@ -84,20 +84,24 @@ func TestExecutor_HostEndpoint(t *testing.T) {
 	tmpDir := t.TempDir()
 	hostSocket := filepath.Join(tmpDir, "host.sock")
 
+	// Compile the mock plugin binary once to avoid 'go run' overhead in CI
+	pluginBin := filepath.Join(tmpDir, "mock-plugin-bin")
+	cmd := exec.Command("go", "build", "-o", pluginBin, "testdata/mock_plugin.go")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("failed to compile mock plugin: %v\nOutput: %s", err, string(out))
+	}
+
 	p := &Plugin{
 		Name: "env-plugin",
-		Path: "go", // We'll use 'go run'
+		Path: pluginBin,
 	}
+
+	// Tell the mock plugin what to expect
+	t.Setenv("EXPECTED_HOST_ENDPOINT", hostSocket)
 
 	e := NewExecutor(hostSocket)
 
-	// Update path to run our mock plugin
-	p.Path = "go"
-	oldArgs := p.Args
-	p.Args = []string{"run", "testdata/mock_plugin.go"}
-	defer func() { p.Args = oldArgs }()
-
-	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 
 	err := e.Start(ctx, p)
