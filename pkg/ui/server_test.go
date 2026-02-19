@@ -3,7 +3,6 @@ package ui
 import (
 	"context"
 	"io"
-	"os"
 	"testing"
 	"time"
 
@@ -11,24 +10,13 @@ import (
 )
 
 func TestUIServer_Prompt(t *testing.T) {
-	// Setup mock stdin
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer r.Close()
-
-	oldStdin := os.Stdin
-	os.Stdin = r
-	defer func() { os.Stdin = oldStdin }()
-
-	// Write response to pipe
+	r, w := io.Pipe()
 	go func() {
 		defer w.Close()
 		_, _ = io.WriteString(w, "my-input\n")
 	}()
 
-	srv := NewUIServer()
+	srv := NewUIServerWithReader(r)
 	resp, err := srv.Prompt(t.Context(), &apiv1.PromptRequest{
 		Label: "Enter something:",
 	})
@@ -57,17 +45,13 @@ func TestUIServer_Confirm(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r, w, _ := os.Pipe()
-			oldStdin := os.Stdin
-			os.Stdin = r
-			defer func() { os.Stdin = oldStdin; r.Close() }()
-
+			r, w := io.Pipe()
 			go func() {
 				defer w.Close()
 				_, _ = io.WriteString(w, tt.input)
 			}()
 
-			srv := NewUIServer()
+			srv := NewUIServerWithReader(r)
 			resp, err := srv.Confirm(t.Context(), &apiv1.ConfirmRequest{
 				Label:        "Confirm?",
 				DefaultValue: tt.defValue,
@@ -85,17 +69,13 @@ func TestUIServer_Confirm(t *testing.T) {
 }
 
 func TestUIServer_Select(t *testing.T) {
-	r, w, _ := os.Pipe()
-	oldStdin := os.Stdin
-	os.Stdin = r
-	defer func() { os.Stdin = oldStdin; r.Close() }()
-
+	r, w := io.Pipe()
 	go func() {
 		defer w.Close()
 		_, _ = io.WriteString(w, "2\n") // Select second option
 	}()
 
-	srv := NewUIServer()
+	srv := NewUIServerWithReader(r)
 	resp, err := srv.Select(t.Context(), &apiv1.SelectRequest{
 		Label:   "Pick one:",
 		Options: []string{"A", "B", "C"},
@@ -111,14 +91,10 @@ func TestUIServer_Select(t *testing.T) {
 }
 
 func TestUIServer_Coordination(t *testing.T) {
-	srv := NewUIServer()
+	// For coordination testing, we use a single server instance with its own reader
+	r, w := io.Pipe()
+	srv := NewUIServerWithReader(r)
 	
-	// Start a prompt that we'll block
-	r, w, _ := os.Pipe()
-	oldStdin := os.Stdin
-	os.Stdin = r
-	defer func() { os.Stdin = oldStdin; r.Close() }()
-
 	promptDone := make(chan struct{})
 	go func() {
 		_, _ = srv.Prompt(t.Context(), &apiv1.PromptRequest{Label: "Blocking:"})
@@ -143,15 +119,12 @@ func TestUIServer_Coordination(t *testing.T) {
 
 	// Unblock first prompt
 	_, _ = io.WriteString(w, "done\n")
-	w.Close()
 	<-promptDone
 
 	// Now unblock second prompt
-	r2, w2, _ := os.Pipe()
-	os.Stdin = r2 // Switch stdin for the second operation
 	go func() {
-		defer w2.Close()
-		_, _ = io.WriteString(w2, "y\n")
+		_, _ = io.WriteString(w, "y\n")
+		w.Close()
 	}()
 
 	select {
@@ -163,23 +136,13 @@ func TestUIServer_Coordination(t *testing.T) {
 }
 
 func TestUIServer_Cancellation(t *testing.T) {
-	srv := NewUIServer()
+	r, w := io.Pipe()
+	srv := NewUIServerWithReader(r)
 	
-	// Setup mock stdin but don't write anything yet
-	r, w, _ := os.Pipe()
-	oldStdin := os.Stdin
-	os.Stdin = r
-	defer func() { 
-		os.Stdin = oldStdin
-		w.Close()
-		r.Close() 
-	}()
-
 	// Start a prompt with a short-lived context
 	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
 	defer cancel()
 
-	// This should return a context deadline exceeded error without blocking indefinitely
 	_, err := srv.Prompt(ctx, &apiv1.PromptRequest{Label: "Timed out prompt:"})
 	
 	if err == nil {
@@ -189,12 +152,14 @@ func TestUIServer_Cancellation(t *testing.T) {
 		t.Errorf("expected context.DeadlineExceeded, got %v", err)
 	}
 
-	// Verify the terminal is still usable (lock was released or never held)
-	r2, w2, _ := os.Pipe()
-	os.Stdin = r2
+	// Important: We must provide input to the background reader so it finishes its 
+	// previous blocked read and is ready for the next one.
+	_, _ = io.WriteString(w, "satisfied\n")
+
+	// Now verify the server can handle a new request
 	go func() {
-		defer w2.Close()
-		_, _ = io.WriteString(w2, "y\n")
+		_, _ = io.WriteString(w, "y\n")
+		w.Close()
 	}()
 
 	_, err = srv.Confirm(t.Context(), &apiv1.ConfirmRequest{Label: "Immediate follow-up:"})

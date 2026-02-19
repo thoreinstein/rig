@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -13,64 +14,103 @@ import (
 	apiv1 "thoreinstein.com/rig/pkg/api/v1"
 )
 
+type readRequest struct {
+	sensitive bool
+	respCh    chan readResponse
+}
+
+type readResponse struct {
+	value string
+	err   error
+}
+
 // UIServer implements the UIService gRPC interface, allowing plugins to
 // perform UI operations by calling back into the host.
 type UIServer struct {
 	apiv1.UnimplementedUIServiceServer
 	coord *Coordinator
+	in    io.Reader
+
+	// Singleton reader infrastructure
+	readCh chan readRequest
 }
 
-// NewUIServer creates a new UI server.
+// NewUIServer creates a new UI server and starts the background stdin reader.
 func NewUIServer() *UIServer {
-	return &UIServer{
-		coord: NewCoordinator(),
+	return NewUIServerWithReader(os.Stdin)
+}
+
+// NewUIServerWithReader creates a new UI server with a specific input reader.
+func NewUIServerWithReader(in io.Reader) *UIServer {
+	s := &UIServer{
+		coord:  NewCoordinator(),
+		in:     in,
+		readCh: make(chan readRequest),
+	}
+	go s.runReader()
+	return s
+}
+
+// runReader is the singleton background goroutine that owns the input reader.
+// It ensures that only one read is active at a time and that no goroutines are leaked
+// when RPCs are canceled.
+func (s *UIServer) runReader() {
+	reader := bufio.NewReader(s.in)
+	for req := range s.readCh {
+		var val string
+		var err error
+
+		if req.sensitive {
+			// Password reading only works on real terminals (os.Stdin)
+			if f, ok := s.in.(*os.File); ok && term.IsTerminal(int(f.Fd())) {
+				var b []byte
+				b, err = term.ReadPassword(int(f.Fd()))
+				fmt.Println() // Move to next line after password entry
+				val = string(b)
+			} else {
+				// Fallback for non-terminal readers (like tests)
+				val, err = reader.ReadString('\n')
+				val = strings.TrimSpace(val)
+			}
+		} else {
+			val, err = reader.ReadString('\n')
+			val = strings.TrimSpace(val)
+		}
+
+		// Send response. If the requester has already timed out or canceled,
+		// they won't be listening, so we use a non-blocking send or 
+		// just let it drop if the channel is closed.
+		select {
+		case req.respCh <- readResponse{value: val, err: err}:
+		default:
+			// Requester is gone, discard the input
+		}
 	}
 }
 
-// readStringLine performs a cancellation-aware read from Stdin.
-// Since os.Stdin.Read is not natively cancellable, we run it in a goroutine.
-// Note: This does not stop the background read if the context is cancelled, 
-// but it unblocks the RPC handler immediately.
-func (s *UIServer) readStringLine(ctx context.Context) (string, error) {
-	type result struct {
-		s   string
-		err error
+func (s *UIServer) readInput(ctx context.Context, sensitive bool) (string, error) {
+	respCh := make(chan readResponse, 1)
+	req := readRequest{
+		sensitive: sensitive,
+		respCh:    respCh,
 	}
-	resCh := make(chan result, 1)
 
-	go func() {
-		reader := bufio.NewReader(os.Stdin)
-		s, err := reader.ReadString('\n')
-		resCh <- result{s: strings.TrimSpace(s), err: err}
-	}()
-
+	// Request a read from the singleton reader
 	select {
 	case <-ctx.Done():
 		return "", ctx.Err()
-	case res := <-resCh:
-		return res.s, res.err
+	case s.readCh <- req:
 	}
-}
 
-// readPassword performs a cancellation-aware password read from Stdin.
-func (s *UIServer) readPassword(ctx context.Context) (string, error) {
-	type result struct {
-		s   string
-		err error
-	}
-	resCh := make(chan result, 1)
-
-	go func() {
-		b, err := term.ReadPassword(int(os.Stdin.Fd()))
-		fmt.Println() // Move to next line after password entry
-		resCh <- result{s: string(b), err: err}
-	}()
-
+	// Wait for the response or cancellation
 	select {
 	case <-ctx.Done():
+		// The background reader is still blocked on os.Stdin, but it's the
+		// ONLY one. The next call to readInput will simply wait for it
+		// to finish or send a new request.
 		return "", ctx.Err()
-	case res := <-resCh:
-		return res.s, res.err
+	case res := <-respCh:
+		return res.value, res.err
 	}
 }
 
@@ -89,13 +129,7 @@ func (s *UIServer) Prompt(ctx context.Context, req *apiv1.PromptRequest) (*apiv1
 		fmt.Printf("(default: %s) ", req.DefaultValue)
 	}
 
-	var input string
-	if req.Sensitive {
-		input, err = s.readPassword(ctx)
-	} else {
-		input, err = s.readStringLine(ctx)
-	}
-
+	input, err := s.readInput(ctx, req.Sensitive)
 	if err != nil {
 		return nil, err
 	}
@@ -122,7 +156,7 @@ func (s *UIServer) Confirm(ctx context.Context, req *apiv1.ConfirmRequest) (*api
 
 	fmt.Printf("%s %s ", req.Label, suffix)
 
-	input, err := s.readStringLine(ctx)
+	input, err := s.readInput(ctx, false)
 	if err != nil {
 		return nil, err
 	}
@@ -159,7 +193,7 @@ func (s *UIServer) Select(ctx context.Context, req *apiv1.SelectRequest) (*apiv1
 			return nil, ctx.Err()
 		default:
 			fmt.Printf("Select (1-%d): ", len(req.Options))
-			input, err := s.readStringLine(ctx)
+			input, err := s.readInput(ctx, false)
 			if err != nil {
 				return nil, err
 			}

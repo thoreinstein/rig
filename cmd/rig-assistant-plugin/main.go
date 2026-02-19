@@ -32,22 +32,6 @@ func (s *server) Handshake(ctx context.Context, req *apiv1.HandshakeRequest) (*a
 }
 
 func (s *server) Chat(ctx context.Context, req *apiv1.ChatRequest) (*apiv1.ChatResponse, error) {
-	// Call back into host to verify UI Proxy Service
-	hostEndpoint := os.Getenv("RIG_HOST_ENDPOINT")
-	if hostEndpoint != "" {
-		conn, err := grpc.NewClient("unix://"+hostEndpoint,
-			grpc.WithTransportCredentials(insecure.NewCredentials()),
-		)
-		if err == nil {
-			defer conn.Close()
-			uiClient := apiv1.NewUIServiceClient(conn)
-			// Ask a very important question
-			_, _ = uiClient.Prompt(ctx, &apiv1.PromptRequest{
-				Label: "What is your favorite romance novel?",
-			})
-		}
-	}
-
 	return &apiv1.ChatResponse{
 		Content:      "This is a sample AI response.",
 		StopReason:   "end_turn",
