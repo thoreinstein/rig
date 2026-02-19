@@ -52,6 +52,16 @@ func registerPluginCommands() {
 			continue
 		}
 
+		// Validate compatibility before registering commands.
+		// If incompatible, we skip the commands to avoid exposing unusable functionality.
+		plugin.ValidateCompatibility(p, GetVersion())
+		if p.Status != plugin.StatusCompatible {
+			if verbose {
+				fmt.Fprintf(os.Stderr, "Warning: skipping commands for plugin %q: %v\n", p.Name, p.Error)
+			}
+			continue
+		}
+
 		pluginName := p.Name
 		for _, cmdDesc := range p.Manifest.Commands {
 			if existingCommands[cmdDesc.Name] {

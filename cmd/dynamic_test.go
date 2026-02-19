@@ -94,3 +94,60 @@ commands:
 		t.Error("test-cmd was not registered")
 	}
 }
+
+func TestRegisterPluginCommands_Incompatible(t *testing.T) {
+	// Setup a temporary plugin directory
+	tmpDir := t.TempDir()
+	pluginDir := filepath.Join(tmpDir, ".rig", "plugins")
+	if err := os.MkdirAll(pluginDir, 0755); err != nil {
+		t.Fatalf("failed to create plugin dir: %v", err)
+	}
+
+	// Create a dummy executable
+	pluginPath := filepath.Join(pluginDir, "incompatible-plugin")
+	if err := os.WriteFile(pluginPath, []byte("#!/bin/sh\necho test"), 0755); err != nil {
+		t.Fatalf("failed to write dummy plugin: %v", err)
+	}
+
+	// Create a manifest with commands that requires Rig >= 2.0.0
+	manifestPath := filepath.Join(pluginDir, "incompatible-plugin.manifest.yaml")
+	manifestContent := `
+name: incompatible-plugin
+version: 1.0.0
+requirements:
+  rig: ">= 2.0.0"
+commands:
+  - name: fail-cmd
+    short: "Should not be registered"
+`
+	if err := os.WriteFile(manifestPath, []byte(manifestContent), 0644); err != nil {
+		t.Fatalf("failed to write manifest: %v", err)
+	}
+
+	// Setup git root so scanner finds it
+	if err := os.Mkdir(filepath.Join(tmpDir, ".git"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(tmpDir)
+
+	// Set Rig version to 1.0.0 (incompatible with >= 2.0.0)
+	oldVersion := Version
+	Version = "1.0.0"
+	defer func() { Version = oldVersion }()
+
+	t.Setenv("GO_TEST", "true")
+
+	// Reset rootCmd for test
+	oldRootCmd := rootCmd
+	rootCmd = &cobra.Command{Use: "rig"}
+	defer func() { rootCmd = oldRootCmd }()
+
+	registerPluginCommands()
+
+	// Verify command was NOT registered
+	for _, c := range rootCmd.Commands() {
+		if c.Name() == "fail-cmd" {
+			t.Error("fail-cmd was registered even though plugin is incompatible")
+		}
+	}
+}
