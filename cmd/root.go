@@ -69,6 +69,10 @@ func preParseGlobalFlags() {
 			}
 		case strings.HasPrefix(arg, "--config="):
 			cfgFile = strings.TrimPrefix(arg, "--config=")
+		case strings.HasPrefix(arg, "-c="):
+			cfgFile = strings.TrimPrefix(arg, "-c=")
+		case strings.HasPrefix(arg, "-c") && len(arg) > 2:
+			cfgFile = arg[2:]
 		case arg == "--verbose" || arg == "-v":
 			verbose = true
 		}
@@ -76,8 +80,6 @@ func preParseGlobalFlags() {
 }
 
 func init() {
-	cobra.OnInitialize(initConfig)
-
 	// Here you will define your flags and configuration settings.
 	// Cobra supports persistent flags, which, if defined here,
 	// will be global for your application.

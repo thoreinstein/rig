@@ -347,6 +347,22 @@ func TestPreParseGlobalFlags(t *testing.T) {
 	if cfgFile != "equals.toml" {
 		t.Errorf("cfgFile = %q, want %q", cfgFile, "equals.toml")
 	}
+
+	// Test shorthand with equals
+	cfgFile = ""
+	os.Args = []string{"rig", "-c=shorthand_equals.toml"}
+	preParseGlobalFlags()
+	if cfgFile != "shorthand_equals.toml" {
+		t.Errorf("cfgFile = %q, want %q", cfgFile, "shorthand_equals.toml")
+	}
+
+	// Test shorthand with attached value
+	cfgFile = ""
+	os.Args = []string{"rig", "-cattached.toml"}
+	preParseGlobalFlags()
+	if cfgFile != "attached.toml" {
+		t.Errorf("cfgFile = %q, want %q", cfgFile, "attached.toml")
+	}
 }
 
 func TestPreParseGlobalFlags_StopsAtSubcommand(t *testing.T) {
