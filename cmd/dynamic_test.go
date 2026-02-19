@@ -334,7 +334,7 @@ func TestPreParseGlobalFlags(t *testing.T) {
 
 	// Test shorthand config
 	cfgFile = ""
-	os.Args = []string{"rig", "-c", "short.toml"}
+	os.Args = []string{"rig", "-C", "short.toml"}
 	preParseGlobalFlags()
 	if cfgFile != "short.toml" {
 		t.Errorf("cfgFile = %q, want %q", cfgFile, "short.toml")
@@ -350,7 +350,7 @@ func TestPreParseGlobalFlags(t *testing.T) {
 
 	// Test shorthand with equals
 	cfgFile = ""
-	os.Args = []string{"rig", "-c=shorthand_equals.toml"}
+	os.Args = []string{"rig", "-C=shorthand_equals.toml"}
 	preParseGlobalFlags()
 	if cfgFile != "shorthand_equals.toml" {
 		t.Errorf("cfgFile = %q, want %q", cfgFile, "shorthand_equals.toml")
@@ -358,7 +358,7 @@ func TestPreParseGlobalFlags(t *testing.T) {
 
 	// Test shorthand with attached value
 	cfgFile = ""
-	os.Args = []string{"rig", "-cattached.toml"}
+	os.Args = []string{"rig", "-Cattached.toml"}
 	preParseGlobalFlags()
 	if cfgFile != "attached.toml" {
 		t.Errorf("cfgFile = %q, want %q", cfgFile, "attached.toml")
@@ -428,9 +428,9 @@ func TestFilterHostFlags(t *testing.T) {
 		},
 		{
 			name:       "Shorthand flags",
-			args:       []string{"-v", "-c", "c.toml", "arg1"},
+			args:       []string{"-v", "-C", "c.toml", "arg1"},
 			wantPlugin: []string{"arg1"},
-			wantHost:   []string{"-v", "-c", "c.toml"},
+			wantHost:   []string{"-v", "-C", "c.toml"},
 		},
 		{
 			name:       "Flag with equals sign",

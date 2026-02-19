@@ -62,16 +62,16 @@ func preParseGlobalFlags() {
 		}
 
 		switch {
-		case arg == "--config" || arg == "-c":
+		case arg == "--config" || arg == "-C":
 			if i+1 < len(os.Args) {
 				cfgFile = os.Args[i+1]
 				i++
 			}
 		case strings.HasPrefix(arg, "--config="):
 			cfgFile = strings.TrimPrefix(arg, "--config=")
-		case strings.HasPrefix(arg, "-c="):
-			cfgFile = strings.TrimPrefix(arg, "-c=")
-		case strings.HasPrefix(arg, "-c") && len(arg) > 2:
+		case strings.HasPrefix(arg, "-C="):
+			cfgFile = strings.TrimPrefix(arg, "-C=")
+		case strings.HasPrefix(arg, "-C") && len(arg) > 2:
 			cfgFile = arg[2:]
 		case arg == "--verbose" || arg == "-v":
 			verbose = true
@@ -84,7 +84,7 @@ func init() {
 	// Cobra supports persistent flags, which, if defined here,
 	// will be global for your application.
 
-	rootCmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", "", "config file (default is $HOME/.config/rig/config.toml)")
+	rootCmd.PersistentFlags().StringVarP(&cfgFile, "config", "C", "", "config file (default is $HOME/.config/rig/config.toml)")
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "verbose output")
 
 	// Remove the example toggle flag
