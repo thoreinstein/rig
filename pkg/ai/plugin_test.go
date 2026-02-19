@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"io"
+	"strings"
 	"testing"
 
 	"google.golang.org/grpc"
@@ -34,8 +35,8 @@ func (m *mockAssistantClient) Chat(ctx context.Context, in *apiv1.ChatRequest, o
 }
 
 func (m *mockAssistantClient) StreamChat(ctx context.Context, in *apiv1.ChatRequest, opts ...grpc.CallOption) (apiv1.AssistantService_StreamChatClient, error) {
-	// For testing StreamChat, we need a way to pipe results. 
-	// This is a bit complex for a simple mock, so we'll use a real pipe if needed, 
+	// For testing StreamChat, we need a way to pipe results.
+	// This is a bit complex for a simple mock, so we'll use a real pipe if needed,
 	// but for now let's try a simplified approach.
 	return &mockStreamClient{ctx: ctx, req: in, server: m.server}, nil
 }
@@ -45,10 +46,10 @@ type mockStreamClient struct {
 	ctx    context.Context
 	req    *apiv1.ChatRequest
 	server *mockAssistantServer
-	
+
 	// Internal state to simulate the stream
-	chunks chan *apiv1.ChatChunk
-	err    error
+	chunks  chan *apiv1.ChatChunk
+	err     error
 	started bool
 }
 
@@ -105,7 +106,7 @@ func TestPluginAssistantProvider_Chat(t *testing.T) {
 	client := &mockAssistantClient{server: mockServer}
 	provider := NewPluginAssistantProvider("test-plugin", client, nil)
 
-	resp, err := provider.Chat(context.Background(), []Message{{Role: "user", Content: "hi"}})
+	resp, err := provider.Chat(t.Context(), []Message{{Role: "user", Content: "hi"}})
 	if err != nil {
 		t.Fatalf("Chat() error = %v", err)
 	}
@@ -130,25 +131,25 @@ func TestPluginAssistantProvider_StreamChat(t *testing.T) {
 	client := &mockAssistantClient{server: mockServer}
 	provider := NewPluginAssistantProvider("test-plugin", client, nil)
 
-	chunks, err := provider.StreamChat(context.Background(), []Message{{Role: "user", Content: "hi"}})
+	chunks, err := provider.StreamChat(t.Context(), []Message{{Role: "user", Content: "hi"}})
 	if err != nil {
 		t.Fatalf("StreamChat() error = %v", err)
 	}
 
-	var content string
+	var content strings.Builder
 	var gotDone bool
 	for chunk := range chunks {
 		if chunk.Error != nil {
 			t.Fatalf("chunk error = %v", chunk.Error)
 		}
-		content += chunk.Content
+		content.WriteString(chunk.Content)
 		if chunk.Done {
 			gotDone = true
 		}
 	}
 
-	if content != "Part 1 Part 2" {
-		t.Errorf("expected 'Part 1 Part 2', got %q", content)
+	if content.String() != "Part 1 Part 2" {
+		t.Errorf("expected 'Part 1 Part 2', got %q", content.String())
 	}
 	if !gotDone {
 		t.Error("expected done chunk")
