@@ -24,9 +24,20 @@ const (
 	// AssistantCapability is the name of the capability for AI completion plugins.
 	AssistantCapability = "assistant"
 
+	// CommandCapability is the name of the capability for plugins that provide CLI commands.
+	CommandCapability = "command"
+
 	// APIVersion is the current version of the Rig Plugin API contract.
 	APIVersion = "v1"
 )
+
+// CommandDescriptor represents a CLI command provided by a plugin.
+type CommandDescriptor struct {
+	Name    string   `yaml:"name"`
+	Short   string   `yaml:"short"`
+	Long    string   `yaml:"long"`
+	Aliases []string `yaml:"aliases"`
+}
 
 // Manifest represents the metadata for a plugin found in manifest.yaml
 type Manifest struct {
@@ -37,6 +48,7 @@ type Manifest struct {
 	Requirements struct {
 		Rig string `yaml:"rig"` // SemVer requirement for Rig
 	} `yaml:"requirements"`
+	Commands []CommandDescriptor `yaml:"commands"`
 }
 
 // Plugin represents a discovered plugin.

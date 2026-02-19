@@ -37,3 +37,26 @@ requirements:
 		t.Errorf("manifest.Requirements.Rig = %q, want %q", manifest.Requirements.Rig, ">= 1.0.0")
 	}
 }
+
+func TestLoadManifest_WithCommands(t *testing.T) {
+	manifestPath := filepath.Join("testdata", "manifests", "with_commands.yaml")
+	manifest, err := loadManifest(manifestPath)
+	if err != nil {
+		t.Fatalf("loadManifest() error = %v", err)
+	}
+
+	if len(manifest.Commands) != 1 {
+		t.Fatalf("len(manifest.Commands) = %d, want 1", len(manifest.Commands))
+	}
+
+	cmd := manifest.Commands[0]
+	if cmd.Name != "echo" {
+		t.Errorf("cmd.Name = %q, want %q", cmd.Name, "echo")
+	}
+	if cmd.Short != "Echo arguments" {
+		t.Errorf("cmd.Short = %q, want %q", cmd.Short, "Echo arguments")
+	}
+	if len(cmd.Aliases) != 2 {
+		t.Errorf("len(cmd.Aliases) = %d, want 2", len(cmd.Aliases))
+	}
+}
