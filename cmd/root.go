@@ -52,9 +52,16 @@ func Execute() {
 
 // preParseGlobalFlags manually scans os.Args for --config and --verbose flags
 // before the main Cobra execution. This is a bootstrap step for configuration.
+// It stops scanning as soon as it hits a non-flag argument (the subcommand).
 func preParseGlobalFlags() {
 	for i := 1; i < len(os.Args); i++ {
 		arg := os.Args[i]
+
+		// Stop parsing at the first non-flag argument
+		if !strings.HasPrefix(arg, "-") {
+			break
+		}
+
 		switch {
 		case arg == "--config" || arg == "-c":
 			if i+1 < len(os.Args) {

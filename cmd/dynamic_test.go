@@ -347,3 +347,24 @@ func TestPreParseGlobalFlags(t *testing.T) {
 		t.Errorf("cfgFile = %q, want %q", cfgFile, "equals.toml")
 	}
 }
+
+func TestPreParseGlobalFlags_StopsAtSubcommand(t *testing.T) {
+	oldArgs := os.Args
+	defer func() { os.Args = oldArgs }()
+
+	// Reset global variables
+	cfgFile = ""
+	verbose = false
+
+	// rig --verbose my-subcommand --config plugin.yaml
+	// The host should pick up --verbose but NOT --config plugin.yaml
+	os.Args = []string{"rig", "--verbose", "my-subcommand", "--config", "plugin.yaml"}
+	preParseGlobalFlags()
+
+	if !verbose {
+		t.Error("verbose should be true")
+	}
+	if cfgFile != "" {
+		t.Errorf("cfgFile should be empty (intercepted plugin flag), got %q", cfgFile)
+	}
+}

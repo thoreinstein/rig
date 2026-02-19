@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/cockroachdb/errors"
 	"github.com/spf13/cobra"
@@ -125,10 +126,42 @@ func registerPluginCommands() {
 func runPluginCommand(ctx context.Context, pluginName, commandName string, args []string) error {
 	// Re-parse host persistent flags from args to catch flags appearing after the command name.
 	// This ensures rig --verbose <cmd> and rig <cmd> --verbose both work for host logic.
-	// We ignore errors and unknown flags because they belong to the plugin.
 	fs := rootCmd.PersistentFlags()
 	fs.ParseErrorsWhitelist.UnknownFlags = true
 	_ = fs.Parse(args)
+
+	// Identify which args are host persistent flags so we can filter them out
+	// before forwarding to the plugin.
+	var pluginArgs []string
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if !strings.HasPrefix(arg, "-") {
+			pluginArgs = append(pluginArgs, arg)
+			continue
+		}
+
+		// Check if this flag or its shorthand is known to the host
+		name := strings.TrimLeft(arg, "-")
+		if strings.Contains(name, "=") {
+			name = strings.Split(name, "=")[0]
+		}
+
+		f := fs.Lookup(name)
+		if f == nil && len(name) == 1 {
+			f = fs.ShorthandLookup(name)
+		}
+
+		if f != nil {
+			// It's a host flag. If it's not a boolean, skip its value too.
+			if f.Value.Type() != "bool" && !strings.Contains(arg, "=") {
+				i++
+			}
+			continue
+		}
+
+		// Unknown flag, belongs to the plugin
+		pluginArgs = append(pluginArgs, arg)
+	}
 
 	cfg, err := loadConfig()
 	if err != nil {
@@ -164,7 +197,7 @@ func runPluginCommand(ctx context.Context, pluginName, commandName string, args 
 	// 3. Execute the command and stream output
 	stream, err := client.Execute(ctx, &apiv1.ExecuteRequest{
 		Command: commandName,
-		Args:    args,
+		Args:    pluginArgs,
 	})
 	if err != nil {
 		return errors.Wrapf(err, "failed to execute command %q on plugin %q", commandName, pluginName)
