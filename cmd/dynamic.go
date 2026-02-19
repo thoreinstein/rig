@@ -72,7 +72,7 @@ func registerPluginCommands() {
 				Aliases:            cDesc.Aliases,
 				DisableFlagParsing: true, // Let the plugin handle its own flags
 				RunE: func(cmd *cobra.Command, args []string) error {
-					return runPluginCommand(pName, cDesc.Name, args)
+					return runPluginCommand(cmd.Context(), pName, cDesc.Name, args)
 				},
 			}
 
@@ -83,7 +83,7 @@ func registerPluginCommands() {
 }
 
 // runPluginCommand starts the plugin and executes the specified command.
-func runPluginCommand(pluginName, commandName string, args []string) error {
+func runPluginCommand(ctx context.Context, pluginName, commandName string, args []string) error {
 	cfg, err := loadConfig()
 	if err != nil {
 		return errors.Wrap(err, "failed to load configuration")
@@ -110,7 +110,6 @@ func runPluginCommand(pluginName, commandName string, args []string) error {
 	defer manager.StopAll()
 
 	// 2. Get command client and start plugin
-	ctx := context.Background()
 	client, err := manager.GetCommandClient(ctx, pluginName)
 	if err != nil {
 		return errors.Wrapf(err, "failed to get command client for plugin %q", pluginName)
