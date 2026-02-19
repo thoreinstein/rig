@@ -198,4 +198,7 @@ func (m *Manager) StopAll() {
 		_ = os.Remove(m.hostPath)
 		m.hostPath = ""
 	}
+
+	// Reset host endpoint in executor to avoid stale environment variables
+	m.executor.SetHostEndpoint("")
 }

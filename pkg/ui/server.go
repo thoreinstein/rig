@@ -27,9 +27,59 @@ func NewUIServer() *UIServer {
 	}
 }
 
+// readStringLine performs a cancellation-aware read from Stdin.
+// Since os.Stdin.Read is not natively cancellable, we run it in a goroutine.
+// Note: This does not stop the background read if the context is cancelled, 
+// but it unblocks the RPC handler immediately.
+func (s *UIServer) readStringLine(ctx context.Context) (string, error) {
+	type result struct {
+		s   string
+		err error
+	}
+	resCh := make(chan result, 1)
+
+	go func() {
+		reader := bufio.NewReader(os.Stdin)
+		s, err := reader.ReadString('\n')
+		resCh <- result{s: strings.TrimSpace(s), err: err}
+	}()
+
+	select {
+	case <-ctx.Done():
+		return "", ctx.Err()
+	case res := <-resCh:
+		return res.s, res.err
+	}
+}
+
+// readPassword performs a cancellation-aware password read from Stdin.
+func (s *UIServer) readPassword(ctx context.Context) (string, error) {
+	type result struct {
+		s   string
+		err error
+	}
+	resCh := make(chan result, 1)
+
+	go func() {
+		b, err := term.ReadPassword(int(os.Stdin.Fd()))
+		fmt.Println() // Move to next line after password entry
+		resCh <- result{s: string(b), err: err}
+	}()
+
+	select {
+	case <-ctx.Done():
+		return "", ctx.Err()
+	case res := <-resCh:
+		return res.s, res.err
+	}
+}
+
 // Prompt asks the user for a text input.
 func (s *UIServer) Prompt(ctx context.Context, req *apiv1.PromptRequest) (*apiv1.PromptResponse, error) {
-	unlock := s.coord.Lock()
+	unlock, err := s.coord.Lock(ctx)
+	if err != nil {
+		return nil, err
+	}
 	defer unlock()
 
 	fmt.Printf("%s ", req.Label)
@@ -40,17 +90,10 @@ func (s *UIServer) Prompt(ctx context.Context, req *apiv1.PromptRequest) (*apiv1
 	}
 
 	var input string
-	var err error
-
 	if req.Sensitive {
-		var b []byte
-		b, err = term.ReadPassword(int(os.Stdin.Fd()))
-		fmt.Println() // Move to next line after password entry
-		input = string(b)
+		input, err = s.readPassword(ctx)
 	} else {
-		reader := bufio.NewReader(os.Stdin)
-		input, err = reader.ReadString('\n')
-		input = strings.TrimSpace(input)
+		input, err = s.readStringLine(ctx)
 	}
 
 	if err != nil {
@@ -66,7 +109,10 @@ func (s *UIServer) Prompt(ctx context.Context, req *apiv1.PromptRequest) (*apiv1
 
 // Confirm asks the user for a yes/no confirmation.
 func (s *UIServer) Confirm(ctx context.Context, req *apiv1.ConfirmRequest) (*apiv1.ConfirmResponse, error) {
-	unlock := s.coord.Lock()
+	unlock, err := s.coord.Lock(ctx)
+	if err != nil {
+		return nil, err
+	}
 	defer unlock()
 
 	suffix := "[y/N]"
@@ -76,13 +122,12 @@ func (s *UIServer) Confirm(ctx context.Context, req *apiv1.ConfirmRequest) (*api
 
 	fmt.Printf("%s %s ", req.Label, suffix)
 
-	reader := bufio.NewReader(os.Stdin)
-	input, err := reader.ReadString('\n')
+	input, err := s.readStringLine(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	input = strings.ToLower(strings.TrimSpace(input))
+	input = strings.ToLower(input)
 	if input == "" {
 		return &apiv1.ConfirmResponse{Confirmed: req.DefaultValue}, nil
 	}
@@ -93,7 +138,10 @@ func (s *UIServer) Confirm(ctx context.Context, req *apiv1.ConfirmRequest) (*api
 
 // Select asks the user to choose from a list of options.
 func (s *UIServer) Select(ctx context.Context, req *apiv1.SelectRequest) (*apiv1.SelectResponse, error) {
-	unlock := s.coord.Lock()
+	unlock, err := s.coord.Lock(ctx)
+	if err != nil {
+		return nil, err
+	}
 	defer unlock()
 
 	if len(req.Options) == 0 {
@@ -106,35 +154,37 @@ func (s *UIServer) Select(ctx context.Context, req *apiv1.SelectRequest) (*apiv1
 	}
 
 	for {
-		fmt.Printf("Select (1-%d): ", len(req.Options))
-		reader := bufio.NewReader(os.Stdin)
-		input, err := reader.ReadString('\n')
-		if err != nil {
-			return nil, err
-		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+			fmt.Printf("Select (1-%d): ", len(req.Options))
+			input, err := s.readStringLine(ctx)
+			if err != nil {
+				return nil, err
+			}
 
-		input = strings.TrimSpace(input)
-		if input == "" {
-			continue
-		}
+			if input == "" {
+				continue
+			}
 
-		var idx int
-		_, err = fmt.Sscanf(input, "%d", &idx)
-		if err != nil || idx < 1 || idx > len(req.Options) {
-			fmt.Println("Invalid selection.")
-			continue
-		}
+			var idx int
+			_, err = fmt.Sscanf(input, "%d", &idx)
+			if err != nil || idx < 1 || idx > len(req.Options) {
+				fmt.Println("Invalid selection.")
+				continue
+			}
 
-		return &apiv1.SelectResponse{
-			SelectedIndices: []uint32{uint32(idx - 1)},
-		}, nil
+			return &apiv1.SelectResponse{
+				SelectedIndices: []uint32{uint32(idx - 1)},
+			}, nil
+		}
 	}
 }
 
 // UpdateProgress provides real-time status updates for a long-running task.
 func (s *UIServer) UpdateProgress(ctx context.Context, req *apiv1.ProgressUpdate) (*emptypb.Empty, error) {
-	// For now, just print to stderr. A more sophisticated implementation
-	// would use a real spinner or progress bar library.
+	// Progress updates are non-blocking and do not require the coordinator lock.
 	if req.Message != "" {
 		fmt.Fprintf(os.Stderr, "--> %s\n", req.Message)
 	}

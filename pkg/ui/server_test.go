@@ -1,9 +1,11 @@
 package ui
 
 import (
+	"context"
 	"io"
 	"os"
 	"testing"
+	"time"
 
 	apiv1 "thoreinstein.com/rig/pkg/api/v1"
 )
@@ -110,7 +112,7 @@ func TestUIServer_Select(t *testing.T) {
 
 func TestUIServer_Coordination(t *testing.T) {
 	srv := NewUIServer()
-
+	
 	// Start a prompt that we'll block
 	r, w, _ := os.Pipe()
 	oldStdin := os.Stdin
@@ -135,9 +137,7 @@ func TestUIServer_Coordination(t *testing.T) {
 	select {
 	case <-secondDone:
 		t.Fatal("second UI operation did not block")
-	case <-t.Context().Done():
-		t.Fatal("test timed out")
-	default:
+	case <-time.After(100 * time.Millisecond):
 		// Success: it's blocked
 	}
 
@@ -150,14 +150,55 @@ func TestUIServer_Coordination(t *testing.T) {
 	r2, w2, _ := os.Pipe()
 	os.Stdin = r2 // Switch stdin for the second operation
 	go func() {
+		defer w2.Close()
 		_, _ = io.WriteString(w2, "y\n")
-		w2.Close()
 	}()
 
 	select {
 	case <-secondDone:
 		// Success
-	case <-t.Context().Done():
+	case <-time.After(500 * time.Millisecond):
 		t.Fatal("second operation never unblocked")
+	}
+}
+
+func TestUIServer_Cancellation(t *testing.T) {
+	srv := NewUIServer()
+	
+	// Setup mock stdin but don't write anything yet
+	r, w, _ := os.Pipe()
+	oldStdin := os.Stdin
+	os.Stdin = r
+	defer func() { 
+		os.Stdin = oldStdin
+		w.Close()
+		r.Close() 
+	}()
+
+	// Start a prompt with a short-lived context
+	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
+	defer cancel()
+
+	// This should return a context deadline exceeded error without blocking indefinitely
+	_, err := srv.Prompt(ctx, &apiv1.PromptRequest{Label: "Timed out prompt:"})
+	
+	if err == nil {
+		t.Error("expected context timeout error, got nil")
+	}
+	if err != context.DeadlineExceeded {
+		t.Errorf("expected context.DeadlineExceeded, got %v", err)
+	}
+
+	// Verify the terminal is still usable (lock was released or never held)
+	r2, w2, _ := os.Pipe()
+	os.Stdin = r2
+	go func() {
+		defer w2.Close()
+		_, _ = io.WriteString(w2, "y\n")
+	}()
+
+	_, err = srv.Confirm(t.Context(), &apiv1.ConfirmRequest{Label: "Immediate follow-up:"})
+	if err != nil {
+		t.Errorf("subsequent UI call failed after cancellation: %v", err)
 	}
 }
