@@ -80,6 +80,7 @@ Rig uses a TOML configuration file, typically located at `~/.config/rig/config.t
   - Use interfaces for mocking external dependencies (Git, JIRA, Tmux, Plugin Executors).
 - **Architecture:** Keep CLI logic in `cmd/` minimal; delegate business logic to `pkg/`.
 - **Linting:** Strict mode using `golangci-lint`.
+- **Pre-commit Mandate:** NEVER push changes without running the full pre-commit suite, even if the automatic git hook fails to trigger. Local validation is the primary guardrail.
 
 ## Key Commands
 
@@ -143,6 +144,7 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 - **Sparse-Checkout Staging:** In a `git sparse-checkout` environment, new files must be staged using `git add --sparse <path>` if they fall outside the current sparse index definition.
 - **Surfacing Metadata Errors:** If a plugin's manifest file exists but is malformed, report an error rather than silently ignoring it. This prevents bypassing version checks due to configuration errors. Ensure consistent error reporting across all discovery paths (e.g., both single-binary and directory-based plugins).
 - **Automated Reviewer Naming Conflicts**: Conflicting bot suggestions (e.g., snake_case vs. camelCase) should be resolved by prioritizing Go idioms and established codebase patterns over generic bot rules.
+- **Stale Git Context in Hooks Trap**: Environment variables injected by `pre-commit` (e.g., `GIT_INDEX_FILE`) can interfere with unit tests that create temporary git repositories. Always unset `GIT_*` variables in test hooks.
 
 ## API & Plugin Architecture (gRPC)
 
@@ -168,6 +170,11 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 - **Assistant Capability:** Plugins advertising the `assistant` capability must implement the `AssistantService` (defined in `assistant.proto`) to provide AI completion and streaming services.
 - **Discovery & Lifecycle:** The host's `PluginManager` discovers plugins via `Scanner`, starts them via `Executor`, and manages the connection state. Clients for specific capabilities (like `AssistantServiceClient`) are lazily initialized from the shared gRPC connection.
 - **Dynamic Routing:** The AI factory (`NewProviderWithManager`) can route requests to specific assistant plugins by specifying the `plugin` provider and the plugin's name in the configuration.
+
+#### UI Interaction Model
+- **UIService (Host-as-Server)**: UI interaction is modeled as a callback service hosted by Rig. Plugins use the `UIService` (defined in `interaction.proto`) to request user input (Prompts, Confirms, Selects) or report progress.
+- **Singleton Stdin Reader Pattern**: Centralize terminal input reading into a single background goroutine. Handlers send requests to this loop and wait for results or cancellation. This prevents goroutine leaks and input stealing when multiple plugins request input or when RPCs are canceled.
+- **TUI Coordination**: A semaphore-based `Coordinator` ensures that only one blocking UI operation is active at a time, protecting terminal integrity.
 
 ### Protobuf & API Evolution
 - **Tag Immortality:** Field tags in protobuf messages are permanent identities. Never reuse or repurpose a tag number for a different semantic meaning, even if renamed. Use `reserved` for removed tags to prevent future accidental reuse.
