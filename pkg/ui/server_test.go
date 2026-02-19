@@ -125,7 +125,7 @@ func TestUIServer_Coordination(t *testing.T) {
 	r, w := io.Pipe()
 	srv := NewUIServerWithReader(r)
 	defer srv.Stop()
-	
+
 	promptDone := make(chan struct{})
 	go func() {
 		_, _ = srv.Prompt(t.Context(), &apiv1.PromptRequest{Label: "Blocking:"})
@@ -167,13 +167,13 @@ func TestUIServer_Cancellation(t *testing.T) {
 	r, w := io.Pipe()
 	srv := NewUIServerWithReader(r)
 	defer srv.Stop()
-	
+
 	// Start a prompt with a short-lived context
 	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
 	defer cancel()
 
 	_, err := srv.Prompt(ctx, &apiv1.PromptRequest{Label: "Timed out prompt:"})
-	
+
 	if err == nil {
 		t.Error("expected context timeout error, got nil")
 	}
