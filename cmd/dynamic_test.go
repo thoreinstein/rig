@@ -3,6 +3,7 @@ package cmd
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -374,59 +375,75 @@ func TestFilterHostFlags(t *testing.T) {
 	// --verbose is boolean host flag
 	// --config is non-boolean host flag
 	tests := []struct {
-		name string
-		args []string
-		want []string
+		name       string
+		args       []string
+		wantPlugin []string
+		wantHost   []string
 	}{
 		{
-			name: "No host flags",
-			args: []string{"arg1", "arg2"},
-			want: []string{"arg1", "arg2"},
+			name:       "No host flags",
+			args:       []string{"arg1", "arg2"},
+			wantPlugin: []string{"arg1", "arg2"},
+			wantHost:   []string{},
 		},
 		{
-			name: "Boolean host flag",
-			args: []string{"--verbose", "arg1"},
-			want: []string{"arg1"},
+			name:       "Boolean host flag",
+			args:       []string{"--verbose", "arg1"},
+			wantPlugin: []string{"arg1"},
+			wantHost:   []string{"--verbose"},
 		},
 		{
-			name: "Non-boolean host flag with value",
-			args: []string{"--config", "custom.toml", "arg1"},
-			want: []string{"arg1"},
+			name:       "Non-boolean host flag with value",
+			args:       []string{"--config", "custom.toml", "arg1"},
+			wantPlugin: []string{"arg1"},
+			wantHost:   []string{"--config", "custom.toml"},
 		},
 		{
-			name: "Mixed flags",
-			args: []string{"--verbose", "arg1", "--config", "c.toml", "--plugin-flag"},
-			want: []string{"arg1", "--plugin-flag"},
+			name:       "Mixed flags",
+			args:       []string{"--verbose", "arg1", "--config", "c.toml", "--plugin-flag"},
+			wantPlugin: []string{"arg1", "--plugin-flag"},
+			wantHost:   []string{"--verbose", "--config", "c.toml"},
 		},
 		{
-			name: "Double dash preserves everything after",
-			args: []string{"--verbose", "--", "--verbose", "arg1"},
-			want: []string{"--", "--verbose", "arg1"},
+			name:       "Double dash preserves everything after",
+			args:       []string{"--verbose", "--", "--verbose", "arg1"},
+			wantPlugin: []string{"--", "--verbose", "arg1"},
+			wantHost:   []string{"--verbose"},
 		},
 		{
-			name: "Shorthand flags",
-			args: []string{"-v", "-c", "c.toml", "arg1"},
-			want: []string{"arg1"},
+			name:       "Shorthand flags",
+			args:       []string{"-v", "-c", "c.toml", "arg1"},
+			wantPlugin: []string{"arg1"},
+			wantHost:   []string{"-v", "-c", "c.toml"},
 		},
 		{
-			name: "Flag with equals sign",
-			args: []string{"--config=c.toml", "arg1"},
-			want: []string{"arg1"},
+			name:       "Flag with equals sign",
+			args:       []string{"--config=c.toml", "arg1"},
+			wantPlugin: []string{"arg1"},
+			wantHost:   []string{"--config=c.toml"},
+		},
+		{
+			name:       "Ambiguous plugin shorthand NOT consumed by host",
+			args:       []string{"-cfoo", "arg1"},
+			wantPlugin: []string{"-cfoo", "arg1"},
+			wantHost:   []string{},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := filterHostFlags(tt.args)
-			if len(got) != len(tt.want) {
-				t.Errorf("filterHostFlags() = %v, want %v", got, tt.want)
+			gotPlugin, gotHost := filterHostFlags(tt.args)
+
+			if !reflect.DeepEqual(gotPlugin, tt.wantPlugin) {
+				t.Errorf("filterHostFlags() pluginArgs = %v, want %v", gotPlugin, tt.wantPlugin)
+			}
+
+			// Use empty slice instead of nil for comparison
+			if len(gotHost) == 0 && len(tt.wantHost) == 0 {
 				return
 			}
-			for i := range got {
-				if got[i] != tt.want[i] {
-					t.Errorf("filterHostFlags() = %v, want %v", got, tt.want)
-					break
-				}
+			if !reflect.DeepEqual(gotHost, tt.wantHost) {
+				t.Errorf("filterHostFlags() hostArgs = %v, want %v", gotHost, tt.wantHost)
 			}
 		})
 	}

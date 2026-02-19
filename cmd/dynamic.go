@@ -124,19 +124,19 @@ func registerPluginCommands() {
 
 // runPluginCommand starts the plugin and executes the specified command.
 func runPluginCommand(ctx context.Context, pluginName, commandName string, args []string) error {
-	// Re-parse host persistent flags from args to catch flags appearing after the command name.
-	// This ensures rig --verbose <cmd> and rig <cmd> --verbose both work for host logic.
+	// Identify which args are host persistent flags and extract them.
+	// This ensures we only parse host-owned flags and avoid misinterpreting
+	// plugin short options (e.g. -cfoo).
+	pluginArgs, hostArgs := filterHostFlags(args)
+
+	// Re-parse host persistent flags from extracted hostArgs.
 	fs := rootCmd.PersistentFlags()
 	fs.ParseErrorsWhitelist.UnknownFlags = true
-	_ = fs.Parse(args)
+	_ = fs.Parse(hostArgs)
 
 	// Re-initialize configuration if host flags were parsed.
 	// This ensures --config or --verbose provided after the subcommand are respected.
 	initConfig()
-
-	// Identify which args are host persistent flags so we can filter them out
-	// before forwarding to the plugin.
-	pluginArgs := filterHostFlags(args)
 
 	cfg, err := loadConfig()
 	if err != nil {
@@ -205,29 +205,30 @@ func runPluginCommand(ctx context.Context, pluginName, commandName string, args 
 	return nil
 }
 
-// filterHostFlags removes host persistent flags and their values from the provided arguments.
-// It respects the '--' separator, stopping all filtering once it's encountered.
-func filterHostFlags(args []string) []string {
+// filterHostFlags separates arguments into plugin-owned and host-owned slices.
+// It respects the '--' separator, stopping all extraction once it's encountered.
+func filterHostFlags(args []string) ([]string, []string) {
 	fs := rootCmd.PersistentFlags()
-	var result []string
+	var pluginArgs []string
+	var hostArgs []string
 	stopFiltering := false
 
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 
 		if stopFiltering {
-			result = append(result, arg)
+			pluginArgs = append(pluginArgs, arg)
 			continue
 		}
 
 		if arg == "--" {
 			stopFiltering = true
-			result = append(result, arg)
+			pluginArgs = append(pluginArgs, arg)
 			continue
 		}
 
 		if !strings.HasPrefix(arg, "-") {
-			result = append(result, arg)
+			pluginArgs = append(pluginArgs, arg)
 			continue
 		}
 
@@ -243,16 +244,19 @@ func filterHostFlags(args []string) []string {
 		}
 
 		if f != nil {
-			// It's a host flag. If it's not a boolean, skip its value too.
-			if f.Value.Type() != "bool" && !strings.Contains(arg, "=") {
+			// It's a host flag.
+			hostArgs = append(hostArgs, arg)
+			// If it's not a boolean and has no inline value, the next arg is its value.
+			if f.Value.Type() != "bool" && !strings.Contains(arg, "=") && i+1 < len(args) {
+				hostArgs = append(hostArgs, args[i+1])
 				i++
 			}
 			continue
 		}
 
 		// Unknown flag, belongs to the plugin
-		result = append(result, arg)
+		pluginArgs = append(pluginArgs, arg)
 	}
 
-	return result
+	return pluginArgs, hostArgs
 }
