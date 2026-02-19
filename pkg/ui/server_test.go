@@ -11,12 +11,14 @@ import (
 
 func TestUIServer_Prompt(t *testing.T) {
 	r, w := io.Pipe()
+	srv := NewUIServerWithReader(r)
+	defer srv.Stop()
+
 	go func() {
-		defer w.Close()
 		_, _ = io.WriteString(w, "my-input\n")
+		w.Close()
 	}()
 
-	srv := NewUIServerWithReader(r)
 	resp, err := srv.Prompt(t.Context(), &apiv1.PromptRequest{
 		Label: "Enter something:",
 	})
@@ -27,6 +29,31 @@ func TestUIServer_Prompt(t *testing.T) {
 
 	if resp.Value != "my-input" {
 		t.Errorf("expected 'my-input', got %q", resp.Value)
+	}
+}
+
+func TestUIServer_Prompt_Sensitive(t *testing.T) {
+	// Sensitive prompt should fallback to normal read when not a terminal (like in tests)
+	r, w := io.Pipe()
+	srv := NewUIServerWithReader(r)
+	defer srv.Stop()
+
+	go func() {
+		_, _ = io.WriteString(w, "secret-password\n")
+		w.Close()
+	}()
+
+	resp, err := srv.Prompt(t.Context(), &apiv1.PromptRequest{
+		Label:     "Password:",
+		Sensitive: true,
+	})
+
+	if err != nil {
+		t.Fatalf("Prompt() failed: %v", err)
+	}
+
+	if resp.Value != "secret-password" {
+		t.Errorf("expected 'secret-password', got %q", resp.Value)
 	}
 }
 
@@ -46,12 +73,14 @@ func TestUIServer_Confirm(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			r, w := io.Pipe()
+			srv := NewUIServerWithReader(r)
+			defer srv.Stop()
+
 			go func() {
-				defer w.Close()
 				_, _ = io.WriteString(w, tt.input)
+				w.Close()
 			}()
 
-			srv := NewUIServerWithReader(r)
 			resp, err := srv.Confirm(t.Context(), &apiv1.ConfirmRequest{
 				Label:        "Confirm?",
 				DefaultValue: tt.defValue,
@@ -70,12 +99,14 @@ func TestUIServer_Confirm(t *testing.T) {
 
 func TestUIServer_Select(t *testing.T) {
 	r, w := io.Pipe()
+	srv := NewUIServerWithReader(r)
+	defer srv.Stop()
+
 	go func() {
-		defer w.Close()
 		_, _ = io.WriteString(w, "2\n") // Select second option
+		w.Close()
 	}()
 
-	srv := NewUIServerWithReader(r)
 	resp, err := srv.Select(t.Context(), &apiv1.SelectRequest{
 		Label:   "Pick one:",
 		Options: []string{"A", "B", "C"},
@@ -91,9 +122,9 @@ func TestUIServer_Select(t *testing.T) {
 }
 
 func TestUIServer_Coordination(t *testing.T) {
-	// For coordination testing, we use a single server instance with its own reader
 	r, w := io.Pipe()
 	srv := NewUIServerWithReader(r)
+	defer srv.Stop()
 	
 	promptDone := make(chan struct{})
 	go func() {
@@ -104,7 +135,6 @@ func TestUIServer_Coordination(t *testing.T) {
 	// Try to start another prompt while first is active
 	secondDone := make(chan bool)
 	go func() {
-		// This should block until we provide input to the first prompt
 		_, _ = srv.Confirm(t.Context(), &apiv1.ConfirmRequest{Label: "Second:"})
 		secondDone <- true
 	}()
@@ -122,10 +152,8 @@ func TestUIServer_Coordination(t *testing.T) {
 	<-promptDone
 
 	// Now unblock second prompt
-	go func() {
-		_, _ = io.WriteString(w, "y\n")
-		w.Close()
-	}()
+	_, _ = io.WriteString(w, "y\n")
+	w.Close()
 
 	select {
 	case <-secondDone:
@@ -138,6 +166,7 @@ func TestUIServer_Coordination(t *testing.T) {
 func TestUIServer_Cancellation(t *testing.T) {
 	r, w := io.Pipe()
 	srv := NewUIServerWithReader(r)
+	defer srv.Stop()
 	
 	// Start a prompt with a short-lived context
 	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
@@ -152,8 +181,7 @@ func TestUIServer_Cancellation(t *testing.T) {
 		t.Errorf("expected context.DeadlineExceeded, got %v", err)
 	}
 
-	// Important: We must provide input to the background reader so it finishes its 
-	// previous blocked read and is ready for the next one.
+	// Satisfy the background reader so it moves on
 	_, _ = io.WriteString(w, "satisfied\n")
 
 	// Now verify the server can handle a new request

@@ -10,7 +10,6 @@ import (
 	"syscall"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 
 	apiv1 "thoreinstein.com/rig/pkg/api/v1"
 )

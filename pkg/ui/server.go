@@ -45,10 +45,15 @@ func NewUIServerWithReader(in io.Reader) *UIServer {
 	s := &UIServer{
 		coord:  NewCoordinator(),
 		in:     in,
-		readCh: make(chan readRequest),
+		readCh: make(chan readRequest, 10), // Buffered to prevent deadlocks on cancellation
 	}
 	go s.runReader()
 	return s
+}
+
+// Stop shuts down the UI server and its background reader.
+func (s *UIServer) Stop() {
+	close(s.readCh)
 }
 
 // runReader is the singleton background goroutine that owns the input reader.
@@ -78,13 +83,10 @@ func (s *UIServer) runReader() {
 		}
 
 		// Send response. If the requester has already timed out or canceled,
-		// they won't be listening, so we use a non-blocking send or 
-		// just let it drop if the channel is closed.
-		select {
-		case req.respCh <- readResponse{value: val, err: err}:
-		default:
-			// Requester is gone, discard the input
-		}
+		// we use a non-blocking send or just let it drop if the channel is closed.
+		// However, we want to give the requester a chance to receive it if they are
+		// just slightly behind.
+		req.respCh <- readResponse{value: val, err: err}
 	}
 }
 
