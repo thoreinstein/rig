@@ -107,6 +107,10 @@ func initConfig() {
 		return
 	}
 
+	// Reset Viper state to avoid carrying over stale settings from previous loads.
+	// This is important because initConfig can be called multiple times.
+	viper.Reset()
+
 	if cfgFile != "" {
 		// Use config file from the flag.
 		viper.SetConfigFile(cfgFile)

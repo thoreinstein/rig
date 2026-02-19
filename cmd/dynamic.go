@@ -254,6 +254,14 @@ func filterHostFlags(args []string) ([]string, []string) {
 		} else if len(name) > 0 {
 			// Check if the first character is a valid shorthand
 			f = fs.ShorthandLookup(name[:1])
+			if f != nil && f.Value.Type() == "bool" && len(name) > 1 {
+				// If first char is a boolean shorthand, it's only a host flag if
+				// the next char is also a valid host shorthand (grouping).
+				// Otherwise, it's likely a plugin-specific short option (e.g. -vfoo).
+				if fs.ShorthandLookup(name[1:2]) == nil {
+					f = nil
+				}
+			}
 		}
 
 		if f != nil {
