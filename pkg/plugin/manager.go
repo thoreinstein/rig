@@ -8,21 +8,30 @@ import (
 	"thoreinstein.com/rig/pkg/errors"
 )
 
+type pluginExecutor interface {
+	Start(ctx context.Context, p *Plugin) error
+	Stop(p *Plugin) error
+	PrepareClient(p *Plugin) error
+	Handshake(ctx context.Context, p *Plugin, rigVersion, apiVersion string) error
+}
+
 // Manager manages a pool of active plugins.
 type Manager struct {
-	executor *Executor
-	scanner  *Scanner
+	executor   pluginExecutor
+	scanner    *Scanner
+	rigVersion string
 
 	mu      sync.Mutex
 	plugins map[string]*Plugin
 }
 
 // NewManager creates a new plugin manager.
-func NewManager(executor *Executor, scanner *Scanner) *Manager {
+func NewManager(executor *Executor, scanner *Scanner, rigVersion string) *Manager {
 	return &Manager{
-		executor: executor,
-		scanner:  scanner,
-		plugins:  make(map[string]*Plugin),
+		executor:   executor,
+		scanner:    scanner,
+		rigVersion: rigVersion,
+		plugins:    make(map[string]*Plugin),
 	}
 }
 
@@ -103,10 +112,21 @@ func (m *Manager) getOrStartPlugin(ctx context.Context, name string) (*Plugin, e
 		return nil, errors.Wrapf(err, "failed to prepare client for plugin %q", name)
 	}
 
-	// For now, use a dummy rig version and API version for handshake
-	if err := m.executor.Handshake(ctx, target, "v1.0.0", "v1"); err != nil {
+	// Perform handshake with host version and API contract version
+	if err := m.executor.Handshake(ctx, target, m.rigVersion, APIVersion); err != nil {
 		_ = m.executor.Stop(target)
 		return nil, errors.Wrapf(err, "handshake failed for plugin %q", name)
+	}
+
+	// Validate compatibility with host Rig version after handshake
+	// (which might have updated the plugin's metadata/version).
+	ValidateCompatibility(target, m.rigVersion)
+	if target.Status != StatusCompatible {
+		_ = m.executor.Stop(target)
+		if target.Error != nil {
+			return nil, errors.Wrapf(target.Error, "plugin %q is incompatible", name)
+		}
+		return nil, errors.NewPluginError(name, "Compatibility", "plugin is incompatible with this version of rig")
 	}
 
 	m.mu.Lock()

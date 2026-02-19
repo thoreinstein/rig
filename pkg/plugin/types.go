@@ -23,6 +23,9 @@ const (
 const (
 	// AssistantCapability is the name of the capability for AI completion plugins.
 	AssistantCapability = "assistant"
+
+	// APIVersion is the current version of the Rig Plugin API contract.
+	APIVersion = "v1"
 )
 
 // Manifest represents the metadata for a plugin found in manifest.yaml
