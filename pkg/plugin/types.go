@@ -76,6 +76,7 @@ type Plugin struct {
 	socketPath      string
 	client          apiv1.PluginServiceClient
 	AssistantClient apiv1.AssistantServiceClient
+	CommandClient   apiv1.CommandServiceClient
 	conn            *grpc.ClientConn
 	cancel          context.CancelFunc
 }

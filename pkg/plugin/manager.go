@@ -139,6 +139,40 @@ func (m *Manager) GetAssistantClient(ctx context.Context, name string) (apiv1.As
 	return p.AssistantClient, nil
 }
 
+// GetCommandClient returns a gRPC client for the specified command plugin.
+// If the plugin is not running, it will be started.
+func (m *Manager) GetCommandClient(ctx context.Context, name string) (apiv1.CommandServiceClient, error) {
+	p, err := m.getOrStartPlugin(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	// Verify the plugin has the command capability
+	hasCommand := false
+	for _, cap := range p.Capabilities {
+		if cap.Name == CommandCapability {
+			hasCommand = true
+			break
+		}
+	}
+
+	if !hasCommand {
+		return nil, errors.NewPluginError(name, "GetCommandClient", "plugin does not support command capability")
+	}
+
+	if p.CommandClient == nil {
+		if p.conn == nil {
+			return nil, errors.NewPluginError(name, "GetCommandClient", "plugin connection not established")
+		}
+		p.CommandClient = apiv1.NewCommandServiceClient(p.conn)
+	}
+
+	return p.CommandClient, nil
+}
+
 func (m *Manager) getOrStartPlugin(ctx context.Context, name string) (*Plugin, error) {
 	m.mu.Lock()
 	p, ok := m.plugins[name]
