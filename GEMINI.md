@@ -31,6 +31,7 @@
   - `pkg/notes/`: Markdown note templates and management.
   - `pkg/ai/`: AI provider implementations.
   - `pkg/github/`: GitHub API and CLI client.
+  - `pkg/bootstrap/`: Heavy CLI initialization and bootstrap logic.
 - `main.go`: Application entry point.
 - `project.yaml`: Project metadata and governance.
 
@@ -66,6 +67,7 @@ Rig uses a TOML configuration file, typically located at `~/.config/rig/config.t
 - **[tmux]**: Session window layouts and commands.
 - **[history]**: Database path for command history.
 - **[ai]**: AI provider and model settings.
+- **[plugins]**: Plugin-specific configuration sections.
 
 ## Development Conventions
 
@@ -76,9 +78,13 @@ Rig uses a TOML configuration file, typically located at `~/.config/rig/config.t
   - Enums: `SCREAMING_SNAKE`
 - **Testing:**
   - Mandatory for new features.
-  - Prefer table-driven tests.
+  - ALWAYS use table-driven tests for all Go logic.
+  - Prefer table-driven tests for comprehensive edge case coverage.
   - Use interfaces for mocking external dependencies (Git, JIRA, Tmux, Plugin Executors).
-- **Architecture:** Keep CLI logic in `cmd/` minimal; delegate business logic to `pkg/`.
+- **Architecture:**
+  - Keep CLI logic in `cmd/` minimal (thin wrappers).
+  - Delegate orchestration and business logic to `pkg/`.
+  - Move heavy bootstrap and initialization logic to `pkg/bootstrap`.
 - **Linting:** Strict mode using `golangci-lint`.
 - **Pre-commit Mandate:** NEVER push changes without running the full pre-commit suite, even if the automatic git hook fails to trigger. Local validation is the primary guardrail.
 
@@ -127,6 +133,8 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 ### Architectural Decisions
 - **SDK-First:** Prefer official Go SDKs (like Genkit for Google AI) over CLI wrappers for stability and robust streaming support.
 - **Safe Deprecation:** Use non-blocking configuration warnings (via `CheckSecurityWarnings`) instead of silent removal when deprecating keys to ensure a smooth user migration.
+- **Bootstrap Package:** All early CLI orchestration (flag pre-parsing, configuration initialization, dynamic registration) belongs in `pkg/bootstrap` to keep `Execute()` paths delegative and testable.
+- **Convention-Over-Collision:** Use uppercase shorthands for global host flags (e.g., `-C` for config) to minimize collisions with subcommand-specific shorthands.
 
 ### Documentation Conventions
 - **Historical Accuracy:** Never modify old release notes or historical documentation to reflect current state. Always treat past records as immutable snapshots.
@@ -145,6 +153,7 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 - **Surfacing Metadata Errors:** If a plugin's manifest file exists but is malformed, report an error rather than silently ignoring it. This prevents bypassing version checks due to configuration errors. Ensure consistent error reporting across all discovery paths (e.g., both single-binary and directory-based plugins).
 - **Automated Reviewer Naming Conflicts**: Conflicting bot suggestions (e.g., snake_case vs. camelCase) should be resolved by prioritizing Go idioms and established codebase patterns over generic bot rules.
 - **Stale Git Context in Hooks Trap**: Environment variables injected by `pre-commit` (e.g., `GIT_INDEX_FILE`) can interfere with unit tests that create temporary git repositories. Always unset `GIT_*` variables in test hooks.
+- **Host Flag Shadowing**: In dynamic CLIs, bootstrap parsers MUST stop scanning at the first non-flag token or `--` to avoid "stealing" arguments from subcommands. Host-only flags must be strictly filtered before forwarding to sub-processes.
 
 ## API & Plugin Architecture (gRPC)
 
