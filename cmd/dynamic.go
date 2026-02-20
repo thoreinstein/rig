@@ -4,7 +4,10 @@ import (
 	"context"
 	"os"
 
+	apiv1 "thoreinstein.com/rig/pkg/api/v1"
 	"thoreinstein.com/rig/pkg/bootstrap"
+	"thoreinstein.com/rig/pkg/daemon"
+	"thoreinstein.com/rig/pkg/ui"
 )
 
 // registerPluginCommands scans for plugins and dynamically adds their commands to the root command.
@@ -14,8 +17,33 @@ func registerPluginCommands() {
 
 // runPluginCommand starts the plugin and executes the specified command.
 func runPluginCommand(ctx context.Context, pluginName, commandName string, args []string) error {
-	// Delegate to the bootstrap package for heavy orchestration.
-	// This ensures CLI logic remains decoupled from core plugin execution.
+	// Phase 7: Attempt execution via Daemon first
+	if appConfig != nil {
+		rigPath, _ := os.Executable()
+		client, err := daemon.EnsureRunning(ctx, rigPath)
+		if err == nil {
+			defer client.Close()
+
+			configJSON := bootstrap.ResolvePluginConfig(appConfig.PluginConfig, pluginName, nil)
+			uiHandler := ui.NewUIServer()
+			defer uiHandler.Stop()
+
+			err = client.ExecuteCommand(ctx, &apiv1.CommandRequest{
+				PluginName:  pluginName,
+				CommandName: commandName,
+				Args:        args,
+				ConfigJson:  configJSON,
+				RigVersion:  GetVersion(),
+			}, uiHandler, os.Stdout, os.Stderr)
+
+			if err == nil {
+				return nil
+			}
+			// If daemon is busy or failed, fallback to direct execution
+		}
+	}
+
+	// Delegate to the bootstrap package for heavy orchestration (Fallback).
 	return bootstrap.RunPluginCommand(
 		ctx,
 		rootCmd.PersistentFlags(),
