@@ -16,24 +16,22 @@ import (
 func TestCommandExecution(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// 1. Compile the mock command plugin
+	// 1. Compile the mock command plugin once for all cases
 	pluginBin := filepath.Join(tmpDir, "mock-cmd-plugin")
-	// Use absolute path for the source file to avoid issues with CWD
 	cwd, _ := os.Getwd()
 	sourceFile := filepath.Join(cwd, "testdata", "mock-cmd-plugin", "main.go")
 
-	cmd := exec.Command("go", "build", "-o", pluginBin, sourceFile)
-	if out, err := cmd.CombinedOutput(); err != nil {
+	compileCmd := exec.Command("go", "build", "-o", pluginBin, sourceFile)
+	if out, err := compileCmd.CombinedOutput(); err != nil {
 		t.Fatalf("failed to compile mock-cmd-plugin: %v\nOutput: %s", err, string(out))
 	}
 
-	// 2. Setup plugin directory structure for scanning
+	// 2. Setup plugin directory structure
 	pluginDir := filepath.Join(tmpDir, "plugins")
 	if err := os.Mkdir(pluginDir, 0755); err != nil {
 		t.Fatal(err)
 	}
 
-	// Move binary and copy manifest
 	targetBin := filepath.Join(pluginDir, "mock-cmd")
 	if err := os.Rename(pluginBin, targetBin); err != nil {
 		t.Fatal(err)
@@ -48,72 +46,103 @@ func TestCommandExecution(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// 3. Initialize Manager
-	scanner := &Scanner{Paths: []string{pluginDir}}
-	executor := NewExecutor("")
-
-	// Mock config provider that returns a test config
-	configProvider := func(name string) ([]byte, error) {
-		return []byte(`{"test":"config"}`), nil
+	// 3. Define test cases
+	tests := []struct {
+		name         string
+		command      string
+		args         []string
+		wantStdout   string
+		wantStderr   string
+		wantExitCode int32
+		wantErr      bool
+	}{
+		{
+			name:         "Echo command success",
+			command:      "echo",
+			args:         []string{"hello", "world"},
+			wantStdout:   "hello world",
+			wantExitCode: 0,
+		},
+		{
+			name:         "Unknown command failure",
+			command:      "unknown",
+			wantStderr:   "Unknown command: unknown",
+			wantExitCode: 1,
+		},
 	}
 
-	manager, err := NewManager(executor, scanner, "0.1.0", configProvider, nil)
-	if err != nil {
-		t.Fatalf("NewManager() failed: %v", err)
-	}
-	defer manager.StopAll()
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			scanner := &Scanner{Paths: []string{pluginDir}}
+			executor := NewExecutor("")
 
-	// 4. Get command client (starts plugin + handshake)
-	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
-	defer cancel()
+			configProvider := func(name string) ([]byte, error) {
+				return []byte(`{"test":"config"}`), nil
+			}
 
-	client, err := manager.GetCommandClient(ctx, "mock-cmd")
-	if err != nil {
-		t.Fatalf("GetCommandClient() failed: %v", err)
-	}
+			manager, err := NewManager(executor, scanner, "0.1.0", configProvider, nil)
+			if err != nil {
+				t.Fatalf("NewManager() failed: %v", err)
+			}
+			defer manager.StopAll()
 
-	// 5. Execute command
-	args := []string{"hello", "world"}
-	stream, err := client.Execute(ctx, &apiv1.ExecuteRequest{
-		Command: "echo",
-		Args:    args,
-	})
-	if err != nil {
-		t.Fatalf("Execute() failed: %v", err)
-	}
+			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+			defer cancel()
 
-	// 6. Collect output
-	var stdout strings.Builder
-	var gotDone bool
-	var exitCode int32
+			client, err := manager.GetCommandClient(ctx, "mock-cmd")
+			if err != nil {
+				t.Fatalf("GetCommandClient() failed: %v", err)
+			}
 
-	for {
-		resp, err := stream.Recv()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			t.Fatalf("stream.Recv() failed: %v", err)
-		}
+			stream, err := client.Execute(ctx, &apiv1.ExecuteRequest{
+				Command: tc.command,
+				Args:    tc.args,
+			})
+			if err != nil {
+				if tc.wantErr {
+					return
+				}
+				t.Fatalf("Execute() failed: %v", err)
+			}
 
-		if len(resp.Stdout) > 0 {
-			stdout.Write(resp.Stdout)
-		}
-		if resp.Done {
-			gotDone = true
-			exitCode = resp.ExitCode
-			break
-		}
-	}
+			var stdout, stderr strings.Builder
+			var gotDone bool
+			var exitCode int32
 
-	// 7. Verify results
-	if !gotDone {
-		t.Error("expected done=true in stream")
-	}
-	if exitCode != 0 {
-		t.Errorf("expected exit_code=0, got %d", exitCode)
-	}
-	if stdout.String() != "hello world" {
-		t.Errorf("stdout = %q, want %q", stdout.String(), "hello world")
+			for {
+				resp, err := stream.Recv()
+				if err == io.EOF {
+					break
+				}
+				if err != nil {
+					t.Fatalf("stream.Recv() failed: %v", err)
+				}
+
+				if len(resp.Stdout) > 0 {
+					stdout.Write(resp.Stdout)
+				}
+				if len(resp.Stderr) > 0 {
+					stderr.Write(resp.Stderr)
+				}
+				if resp.Done {
+					gotDone = true
+					exitCode = resp.ExitCode
+					break
+				}
+			}
+
+			if !gotDone {
+				t.Error("expected done=true in stream")
+			}
+			if exitCode != tc.wantExitCode {
+				t.Errorf("exit_code = %d, want %d", exitCode, tc.wantExitCode)
+			}
+			if tc.wantStdout != "" && stdout.String() != tc.wantStdout {
+				t.Errorf("stdout = %q, want %q", stdout.String(), tc.wantStdout)
+			}
+			if tc.wantStderr != "" && stderr.String() != tc.wantStderr {
+				t.Errorf("stderr = %q, want %q", stderr.String(), tc.wantStderr)
+			}
+		})
 	}
 }
