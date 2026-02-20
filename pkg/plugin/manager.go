@@ -29,6 +29,17 @@ type pluginExecutor interface {
 type ConfigProvider func(pluginName string) ([]byte, error)
 
 // Manager manages a pool of active plugins.
+// ManagerOption defines a functional option for configuring a Manager.
+type ManagerOption func(*Manager)
+
+// WithUIServer sets a custom UI server for the manager to use for plugin callbacks.
+func WithUIServer(srv apiv1.UIServiceServer) ManagerOption {
+	return func(m *Manager) {
+		m.hostUI = srv
+	}
+}
+
+// Manager manages a pool of active plugins.
 type Manager struct {
 	executor       pluginExecutor
 	scanner        *Scanner
@@ -38,7 +49,7 @@ type Manager struct {
 
 	// Host-side UI Proxy Service
 	hostServer *grpc.Server
-	hostUI     *ui.UIServer
+	hostUI     apiv1.UIServiceServer
 	hostL      net.Listener
 	hostPath   string
 	hostDir    string
@@ -48,7 +59,7 @@ type Manager struct {
 }
 
 // NewManager creates a new plugin manager and starts the host-side UI Proxy Service.
-func NewManager(executor *Executor, scanner *Scanner, rigVersion string, configProvider ConfigProvider, logger *slog.Logger) (*Manager, error) {
+func NewManager(executor pluginExecutor, scanner *Scanner, rigVersion string, configProvider ConfigProvider, logger *slog.Logger, opts ...ManagerOption) (*Manager, error) {
 	// 1. Create a private directory and generate unique UDS path for the host server
 	hostDir, err := os.MkdirTemp("", "rig-h-")
 	if err != nil {
@@ -79,9 +90,29 @@ func NewManager(executor *Executor, scanner *Scanner, rigVersion string, configP
 		return nil, errors.Wrapf(err, "failed to set permissions on host socket %q", hostPath)
 	}
 
-	uiServer := ui.NewUIServer()
+	m := &Manager{
+		executor:       executor,
+		scanner:        scanner,
+		rigVersion:     rigVersion,
+		configProvider: configProvider,
+		logger:         logger,
+		hostL:          lis,
+		hostPath:       hostPath,
+		hostDir:        hostDir,
+		plugins:        make(map[string]*Plugin),
+	}
+
+	for _, opt := range opts {
+		opt(m)
+	}
+
+	if m.hostUI == nil {
+		m.hostUI = ui.NewUIServer()
+	}
+
 	srv := grpc.NewServer()
-	apiv1.RegisterUIServiceServer(srv, uiServer)
+	apiv1.RegisterUIServiceServer(srv, m.hostUI)
+	m.hostServer = srv
 
 	go func() {
 		if err := srv.Serve(lis); err != nil && err != grpc.ErrServerStopped {
@@ -93,19 +124,7 @@ func NewManager(executor *Executor, scanner *Scanner, rigVersion string, configP
 	// 3. Configure executor with host endpoint
 	executor.SetHostEndpoint(hostPath)
 
-	return &Manager{
-		executor:       executor,
-		scanner:        scanner,
-		rigVersion:     rigVersion,
-		configProvider: configProvider,
-		logger:         logger,
-		hostServer:     srv,
-		hostUI:         uiServer,
-		hostL:          lis,
-		hostPath:       hostPath,
-		hostDir:        hostDir,
-		plugins:        make(map[string]*Plugin),
-	}, nil
+	return m, nil
 }
 
 // GetAssistantClient returns a gRPC client for the specified assistant plugin.
@@ -272,7 +291,9 @@ func (m *Manager) StopAll() {
 	}
 
 	if m.hostUI != nil {
-		m.hostUI.Stop()
+		if s, ok := m.hostUI.(interface{ Stop() }); ok {
+			s.Stop()
+		}
 		m.hostUI = nil
 	}
 
