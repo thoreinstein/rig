@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/cockroachdb/errors"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
 
@@ -79,7 +80,7 @@ func newDaemonStartCmd() *cobra.Command {
 				daemonIdle = 15 * time.Minute // Fallback
 			}
 			lifecycle := daemon.NewLifecycle(mgr, server, pluginIdle, daemonIdle, slog.Default())
-			go lifecycle.Run(cmd.Context())
+
 			// 2. Setup UDS listener
 			if err := daemon.EnsureDir(); err != nil {
 				return err
@@ -106,15 +107,15 @@ func newDaemonStartCmd() *cobra.Command {
 			}
 			defer func() { _ = daemon.RemovePIDFile() }()
 
-			// 4. Start lifecycle monitor
-			go lifecycle.Run(cmd.Context())
-
-			// 5. Handle signals and lifecycle shutdown
+			// 4. Handle signals and lifecycle shutdown
 			sigCh := make(chan os.Signal, 1)
 			signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
 
+			ctx := cmd.Context()
 			go func() {
 				select {
+				case <-ctx.Done():
+					fmt.Println("\nContext canceled, shutting down...")
 				case <-sigCh:
 					fmt.Println("\nShutting down daemon...")
 				case <-server.ShutdownCh():
@@ -125,6 +126,9 @@ func newDaemonStartCmd() *cobra.Command {
 				mgr.StopAll()
 				s.GracefulStop()
 			}()
+
+			// 5. Start lifecycle monitor
+			go lifecycle.Run(ctx)
 			fmt.Printf("Daemon started on %s (PID %d)\n", path, os.Getpid())
 			return s.Serve(lis)
 		},
@@ -143,7 +147,7 @@ func newDaemonStopCmd() *cobra.Command {
 					fmt.Println("Daemon is not running.")
 					return nil
 				}
-				return fmt.Errorf("failed to read PID file: %w", err)
+				return errors.Wrapf(err, "failed to read PID file")
 			}
 
 			// 1. Try to connect and shut down via gRPC

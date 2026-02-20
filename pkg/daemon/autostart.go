@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"context"
+	"log/slog"
 	"os"
 	"os/exec"
 	"time"
@@ -18,6 +19,7 @@ func EnsureRunning(ctx context.Context, rigPath string) (*DaemonClient, error) {
 			return client, nil
 		}
 		// Stale PID? Remove it and start fresh
+		slog.Debug("NewClient failed for existing daemon; removing stale PID file", "path", rigPath, "error", err)
 		_ = RemovePIDFile()
 	}
 

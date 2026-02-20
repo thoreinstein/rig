@@ -28,8 +28,18 @@ type DaemonClient struct {
 }
 
 // NewClient creates a new client connected to the daemon at the well-known socket path.
+// It performs a connection check to ensure the daemon is reachable before returning.
 func NewClient(ctx context.Context) (*DaemonClient, error) {
 	path := SocketPath()
+
+	// NewClient is lazy, so we dial the socket directly first to ensure it's up.
+	d := net.Dialer{Timeout: 500 * time.Millisecond}
+	testConn, err := d.DialContext(ctx, "unix", path)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to connect to daemon socket")
+	}
+	_ = testConn.Close()
+
 	conn, err := grpc.NewClient("passthrough:///unix://"+path,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithContextDialer(func(ctx context.Context, addr string) (net.Conn, error) {
@@ -37,7 +47,7 @@ func NewClient(ctx context.Context) (*DaemonClient, error) {
 		}),
 	)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to connect to daemon")
+		return nil, errors.Wrap(err, "failed to create daemon client")
 	}
 
 	return &DaemonClient{

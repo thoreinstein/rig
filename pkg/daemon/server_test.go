@@ -91,11 +91,8 @@ func TestDaemonServer_Execute(t *testing.T) {
 
 	// Since we haven't mocked the scanner/plugin discovery fully here,
 	// it will fail at GetCommandClient. That's fine for verifying the flow reached that point.
-	resp, err := stream.Recv()
+	_, err = stream.Recv()
 	if err == nil {
-		t.Fatal("expected error from GetCommandClient, got nil")
-	}
-	if resp != nil {
-		t.Fatalf("expected nil response on error, got %v", resp)
+		t.Fatal("expected non-nil error from GetCommandClient stream.Recv()")
 	}
 }

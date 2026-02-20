@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"context"
+	"log/slog"
 	"sync"
 
 	"github.com/google/uuid"
@@ -13,7 +14,7 @@ import (
 // UIBridge defines the interface for sending UI requests to the CLI and receiving responses.
 type UIBridge interface {
 	SendRequest(resp *apiv1.InteractResponse) error
-	RegisterResponse(id string) chan *apiv1.InteractRequest
+	RegisterResponse(id string) (chan *apiv1.InteractRequest, func())
 	WaitResponse(ctx context.Context, id string, ch chan *apiv1.InteractRequest) (*apiv1.InteractRequest, error)
 }
 
@@ -35,24 +36,25 @@ func (b *sessionBridge) SendRequest(resp *apiv1.InteractResponse) error {
 	return b.send(resp)
 }
 
-// RegisterResponse installs a channel to receive the UI response.
+// RegisterResponse installs a channel to receive the UI response and returns a cleanup function.
 // MUST be called before SendRequest to avoid race conditions.
-func (b *sessionBridge) RegisterResponse(id string) chan *apiv1.InteractRequest {
+func (b *sessionBridge) RegisterResponse(id string) (chan *apiv1.InteractRequest, func()) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	ch := make(chan *apiv1.InteractRequest, 1)
 	b.pending[id] = ch
-	return ch
+
+	cleanup := func() {
+		b.mu.Lock()
+		defer b.mu.Unlock()
+		delete(b.pending, id)
+	}
+
+	return ch, cleanup
 }
 
 // WaitResponse blocks until the response for the given ID is received or the context is canceled.
 func (b *sessionBridge) WaitResponse(ctx context.Context, id string, ch chan *apiv1.InteractRequest) (*apiv1.InteractRequest, error) {
-	defer func() {
-		b.mu.Lock()
-		delete(b.pending, id)
-		b.mu.Unlock()
-	}()
-
 	select {
 	case res := <-ch:
 		return res, nil
@@ -111,7 +113,8 @@ func (p *DaemonUIProxy) Prompt(ctx context.Context, req *apiv1.PromptRequest) (*
 	}
 
 	id := uuid.New().String()
-	respCh := bridge.RegisterResponse(id)
+	respCh, cleanup := bridge.RegisterResponse(id)
+	defer cleanup()
 
 	err = bridge.SendRequest(&apiv1.InteractResponse{
 		Id: id,
@@ -140,7 +143,8 @@ func (p *DaemonUIProxy) Confirm(ctx context.Context, req *apiv1.ConfirmRequest) 
 	}
 
 	id := uuid.New().String()
-	respCh := bridge.RegisterResponse(id)
+	respCh, cleanup := bridge.RegisterResponse(id)
+	defer cleanup()
 
 	err = bridge.SendRequest(&apiv1.InteractResponse{
 		Id: id,
@@ -169,7 +173,8 @@ func (p *DaemonUIProxy) Select(ctx context.Context, req *apiv1.SelectRequest) (*
 	}
 
 	id := uuid.New().String()
-	respCh := bridge.RegisterResponse(id)
+	respCh, cleanup := bridge.RegisterResponse(id)
+	defer cleanup()
 
 	err = bridge.SendRequest(&apiv1.InteractResponse{
 		Id: id,
@@ -198,12 +203,15 @@ func (p *DaemonUIProxy) UpdateProgress(ctx context.Context, req *apiv1.UpdatePro
 		return &apiv1.UpdateProgressResponse{}, nil
 	}
 
-	_ = bridge.SendRequest(&apiv1.InteractResponse{
-		Id: uuid.New().String(),
+	id := uuid.New().String()
+	if err := bridge.SendRequest(&apiv1.InteractResponse{
+		Id: id,
 		Payload: &apiv1.InteractResponse_Progress{
 			Progress: req.Progress,
 		},
-	})
+	}); err != nil {
+		slog.Debug("Failed to send UI progress update to session", "id", id, "error", err)
+	}
 
 	return &apiv1.UpdateProgressResponse{}, nil
 }

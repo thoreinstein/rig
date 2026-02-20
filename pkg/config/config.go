@@ -343,7 +343,8 @@ func setDefaults() {
 	viper.SetDefault("daemon.plugin_idle_timeout", "5m")
 	viper.SetDefault("daemon.daemon_idle_timeout", "15m")
 
-	// Plugin defaults	viper.SetDefault("plugins", map[string]interface{}{})
+	// Plugin defaults
+	viper.SetDefault("plugins", map[string]interface{}{})
 }
 
 // expandPaths expands ~ and environment variables in paths
