@@ -26,7 +26,15 @@ func runPluginCommand(ctx context.Context, pluginName, commandName string, args 
 			defer client.Close()
 
 			// Sanitize arguments by filtering out host flags
-			pluginArgs, _ := bootstrap.FilterHostFlags(rootCmd.PersistentFlags(), args)
+			pluginArgs, hostArgs := bootstrap.FilterHostFlags(rootCmd.PersistentFlags(), args)
+
+			// 3. Re-initialize configuration if host flags were parsed.
+			if len(hostArgs) > 0 {
+				if err := rootCmd.PersistentFlags().Parse(hostArgs); err != nil {
+					return errors.Wrap(err, "failed to parse host flags")
+				}
+				initConfig()
+			}
 
 			configJSON := bootstrap.ResolvePluginConfig(appConfig.PluginConfig, pluginName, nil)
 			uiHandler := ui.NewUIServer()

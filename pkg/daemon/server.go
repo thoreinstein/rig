@@ -29,6 +29,7 @@ type DaemonServer struct {
 	busy             bool // Simple Phase 1 lock: one command at a time
 	lastActivityTime time.Time
 	shutdown         chan struct{}
+	shutdownOnce     sync.Once
 }
 
 func NewDaemonServer(m *plugin.Manager, proxy *DaemonUIProxy, rigVersion string, logger *slog.Logger) *DaemonServer {
@@ -156,7 +157,9 @@ func (s *DaemonServer) Status(ctx context.Context, _ *apiv1.DaemonServiceStatusR
 	}, nil
 }
 func (s *DaemonServer) Shutdown(ctx context.Context, req *apiv1.DaemonServiceShutdownRequest) (*apiv1.DaemonServiceShutdownResponse, error) {
-	close(s.shutdown)
+	s.shutdownOnce.Do(func() {
+		close(s.shutdown)
+	})
 	return &apiv1.DaemonServiceShutdownResponse{Accepted: true}, nil
 }
 
