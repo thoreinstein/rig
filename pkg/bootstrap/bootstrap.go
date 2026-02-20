@@ -372,13 +372,13 @@ func FilterHostFlags(fs *pflag.FlagSet, args []string) ([]string, []string) {
 						i++
 					}
 				} else {
-					// -Cfile OR -C file
-					if len(name) == 1 && i+1 < len(args) {
+					// -Cfile OR -C=file OR -C file
+					if !strings.Contains(arg, "=") && len(name) == 1 && i+1 < len(args) {
 						// -C file
 						hostArgs = append(hostArgs, args[i+1])
 						i++
 					}
-					// -Cfile is already part of hostArgs via 'arg'
+					// -Cfile and -C=file are already part of hostArgs via 'arg'
 				}
 			}
 			continue
