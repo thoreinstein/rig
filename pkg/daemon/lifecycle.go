@@ -62,12 +62,20 @@ func (l *Lifecycle) checkIdle() {
 		if l.logger != nil {
 			l.logger.Info("Daemon reached idle timeout, shutting down")
 		}
-		// TODO: Trigger graceful shutdown of the daemon process
+		// Signal shutdown to the main process
+		l.Stop()
 	}
 
 	// 2. Check for plugin idle timeouts
-	// This requires Phase 9 (plugin LastUsed tracking) to be fully effective.
-	// For now, it's a placeholder.
+	plugins := l.manager.ListPlugins()
+	for _, p := range plugins {
+		if time.Since(p.LastUsedTime()) > l.pluginIdleTimeout {
+			if l.logger != nil {
+				l.logger.Info("Plugin reached idle timeout, stopping", "plugin", p.Name)
+			}
+			_ = l.manager.StopPlugin(p.Name)
+		}
+	}
 }
 
 func (l *Lifecycle) Stop() {

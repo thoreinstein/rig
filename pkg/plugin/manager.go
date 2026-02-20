@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
@@ -138,6 +139,8 @@ func (m *Manager) GetAssistantClient(ctx context.Context, name string) (apiv1.As
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
+	p.LastUsed = time.Now()
+
 	// Verify the plugin has the assistant capability
 	hasAssistant := false
 	for _, cap := range p.Capabilities {
@@ -171,6 +174,8 @@ func (m *Manager) GetCommandClient(ctx context.Context, name string) (apiv1.Comm
 
 	p.mu.Lock()
 	defer p.mu.Unlock()
+
+	p.LastUsed = time.Now()
 
 	// Verify the plugin has the command capability
 	hasCommand := false
@@ -269,6 +274,7 @@ func (m *Manager) getOrStartPlugin(ctx context.Context, name string) (*Plugin, e
 	}
 
 	m.mu.Lock()
+	target.LastUsed = time.Now()
 	m.plugins[name] = target
 	m.mu.Unlock()
 
@@ -310,4 +316,32 @@ func (m *Manager) StopAll() {
 
 	// Reset host endpoint in executor to avoid stale environment variables
 	m.executor.SetHostEndpoint("")
+}
+
+// StopPlugin stops a specific plugin by name.
+func (m *Manager) StopPlugin(name string) error {
+	m.mu.Lock()
+	p, ok := m.plugins[name]
+	if ok {
+		delete(m.plugins, name)
+	}
+	m.mu.Unlock()
+
+	if !ok {
+		return nil
+	}
+
+	return m.executor.Stop(p)
+}
+
+// ListPlugins returns a list of all currently managed plugins.
+func (m *Manager) ListPlugins() []*Plugin {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	plugins := make([]*Plugin, 0, len(m.plugins))
+	for _, p := range m.plugins {
+		plugins = append(plugins, p)
+	}
+	return plugins
 }
