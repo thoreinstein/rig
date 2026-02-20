@@ -310,6 +310,22 @@ func RunPluginCommand(ctx context.Context, hostFlags *pflag.FlagSet, pluginName,
 	return nil
 }
 
+// ResolvePluginConfig fetches the JSON configuration for a specific plugin using the provided provider.
+func ResolvePluginConfig(provider plugin.ConfigProvider, pluginName string, logger *slog.Logger) []byte {
+	configJSON := []byte("{}")
+	if provider != nil {
+		data, err := provider(pluginName)
+		if err != nil {
+			if logger != nil {
+				logger.Debug("failed to get config for plugin", "plugin", pluginName, "error", err)
+			}
+		} else if len(data) > 0 {
+			configJSON = data
+		}
+	}
+	return configJSON
+}
+
 // FilterHostFlags separates arguments into plugin-owned and host-owned slices.
 // It respects the '--' separator, stopping all extraction once it's encountered.
 func FilterHostFlags(fs *pflag.FlagSet, args []string) ([]string, []string) {

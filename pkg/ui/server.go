@@ -246,3 +246,24 @@ func (s *UIServer) UpdateProgress(ctx context.Context, req *apiv1.UpdateProgress
 	}
 	return &apiv1.UpdateProgressResponse{}, nil
 }
+
+// HandlePrompt satisfies the daemon.UIHandler interface.
+func (s *UIServer) HandlePrompt(ctx context.Context, req *apiv1.PromptRequest) (*apiv1.PromptResponse, error) {
+	return s.Prompt(ctx, req)
+}
+
+// HandleConfirm satisfies the daemon.UIHandler interface.
+func (s *UIServer) HandleConfirm(ctx context.Context, req *apiv1.ConfirmRequest) (*apiv1.ConfirmResponse, error) {
+	return s.Confirm(ctx, req)
+}
+
+// HandleSelect satisfies the daemon.UIHandler interface.
+func (s *UIServer) HandleSelect(ctx context.Context, req *apiv1.SelectRequest) (*apiv1.SelectResponse, error) {
+	return s.Select(ctx, req)
+}
+
+// HandleProgress satisfies the daemon.UIHandler interface.
+func (s *UIServer) HandleProgress(ctx context.Context, req *apiv1.ProgressUpdate) error {
+	_, err := s.UpdateProgress(ctx, &apiv1.UpdateProgressRequest{Progress: req})
+	return err
+}

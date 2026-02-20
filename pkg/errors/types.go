@@ -314,6 +314,37 @@ func (e *PluginError) WithCause(cause error) *PluginError {
 	return e
 }
 
+// DaemonError represents errors related to the Rig background daemon.
+type DaemonError struct {
+	Operation string // e.g., "Connect", "Execute", "Status"
+	Message   string
+	Cause     error
+}
+
+// Error implements the error interface.
+func (e *DaemonError) Error() string {
+	if e.Operation != "" {
+		return fmt.Sprintf("daemon %s failed: %s", e.Operation, e.Message)
+	}
+	return "daemon error: " + e.Message
+}
+
+// Unwrap returns the underlying cause for error chain traversal.
+func (e *DaemonError) Unwrap() error {
+	return e.Cause
+}
+
+// NewDaemonError creates a new DaemonError.
+func NewDaemonError(operation, message string) *DaemonError {
+	return &DaemonError{Operation: operation, Message: message}
+}
+
+// WithCause adds an underlying cause to the DaemonError.
+func (e *DaemonError) WithCause(cause error) *DaemonError {
+	e.Cause = cause
+	return e
+}
+
 // IsRetryable checks if an error or any error in its chain is retryable.
 // It returns true if the error itself is retryable, or if any wrapped error
 // is marked as retryable.
@@ -395,6 +426,12 @@ func IsWorkflowError(err error) bool {
 func IsPluginError(err error) bool {
 	var pluginErr *PluginError
 	return errors.As(err, &pluginErr)
+}
+
+// IsDaemonError checks if an error or any error in its chain is a DaemonError.
+func IsDaemonError(err error) bool {
+	var daemonErr *DaemonError
+	return errors.As(err, &daemonErr)
 }
 
 // isRetryableHTTPStatus returns true for HTTP status codes that are typically retryable.

@@ -1,0 +1,73 @@
+syntax = "proto3";
+
+package rig.v1;
+
+import "pkg/api/v1/command.proto";
+import "pkg/api/v1/interaction.proto";
+
+option go_package = "thoreinstein.com/rig/pkg/api/v1;apiv1";
+
+// DaemonService provides an interface for the Rig CLI to interact with a
+// background daemon managing plugin processes.
+service DaemonService {
+  // Execute starts a command execution session. It uses a bi-directional stream
+  // to multiplex command output and UI interactions.
+  rpc Execute(stream DaemonServiceExecuteRequest) returns (stream DaemonServiceExecuteResponse);
+
+  // Status returns the current state of the daemon and its managed plugins.
+  rpc Status(DaemonServiceStatusRequest) returns (DaemonServiceStatusResponse);
+
+  // Shutdown requests a graceful termination of the daemon.
+  rpc Shutdown(DaemonServiceShutdownRequest) returns (DaemonServiceShutdownResponse);
+}
+
+// DaemonServiceExecuteRequest is sent from the CLI to the Daemon.
+message DaemonServiceExecuteRequest {
+  oneof payload {
+    CommandRequest command = 1;
+    InteractRequest ui_response = 2; // Response to a UI request (InteractResponse)
+  }
+}
+
+// DaemonServiceExecuteResponse is sent from the Daemon to the CLI.
+message DaemonServiceExecuteResponse {
+  oneof payload {
+    rig.v1.ExecuteResponse output = 1; // Standard command output from command.proto
+    InteractResponse ui_request = 2;   // UI interaction request from plugin
+    string error = 3;                  // Connection or orchestration error
+  }
+}
+
+// CommandRequest initiates a command execution.
+message CommandRequest {
+  string plugin_name = 1;
+  string command_name = 2;
+  repeated string args = 3;
+  map<string, string> flags = 4;
+  bytes config_json = 5;
+  string rig_version = 6;
+}
+
+message DaemonServiceStatusRequest {}
+
+message DaemonServiceStatusResponse {
+  string daemon_version = 1;
+  int64 uptime_seconds = 2;
+  int32 active_sessions = 3;
+  repeated PluginStatus plugins = 4;
+  int32 pid = 5;
+}
+
+message PluginStatus {
+  string name = 1;
+  string status = 2;
+  int64 last_used_unix = 3;
+}
+
+message DaemonServiceShutdownRequest {
+  bool force = 1;
+}
+
+message DaemonServiceShutdownResponse {
+  bool accepted = 1;
+}

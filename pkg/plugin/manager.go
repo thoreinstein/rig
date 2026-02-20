@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
@@ -29,6 +30,17 @@ type pluginExecutor interface {
 type ConfigProvider func(pluginName string) ([]byte, error)
 
 // Manager manages a pool of active plugins.
+// ManagerOption defines a functional option for configuring a Manager.
+type ManagerOption func(*Manager)
+
+// WithUIServer sets a custom UI server for the manager to use for plugin callbacks.
+func WithUIServer(srv apiv1.UIServiceServer) ManagerOption {
+	return func(m *Manager) {
+		m.hostUI = srv
+	}
+}
+
+// Manager manages a pool of active plugins.
 type Manager struct {
 	executor       pluginExecutor
 	scanner        *Scanner
@@ -38,7 +50,7 @@ type Manager struct {
 
 	// Host-side UI Proxy Service
 	hostServer *grpc.Server
-	hostUI     *ui.UIServer
+	hostUI     apiv1.UIServiceServer
 	hostL      net.Listener
 	hostPath   string
 	hostDir    string
@@ -48,7 +60,7 @@ type Manager struct {
 }
 
 // NewManager creates a new plugin manager and starts the host-side UI Proxy Service.
-func NewManager(executor *Executor, scanner *Scanner, rigVersion string, configProvider ConfigProvider, logger *slog.Logger) (*Manager, error) {
+func NewManager(executor pluginExecutor, scanner *Scanner, rigVersion string, configProvider ConfigProvider, logger *slog.Logger, opts ...ManagerOption) (*Manager, error) {
 	// 1. Create a private directory and generate unique UDS path for the host server
 	hostDir, err := os.MkdirTemp("", "rig-h-")
 	if err != nil {
@@ -79,9 +91,29 @@ func NewManager(executor *Executor, scanner *Scanner, rigVersion string, configP
 		return nil, errors.Wrapf(err, "failed to set permissions on host socket %q", hostPath)
 	}
 
-	uiServer := ui.NewUIServer()
+	m := &Manager{
+		executor:       executor,
+		scanner:        scanner,
+		rigVersion:     rigVersion,
+		configProvider: configProvider,
+		logger:         logger,
+		hostL:          lis,
+		hostPath:       hostPath,
+		hostDir:        hostDir,
+		plugins:        make(map[string]*Plugin),
+	}
+
+	for _, opt := range opts {
+		opt(m)
+	}
+
+	if m.hostUI == nil {
+		m.hostUI = ui.NewUIServer()
+	}
+
 	srv := grpc.NewServer()
-	apiv1.RegisterUIServiceServer(srv, uiServer)
+	apiv1.RegisterUIServiceServer(srv, m.hostUI)
+	m.hostServer = srv
 
 	go func() {
 		if err := srv.Serve(lis); err != nil && err != grpc.ErrServerStopped {
@@ -93,19 +125,7 @@ func NewManager(executor *Executor, scanner *Scanner, rigVersion string, configP
 	// 3. Configure executor with host endpoint
 	executor.SetHostEndpoint(hostPath)
 
-	return &Manager{
-		executor:       executor,
-		scanner:        scanner,
-		rigVersion:     rigVersion,
-		configProvider: configProvider,
-		logger:         logger,
-		hostServer:     srv,
-		hostUI:         uiServer,
-		hostL:          lis,
-		hostPath:       hostPath,
-		hostDir:        hostDir,
-		plugins:        make(map[string]*Plugin),
-	}, nil
+	return m, nil
 }
 
 // GetAssistantClient returns a gRPC client for the specified assistant plugin.
@@ -118,6 +138,8 @@ func (m *Manager) GetAssistantClient(ctx context.Context, name string) (apiv1.As
 
 	p.mu.Lock()
 	defer p.mu.Unlock()
+
+	p.lastUsed = time.Now()
 
 	// Verify the plugin has the assistant capability
 	hasAssistant := false
@@ -152,6 +174,8 @@ func (m *Manager) GetCommandClient(ctx context.Context, name string) (apiv1.Comm
 
 	p.mu.Lock()
 	defer p.mu.Unlock()
+
+	p.lastUsed = time.Now()
 
 	// Verify the plugin has the command capability
 	hasCommand := false
@@ -250,9 +274,9 @@ func (m *Manager) getOrStartPlugin(ctx context.Context, name string) (*Plugin, e
 	}
 
 	m.mu.Lock()
+	target.lastUsed = time.Now()
 	m.plugins[name] = target
 	m.mu.Unlock()
-
 	return target, nil
 }
 
@@ -272,7 +296,9 @@ func (m *Manager) StopAll() {
 	}
 
 	if m.hostUI != nil {
-		m.hostUI.Stop()
+		if s, ok := m.hostUI.(interface{ Stop() }); ok {
+			s.Stop()
+		}
 		m.hostUI = nil
 	}
 
@@ -289,4 +315,51 @@ func (m *Manager) StopAll() {
 
 	// Reset host endpoint in executor to avoid stale environment variables
 	m.executor.SetHostEndpoint("")
+}
+
+// StopPlugin stops a specific plugin by name.
+func (m *Manager) StopPlugin(name string) error {
+	m.mu.Lock()
+	p, ok := m.plugins[name]
+	if ok {
+		delete(m.plugins, name)
+	}
+	m.mu.Unlock()
+
+	if !ok {
+		return nil
+	}
+
+	return m.executor.Stop(p)
+}
+
+// ListPlugins returns a list of all currently managed plugins.
+func (m *Manager) ListPlugins() []*Plugin {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	plugins := make([]*Plugin, 0, len(m.plugins))
+	for _, p := range m.plugins {
+		p.mu.Lock()
+		// Return a shallow copy to prevent external mutation of internal state.
+		// We manually copy fields to avoid copying the mutex.
+		copy := &Plugin{
+			Name:         p.Name,
+			Version:      p.Version,
+			APIVersion:   p.APIVersion,
+			Path:         p.Path,
+			Args:         p.Args,
+			Source:       p.Source,
+			Status:       p.Status,
+			Description:  p.Description,
+			Manifest:     p.Manifest,
+			Error:        p.Error,
+			DiscoveryAt:  p.DiscoveryAt,
+			lastUsed:     p.lastUsed,
+			Capabilities: p.Capabilities,
+		}
+		p.mu.Unlock()
+		plugins = append(plugins, copy)
+	}
+	return plugins
 }
