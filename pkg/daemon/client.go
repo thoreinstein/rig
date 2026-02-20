@@ -98,6 +98,9 @@ func (c *DaemonClient) ExecuteCommand(ctx context.Context, req *apiv1.CommandReq
 	for {
 		resp, err := stream.Recv()
 		if err == io.EOF {
+			if !gotDone {
+				return errors.New("daemon stream closed before completion")
+			}
 			break
 		}
 		if err != nil {

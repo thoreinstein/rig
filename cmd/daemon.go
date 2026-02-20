@@ -3,17 +3,13 @@ package cmd
 import (
 	"fmt"
 	"log/slog"
-	"net"
 	"os"
-	"os/signal"
 	"syscall"
 	"time"
 
 	"github.com/cockroachdb/errors"
 	"github.com/spf13/cobra"
-	"google.golang.org/grpc"
 
-	apiv1 "thoreinstein.com/rig/pkg/api/v1"
 	"thoreinstein.com/rig/pkg/daemon"
 	"thoreinstein.com/rig/pkg/plugin"
 )
@@ -53,8 +49,6 @@ func newDaemonStartCmd() *cobra.Command {
 
 			executor := plugin.NewExecutor("")
 
-			// For simplicity in Phase 7, we'll use a basic config provider.
-			// Ideally, this should come from the loaded config.
 			if err := initConfig(); err != nil {
 				return err
 			}
@@ -65,72 +59,20 @@ func newDaemonStartCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer mgr.StopAll()
-
-			server := daemon.NewDaemonServer(mgr, uiProxy, GetVersion(), slog.Default())
 
 			pluginIdle, err := time.ParseDuration(cfg.Daemon.PluginIdleTimeout)
 			if err != nil {
 				slog.Error("Invalid plugin idle timeout", "value", cfg.Daemon.PluginIdleTimeout, "error", err)
-				pluginIdle = 5 * time.Minute // Fallback
+				pluginIdle = 5 * time.Minute
 			}
 			daemonIdle, err := time.ParseDuration(cfg.Daemon.DaemonIdleTimeout)
 			if err != nil {
 				slog.Error("Invalid daemon idle timeout", "value", cfg.Daemon.DaemonIdleTimeout, "error", err)
-				daemonIdle = 15 * time.Minute // Fallback
-			}
-			lifecycle := daemon.NewLifecycle(mgr, server, pluginIdle, daemonIdle, slog.Default())
-
-			// 2. Setup UDS listener
-			if err := daemon.EnsureDir(); err != nil {
-				return err
-			}
-			path := daemon.SocketPath()
-			_ = os.Remove(path) // Ensure clean start
-
-			lis, err := net.Listen("unix", path)
-			if err != nil {
-				return err
-			}
-			defer lis.Close()
-
-			if err := os.Chmod(path, 0o600); err != nil {
-				return err
+				daemonIdle = 15 * time.Minute
 			}
 
-			// 3. Start gRPC server
-			s := grpc.NewServer()
-			apiv1.RegisterDaemonServiceServer(s, server)
-
-			if err := daemon.WritePIDFile(); err != nil {
-				return err
-			}
-			defer func() { _ = daemon.RemovePIDFile() }()
-
-			// 4. Handle signals and lifecycle shutdown
-			sigCh := make(chan os.Signal, 1)
-			signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
-
-			ctx := cmd.Context()
-			go func() {
-				select {
-				case <-ctx.Done():
-					fmt.Println("\nContext canceled, shutting down...")
-				case <-sigCh:
-					fmt.Println("\nShutting down daemon...")
-				case <-server.ShutdownCh():
-					fmt.Println("\nShutdown requested via RPC, exiting...")
-				case <-lifecycle.ShutdownCh():
-					fmt.Println("\nDaemon idle timeout reached, shutting down...")
-				}
-				mgr.StopAll()
-				s.GracefulStop()
-			}()
-
-			// 5. Start lifecycle monitor
-			go lifecycle.Run(ctx)
-			fmt.Printf("Daemon started on %s (PID %d)\n", path, os.Getpid())
-			return s.Serve(lis)
+			// 2. Delegate to pkg/daemon.Serve
+			return daemon.Serve(cmd.Context(), mgr, uiProxy, GetVersion(), slog.Default(), pluginIdle, daemonIdle)
 		},
 	}
 }
@@ -164,11 +106,11 @@ func newDaemonStopCmd() *cobra.Command {
 			// 2. If gRPC fails or PID mismatch, validate process before signaling
 			process, err := os.FindProcess(pid)
 			if err != nil {
-				return fmt.Errorf("failed to find daemon process: %w", err)
+				return errors.Wrapf(err, "failed to find daemon process %d", pid)
 			}
 
 			if !force {
-				return fmt.Errorf("daemon socket is unreachable and PID %d could not be verified as Rig. Use --force to signal anyway", pid)
+				return errors.Newf("daemon socket is unreachable and PID %d could not be verified as Rig. Use --force to signal anyway", pid)
 			}
 
 			fmt.Printf("Signaling PID %d with SIGTERM (force)...\n", pid)

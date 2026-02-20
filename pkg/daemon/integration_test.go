@@ -51,6 +51,7 @@ func TestDaemon_Integration(t *testing.T) {
 		t.Skip("mock-cmd-plugin source not found, skipping integration test")
 	}
 
+	// #nosec G204 - Intentional compilation of mock plugin for integration test
 	cmd := exec.Command("go", "build", "-o", pluginPath, filepath.Join(pluginSource, "main.go"))
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("failed to build mock plugin: %v\nOutput: %s", err, string(out))
