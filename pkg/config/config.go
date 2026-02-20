@@ -23,7 +23,16 @@ type Config struct {
 	AI        AIConfig                          `mapstructure:"ai"`
 	Workflow  WorkflowConfig                    `mapstructure:"workflow"`
 	Discovery DiscoveryConfig                   `mapstructure:"discovery"`
+	Daemon    DaemonConfig                      `mapstructure:"daemon"`
 	Plugins   map[string]map[string]interface{} `mapstructure:"plugins"`
+}
+
+// DaemonConfig holds background daemon configuration
+type DaemonConfig struct {
+	Enabled           bool   `mapstructure:"enabled"`
+	PluginIdleTimeout string `mapstructure:"plugin_idle_timeout"` // e.g. "5m"
+	DaemonIdleTimeout string `mapstructure:"daemon_idle_timeout"` // e.g. "15m"
+	SocketPath        string `mapstructure:"socket_path"`
 }
 
 // NotesConfig holds markdown notes configuration
@@ -316,6 +325,12 @@ func setDefaults() {
 	viper.SetDefault("discovery.search_paths", []string{filepath.Join(homeDir, "src")})
 	viper.SetDefault("discovery.max_depth", 3)
 	viper.SetDefault("discovery.cache_path", filepath.Join(homeDir, ".cache", "rig", "projects.json"))
+
+	// Daemon defaults
+	viper.SetDefault("daemon.enabled", true)
+	viper.SetDefault("daemon.plugin_idle_timeout", "5m")
+	viper.SetDefault("daemon.daemon_idle_timeout", "15m")
+	viper.SetDefault("daemon.socket_path", "")
 
 	// Plugin defaults
 	viper.SetDefault("plugins", map[string]interface{}{})

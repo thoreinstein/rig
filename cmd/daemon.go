@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
@@ -63,6 +64,11 @@ func newDaemonStartCmd() *cobra.Command {
 			}
 
 			server := daemon.NewDaemonServer(mgr, uiProxy, GetVersion(), slog.Default())
+
+			pluginIdle, _ := time.ParseDuration(cfg.Daemon.PluginIdleTimeout)
+			daemonIdle, _ := time.ParseDuration(cfg.Daemon.DaemonIdleTimeout)
+			lifecycle := daemon.NewLifecycle(mgr, server, pluginIdle, daemonIdle, slog.Default())
+			go lifecycle.Run(cmd.Context())
 
 			// 2. Setup UDS listener
 			if err := daemon.EnsureDir(); err != nil {
