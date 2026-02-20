@@ -25,6 +25,9 @@ func runPluginCommand(ctx context.Context, pluginName, commandName string, args 
 		if err == nil {
 			defer client.Close()
 
+			// Sanitize arguments by filtering out host flags
+			pluginArgs, _ := bootstrap.FilterHostFlags(rootCmd.PersistentFlags(), args)
+
 			configJSON := bootstrap.ResolvePluginConfig(appConfig.PluginConfig, pluginName, nil)
 			uiHandler := ui.NewUIServer()
 			defer uiHandler.Stop()
@@ -32,11 +35,10 @@ func runPluginCommand(ctx context.Context, pluginName, commandName string, args 
 			err = client.ExecuteCommand(ctx, &apiv1.CommandRequest{
 				PluginName:  pluginName,
 				CommandName: commandName,
-				Args:        args,
+				Args:        pluginArgs,
 				ConfigJson:  configJSON,
 				RigVersion:  GetVersion(),
 			}, uiHandler, os.Stdout, os.Stderr)
-
 			if err == nil || !errors.IsDaemonError(err) {
 				return err
 			}

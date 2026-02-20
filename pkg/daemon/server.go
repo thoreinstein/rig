@@ -28,6 +28,7 @@ type DaemonServer struct {
 	activeSessions   int
 	busy             bool // Simple Phase 1 lock: one command at a time
 	lastActivityTime time.Time
+	shutdown         chan struct{}
 }
 
 func NewDaemonServer(m *plugin.Manager, proxy *DaemonUIProxy, rigVersion string, logger *slog.Logger) *DaemonServer {
@@ -39,6 +40,7 @@ func NewDaemonServer(m *plugin.Manager, proxy *DaemonUIProxy, rigVersion string,
 		startTime:        now,
 		rigVersion:       rigVersion,
 		lastActivityTime: now,
+		shutdown:         make(chan struct{}),
 	}
 }
 
@@ -154,8 +156,13 @@ func (s *DaemonServer) Status(ctx context.Context, _ *apiv1.DaemonServiceStatusR
 	}, nil
 }
 func (s *DaemonServer) Shutdown(ctx context.Context, req *apiv1.DaemonServiceShutdownRequest) (*apiv1.DaemonServiceShutdownResponse, error) {
-	// Actual shutdown logic will be handled by the runner which calls Stop()
+	close(s.shutdown)
 	return &apiv1.DaemonServiceShutdownResponse{Accepted: true}, nil
+}
+
+// ShutdownCh returns a channel that is closed when the daemon is requested to shut down.
+func (s *DaemonServer) ShutdownCh() <-chan struct{} {
+	return s.shutdown
 }
 
 // LastActivityTime returns the time of the last session completion.

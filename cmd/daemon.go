@@ -107,13 +107,14 @@ func newDaemonStartCmd() *cobra.Command {
 				select {
 				case <-sigCh:
 					fmt.Println("\nShutting down daemon...")
+				case <-server.ShutdownCh():
+					fmt.Println("\nShutdown requested via RPC, exiting...")
 				case <-lifecycle.ShutdownCh():
 					fmt.Println("\nDaemon idle timeout reached, shutting down...")
 				}
 				mgr.StopAll()
 				s.GracefulStop()
 			}()
-
 			fmt.Printf("Daemon started on %s (PID %d)\n", path, os.Getpid())
 			return s.Serve(lis)
 		},
