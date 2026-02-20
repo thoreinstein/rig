@@ -105,7 +105,7 @@ requirements:
 				},
 			}
 
-			m, err := NewManager(NewExecutor(""), scanner, tc.rigVersion, nil)
+			m, err := NewManager(NewExecutor(""), scanner, tc.rigVersion, nil, nil)
 			if err != nil {
 				t.Fatalf("NewManager() failed: %v", err)
 			}
@@ -197,7 +197,7 @@ func TestManager_ConfigDefaulting(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			capturedConfig = nil // Reset capture
-			m, err := NewManager(NewExecutor(""), scanner, "1.0.0", tc.provider)
+			m, err := NewManager(NewExecutor(""), scanner, "1.0.0", tc.provider, nil)
 			if err != nil {
 				t.Fatalf("NewManager() failed: %v", err)
 			}

@@ -57,7 +57,7 @@ func TestCommandExecution(t *testing.T) {
 		return []byte(`{"test":"config"}`), nil
 	}
 
-	manager, err := NewManager(executor, scanner, "0.1.0", configProvider)
+	manager, err := NewManager(executor, scanner, "0.1.0", configProvider, nil)
 	if err != nil {
 		t.Fatalf("NewManager() failed: %v", err)
 	}

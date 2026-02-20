@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"io"
+	"log/slog"
 	"os"
 	"strings"
 
@@ -61,7 +62,7 @@ func runPluginCommand(ctx context.Context, pluginName, commandName string, args 
 	executor := plugin.NewExecutor("")
 
 	// Create manager with the config provider from the loaded appConfig
-	manager, err := plugin.NewManager(executor, scanner, GetVersion(), cfg.PluginConfig)
+	manager, err := plugin.NewManager(executor, scanner, GetVersion(), cfg.PluginConfig, slog.Default())
 	if err != nil {
 		return errors.Wrap(err, "failed to initialize plugin manager")
 	}

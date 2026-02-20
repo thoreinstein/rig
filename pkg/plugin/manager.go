@@ -3,6 +3,7 @@ package plugin
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net"
 	"os"
 	"path/filepath"
@@ -33,6 +34,7 @@ type Manager struct {
 	scanner        *Scanner
 	rigVersion     string
 	configProvider ConfigProvider
+	logger         *slog.Logger
 
 	// Host-side UI Proxy Service
 	hostServer *grpc.Server
@@ -46,7 +48,7 @@ type Manager struct {
 }
 
 // NewManager creates a new plugin manager and starts the host-side UI Proxy Service.
-func NewManager(executor *Executor, scanner *Scanner, rigVersion string, configProvider ConfigProvider) (*Manager, error) {
+func NewManager(executor *Executor, scanner *Scanner, rigVersion string, configProvider ConfigProvider, logger *slog.Logger) (*Manager, error) {
 	// 1. Create a private directory and generate unique UDS path for the host server
 	hostDir, err := os.MkdirTemp("", "rig-h-")
 	if err != nil {
@@ -96,6 +98,7 @@ func NewManager(executor *Executor, scanner *Scanner, rigVersion string, configP
 		scanner:        scanner,
 		rigVersion:     rigVersion,
 		configProvider: configProvider,
+		logger:         logger,
 		hostServer:     srv,
 		hostUI:         uiServer,
 		hostL:          lis,
@@ -221,7 +224,9 @@ func (m *Manager) getOrStartPlugin(ctx context.Context, name string) (*Plugin, e
 	if m.configProvider != nil {
 		data, err := m.configProvider(name)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to get config for plugin %q: %v (using empty config)\n", name, err)
+			if m.logger != nil {
+				m.logger.Debug("failed to get config for plugin", "plugin", name, "error", err)
+			}
 		} else if len(data) > 0 {
 			configJSON = data
 		}
