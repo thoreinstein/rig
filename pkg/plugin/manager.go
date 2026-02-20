@@ -219,7 +219,10 @@ func (m *Manager) getOrStartPlugin(ctx context.Context, name string) (*Plugin, e
 	// Fetch plugin configuration if provider is available
 	configJSON := []byte("{}")
 	if m.configProvider != nil {
-		if data, err := m.configProvider(name); err == nil && len(data) > 0 {
+		data, err := m.configProvider(name)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to get config for plugin %q: %v (using empty config)\n", name, err)
+		} else if len(data) > 0 {
 			configJSON = data
 		}
 	}

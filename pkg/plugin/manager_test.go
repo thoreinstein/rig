@@ -175,39 +175,43 @@ func TestManager_ConfigDefaulting(t *testing.T) {
 		},
 	}
 
-	// Case 1: Nil config provider should result in "{}"
-	m, err := NewManager(NewExecutor(""), scanner, "1.0.0", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer m.StopAll()
-	m.executor = executor
-
-	_, err = m.getOrStartPlugin(t.Context(), "config-test-plugin")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if string(capturedConfig) != "{}" {
-		t.Errorf("expected config '{}' when provider is nil, got %q", string(capturedConfig))
-	}
-
-	// Case 2: Provider returning error should result in "{}"
-	m2, err := NewManager(NewExecutor(""), scanner, "1.0.0", func(name string) ([]byte, error) {
-		return nil, os.ErrNotExist
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer m2.StopAll()
-	m2.executor = executor
-
-	_, err = m2.getOrStartPlugin(t.Context(), "config-test-plugin")
-	if err != nil {
-		t.Fatal(err)
+	tests := []struct {
+		name     string
+		provider ConfigProvider
+		want     string
+	}{
+		{
+			name:     "nil config provider defaults to empty object",
+			provider: nil,
+			want:     "{}",
+		},
+		{
+			name: "provider error defaults to empty object",
+			provider: func(name string) ([]byte, error) {
+				return nil, os.ErrNotExist
+			},
+			want: "{}",
+		},
 	}
 
-	if string(capturedConfig) != "{}" {
-		t.Errorf("expected config '{}' when provider fails, got %q", string(capturedConfig))
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			capturedConfig = nil // Reset capture
+			m, err := NewManager(NewExecutor(""), scanner, "1.0.0", tc.provider)
+			if err != nil {
+				t.Fatalf("NewManager() failed: %v", err)
+			}
+			defer m.StopAll()
+			m.executor = executor // Inject mock executor
+
+			_, err = m.getOrStartPlugin(t.Context(), "config-test-plugin")
+			if err != nil {
+				t.Fatalf("getOrStartPlugin() failed: %v", err)
+			}
+
+			if string(capturedConfig) != tc.want {
+				t.Errorf("expected config %q, got %q", tc.want, string(capturedConfig))
+			}
+		})
 	}
 }

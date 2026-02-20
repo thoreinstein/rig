@@ -39,24 +39,47 @@ requirements:
 }
 
 func TestLoadManifest_WithCommands(t *testing.T) {
-	manifestPath := filepath.Join("testdata", "manifests", "with_commands.yaml")
-	manifest, err := loadManifest(manifestPath)
-	if err != nil {
-		t.Fatalf("loadManifest() error = %v", err)
+	tests := []struct {
+		name              string
+		manifestPath      string
+		wantCommandsLen   int
+		wantCmdName       string
+		wantCmdShort      string
+		wantCmdAliasesLen int
+	}{
+		{
+			name:              "Manifest with commands",
+			manifestPath:      filepath.Join("testdata", "manifests", "with_commands.yaml"),
+			wantCommandsLen:   1,
+			wantCmdName:       "echo",
+			wantCmdShort:      "Echo arguments",
+			wantCmdAliasesLen: 2,
+		},
 	}
 
-	if len(manifest.Commands) != 1 {
-		t.Fatalf("len(manifest.Commands) = %d, want 1", len(manifest.Commands))
-	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			manifest, err := loadManifest(tc.manifestPath)
+			if err != nil {
+				t.Fatalf("loadManifest() error = %v", err)
+			}
 
-	cmd := manifest.Commands[0]
-	if cmd.Name != "echo" {
-		t.Errorf("cmd.Name = %q, want %q", cmd.Name, "echo")
-	}
-	if cmd.Short != "Echo arguments" {
-		t.Errorf("cmd.Short = %q, want %q", cmd.Short, "Echo arguments")
-	}
-	if len(cmd.Aliases) != 2 {
-		t.Errorf("len(cmd.Aliases) = %d, want 2", len(cmd.Aliases))
+			if len(manifest.Commands) != tc.wantCommandsLen {
+				t.Fatalf("len(manifest.Commands) = %d, want %d", len(manifest.Commands), tc.wantCommandsLen)
+			}
+
+			if tc.wantCommandsLen > 0 {
+				cmd := manifest.Commands[0]
+				if cmd.Name != tc.wantCmdName {
+					t.Errorf("cmd.Name = %q, want %q", cmd.Name, tc.wantCmdName)
+				}
+				if cmd.Short != tc.wantCmdShort {
+					t.Errorf("cmd.Short = %q, want %q", cmd.Short, tc.wantCmdShort)
+				}
+				if len(cmd.Aliases) != tc.wantCmdAliasesLen {
+					t.Errorf("len(cmd.Aliases) = %d, want %d", len(cmd.Aliases), tc.wantCmdAliasesLen)
+				}
+			}
+		})
 	}
 }

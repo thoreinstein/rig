@@ -7,92 +7,80 @@ import (
 	"testing"
 
 	"github.com/spf13/cobra"
+
+	"thoreinstein.com/rig/pkg/bootstrap"
 )
 
 func TestRegisterPluginCommands(t *testing.T) {
-	// Setup a temporary plugin directory
-	tmpDir := t.TempDir()
-	pluginDir := filepath.Join(tmpDir, "plugins")
-	if err := os.Mkdir(pluginDir, 0755); err != nil {
-		t.Fatalf("failed to create plugin dir: %v", err)
+	tests := []struct {
+		name          string
+		setup         func(t *testing.T, tmpDir string)
+		wantCmdName   string
+		wantCmdShort  string
+		wantCmdExists bool
+	}{
+		{
+			name: "plugin in project-local directory",
+			setup: func(t *testing.T, tmpDir string) {
+				projectPluginDir := filepath.Join(tmpDir, ".rig", "plugins")
+				if err := os.MkdirAll(projectPluginDir, 0755); err != nil {
+					t.Fatalf("failed to create project plugin dir: %v", err)
+				}
+
+				// Create a dummy executable
+				pluginPath := filepath.Join(projectPluginDir, "test-plugin")
+				if err := os.WriteFile(pluginPath, []byte("#!/bin/sh\necho test"), 0755); err != nil {
+					t.Fatalf("failed to write dummy plugin: %v", err)
+				}
+
+				// Create a manifest with commands
+				manifestContent := "name: test-plugin\nversion: 1.0.0\ncommands:\n  - name: test-cmd\n    short: \"Test command\"\n"
+				if err := os.WriteFile(pluginPath+".manifest.yaml", []byte(manifestContent), 0644); err != nil {
+					t.Fatalf("failed to write manifest: %v", err)
+				}
+
+				// Setup git root
+				if err := os.Mkdir(filepath.Join(tmpDir, ".git"), 0755); err != nil {
+					t.Fatal(err)
+				}
+				t.Chdir(tmpDir)
+			},
+			wantCmdName:   "test-cmd",
+			wantCmdShort:  "Test command",
+			wantCmdExists: true,
+		},
 	}
 
-	// Create a dummy executable
-	pluginPath := filepath.Join(pluginDir, "test-plugin")
-	if err := os.WriteFile(pluginPath, []byte("#!/bin/sh\necho test"), 0755); err != nil {
-		t.Fatalf("failed to write dummy plugin: %v", err)
-	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			tc.setup(t, tmpDir)
 
-	// Create a manifest with commands
-	manifestPath := filepath.Join(pluginDir, "test-plugin.manifest.yaml")
-	manifestContent := `
-name: test-plugin
-version: 1.0.0
-commands:
-  - name: test-cmd
-    short: "Test command"
-`
-	if err := os.WriteFile(manifestPath, []byte(manifestContent), 0644); err != nil {
-		t.Fatalf("failed to write manifest: %v", err)
-	}
+			t.Setenv("GO_TEST", "true")
 
-	// Mock findGitRoot to return our temp dir
-	// We need to inject the search path somehow.
-	// Since registerPluginCommands uses findGitRoot() and hardcoded paths,
-	// we can try to point it to our temp dir.
+			// Reset rootCmd for test
+			oldRootCmd := rootCmd
+			rootCmd = &cobra.Command{Use: "rig"}
+			defer func() { rootCmd = oldRootCmd }()
 
-	// Wait, registerPluginCommands uses:
-	// 1. ~/.config/rig/plugins
-	// 2. <git-root>/.rig/plugins
+			registerPluginCommands()
 
-	// I'll create <tmpDir>/.rig/plugins
-	projectPluginDir := filepath.Join(tmpDir, ".rig", "plugins")
-	if err := os.MkdirAll(projectPluginDir, 0755); err != nil {
-		t.Fatalf("failed to create project plugin dir: %v", err)
-	}
-
-	// Move files to project plugin dir
-	if err := os.Rename(pluginPath, filepath.Join(projectPluginDir, "test-plugin")); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Rename(manifestPath, filepath.Join(projectPluginDir, "test-plugin.manifest.yaml")); err != nil {
-		t.Fatal(err)
-	}
-
-	// Change CWD to tmpDir so findGitRoot finds it (if it looks for .git)
-	// But findGitRoot looks for .git directory.
-	if err := os.Mkdir(filepath.Join(tmpDir, ".git"), 0755); err != nil {
-		t.Fatal(err)
-	}
-
-	t.Chdir(tmpDir)
-
-	// We need to ensure loadConfig doesn't fail
-	// initConfig already ran, so appConfig might be set.
-	// In test, loadConfig reloads if GO_TEST=true.
-	t.Setenv("GO_TEST", "true")
-
-	// Reset rootCmd for test
-	oldRootCmd := rootCmd
-	rootCmd = &cobra.Command{Use: "rig"}
-	defer func() { rootCmd = oldRootCmd }()
-
-	registerPluginCommands()
-
-	// Verify command was registered
-	found := false
-	for _, c := range rootCmd.Commands() {
-		if c.Name() == "test-cmd" {
-			found = true
-			if c.Short != "Test command" {
-				t.Errorf("cmd.Short = %q, want %q", c.Short, "Test command")
+			// Verify command registration
+			found := false
+			for _, c := range rootCmd.Commands() {
+				if c.Name() == tc.wantCmdName {
+					found = true
+					if c.Short != tc.wantCmdShort {
+						t.Errorf("cmd.Short = %q, want %q", c.Short, tc.wantCmdShort)
+					}
+					break
+				}
 			}
-			break
-		}
-	}
 
-	if !found {
-		t.Error("test-cmd was not registered")
+			if found != tc.wantCmdExists {
+				t.Errorf("command %q existence = %v, want %v", tc.wantCmdName, found, tc.wantCmdExists)
+			}
+		})
 	}
 }
 
@@ -323,7 +311,7 @@ func TestPreParseGlobalFlags(t *testing.T) {
 	verbose = false
 
 	os.Args = []string{"rig", "--config", "custom.toml", "-v"}
-	preParseGlobalFlags()
+	cfgFile, verbose = bootstrap.PreParseGlobalFlags(os.Args)
 
 	if cfgFile != "custom.toml" {
 		t.Errorf("cfgFile = %q, want %q", cfgFile, "custom.toml")
@@ -335,7 +323,7 @@ func TestPreParseGlobalFlags(t *testing.T) {
 	// Test shorthand config
 	cfgFile = ""
 	os.Args = []string{"rig", "-C", "short.toml"}
-	preParseGlobalFlags()
+	cfgFile, verbose = bootstrap.PreParseGlobalFlags(os.Args)
 	if cfgFile != "short.toml" {
 		t.Errorf("cfgFile = %q, want %q", cfgFile, "short.toml")
 	}
@@ -343,7 +331,7 @@ func TestPreParseGlobalFlags(t *testing.T) {
 	// Test flag with equals
 	cfgFile = ""
 	os.Args = []string{"rig", "--config=equals.toml"}
-	preParseGlobalFlags()
+	cfgFile, verbose = bootstrap.PreParseGlobalFlags(os.Args)
 	if cfgFile != "equals.toml" {
 		t.Errorf("cfgFile = %q, want %q", cfgFile, "equals.toml")
 	}
@@ -351,7 +339,7 @@ func TestPreParseGlobalFlags(t *testing.T) {
 	// Test shorthand with equals
 	cfgFile = ""
 	os.Args = []string{"rig", "-C=shorthand_equals.toml"}
-	preParseGlobalFlags()
+	cfgFile, verbose = bootstrap.PreParseGlobalFlags(os.Args)
 	if cfgFile != "shorthand_equals.toml" {
 		t.Errorf("cfgFile = %q, want %q", cfgFile, "shorthand_equals.toml")
 	}
@@ -359,7 +347,7 @@ func TestPreParseGlobalFlags(t *testing.T) {
 	// Test shorthand with attached value
 	cfgFile = ""
 	os.Args = []string{"rig", "-Cattached.toml"}
-	preParseGlobalFlags()
+	cfgFile, verbose = bootstrap.PreParseGlobalFlags(os.Args)
 	if cfgFile != "attached.toml" {
 		t.Errorf("cfgFile = %q, want %q", cfgFile, "attached.toml")
 	}
@@ -376,7 +364,7 @@ func TestPreParseGlobalFlags_StopsAtSubcommand(t *testing.T) {
 	// rig --verbose my-subcommand --config plugin.yaml
 	// The host should pick up --verbose but NOT --config plugin.yaml
 	os.Args = []string{"rig", "--verbose", "my-subcommand", "--config", "plugin.yaml"}
-	preParseGlobalFlags()
+	cfgFile, verbose = bootstrap.PreParseGlobalFlags(os.Args)
 
 	if !verbose {
 		t.Error("verbose should be true")

@@ -2,125 +2,21 @@ package cmd
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"os"
 	"strings"
 
 	"github.com/cockroachdb/errors"
-	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
 	apiv1 "thoreinstein.com/rig/pkg/api/v1"
+	"thoreinstein.com/rig/pkg/bootstrap"
 	"thoreinstein.com/rig/pkg/plugin"
 )
 
 // registerPluginCommands scans for plugins and dynamically adds their commands to the root command.
 func registerPluginCommands() {
-	// 1. Initialize plugin scanner
-	var scanner *plugin.Scanner
-	var err error
-
-	if gitRoot, gitErr := findGitRoot(); gitErr == nil && gitRoot != "" {
-		scanner, err = plugin.NewScannerWithProjectRoot(gitRoot)
-	} else {
-		scanner, err = plugin.NewScanner()
-	}
-
-	if err != nil {
-		if verbose {
-			fmt.Fprintf(os.Stderr, "Warning: failed to initialize plugin scanner: %v\n", err)
-		}
-		return
-	}
-
-	// 2. Scan for plugins
-	result, err := scanner.Scan()
-	if err != nil {
-		if verbose {
-			fmt.Fprintf(os.Stderr, "Warning: plugin scan failed: %v\n", err)
-		}
-		return
-	}
-
-	// 3. Register commands
-	// Track both names and aliases to prevent collisions
-	collisionMap := make(map[string]string) // name/alias -> plugin/built-in name
-	for _, c := range rootCmd.Commands() {
-		collisionMap[c.Name()] = "built-in"
-		for _, alias := range c.Aliases {
-			collisionMap[alias] = "built-in"
-		}
-	}
-
-	// Explicitly reserve built-in commands that might be added lazily by Cobra
-	reserved := []string{"help", "h", "completion"}
-	for _, r := range reserved {
-		if _, exists := collisionMap[r]; !exists {
-			collisionMap[r] = "built-in"
-		}
-	}
-
-	for _, p := range result.Plugins {
-		if p.Manifest == nil || len(p.Manifest.Commands) == 0 {
-			continue
-		}
-
-		// Validate compatibility before registering commands.
-		// If incompatible, we skip the commands to avoid exposing unusable functionality.
-		plugin.ValidateCompatibility(p, GetVersion())
-		if p.Status != plugin.StatusCompatible {
-			if verbose {
-				fmt.Fprintf(os.Stderr, "Warning: skipping commands for plugin %q: %v\n", p.Name, p.Error)
-			}
-			continue
-		}
-
-		pluginName := p.Name
-		for _, cmdDesc := range p.Manifest.Commands {
-			if owner, exists := collisionMap[cmdDesc.Name]; exists {
-				if verbose {
-					fmt.Fprintf(os.Stderr, "Warning: skipping plugin command %q from %q: already exists (owned by %s)\n", cmdDesc.Name, pluginName, owner)
-				}
-				continue
-			}
-
-			// Check aliases for collisions and filter them
-			var filteredAliases []string
-			for _, alias := range cmdDesc.Aliases {
-				if owner, exists := collisionMap[alias]; exists {
-					if verbose {
-						fmt.Fprintf(os.Stderr, "Warning: skipping alias %q for plugin command %q (%q): already exists (owned by %s)\n", alias, cmdDesc.Name, pluginName, owner)
-					}
-					continue
-				}
-				filteredAliases = append(filteredAliases, alias)
-			}
-
-			// Capture loop variables for the closure
-			pName := pluginName
-			cDesc := cmdDesc
-
-			cobraCmd := &cobra.Command{
-				Use:                cDesc.Name,
-				Short:              cDesc.Short,
-				Long:               cDesc.Long,
-				Aliases:            filteredAliases,
-				DisableFlagParsing: true, // Let the plugin handle its own flags
-				RunE: func(cmd *cobra.Command, args []string) error {
-					return runPluginCommand(cmd.Context(), pName, cDesc.Name, args)
-				},
-			}
-
-			rootCmd.AddCommand(cobraCmd)
-
-			// Add name and filtered aliases to collision map
-			collisionMap[cDesc.Name] = pluginName
-			for _, alias := range filteredAliases {
-				collisionMap[alias] = pluginName
-			}
-		}
-	}
+	bootstrap.RegisterPluginCommandsFromConfig(rootCmd, appConfig, GetVersion(), verbose, runPluginCommand)
 }
 
 // runPluginCommand starts the plugin and executes the specified command.
@@ -132,7 +28,12 @@ func runPluginCommand(ctx context.Context, pluginName, commandName string, args 
 
 	// Re-parse host persistent flags from extracted hostArgs.
 	fs := rootCmd.PersistentFlags()
+
+	// Preserve global flagset state
+	origUnknownFlags := fs.ParseErrorsAllowlist.UnknownFlags
 	fs.ParseErrorsAllowlist.UnknownFlags = true
+	defer func() { fs.ParseErrorsAllowlist.UnknownFlags = origUnknownFlags }()
+
 	if err := fs.Parse(hostArgs); err != nil {
 		return errors.Wrap(err, "failed to parse host flags")
 	}
@@ -148,7 +49,7 @@ func runPluginCommand(ctx context.Context, pluginName, commandName string, args 
 
 	// 1. Initialize plugin components
 	var scanner *plugin.Scanner
-	if gitRoot, gitErr := findGitRoot(); gitErr == nil && gitRoot != "" {
+	if gitRoot, gitErr := bootstrap.FindGitRoot(); gitErr == nil && gitRoot != "" {
 		scanner, err = plugin.NewScannerWithProjectRoot(gitRoot)
 	} else {
 		scanner, err = plugin.NewScanner()
@@ -201,14 +102,14 @@ func runPluginCommand(ctx context.Context, pluginName, commandName string, args 
 		if resp.Done {
 			gotDone = true
 			if resp.ExitCode != 0 {
-				return fmt.Errorf("plugin command %q exited with code %d", commandName, resp.ExitCode)
+				return errors.Errorf("plugin command %q exited with code %d", commandName, resp.ExitCode)
 			}
 			break
 		}
 	}
 
 	if !gotDone {
-		return fmt.Errorf("plugin command %q terminated prematurely (no done message received)", commandName)
+		return errors.Errorf("plugin command %q terminated prematurely (no done message received)", commandName)
 	}
 
 	return nil

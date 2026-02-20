@@ -1,8 +1,10 @@
 package config
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/spf13/viper"
@@ -482,42 +484,57 @@ func TestConfig_Validate(t *testing.T) {
 	}
 }
 
-func TestPluginConfig_Present(t *testing.T) {
-	config := &Config{
-		Plugins: map[string]map[string]interface{}{
-			"deploy": {
-				"environment": "production",
-				"retries":     3,
+func TestPluginConfig(t *testing.T) {
+	tests := []struct {
+		name    string
+		plugins map[string]map[string]interface{}
+		key     string
+		want    map[string]interface{}
+		wantErr bool
+	}{
+		{
+			name: "plugin config exists",
+			plugins: map[string]map[string]interface{}{
+				"deploy": {
+					"environment": "production",
+					"retries":     float64(3), // json.Unmarshal uses float64 for numbers
+				},
 			},
+			key: "deploy",
+			want: map[string]interface{}{
+				"environment": "production",
+				"retries":     float64(3),
+			},
+			wantErr: false,
+		},
+		{
+			name:    "plugin config missing",
+			plugins: map[string]map[string]interface{}{},
+			key:     "missing",
+			want:    map[string]interface{}{},
+			wantErr: false,
 		},
 	}
 
-	data, err := config.PluginConfig("deploy")
-	if err != nil {
-		t.Fatalf("PluginConfig() error: %v", err)
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := &Config{Plugins: tt.plugins}
+			data, err := config.PluginConfig(tt.key)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("PluginConfig() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if err != nil {
+				return
+			}
 
-	// Order of keys in JSON might vary, but content should be the same
-	expected := `{"environment":"production","retries":3}`
-	// Marshalling map[string]interface{} might result in different order,
-	// so we verify by unmarshaling back or just checking for substrings.
-	sData := string(data)
-	if sData != expected && sData != `{"retries":3,"environment":"production"}` {
-		t.Errorf("PluginConfig() = %s, want %s", sData, expected)
-	}
-}
+			var got map[string]interface{}
+			if err := json.Unmarshal(data, &got); err != nil {
+				t.Fatalf("failed to unmarshal result: %v", err)
+			}
 
-func TestPluginConfig_Missing(t *testing.T) {
-	config := &Config{
-		Plugins: map[string]map[string]interface{}{},
-	}
-
-	data, err := config.PluginConfig("missing")
-	if err != nil {
-		t.Fatalf("PluginConfig() error: %v", err)
-	}
-
-	if string(data) != "{}" {
-		t.Errorf("PluginConfig() = %s, want {}", string(data))
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("PluginConfig() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }

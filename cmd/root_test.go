@@ -9,6 +9,8 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+
+	"thoreinstein.com/rig/pkg/bootstrap"
 )
 
 func TestRootCommandStructure(t *testing.T) {
@@ -583,13 +585,13 @@ func TestFindGitRoot_FromRepoRoot(t *testing.T) {
 	t.Chdir(tmpDir)
 
 	// Find git root
-	root, err := findGitRoot()
+	root, err := bootstrap.FindGitRoot()
 	if err != nil {
-		t.Fatalf("findGitRoot() error: %v", err)
+		t.Fatalf("FindGitRoot() error: %v", err)
 	}
 
 	if root != tmpDir {
-		t.Errorf("findGitRoot() = %q, want %q", root, tmpDir)
+		t.Errorf("FindGitRoot() = %q, want %q", root, tmpDir)
 	}
 }
 
@@ -611,13 +613,13 @@ func TestFindGitRoot_FromSubdirectory(t *testing.T) {
 	t.Chdir(subDir)
 
 	// Find git root
-	root, err := findGitRoot()
+	root, err := bootstrap.FindGitRoot()
 	if err != nil {
-		t.Fatalf("findGitRoot() error: %v", err)
+		t.Fatalf("FindGitRoot() error: %v", err)
 	}
 
 	if root != tmpDir {
-		t.Errorf("findGitRoot() = %q, want %q", root, tmpDir)
+		t.Errorf("FindGitRoot() = %q, want %q", root, tmpDir)
 	}
 }
 
@@ -630,13 +632,13 @@ func TestFindGitRoot_NotInGitRepo(t *testing.T) {
 	t.Chdir(tmpDir)
 
 	// Find git root - should return empty string, no error
-	root, err := findGitRoot()
+	root, err := bootstrap.FindGitRoot()
 	if err != nil {
-		t.Fatalf("findGitRoot() should not error when not in git repo: %v", err)
+		t.Fatalf("FindGitRoot() should not error when not in git repo: %v", err)
 	}
 
 	if root != "" {
-		t.Errorf("findGitRoot() = %q, want empty string when not in git repo", root)
+		t.Errorf("FindGitRoot() = %q, want empty string when not in git repo", root)
 	}
 }
 
@@ -655,13 +657,13 @@ func TestFindGitRoot_GitWorktree(t *testing.T) {
 	t.Chdir(tmpDir)
 
 	// Find git root - should recognize .git file as valid
-	root, err := findGitRoot()
+	root, err := bootstrap.FindGitRoot()
 	if err != nil {
-		t.Fatalf("findGitRoot() error: %v", err)
+		t.Fatalf("FindGitRoot() error: %v", err)
 	}
 
 	if root != tmpDir {
-		t.Errorf("findGitRoot() = %q, want %q (should recognize .git file for worktrees)", root, tmpDir)
+		t.Errorf("FindGitRoot() = %q, want %q (should recognize .git file for worktrees)", root, tmpDir)
 	}
 }
 
@@ -685,18 +687,18 @@ func TestFindGitRoot_WorktreeSubdirectory(t *testing.T) {
 	t.Chdir(subDir)
 
 	// Find git root from worktree subdirectory
-	root, err := findGitRoot()
+	root, err := bootstrap.FindGitRoot()
 	if err != nil {
-		t.Fatalf("findGitRoot() error: %v", err)
+		t.Fatalf("FindGitRoot() error: %v", err)
 	}
 
 	if root != tmpDir {
-		t.Errorf("findGitRoot() = %q, want %q (should find worktree root from subdirectory)", root, tmpDir)
+		t.Errorf("FindGitRoot() = %q, want %q (should find worktree root from subdirectory)", root, tmpDir)
 	}
 }
 
 // =============================================================================
-// loadRepoLocalConfig() Tests
+// LoadRepoLocalConfig() Tests
 // =============================================================================
 
 func TestLoadRepoLocalConfig_FromGitRoot(t *testing.T) {
@@ -729,7 +731,7 @@ ollama_model = "codellama"
 	t.Chdir(tmpDir)
 
 	// Load repo local config
-	loadRepoLocalConfig()
+	bootstrap.LoadRepoLocalConfig(false)
 
 	// Verify values were loaded
 	if got := viper.GetString("github.default_merge_method"); got != "rebase" {
@@ -777,7 +779,7 @@ session_prefix = "api-"
 	t.Chdir(subDir)
 
 	// Load repo local config
-	loadRepoLocalConfig()
+	bootstrap.LoadRepoLocalConfig(false)
 
 	// Verify values from subdirectory config
 	if got := viper.GetString("github.default_merge_method"); got != "squash" {
@@ -839,7 +841,7 @@ session_prefix = "api-"
 	t.Chdir(subDir)
 
 	// Load repo local config
-	loadRepoLocalConfig()
+	bootstrap.LoadRepoLocalConfig(false)
 
 	// Verify subdirectory overrides root
 	if got := viper.GetString("github.default_merge_method"); got != "squash" {
@@ -875,13 +877,13 @@ func TestLoadRepoLocalConfig_NoConfigPresent(t *testing.T) {
 	viper.Reset()
 	defer viper.Reset()
 
-	// Set a known value before calling loadRepoLocalConfig
+	// Set a known value before calling LoadRepoLocalConfig
 	viper.Set("test.existing_value", "preserved")
 
 	t.Chdir(tmpDir)
 
 	// Should not panic or error when no .rig.toml exists
-	loadRepoLocalConfig()
+	bootstrap.LoadRepoLocalConfig(false)
 
 	// Existing values should be preserved
 	if got := viper.GetString("test.existing_value"); got != "preserved" {
@@ -920,7 +922,7 @@ this is not valid toml syntax
 	t.Chdir(tmpDir)
 
 	// Should not panic - gracefully handle malformed config
-	loadRepoLocalConfig()
+	bootstrap.LoadRepoLocalConfig(false)
 
 	// Existing values should be preserved even with malformed config
 	if got := viper.GetString("test.existing_value"); got != "preserved" {
@@ -960,7 +962,7 @@ func TestLoadRepoLocalConfig_MalformedConfigVerbose(t *testing.T) {
 	r, w, _ := os.Pipe()
 	os.Stderr = w
 
-	loadRepoLocalConfig()
+	bootstrap.LoadRepoLocalConfig(true)
 
 	w.Close()
 	os.Stderr = oldStderr
@@ -997,7 +999,7 @@ default_merge_method = "rebase"
 	t.Chdir(tmpDir)
 
 	// Load repo local config - should use fallback to current directory
-	loadRepoLocalConfig()
+	bootstrap.LoadRepoLocalConfig(false)
 
 	// Should still load .rig.toml from current directory
 	if got := viper.GetString("github.default_merge_method"); got != "rebase" {
@@ -1039,7 +1041,7 @@ default_merge_method = "squash"
 	r, w, _ := os.Pipe()
 	os.Stderr = w
 
-	loadRepoLocalConfig()
+	bootstrap.LoadRepoLocalConfig(true)
 
 	w.Close()
 	os.Stderr = oldStderr
@@ -1276,7 +1278,7 @@ provider = "ollama"
 }
 
 // =============================================================================
-// Table-Driven Test for findGitRoot
+// Table-Driven Test for FindGitRoot
 // =============================================================================
 
 func TestFindGitRoot_TableDriven(t *testing.T) {
@@ -1352,29 +1354,29 @@ func TestFindGitRoot_TableDriven(t *testing.T) {
 
 			t.Chdir(cwd)
 
-			root, err := findGitRoot()
+			root, err := bootstrap.FindGitRoot()
 			if err != nil {
-				t.Fatalf("findGitRoot() error: %v", err)
+				t.Fatalf("FindGitRoot() error: %v", err)
 			}
 
 			if tt.wantRoot && root == "" {
-				t.Error("findGitRoot() = empty, want non-empty root")
+				t.Error("FindGitRoot() = empty, want non-empty root")
 			}
 			if !tt.wantRoot && root != "" {
-				t.Errorf("findGitRoot() = %q, want empty string", root)
+				t.Errorf("FindGitRoot() = %q, want empty string", root)
 			}
 			if tt.wantSame && root != cwd {
-				t.Errorf("findGitRoot() = %q, want %q (same as cwd)", root, cwd)
+				t.Errorf("FindGitRoot() = %q, want %q (same as cwd)", root, cwd)
 			}
 			if tt.wantParent && root != tmpDir {
-				t.Errorf("findGitRoot() = %q, want %q (parent tmpDir)", root, tmpDir)
+				t.Errorf("FindGitRoot() = %q, want %q (parent tmpDir)", root, tmpDir)
 			}
 		})
 	}
 }
 
 // =============================================================================
-// Table-Driven Test for loadRepoLocalConfig with Various Scenarios
+// LoadRepoLocalConfig() Tests
 // =============================================================================
 
 func TestLoadRepoLocalConfig_TableDriven(t *testing.T) {
@@ -1497,7 +1499,7 @@ path = "/fallback/path"
 			t.Chdir(cwd)
 
 			// Load repo local config
-			loadRepoLocalConfig()
+			bootstrap.LoadRepoLocalConfig(false)
 
 			// Check expected values
 			for key, want := range tt.wantValues {
