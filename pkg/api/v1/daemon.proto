@@ -55,6 +55,7 @@ message DaemonServiceStatusResponse {
   int64 uptime_seconds = 2;
   int32 active_sessions = 3;
   repeated PluginStatus plugins = 4;
+  int32 pid = 5;
 }
 
 message PluginStatus {

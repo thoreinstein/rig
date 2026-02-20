@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"os"
 	"sync"
 	"time"
 
@@ -148,10 +149,10 @@ func (s *DaemonServer) Status(ctx context.Context, _ *apiv1.DaemonServiceStatusR
 		DaemonVersion:  s.rigVersion,
 		UptimeSeconds:  int64(time.Since(s.startTime).Seconds()),
 		ActiveSessions: int32(active),
+		Pid:            int32(os.Getpid()),
 		// Plugins: list of warm plugins could be added here in Phase 9
 	}, nil
 }
-
 func (s *DaemonServer) Shutdown(ctx context.Context, req *apiv1.DaemonServiceShutdownRequest) (*apiv1.DaemonServiceShutdownResponse, error) {
 	// Actual shutdown logic will be handled by the runner which calls Stop()
 	return &apiv1.DaemonServiceShutdownResponse{Accepted: true}, nil

@@ -14,7 +14,8 @@ import (
 // UIBridge defines the interface for sending UI requests to the CLI and receiving responses.
 type UIBridge interface {
 	SendRequest(resp *apiv1.InteractResponse) error
-	ReceiveResponse(ctx context.Context, id string) (*apiv1.InteractRequest, error)
+	RegisterResponse(id string) chan *apiv1.InteractRequest
+	WaitResponse(ctx context.Context, id string, ch chan *apiv1.InteractRequest) (*apiv1.InteractRequest, error)
 }
 
 // sessionBridge manages the communication for a single active CLI session.
@@ -35,12 +36,18 @@ func (b *sessionBridge) SendRequest(resp *apiv1.InteractResponse) error {
 	return b.send(resp)
 }
 
-func (b *sessionBridge) ReceiveResponse(ctx context.Context, id string) (*apiv1.InteractRequest, error) {
+// RegisterResponse installs a channel to receive the UI response.
+// MUST be called before SendRequest to avoid race conditions.
+func (b *sessionBridge) RegisterResponse(id string) chan *apiv1.InteractRequest {
 	b.mu.Lock()
+	defer b.mu.Unlock()
 	ch := make(chan *apiv1.InteractRequest, 1)
 	b.pending[id] = ch
-	b.mu.Unlock()
+	return ch
+}
 
+// WaitResponse blocks until the response for the given ID is received or a timeout occurs.
+func (b *sessionBridge) WaitResponse(ctx context.Context, id string, ch chan *apiv1.InteractRequest) (*apiv1.InteractRequest, error) {
 	defer func() {
 		b.mu.Lock()
 		delete(b.pending, id)
@@ -108,6 +115,8 @@ func (p *DaemonUIProxy) Prompt(ctx context.Context, req *apiv1.PromptRequest) (*
 	}
 
 	id := uuid.New().String()
+	respCh := bridge.RegisterResponse(id)
+
 	err = bridge.SendRequest(&apiv1.InteractResponse{
 		Id: id,
 		Payload: &apiv1.InteractResponse_Prompt{
@@ -118,11 +127,10 @@ func (p *DaemonUIProxy) Prompt(ctx context.Context, req *apiv1.PromptRequest) (*
 		return nil, err
 	}
 
-	resp, err := bridge.ReceiveResponse(ctx, id)
+	resp, err := bridge.WaitResponse(ctx, id, respCh)
 	if err != nil {
 		return nil, err
 	}
-
 	if payload, ok := resp.Payload.(*apiv1.InteractRequest_Prompt); ok {
 		return payload.Prompt, nil
 	}
@@ -136,6 +144,8 @@ func (p *DaemonUIProxy) Confirm(ctx context.Context, req *apiv1.ConfirmRequest) 
 	}
 
 	id := uuid.New().String()
+	respCh := bridge.RegisterResponse(id)
+
 	err = bridge.SendRequest(&apiv1.InteractResponse{
 		Id: id,
 		Payload: &apiv1.InteractResponse_Confirm{
@@ -146,11 +156,10 @@ func (p *DaemonUIProxy) Confirm(ctx context.Context, req *apiv1.ConfirmRequest) 
 		return nil, err
 	}
 
-	resp, err := bridge.ReceiveResponse(ctx, id)
+	resp, err := bridge.WaitResponse(ctx, id, respCh)
 	if err != nil {
 		return nil, err
 	}
-
 	if payload, ok := resp.Payload.(*apiv1.InteractRequest_Confirm); ok {
 		return payload.Confirm, nil
 	}
@@ -164,6 +173,8 @@ func (p *DaemonUIProxy) Select(ctx context.Context, req *apiv1.SelectRequest) (*
 	}
 
 	id := uuid.New().String()
+	respCh := bridge.RegisterResponse(id)
+
 	err = bridge.SendRequest(&apiv1.InteractResponse{
 		Id: id,
 		Payload: &apiv1.InteractResponse_Select{
@@ -174,11 +185,10 @@ func (p *DaemonUIProxy) Select(ctx context.Context, req *apiv1.SelectRequest) (*
 		return nil, err
 	}
 
-	resp, err := bridge.ReceiveResponse(ctx, id)
+	resp, err := bridge.WaitResponse(ctx, id, respCh)
 	if err != nil {
 		return nil, err
 	}
-
 	if payload, ok := resp.Payload.(*apiv1.InteractRequest_Select); ok {
 		return payload.Select, nil
 	}

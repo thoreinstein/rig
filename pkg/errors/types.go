@@ -339,8 +339,13 @@ func NewDaemonError(operation, message string) *DaemonError {
 	return &DaemonError{Operation: operation, Message: message}
 }
 
-// IsRetryable checks if an error or any error in its chain is retryable.
-// It returns true if the error itself is retryable, or if any wrapped error
+// WithCause adds an underlying cause to the DaemonError.
+func (e *DaemonError) WithCause(cause error) *DaemonError {
+	e.Cause = cause
+	return e
+}
+
+// IsRetryable checks if an error or any error in its chain is retryable.// It returns true if the error itself is retryable, or if any wrapped error
 // is marked as retryable.
 func IsRetryable(err error) bool {
 	if err == nil {

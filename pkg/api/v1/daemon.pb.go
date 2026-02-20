@@ -330,6 +330,7 @@ type DaemonServiceStatusResponse struct {
 	UptimeSeconds  int64                  `protobuf:"varint,2,opt,name=uptime_seconds,json=uptimeSeconds,proto3" json:"uptime_seconds,omitempty"`
 	ActiveSessions int32                  `protobuf:"varint,3,opt,name=active_sessions,json=activeSessions,proto3" json:"active_sessions,omitempty"`
 	Plugins        []*PluginStatus        `protobuf:"bytes,4,rep,name=plugins,proto3" json:"plugins,omitempty"`
+	Pid            int32                  `protobuf:"varint,5,opt,name=pid,proto3" json:"pid,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -390,6 +391,13 @@ func (x *DaemonServiceStatusResponse) GetPlugins() []*PluginStatus {
 		return x.Plugins
 	}
 	return nil
+}
+
+func (x *DaemonServiceStatusResponse) GetPid() int32 {
+	if x != nil {
+		return x.Pid
+	}
+	return 0
 }
 
 type PluginStatus struct {
@@ -570,12 +578,13 @@ const file_pkg_api_v1_daemon_proto_rawDesc = "" +
 	"FlagsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x1c\n" +
-	"\x1aDaemonServiceStatusRequest\"\xc4\x01\n" +
+	"\x1aDaemonServiceStatusRequest\"\xd6\x01\n" +
 	"\x1bDaemonServiceStatusResponse\x12%\n" +
 	"\x0edaemon_version\x18\x01 \x01(\tR\rdaemonVersion\x12%\n" +
 	"\x0euptime_seconds\x18\x02 \x01(\x03R\ruptimeSeconds\x12'\n" +
 	"\x0factive_sessions\x18\x03 \x01(\x05R\x0eactiveSessions\x12.\n" +
-	"\aplugins\x18\x04 \x03(\v2\x14.rig.v1.PluginStatusR\aplugins\"`\n" +
+	"\aplugins\x18\x04 \x03(\v2\x14.rig.v1.PluginStatusR\aplugins\x12\x10\n" +
+	"\x03pid\x18\x05 \x01(\x05R\x03pid\"`\n" +
 	"\fPluginStatus\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x16\n" +
 	"\x06status\x18\x02 \x01(\tR\x06status\x12$\n" +

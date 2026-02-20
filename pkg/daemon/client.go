@@ -53,11 +53,22 @@ func (c *DaemonClient) Close() error {
 	return nil
 }
 
+// Status returns the current status of the daemon.
+func (c *DaemonClient) Status(ctx context.Context) (*apiv1.DaemonServiceStatusResponse, error) {
+	return c.client.Status(ctx, &apiv1.DaemonServiceStatusRequest{})
+}
+
+// Shutdown requests the daemon to shut down.
+func (c *DaemonClient) Shutdown(ctx context.Context, force bool) error {
+	_, err := c.client.Shutdown(ctx, &apiv1.DaemonServiceShutdownRequest{Force: force})
+	return err
+}
+
 // ExecuteCommand runs a plugin command via the daemon, handling output and UI callbacks.
 func (c *DaemonClient) ExecuteCommand(ctx context.Context, req *apiv1.CommandRequest, ui UIHandler, stdout, stderr io.Writer) error {
 	stream, err := c.client.Execute(ctx)
 	if err != nil {
-		return errors.Wrap(err, "failed to initiate command execution")
+		return errors.NewDaemonError("Execute", "failed to initiate command execution").WithCause(err)
 	}
 
 	// 1. Send initial command request
@@ -67,7 +78,7 @@ func (c *DaemonClient) ExecuteCommand(ctx context.Context, req *apiv1.CommandReq
 		},
 	})
 	if err != nil {
-		return errors.Wrap(err, "failed to send command request to daemon")
+		return errors.NewDaemonError("Execute", "failed to send command request to daemon").WithCause(err)
 	}
 
 	// 2. Main loop: process output and UI requests
@@ -145,7 +156,7 @@ func (c *DaemonClient) ExecuteCommand(ctx context.Context, req *apiv1.CommandReq
 			}
 
 		case *apiv1.DaemonServiceExecuteResponse_Error:
-			return errors.New(p.Error)
+			return errors.NewDaemonError("Execute", p.Error)
 		}
 
 		if gotDone {
@@ -154,6 +165,8 @@ func (c *DaemonClient) ExecuteCommand(ctx context.Context, req *apiv1.CommandReq
 	}
 
 	if exitCode != 0 {
+		// This is a plugin execution error, NOT a daemon transport error.
+		// It should NOT trigger a fallback.
 		return errors.Newf("plugin command exited with code %d", exitCode)
 	}
 

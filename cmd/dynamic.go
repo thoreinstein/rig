@@ -7,6 +7,7 @@ import (
 	apiv1 "thoreinstein.com/rig/pkg/api/v1"
 	"thoreinstein.com/rig/pkg/bootstrap"
 	"thoreinstein.com/rig/pkg/daemon"
+	"thoreinstein.com/rig/pkg/errors"
 	"thoreinstein.com/rig/pkg/ui"
 )
 
@@ -36,13 +37,12 @@ func runPluginCommand(ctx context.Context, pluginName, commandName string, args 
 				RigVersion:  GetVersion(),
 			}, uiHandler, os.Stdout, os.Stderr)
 
-			if err == nil {
-				return nil
+			if err == nil || !errors.IsDaemonError(err) {
+				return err
 			}
-			// If daemon is busy or failed, fallback to direct execution
+			// If it's a DaemonError (transport/availability), fallback to direct execution
 		}
 	}
-
 	// Delegate to the bootstrap package for heavy orchestration (Fallback).
 	return bootstrap.RunPluginCommand(
 		ctx,

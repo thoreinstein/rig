@@ -121,7 +121,8 @@ func newDaemonStartCmd() *cobra.Command {
 }
 
 func newDaemonStopCmd() *cobra.Command {
-	return &cobra.Command{
+	var force bool
+	cmd := &cobra.Command{
 		Use:   "stop",
 		Short: "Stop the Rig background daemon",
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -134,16 +135,35 @@ func newDaemonStopCmd() *cobra.Command {
 				return fmt.Errorf("failed to read PID file: %w", err)
 			}
 
+			// 1. Try to connect and shut down via gRPC
+			client, err := daemon.NewClient(cmd.Context())
+			if err == nil {
+				defer client.Close()
+				status, err := client.Status(cmd.Context())
+				if err == nil && int(status.Pid) == pid {
+					fmt.Println("Shutting down daemon via gRPC...")
+					return client.Shutdown(cmd.Context(), force)
+				}
+			}
+
+			// 2. If gRPC fails or PID mismatch, validate process before signaling
 			process, err := os.FindProcess(pid)
 			if err != nil {
 				return fmt.Errorf("failed to find daemon process: %w", err)
 			}
 
+			if !force {
+				return fmt.Errorf("daemon socket is unreachable and PID %d could not be verified as Rig. Use --force to signal anyway", pid)
+			}
+
+			fmt.Printf("Signaling PID %d with SIGTERM (force)...\n", pid)
 			return process.Signal(syscall.SIGTERM)
 		},
 	}
-}
 
+	cmd.Flags().BoolVarP(&force, "force", "f", false, "Force stop by signaling PID if daemon is unresponsive")
+	return cmd
+}
 func newDaemonStatusCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "status",
