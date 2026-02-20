@@ -3,6 +3,7 @@ package daemon
 import (
 	"context"
 	"log/slog"
+	"sync"
 	"time"
 
 	"thoreinstein.com/rig/pkg/plugin"
@@ -16,6 +17,7 @@ type Lifecycle struct {
 	daemonIdleTimeout time.Duration
 	logger            *slog.Logger
 	shutdown          chan struct{}
+	stopOnce          sync.Once
 }
 
 func NewLifecycle(m *plugin.Manager, s *DaemonServer, pluginIdle, daemonIdle time.Duration, logger *slog.Logger) *Lifecycle {
@@ -58,7 +60,7 @@ func (l *Lifecycle) checkIdle() {
 	active := l.server.activeSessions
 	l.server.mu.Unlock()
 
-	if active == 0 && time.Since(l.server.startTime) > l.daemonIdleTimeout {
+	if active == 0 && time.Since(l.server.LastActivityTime()) > l.daemonIdleTimeout {
 		if l.logger != nil {
 			l.logger.Info("Daemon reached idle timeout, shutting down")
 		}
@@ -66,18 +68,28 @@ func (l *Lifecycle) checkIdle() {
 		l.Stop()
 	}
 
-	// 2. Check for plugin idle timeouts
-	plugins := l.manager.ListPlugins()
-	for _, p := range plugins {
-		if time.Since(p.LastUsedTime()) > l.pluginIdleTimeout {
-			if l.logger != nil {
-				l.logger.Info("Plugin reached idle timeout, stopping", "plugin", p.Name)
+	// 2. Check for plugin idle timeouts (only when no sessions are active)
+	if active == 0 {
+		plugins := l.manager.ListPlugins()
+		for _, p := range plugins {
+			if time.Since(p.LastUsedTime()) > l.pluginIdleTimeout {
+				if l.logger != nil {
+					l.logger.Info("Plugin reached idle timeout, stopping", "plugin", p.Name)
+				}
+				_ = l.manager.StopPlugin(p.Name)
 			}
-			_ = l.manager.StopPlugin(p.Name)
 		}
 	}
 }
 
+// Stop signals the lifecycle to shut down. Safe to call multiple times.
 func (l *Lifecycle) Stop() {
-	close(l.shutdown)
+	l.stopOnce.Do(func() {
+		close(l.shutdown)
+	})
+}
+
+// ShutdownCh returns a channel that is closed when the lifecycle triggers shutdown.
+func (l *Lifecycle) ShutdownCh() <-chan struct{} {
+	return l.shutdown
 }

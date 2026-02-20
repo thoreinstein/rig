@@ -23,18 +23,21 @@ type DaemonServer struct {
 	startTime  time.Time
 	rigVersion string
 
-	mu             sync.Mutex
-	activeSessions int
-	busy           bool // Simple Phase 1 lock: one command at a time
+	mu               sync.Mutex
+	activeSessions   int
+	busy             bool // Simple Phase 1 lock: one command at a time
+	lastActivityTime time.Time
 }
 
 func NewDaemonServer(m *plugin.Manager, proxy *DaemonUIProxy, rigVersion string, logger *slog.Logger) *DaemonServer {
+	now := time.Now()
 	return &DaemonServer{
-		manager:    m,
-		uiProxy:    proxy,
-		logger:     logger,
-		startTime:  time.Now(),
-		rigVersion: rigVersion,
+		manager:          m,
+		uiProxy:          proxy,
+		logger:           logger,
+		startTime:        now,
+		rigVersion:       rigVersion,
+		lastActivityTime: now,
 	}
 }
 
@@ -53,6 +56,7 @@ func (s *DaemonServer) Execute(stream apiv1.DaemonService_ExecuteServer) error {
 		s.mu.Lock()
 		s.busy = false
 		s.activeSessions--
+		s.lastActivityTime = time.Now()
 		s.mu.Unlock()
 		s.uiProxy.ClearActiveSession()
 	}()
@@ -151,4 +155,11 @@ func (s *DaemonServer) Status(ctx context.Context, _ *apiv1.DaemonServiceStatusR
 func (s *DaemonServer) Shutdown(ctx context.Context, req *apiv1.DaemonServiceShutdownRequest) (*apiv1.DaemonServiceShutdownResponse, error) {
 	// Actual shutdown logic will be handled by the runner which calls Stop()
 	return &apiv1.DaemonServiceShutdownResponse{Accepted: true}, nil
+}
+
+// LastActivityTime returns the time of the last session completion.
+func (s *DaemonServer) LastActivityTime() time.Time {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.lastActivityTime
 }

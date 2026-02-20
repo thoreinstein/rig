@@ -14,7 +14,7 @@ import (
 // UIBridge defines the interface for sending UI requests to the CLI and receiving responses.
 type UIBridge interface {
 	SendRequest(resp *apiv1.InteractResponse) error
-	ReceiveResponse(id string) (*apiv1.InteractRequest, error)
+	ReceiveResponse(ctx context.Context, id string) (*apiv1.InteractRequest, error)
 }
 
 // sessionBridge manages the communication for a single active CLI session.
@@ -35,7 +35,7 @@ func (b *sessionBridge) SendRequest(resp *apiv1.InteractResponse) error {
 	return b.send(resp)
 }
 
-func (b *sessionBridge) ReceiveResponse(id string) (*apiv1.InteractRequest, error) {
+func (b *sessionBridge) ReceiveResponse(ctx context.Context, id string) (*apiv1.InteractRequest, error) {
 	b.mu.Lock()
 	ch := make(chan *apiv1.InteractRequest, 1)
 	b.pending[id] = ch
@@ -50,6 +50,8 @@ func (b *sessionBridge) ReceiveResponse(id string) (*apiv1.InteractRequest, erro
 	select {
 	case res := <-ch:
 		return res, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	case <-time.After(5 * time.Minute):
 		return nil, errors.New("UI interaction timeout")
 	}
@@ -116,7 +118,7 @@ func (p *DaemonUIProxy) Prompt(ctx context.Context, req *apiv1.PromptRequest) (*
 		return nil, err
 	}
 
-	resp, err := bridge.ReceiveResponse(id)
+	resp, err := bridge.ReceiveResponse(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -144,7 +146,7 @@ func (p *DaemonUIProxy) Confirm(ctx context.Context, req *apiv1.ConfirmRequest) 
 		return nil, err
 	}
 
-	resp, err := bridge.ReceiveResponse(id)
+	resp, err := bridge.ReceiveResponse(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -172,7 +174,7 @@ func (p *DaemonUIProxy) Select(ctx context.Context, req *apiv1.SelectRequest) (*
 		return nil, err
 	}
 
-	resp, err := bridge.ReceiveResponse(id)
+	resp, err := bridge.ReceiveResponse(ctx, id)
 	if err != nil {
 		return nil, err
 	}

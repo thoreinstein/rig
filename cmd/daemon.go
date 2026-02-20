@@ -62,13 +62,13 @@ func newDaemonStartCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			defer mgr.StopAll()
 
 			server := daemon.NewDaemonServer(mgr, uiProxy, GetVersion(), slog.Default())
 
 			pluginIdle, _ := time.ParseDuration(cfg.Daemon.PluginIdleTimeout)
 			daemonIdle, _ := time.ParseDuration(cfg.Daemon.DaemonIdleTimeout)
 			lifecycle := daemon.NewLifecycle(mgr, server, pluginIdle, daemonIdle, slog.Default())
-			go lifecycle.Run(cmd.Context())
 
 			// 2. Setup UDS listener
 			if err := daemon.EnsureDir(); err != nil {
@@ -81,6 +81,8 @@ func newDaemonStartCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			defer lis.Close()
+
 			if err := os.Chmod(path, 0o600); err != nil {
 				return err
 			}
@@ -94,13 +96,20 @@ func newDaemonStartCmd() *cobra.Command {
 			}
 			defer func() { _ = daemon.RemovePIDFile() }()
 
-			// 4. Handle signals for graceful shutdown
+			// 4. Start lifecycle monitor
+			go lifecycle.Run(cmd.Context())
+
+			// 5. Handle signals and lifecycle shutdown
 			sigCh := make(chan os.Signal, 1)
 			signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
 
 			go func() {
-				<-sigCh
-				fmt.Println("\nShutting down daemon...")
+				select {
+				case <-sigCh:
+					fmt.Println("\nShutting down daemon...")
+				case <-lifecycle.ShutdownCh():
+					fmt.Println("\nDaemon idle timeout reached, shutting down...")
+				}
 				mgr.StopAll()
 				s.GracefulStop()
 			}()
