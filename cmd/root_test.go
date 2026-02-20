@@ -128,7 +128,7 @@ enabled = false
 	defer func() { cfgFile = oldCfgFile }()
 
 	// Run initConfig
-	initConfig()
+	_ = initConfig()
 
 	// Verify config was loaded
 	if viper.GetString("notes.path") != "/custom/notes/path" {
@@ -175,7 +175,7 @@ base_branch = "develop"
 	defer func() { cfgFile = oldCfgFile }()
 
 	// Run initConfig
-	initConfig()
+	_ = initConfig()
 
 	// Verify config was loaded from default location
 	if viper.GetString("notes.path") != "/default/location/notes" {
@@ -202,7 +202,7 @@ func TestInitConfig_NoConfigFile(t *testing.T) {
 	defer func() { cfgFile = oldCfgFile }()
 
 	// Run initConfig - should not panic when config file doesn't exist
-	initConfig()
+	_ = initConfig()
 
 	// Viper should still be usable even without a config file
 	// This verifies the error is silently ignored when no config exists
@@ -229,7 +229,7 @@ func TestInitConfig_EnvironmentVariables(t *testing.T) {
 	defer func() { cfgFile = oldCfgFile }()
 
 	// Run initConfig to enable AutomaticEnv
-	initConfig()
+	_ = initConfig()
 
 	// After initConfig, viper.AutomaticEnv() has been called
 	// Verify viper is functional after initConfig
@@ -279,7 +279,7 @@ path = "/test/path"
 	os.Stderr = w
 
 	// Run initConfig
-	initConfig()
+	_ = initConfig()
 
 	// Restore stderr and read captured output
 	w.Close()
@@ -338,7 +338,7 @@ path = "/test/path"
 	os.Stderr = w
 
 	// Run initConfig
-	initConfig()
+	_ = initConfig()
 
 	// Restore stderr and read captured output
 	w.Close()
@@ -438,7 +438,7 @@ path = "/explicit/path"
 	defer func() { cfgFile = oldCfgFile }()
 
 	// Run initConfig
-	initConfig()
+	_ = initConfig()
 
 	// Explicit config should take precedence
 	if viper.GetString("notes.path") != "/explicit/path" {
@@ -463,7 +463,7 @@ func TestInitConfig_ConfigType(t *testing.T) {
 	defer func() { cfgFile = oldCfgFile }()
 
 	// Run initConfig
-	initConfig()
+	_ = initConfig()
 
 	// Check that viper is configured for toml
 	// We can't directly check the config type, but we can verify
@@ -484,7 +484,7 @@ key = "toml_value"
 
 	// Reset and re-run to pick up the new file
 	viper.Reset()
-	initConfig()
+	_ = initConfig()
 
 	if viper.GetString("test.key") != "toml_value" {
 		t.Errorf("Expected toml_value but got %q - TOML parsing may not be working",
@@ -535,7 +535,7 @@ name = "shell"
 	cfgFile = ""
 	defer func() { cfgFile = oldCfgFile }()
 
-	initConfig()
+	_ = initConfig()
 
 	// With the RIG_ prefix, plain TMUX env var should not interfere
 	// Verify the tmux config section is properly loaded
@@ -1100,7 +1100,7 @@ provider = "ollama"
 	t.Chdir(tmpDir)
 
 	// Run full initConfig
-	initConfig()
+	_ = initConfig()
 
 	// Environment variable should take precedence over repo config
 	if got := viper.GetString("github.default_merge_method"); got != "rebase" {
@@ -1168,7 +1168,7 @@ session_prefix = "repo-"
 	t.Chdir(repoDir)
 
 	// Run full initConfig
-	initConfig()
+	_ = initConfig()
 
 	// Repo config should override user config
 	if got := viper.GetString("github.default_merge_method"); got != "squash" {
@@ -1251,7 +1251,7 @@ provider = "ollama"
 	t.Chdir(repoDir)
 
 	// Run full initConfig
-	initConfig()
+	_ = initConfig()
 
 	// Test precedence chain:
 

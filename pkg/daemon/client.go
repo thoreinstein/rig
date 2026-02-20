@@ -33,7 +33,7 @@ func NewClient(ctx context.Context) (*DaemonClient, error) {
 	conn, err := grpc.NewClient("passthrough:///unix://"+path,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithContextDialer(func(ctx context.Context, addr string) (net.Conn, error) {
-			return net.DialTimeout("unix", path, 100*time.Millisecond)
+			return net.DialTimeout("unix", path, 500*time.Millisecond)
 		}),
 	)
 	if err != nil {

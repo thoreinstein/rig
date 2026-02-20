@@ -3,6 +3,7 @@
 package daemon
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -32,7 +33,10 @@ func TestDaemon_ShutdownRPC(t *testing.T) {
 
 	// 1. Setup Server
 	executor := plugin.NewExecutor("")
-	scanner, _ := plugin.NewScanner()
+	scanner, err := plugin.NewScanner()
+	if err != nil {
+		t.Fatalf("plugin.NewScanner() error: %v", err)
+	}
 	uiProxy := NewDaemonUIProxy()
 	mgr, err := plugin.NewManager(executor, scanner, "1.0.0", nil, nil, plugin.WithUIServer(uiProxy))
 	if err != nil {
@@ -84,7 +88,7 @@ func TestDaemon_ShutdownRPC(t *testing.T) {
 
 	select {
 	case err := <-serverExit:
-		if err != nil && err != grpc.ErrServerStopped {
+		if err != nil && !errors.Is(err, grpc.ErrServerStopped) {
 			t.Errorf("server exited with error: %v", err)
 		}
 	case <-time.After(2 * time.Second):

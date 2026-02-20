@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 
 	"thoreinstein.com/rig/pkg/errors"
 )
@@ -70,18 +69,12 @@ func RemovePIDFile() error {
 
 // IsRunning checks if the daemon is currently running by verifying the PID file
 // and checking if the process exists.
+// On Windows, process existence check is best-effort.
 func IsRunning() bool {
 	pid, err := ReadPIDFile()
 	if err != nil {
 		return false
 	}
 
-	process, err := os.FindProcess(pid)
-	if err != nil {
-		return false
-	}
-
-	// On Unix, FindProcess always succeeds. We need to send signal 0 to check existence.
-	err = process.Signal(syscall.Signal(0))
-	return err == nil
+	return isProcessRunning(pid)
 }

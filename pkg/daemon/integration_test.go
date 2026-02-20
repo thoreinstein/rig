@@ -52,10 +52,9 @@ func TestDaemon_Integration(t *testing.T) {
 	}
 
 	cmd := exec.Command("go", "build", "-o", pluginPath, filepath.Join(pluginSource, "main.go"))
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("failed to build mock plugin: %v", err)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("failed to build mock plugin: %v\nOutput: %s", err, string(out))
 	}
-
 	// Copy manifest
 	manifestData, err := os.ReadFile(filepath.Join(pluginSource, "manifest.yaml"))
 	if err != nil {

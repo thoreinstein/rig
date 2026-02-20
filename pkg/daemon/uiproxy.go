@@ -3,7 +3,6 @@ package daemon
 import (
 	"context"
 	"sync"
-	"time"
 
 	"github.com/google/uuid"
 
@@ -46,7 +45,7 @@ func (b *sessionBridge) RegisterResponse(id string) chan *apiv1.InteractRequest 
 	return ch
 }
 
-// WaitResponse blocks until the response for the given ID is received or a timeout occurs.
+// WaitResponse blocks until the response for the given ID is received or the context is canceled.
 func (b *sessionBridge) WaitResponse(ctx context.Context, id string, ch chan *apiv1.InteractRequest) (*apiv1.InteractRequest, error) {
 	defer func() {
 		b.mu.Lock()
@@ -59,11 +58,8 @@ func (b *sessionBridge) WaitResponse(ctx context.Context, id string, ch chan *ap
 		return res, nil
 	case <-ctx.Done():
 		return nil, ctx.Err()
-	case <-time.After(5 * time.Minute):
-		return nil, errors.New("UI interaction timeout")
 	}
 }
-
 func (b *sessionBridge) HandleResponse(res *apiv1.InteractRequest) {
 	b.mu.Lock()
 	defer b.mu.Unlock()

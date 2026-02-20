@@ -54,7 +54,9 @@ func newDaemonStartCmd() *cobra.Command {
 
 			// For simplicity in Phase 7, we'll use a basic config provider.
 			// Ideally, this should come from the loaded config.
-			initConfig()
+			if err := initConfig(); err != nil {
+				return err
+			}
 			cfg := appConfig
 
 			uiProxy := daemon.NewDaemonUIProxy()
@@ -66,10 +68,18 @@ func newDaemonStartCmd() *cobra.Command {
 
 			server := daemon.NewDaemonServer(mgr, uiProxy, GetVersion(), slog.Default())
 
-			pluginIdle, _ := time.ParseDuration(cfg.Daemon.PluginIdleTimeout)
-			daemonIdle, _ := time.ParseDuration(cfg.Daemon.DaemonIdleTimeout)
+			pluginIdle, err := time.ParseDuration(cfg.Daemon.PluginIdleTimeout)
+			if err != nil {
+				slog.Error("Invalid plugin idle timeout", "value", cfg.Daemon.PluginIdleTimeout, "error", err)
+				pluginIdle = 5 * time.Minute // Fallback
+			}
+			daemonIdle, err := time.ParseDuration(cfg.Daemon.DaemonIdleTimeout)
+			if err != nil {
+				slog.Error("Invalid daemon idle timeout", "value", cfg.Daemon.DaemonIdleTimeout, "error", err)
+				daemonIdle = 15 * time.Minute // Fallback
+			}
 			lifecycle := daemon.NewLifecycle(mgr, server, pluginIdle, daemonIdle, slog.Default())
-
+			go lifecycle.Run(cmd.Context())
 			// 2. Setup UDS listener
 			if err := daemon.EnsureDir(); err != nil {
 				return err
@@ -165,6 +175,7 @@ func newDaemonStopCmd() *cobra.Command {
 	cmd.Flags().BoolVarP(&force, "force", "f", false, "Force stop by signaling PID if daemon is unresponsive")
 	return cmd
 }
+
 func newDaemonStatusCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "status",

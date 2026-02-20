@@ -56,11 +56,10 @@ func (l *Lifecycle) Run(ctx context.Context) {
 
 func (l *Lifecycle) checkIdle() {
 	// 1. Check for daemon idle timeout
-	l.server.mu.Lock()
-	active := l.server.activeSessions
-	l.server.mu.Unlock()
+	active := l.server.ActiveSessions()
+	lastActivity := l.server.LastActivityTime()
 
-	if active == 0 && time.Since(l.server.LastActivityTime()) > l.daemonIdleTimeout {
+	if active == 0 && time.Since(lastActivity) > l.daemonIdleTimeout {
 		if l.logger != nil {
 			l.logger.Info("Daemon reached idle timeout, shutting down")
 		}
@@ -68,15 +67,17 @@ func (l *Lifecycle) checkIdle() {
 		l.Stop()
 	}
 
-	// 2. Check for plugin idle timeouts (only when no sessions are active)
-	if active == 0 {
-		plugins := l.manager.ListPlugins()
-		for _, p := range plugins {
-			if time.Since(p.LastUsedTime()) > l.pluginIdleTimeout {
+	// 2. Check for plugin idle timeouts
+	plugins := l.manager.ListPlugins()
+	for _, p := range plugins {
+		if time.Since(p.LastUsedTime()) > l.pluginIdleTimeout {
+			if l.logger != nil {
+				l.logger.Info("Plugin reached idle timeout, stopping", "plugin", p.Name)
+			}
+			if err := l.manager.StopPlugin(p.Name); err != nil {
 				if l.logger != nil {
-					l.logger.Info("Plugin reached idle timeout, stopping", "plugin", p.Name)
+					l.logger.Error("Failed to stop idle plugin", "plugin", p.Name, "error", err)
 				}
-				_ = l.manager.StopPlugin(p.Name)
 			}
 		}
 	}

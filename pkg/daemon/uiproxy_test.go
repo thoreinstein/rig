@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -31,7 +32,7 @@ func TestDaemonUIProxy_Prompt(t *testing.T) {
 			return
 		}
 		if resp.Value != "Response" {
-			errCh <- err
+			errCh <- fmt.Errorf("unexpected resp.Value: %q", resp.Value)
 			return
 		}
 		errCh <- nil

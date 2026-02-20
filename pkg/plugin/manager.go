@@ -139,7 +139,7 @@ func (m *Manager) GetAssistantClient(ctx context.Context, name string) (apiv1.As
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	p.LastUsed = time.Now()
+	p.lastUsed = time.Now()
 
 	// Verify the plugin has the assistant capability
 	hasAssistant := false
@@ -175,7 +175,7 @@ func (m *Manager) GetCommandClient(ctx context.Context, name string) (apiv1.Comm
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	p.LastUsed = time.Now()
+	p.lastUsed = time.Now()
 
 	// Verify the plugin has the command capability
 	hasCommand := false
@@ -274,10 +274,9 @@ func (m *Manager) getOrStartPlugin(ctx context.Context, name string) (*Plugin, e
 	}
 
 	m.mu.Lock()
-	target.LastUsed = time.Now()
+	target.lastUsed = time.Now()
 	m.plugins[name] = target
 	m.mu.Unlock()
-
 	return target, nil
 }
 
@@ -341,7 +340,26 @@ func (m *Manager) ListPlugins() []*Plugin {
 
 	plugins := make([]*Plugin, 0, len(m.plugins))
 	for _, p := range m.plugins {
-		plugins = append(plugins, p)
+		p.mu.Lock()
+		// Return a shallow copy to prevent external mutation of internal state.
+		// We manually copy fields to avoid copying the mutex.
+		copy := &Plugin{
+			Name:         p.Name,
+			Version:      p.Version,
+			APIVersion:   p.APIVersion,
+			Path:         p.Path,
+			Args:         p.Args,
+			Source:       p.Source,
+			Status:       p.Status,
+			Description:  p.Description,
+			Manifest:     p.Manifest,
+			Error:        p.Error,
+			DiscoveryAt:  p.DiscoveryAt,
+			lastUsed:     p.lastUsed,
+			Capabilities: p.Capabilities,
+		}
+		p.mu.Unlock()
+		plugins = append(plugins, copy)
 	}
 	return plugins
 }

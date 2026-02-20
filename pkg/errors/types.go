@@ -345,7 +345,8 @@ func (e *DaemonError) WithCause(cause error) *DaemonError {
 	return e
 }
 
-// IsRetryable checks if an error or any error in its chain is retryable.// It returns true if the error itself is retryable, or if any wrapped error
+// IsRetryable checks if an error or any error in its chain is retryable.
+// It returns true if the error itself is retryable, or if any wrapped error
 // is marked as retryable.
 func IsRetryable(err error) bool {
 	if err == nil {

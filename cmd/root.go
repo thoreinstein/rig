@@ -36,7 +36,9 @@ func Execute() {
 	cfgFile, verbose = bootstrap.PreParseGlobalFlags(os.Args)
 
 	// 2. Initialize configuration (bootstrap)
-	initConfig()
+	if err := initConfig(); err != nil {
+		cobra.CheckErr(err)
+	}
 
 	// 3. Register dynamic commands from plugins
 	registerPluginCommands()
@@ -48,7 +50,9 @@ func Execute() {
 }
 
 func init() {
-	cobra.OnInitialize(initConfig)
+	cobra.OnInitialize(func() {
+		_ = initConfig()
+	})
 
 	// Here you will define your flags and configuration settings.
 	// Cobra supports persistent flags, which, if defined here,
@@ -62,12 +66,10 @@ func init() {
 }
 
 // initConfig reads in config file and ENV variables if set.
-func initConfig() {
+func initConfig() error {
 	var err error
 	appConfig, verbose, err = bootstrap.InitConfig(cfgFile, verbose)
-	if err != nil {
-		cobra.CheckErr(err)
-	}
+	return err
 }
 
 // loadConfig returns the already loaded configuration or loads it if it hasn't been yet.

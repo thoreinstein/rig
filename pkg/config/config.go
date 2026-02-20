@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/cockroachdb/errors"
 	"github.com/spf13/viper"
@@ -32,7 +33,6 @@ type DaemonConfig struct {
 	Enabled           bool   `mapstructure:"enabled"`
 	PluginIdleTimeout string `mapstructure:"plugin_idle_timeout"` // e.g. "5m"
 	DaemonIdleTimeout string `mapstructure:"daemon_idle_timeout"` // e.g. "15m"
-	SocketPath        string `mapstructure:"socket_path"`
 }
 
 // NotesConfig holds markdown notes configuration
@@ -231,6 +231,18 @@ func (c *Config) Validate() error {
 	if err := ValidateMergeMethod(c.GitHub.DefaultMergeMethod); err != nil {
 		return errors.Wrap(err, "github.default_merge_method")
 	}
+
+	if c.Daemon.PluginIdleTimeout != "" {
+		if _, err := time.ParseDuration(c.Daemon.PluginIdleTimeout); err != nil {
+			return errors.Wrapf(err, "invalid daemon.plugin_idle_timeout: %q", c.Daemon.PluginIdleTimeout)
+		}
+	}
+	if c.Daemon.DaemonIdleTimeout != "" {
+		if _, err := time.ParseDuration(c.Daemon.DaemonIdleTimeout); err != nil {
+			return errors.Wrapf(err, "invalid daemon.daemon_idle_timeout: %q", c.Daemon.DaemonIdleTimeout)
+		}
+	}
+
 	return nil
 }
 
@@ -330,10 +342,8 @@ func setDefaults() {
 	viper.SetDefault("daemon.enabled", true)
 	viper.SetDefault("daemon.plugin_idle_timeout", "5m")
 	viper.SetDefault("daemon.daemon_idle_timeout", "15m")
-	viper.SetDefault("daemon.socket_path", "")
 
-	// Plugin defaults
-	viper.SetDefault("plugins", map[string]interface{}{})
+	// Plugin defaults	viper.SetDefault("plugins", map[string]interface{}{})
 }
 
 // expandPaths expands ~ and environment variables in paths

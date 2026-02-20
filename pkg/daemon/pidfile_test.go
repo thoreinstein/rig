@@ -41,3 +41,46 @@ func TestPIDFile(t *testing.T) {
 		t.Error("PID file still exists after RemovePIDFile")
 	}
 }
+
+func TestPIDFile_StalePID(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("XDG_RUNTIME_DIR", tmpDir)
+
+	if err := EnsureDir(); err != nil {
+		t.Fatalf("EnsureDir failed: %v", err)
+	}
+
+	// Write a bogus PID
+	if err := os.WriteFile(PIDFilePath(), []byte("999999"), 0o600); err != nil {
+		t.Fatalf("failed to write stale PID file: %v", err)
+	}
+
+	if IsRunning() {
+		t.Error("IsRunning returned true for bogus PID, expected false")
+	}
+}
+
+func TestPIDFile_MalformedPID(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("XDG_RUNTIME_DIR", tmpDir)
+
+	if err := EnsureDir(); err != nil {
+		t.Fatalf("EnsureDir failed: %v", err)
+	}
+
+	// Write invalid content
+	if err := os.WriteFile(PIDFilePath(), []byte("not-a-number"), 0o600); err != nil {
+		t.Fatalf("failed to write malformed PID file: %v", err)
+	}
+
+	_, err := ReadPIDFile()
+	if err == nil {
+		t.Error("ReadPIDFile returned nil error for malformed content, expected error")
+	}
+
+	if IsRunning() {
+		t.Error("IsRunning returned true for malformed PID, expected false")
+	}
+
+	_ = RemovePIDFile()
+}

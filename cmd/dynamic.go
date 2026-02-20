@@ -19,41 +19,44 @@ func registerPluginCommands() {
 // runPluginCommand starts the plugin and executes the specified command.
 func runPluginCommand(ctx context.Context, pluginName, commandName string, args []string) error {
 	// Phase 7: Attempt execution via Daemon first
-	if appConfig != nil {
-		rigPath, _ := os.Executable()
-		client, err := daemon.EnsureRunning(ctx, rigPath)
+	if appConfig != nil && appConfig.Daemon.Enabled {
+		rigPath, err := os.Executable()
 		if err == nil {
-			defer client.Close()
+			client, err := daemon.EnsureRunning(ctx, rigPath)
+			if err == nil {
+				defer client.Close()
 
-			// Sanitize arguments by filtering out host flags
-			pluginArgs, hostArgs := bootstrap.FilterHostFlags(rootCmd.PersistentFlags(), args)
+				// Sanitize arguments by filtering out host flags
+				pluginArgs, hostArgs := bootstrap.FilterHostFlags(rootCmd.PersistentFlags(), args)
 
-			// 3. Re-initialize configuration if host flags were parsed.
-			if len(hostArgs) > 0 {
-				if err := rootCmd.PersistentFlags().Parse(hostArgs); err != nil {
-					return errors.Wrap(err, "failed to parse host flags")
+				// 3. Re-initialize configuration if host flags were parsed.
+				if len(hostArgs) > 0 {
+					if err := rootCmd.PersistentFlags().Parse(hostArgs); err != nil {
+						return errors.Wrap(err, "failed to parse host flags")
+					}
+					if err := initConfig(); err != nil {
+						return errors.Wrap(err, "failed to re-initialize config after parsing host flags")
+					}
 				}
-				initConfig()
-			}
 
-			configJSON := bootstrap.ResolvePluginConfig(appConfig.PluginConfig, pluginName, nil)
-			uiHandler := ui.NewUIServer()
-			defer uiHandler.Stop()
+				configJSON := bootstrap.ResolvePluginConfig(appConfig.PluginConfig, pluginName, nil)
+				uiHandler := ui.NewUIServer()
+				defer uiHandler.Stop()
 
-			err = client.ExecuteCommand(ctx, &apiv1.CommandRequest{
-				PluginName:  pluginName,
-				CommandName: commandName,
-				Args:        pluginArgs,
-				ConfigJson:  configJSON,
-				RigVersion:  GetVersion(),
-			}, uiHandler, os.Stdout, os.Stderr)
-			if err == nil || !errors.IsDaemonError(err) {
-				return err
+				err = client.ExecuteCommand(ctx, &apiv1.CommandRequest{
+					PluginName:  pluginName,
+					CommandName: commandName,
+					Args:        pluginArgs,
+					ConfigJson:  configJSON,
+					RigVersion:  GetVersion(),
+				}, uiHandler, os.Stdout, os.Stderr)
+				if err == nil || !errors.IsDaemonError(err) {
+					return err
+				}
+				// If it's a DaemonError (transport/availability), fallback to direct execution
 			}
-			// If it's a DaemonError (transport/availability), fallback to direct execution
 		}
-	}
-	// Delegate to the bootstrap package for heavy orchestration (Fallback).
+	} // Delegate to the bootstrap package for heavy orchestration (Fallback).
 	return bootstrap.RunPluginCommand(
 		ctx,
 		rootCmd.PersistentFlags(),

@@ -39,17 +39,21 @@ func TestDaemonServer_Execute(t *testing.T) {
 
 	// Setup Manager with mocks
 	executor := &mockPluginExecutor{}
-	scanner, _ := plugin.NewScanner() // Mocking scanner is harder, but we can bypass it if we inject a plugin
-	mgr, _ := plugin.NewManager(executor, scanner, "1.0.0", nil, nil)
+	scanner, err := plugin.NewScanner()
+	if err != nil {
+		t.Fatalf("NewScanner failed: %v", err)
+	}
+	mgr, err := plugin.NewManager(executor, scanner, "1.0.0", nil, nil)
+	if err != nil {
+		t.Fatalf("NewManager failed: %v", err)
+	}
 
 	proxy := NewDaemonUIProxy()
 	server := NewDaemonServer(mgr, proxy, "1.0.0", nil)
 	apiv1.RegisterDaemonServiceServer(s, server)
 
 	go func() {
-		if err := s.Serve(lis); err != nil {
-			return
-		}
+		_ = s.Serve(lis)
 	}()
 	defer s.Stop()
 
@@ -87,5 +91,11 @@ func TestDaemonServer_Execute(t *testing.T) {
 
 	// Since we haven't mocked the scanner/plugin discovery fully here,
 	// it will fail at GetCommandClient. That's fine for verifying the flow reached that point.
-	_, _ = stream.Recv()
+	resp, err := stream.Recv()
+	if err == nil {
+		t.Fatal("expected error from GetCommandClient, got nil")
+	}
+	if resp != nil {
+		t.Fatalf("expected nil response on error, got %v", resp)
+	}
 }

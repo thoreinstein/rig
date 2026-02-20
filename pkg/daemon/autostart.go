@@ -4,7 +4,6 @@ import (
 	"context"
 	"os"
 	"os/exec"
-	"syscall"
 	"time"
 
 	"thoreinstein.com/rig/pkg/errors"
@@ -24,9 +23,7 @@ func EnsureRunning(ctx context.Context, rigPath string) (*DaemonClient, error) {
 
 	// Start daemon process
 	cmd := exec.Command(rigPath, "daemon", "start")
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Setsid: true,
-	}
+	configureSysProcAttr(cmd)
 	cmd.Stdout = nil
 	cmd.Stderr = nil
 
@@ -36,19 +33,35 @@ func EnsureRunning(ctx context.Context, rigPath string) (*DaemonClient, error) {
 
 	// Poll for socket readiness
 	path := SocketPath()
-	timeout := time.After(2 * time.Second)
-	ticker := time.NewTicker(50 * time.Millisecond)
+	timeout := time.After(5 * time.Second)
+	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ctx.Done():
+			_ = cmd.Process.Kill()
 			return nil, ctx.Err()
 		case <-timeout:
+			_ = cmd.Process.Kill()
+			_ = os.Remove(path)
 			return nil, errors.New("timeout waiting for daemon to start")
 		case <-ticker.C:
 			if _, err := os.Stat(path); err == nil {
-				return NewClient(ctx)
+				// Attempt to connect with retries
+				var client *DaemonClient
+				var connectErr error
+				for range 3 {
+					client, connectErr = NewClient(ctx)
+					if connectErr == nil {
+						return client, nil
+					}
+					time.Sleep(100 * time.Millisecond)
+				}
+				// All connection attempts failed
+				_ = cmd.Process.Kill()
+				_ = os.Remove(path)
+				return nil, errors.Wrap(connectErr, "daemon started but connection failed")
 			}
 		}
 	}

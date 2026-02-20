@@ -92,16 +92,20 @@ func (s *DaemonServer) Execute(stream apiv1.DaemonService_ExecuteServer) error {
 
 	go func() {
 		for {
-			m, err := stream.Recv()
-			if err != nil {
+			select {
+			case <-ctx.Done():
 				return
-			}
-			if uiResp, ok := m.Payload.(*apiv1.DaemonServiceExecuteRequest_UiResponse); ok {
-				bridge.HandleResponse(uiResp.UiResponse)
+			default:
+				m, err := stream.Recv()
+				if err != nil {
+					return
+				}
+				if uiResp, ok := m.Payload.(*apiv1.DaemonServiceExecuteRequest_UiResponse); ok {
+					bridge.HandleResponse(uiResp.UiResponse)
+				}
 			}
 		}
 	}()
-
 	// 4. Execute the plugin command
 	client, err := s.manager.GetCommandClient(ctx, req.PluginName)
 	if err != nil {
@@ -173,4 +177,11 @@ func (s *DaemonServer) LastActivityTime() time.Time {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.lastActivityTime
+}
+
+// ActiveSessions returns the current number of active command sessions.
+func (s *DaemonServer) ActiveSessions() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.activeSessions
 }

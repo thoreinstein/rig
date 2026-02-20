@@ -68,7 +68,7 @@ type Plugin struct {
 	Manifest     *Manifest
 	Error        error
 	DiscoveryAt  time.Time
-	LastUsed     time.Time
+	lastUsed     time.Time
 	Capabilities []*apiv1.Capability
 
 	// Runtime state
@@ -86,7 +86,14 @@ type Plugin struct {
 func (p *Plugin) LastUsedTime() time.Time {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	return p.LastUsed
+	return p.lastUsed
+}
+
+// SetLastUsed updates the time the plugin was last used.
+func (p *Plugin) SetLastUsed(t time.Time) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.lastUsed = t
 }
 
 // Result contains the outcome of a discovery scan, including found plugins and metadata.
