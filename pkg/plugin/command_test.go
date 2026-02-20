@@ -48,26 +48,26 @@ func TestCommandExecution(t *testing.T) {
 
 	// 3. Define test cases
 	tests := []struct {
-		name           string
-		command        string
-		args           []string
-		want_stdout    string
-		want_stderr    string
-		want_exit_code int32
-		want_err       bool
+		name         string
+		command      string
+		args         []string
+		wantStdout   string
+		wantStderr   string
+		wantExitCode int32
+		wantErr      bool
 	}{
 		{
-			name:           "Echo command success",
-			command:        "echo",
-			args:           []string{"hello", "world"},
-			want_stdout:    "hello world",
-			want_exit_code: 0,
+			name:         "Echo command success",
+			command:      "echo",
+			args:         []string{"hello", "world"},
+			wantStdout:   "hello world",
+			wantExitCode: 0,
 		},
 		{
-			name:           "Unknown command failure",
-			command:        "unknown",
-			want_stderr:    "Unknown command: unknown",
-			want_exit_code: 1,
+			name:         "Unknown command failure",
+			command:      "unknown",
+			wantStderr:   "Unknown command: unknown",
+			wantExitCode: 1,
 		},
 	}
 
@@ -99,7 +99,7 @@ func TestCommandExecution(t *testing.T) {
 				Args:    tc.args,
 			})
 			if err != nil {
-				if tc.want_err {
+				if tc.wantErr {
 					return
 				}
 				t.Fatalf("Execute() failed: %v", err)
@@ -134,14 +134,14 @@ func TestCommandExecution(t *testing.T) {
 			if !gotDone {
 				t.Error("expected done=true in stream")
 			}
-			if exitCode != tc.want_exit_code {
-				t.Errorf("exit_code = %d, want %d", exitCode, tc.want_exit_code)
+			if exitCode != tc.wantExitCode {
+				t.Errorf("exit_code = %d, want %d", exitCode, tc.wantExitCode)
 			}
-			if tc.want_stdout != "" && stdout.String() != tc.want_stdout {
-				t.Errorf("stdout = %q, want %q", stdout.String(), tc.want_stdout)
+			if tc.wantStdout != "" && stdout.String() != tc.wantStdout {
+				t.Errorf("stdout = %q, want %q", stdout.String(), tc.wantStdout)
 			}
-			if tc.want_stderr != "" && stderr.String() != tc.want_stderr {
-				t.Errorf("stderr = %q, want %q", stderr.String(), tc.want_stderr)
+			if tc.wantStderr != "" && stderr.String() != tc.wantStderr {
+				t.Errorf("stderr = %q, want %q", stderr.String(), tc.wantStderr)
 			}
 		})
 	}

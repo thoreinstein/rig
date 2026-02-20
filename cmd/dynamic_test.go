@@ -559,7 +559,7 @@ func TestFilterHostFlags(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotPlugin, gotHost := filterHostFlags(tt.args)
+			gotPlugin, gotHost := bootstrap.FilterHostFlags(rootCmd.PersistentFlags(), tt.args)
 
 			if !reflect.DeepEqual(gotPlugin, tt.wantPlugin) {
 				t.Errorf("filterHostFlags() pluginArgs = %v, want %v", gotPlugin, tt.wantPlugin)

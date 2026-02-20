@@ -7,14 +7,21 @@ service CommandService {
 }
 
 message ExecuteRequest {
+  // command is the name of the command to execute.
   string command = 1;
+  // args is the list of positional arguments for the command.
   repeated string args = 2;
+  // flags is a map of key-value pairs representing CLI flags.
   map<string, string> flags = 3;
 }
 
 message ExecuteResponse {
+  // stdout is a chunk of the command's standard output.
   bytes stdout = 1;
+  // stderr is a chunk of the command's standard error.
   bytes stderr = 2;
+  // exit_code is the exit code of the command (only valid if done is true).
   int32 exit_code = 3;
+  // done is true if this is the final message in the stream.
   bool done = 4;
 }
