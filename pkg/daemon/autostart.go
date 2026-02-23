@@ -57,6 +57,8 @@ func EnsureRunning(ctx context.Context, rigPath string) (*DaemonClient, error) {
 				for range 3 {
 					client, connectErr = NewClient(ctx)
 					if connectErr == nil {
+						// Success! Release the process so it keeps running independently
+						_ = cmd.Process.Release()
 						return client, nil
 					}
 					time.Sleep(100 * time.Millisecond)

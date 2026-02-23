@@ -73,6 +73,7 @@ type Plugin struct {
 
 	// Runtime state
 	mu              sync.Mutex
+	activeSessions  int
 	process         *os.Process
 	socketPath      string
 	client          apiv1.PluginServiceClient
@@ -94,6 +95,29 @@ func (p *Plugin) SetLastUsed(t time.Time) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.lastUsed = t
+}
+
+// AcquireSession increments the active session count.
+func (p *Plugin) AcquireSession() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.activeSessions++
+	p.lastUsed = time.Now()
+}
+
+// ReleaseSession decrements the active session count and updates lastUsed.
+func (p *Plugin) ReleaseSession() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.activeSessions--
+	p.lastUsed = time.Now()
+}
+
+// IsBusy returns true if the plugin has active sessions.
+func (p *Plugin) IsBusy() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.activeSessions > 0
 }
 
 // Result contains the outcome of a discovery scan, including found plugins and metadata.

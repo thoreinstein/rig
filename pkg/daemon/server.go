@@ -46,6 +46,8 @@ func NewDaemonServer(m *plugin.Manager, proxy *DaemonUIProxy, rigVersion string,
 }
 
 func (s *DaemonServer) Execute(stream apiv1.DaemonService_ExecuteServer) error {
+	var pluginName string
+
 	// Phase 1: TryLock. Only one active session allowed.
 	s.mu.Lock()
 	if s.busy {
@@ -63,6 +65,9 @@ func (s *DaemonServer) Execute(stream apiv1.DaemonService_ExecuteServer) error {
 		s.lastActivityTime = time.Now()
 		s.mu.Unlock()
 		s.uiProxy.ClearActiveSession()
+		if pluginName != "" {
+			s.manager.ReleasePlugin(pluginName)
+		}
 	}()
 
 	// 1. Receive the first message which MUST be a CommandRequest
@@ -76,6 +81,7 @@ func (s *DaemonServer) Execute(stream apiv1.DaemonService_ExecuteServer) error {
 		return status.Error(codes.InvalidArgument, "first message must be a CommandRequest")
 	}
 	req := reqPayload.Command
+	pluginName = req.PluginName
 
 	// 2. Setup the UI Bridge for this session
 	bridge := s.uiProxy.SetActiveSession(func(uiReq *apiv1.InteractResponse) error {

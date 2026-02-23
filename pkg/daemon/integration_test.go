@@ -98,7 +98,7 @@ func TestDaemon_Integration(t *testing.T) {
 	if err := WritePIDFile(); err != nil {
 		t.Fatal(err)
 	}
-	defer RemovePIDFile()
+	defer func() { _ = RemovePIDFile() }()
 
 	// 4. Test Client Execution
 	client, err := NewClient(t.Context())

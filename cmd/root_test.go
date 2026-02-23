@@ -128,7 +128,9 @@ enabled = false
 	defer func() { cfgFile = oldCfgFile }()
 
 	// Run initConfig
-	_ = initConfig()
+	if err := initConfig(); err != nil {
+		t.Fatalf("initConfig() failed: %v", err)
+	}
 
 	// Verify config was loaded
 	if viper.GetString("notes.path") != "/custom/notes/path" {
@@ -175,7 +177,9 @@ base_branch = "develop"
 	defer func() { cfgFile = oldCfgFile }()
 
 	// Run initConfig
-	_ = initConfig()
+	if err := initConfig(); err != nil {
+		t.Fatalf("initConfig() failed: %v", err)
+	}
 
 	// Verify config was loaded from default location
 	if viper.GetString("notes.path") != "/default/location/notes" {

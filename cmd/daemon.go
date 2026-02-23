@@ -109,11 +109,11 @@ func newDaemonStopCmd() *cobra.Command {
 				return errors.Wrapf(err, "failed to find daemon process %d", pid)
 			}
 
-			if !force {
+			if !daemon.CheckIdentity(pid) && !force {
 				return errors.Newf("daemon socket is unreachable and PID %d could not be verified as Rig. Use --force to signal anyway", pid)
 			}
 
-			fmt.Printf("Signaling PID %d with SIGTERM (force)...\n", pid)
+			fmt.Printf("Signaling PID %d with SIGTERM...\n", pid)
 			return process.Signal(syscall.SIGTERM)
 		},
 	}

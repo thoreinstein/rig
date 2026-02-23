@@ -18,6 +18,9 @@ import (
 	"thoreinstein.com/rig/pkg/ui"
 )
 
+// pluginExecutor defines the interface for starting and stopping plugin processes.
+// Implementations MUST be mutable types (e.g., pointers) if they maintain state
+// across method calls, such as the host endpoint path.
 type pluginExecutor interface {
 	Start(ctx context.Context, p *Plugin) error
 	Stop(p *Plugin) error
@@ -136,10 +139,10 @@ func (m *Manager) GetAssistantClient(ctx context.Context, name string) (apiv1.As
 		return nil, err
 	}
 
+	p.AcquireSession()
+
 	p.mu.Lock()
 	defer p.mu.Unlock()
-
-	p.lastUsed = time.Now()
 
 	// Verify the plugin has the assistant capability
 	hasAssistant := false
@@ -172,10 +175,10 @@ func (m *Manager) GetCommandClient(ctx context.Context, name string) (apiv1.Comm
 		return nil, err
 	}
 
+	p.AcquireSession()
+
 	p.mu.Lock()
 	defer p.mu.Unlock()
-
-	p.lastUsed = time.Now()
 
 	// Verify the plugin has the command capability
 	hasCommand := false
@@ -317,11 +320,27 @@ func (m *Manager) StopAll() {
 	m.executor.SetHostEndpoint("")
 }
 
+// ReleasePlugin signals that a session with the plugin has finished.
+func (m *Manager) ReleasePlugin(name string) {
+	m.mu.Lock()
+	p, ok := m.plugins[name]
+	m.mu.Unlock()
+
+	if ok {
+		p.ReleaseSession()
+	}
+}
+
 // StopPlugin stops a specific plugin by name.
 func (m *Manager) StopPlugin(name string) error {
 	m.mu.Lock()
 	p, ok := m.plugins[name]
 	if ok {
+		// Do not stop if busy
+		if p.IsBusy() {
+			m.mu.Unlock()
+			return nil
+		}
 		delete(m.plugins, name)
 	}
 	m.mu.Unlock()
@@ -342,7 +361,8 @@ func (m *Manager) ListPlugins() []*Plugin {
 	for _, p := range m.plugins {
 		p.mu.Lock()
 		// Return a shallow copy to prevent external mutation of internal state.
-		// We manually copy fields to avoid copying the mutex.
+		// We manually copy fields to avoid copying the mutex. Note that nested
+		// objects (Manifest, Capabilities, Error) are still shared references.
 		copy := &Plugin{
 			Name:         p.Name,
 			Version:      p.Version,

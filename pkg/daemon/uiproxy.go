@@ -69,6 +69,7 @@ func (b *sessionBridge) HandleResponse(res *apiv1.InteractRequest) {
 		select {
 		case ch <- res:
 		default:
+			slog.Warn("dropping UI response: response channel is full", "response_to", res.ResponseTo)
 		}
 	}
 }

@@ -78,3 +78,8 @@ func IsRunning() bool {
 
 	return isProcessRunning(pid)
 }
+
+// CheckIdentity verifies that the process with the given PID is a Rig process.
+func CheckIdentity(pid int) bool {
+	return checkProcessIdentity(pid)
+}
