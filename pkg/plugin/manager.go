@@ -125,7 +125,9 @@ func NewManager(executor pluginExecutor, scanner *Scanner, rigVersion string, co
 		}
 	}()
 
-	// 3. Configure executor with host endpoint
+	// 3. Configure executor with host endpoint.
+	// This works despite the interface being passed by value because the
+	// implementation is expected to be a mutable pointer type.
 	executor.SetHostEndpoint(hostPath)
 
 	return m, nil
