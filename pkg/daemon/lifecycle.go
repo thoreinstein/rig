@@ -74,7 +74,7 @@ func (l *Lifecycle) checkIdle() {
 			if l.logger != nil {
 				l.logger.Info("Plugin reached idle timeout, stopping", "plugin", p.Name)
 			}
-			if err := l.manager.StopPlugin(p.Name); err != nil {
+			if err := l.manager.StopPluginIfIdle(p.Name, l.pluginIdleTimeout); err != nil {
 				if l.logger != nil {
 					l.logger.Error("Failed to stop idle plugin", "plugin", p.Name, "error", err)
 				}

@@ -343,16 +343,28 @@ func (m *Manager) ReleasePlugin(name string) {
 	}
 }
 
-// StopPlugin stops a specific plugin by name.
-func (m *Manager) StopPlugin(name string) error {
+// StopPluginIfIdle stops a specific plugin by name if it is not busy and has been
+// idle for longer than the provided timeout. If idleTimeout is 0, it is stopped
+// as long as it is not busy.
+func (m *Manager) StopPluginIfIdle(name string, idleTimeout time.Duration) error {
 	m.mu.Lock()
 	p, ok := m.plugins[name]
 	if ok {
-		// Do not stop if busy
-		if p.IsBusy() {
+		p.mu.Lock()
+		busy := p.active_sessions > 0
+		lastUsed := p.last_used
+		p.mu.Unlock()
+
+		if busy {
 			m.mu.Unlock()
 			return nil
 		}
+
+		if idleTimeout > 0 && time.Since(lastUsed) <= idleTimeout {
+			m.mu.Unlock()
+			return nil
+		}
+
 		delete(m.plugins, name)
 	}
 	m.mu.Unlock()
