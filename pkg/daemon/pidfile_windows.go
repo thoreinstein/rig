@@ -24,8 +24,16 @@ func isProcessRunning(pid int) bool {
 		return false
 	}
 
-	// WAIT_TIMEOUT means the process is still running.
-	return event == windows.WAIT_TIMEOUT
+	// Other non-error values (e.g., WAIT_OBJECT_0) indicate the process has exited.
+	switch event {
+	case windows.WAIT_TIMEOUT:
+		return true
+	case windows.WAIT_OBJECT_0:
+		return false
+	default:
+		// Treat any other non-error state as "not running".
+		return false
+	}
 }
 
 // checkProcessIdentity verifies that the process with the given PID is a Rig process.
