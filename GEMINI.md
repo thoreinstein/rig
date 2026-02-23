@@ -191,3 +191,12 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 - **API Standardisation:** Prefer industry-standard protocols (e.g., `grpc.health.v1`) over custom implementations for common infrastructure needs like health monitoring.
 - **Fail-Fast Mocking:** When mocking complex gRPC interfaces, implementations MUST fail loudly (return error) for unset function fields rather than returning `nil`.
 - **Stream Naming Inversion:** For bi-directional streams, name messages by *direction* (Request=Client->Server, Response=Server->Client) rather than payload semantics, but document the inversion clearly.
+
+### Daemon & Process Management
+- **Daemon-First Execution Pattern:** Always attempt execution via the background daemon first to minimize latency. Fall back to direct execution only on transport or availability failures (distinguished via `DaemonError`). Command execution failures (e.g., exit 1) should be returned directly, not retried.
+- **Deferred Cleanup + Release Pattern:** When launching background processes, use a deferred cleanup function that kills and reaps the process unless a `released` flag is explicitly set upon success. This prevents zombie processes during failed handshakes or connection timeouts.
+- **Bi-directional UI Proxying:** Use a single gRPC stream to multiplex command output and interactive UI requests. This ensures strict session isolation and eliminates the need for extra network ports or complex session routing.
+- **Identity-Validated Signaling:** Before signaling a process (e.g., for shutdown), always verify its identity (via `CheckIdentity` helper or version RPC) to prevent accidental interference with reused PIDs.
+- **Idempotent Resource Registration:** In asynchronous UI proxying, register response channels *before* sending requests to the client to eliminate registration-vs-response race conditions.
+- **Single-Source Socket Truth:** Use `daemon.SocketPath()` as the sole source of truth for the daemon endpoint. Never hardcode or duplicate path logic in configuration if it can be derived from runtime context.
+- **Atomic Idle Verification:** Re-verify plugin idle state (active sessions + last used time) while holding the manager lock before stopping a plugin to prevent races with new session acquisitions.
