@@ -3,6 +3,7 @@ package sdk
 import (
 	"context"
 	"os"
+	"strings"
 	"sync"
 
 	"google.golang.org/grpc"
@@ -80,7 +81,14 @@ func (u *UI) connect() (apiv1.UIServiceClient, error) {
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	}, u.dialOpts...)
 
-	conn, err := grpc.NewClient("unix://"+u.endpoint, opts...)
+	endpoint := u.endpoint
+	// If no scheme is provided, and it looks like a path, default to unix:// for UDS.
+	// We check for a leading slash or dot, which is typical for Unix Domain Sockets.
+	if !strings.Contains(endpoint, "://") && (strings.HasPrefix(endpoint, "/") || strings.HasPrefix(endpoint, ".")) {
+		endpoint = "unix://" + endpoint
+	}
+
+	conn, err := grpc.NewClient(endpoint, opts...)
 	if err != nil {
 		return nil, err
 	}
