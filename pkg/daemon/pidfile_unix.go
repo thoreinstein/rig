@@ -5,6 +5,7 @@ package daemon
 import (
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -32,6 +33,17 @@ func checkProcessIdentity(pid int) bool {
 		return false
 	}
 	name := strings.TrimSpace(string(out))
-	// On macOS, it might be the full path or just 'rig'
-	return name == "rig" || strings.HasSuffix(name, "/rig")
+
+	// In production, we expect 'rig'.
+	// In tests, we might see the test binary name (e.g. 'daemon.test').
+	if name == "rig" || strings.HasSuffix(name, "/rig") {
+		return true
+	}
+
+	// For tests, allow the current executable name
+	exe, err := os.Executable()
+	if err != nil {
+		return false
+	}
+	return name == exe || name == filepath.Base(exe)
 }

@@ -26,7 +26,7 @@ func TestDaemon_Integration(t *testing.T) {
 	// On Darwin, t.TempDir() can be very long, exceeding AF_UNIX limit.
 	// We'll use a shorter base for the socket.
 	daemonBase := filepath.Join("/tmp", fmt.Sprintf("rig-test-%d", os.Getpid()))
-	if err := os.MkdirAll(daemonBase, 0700); err != nil {
+	if err := os.MkdirAll(daemonBase, 0o700); err != nil {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(daemonBase)
@@ -38,7 +38,7 @@ func TestDaemon_Integration(t *testing.T) {
 	}
 
 	pluginDir := filepath.Join(tmpDir, ".rig", "plugins", "mock-cmd-plugin")
-	if err := os.MkdirAll(pluginDir, 0755); err != nil {
+	if err := os.MkdirAll(pluginDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
@@ -90,8 +90,9 @@ func TestDaemon_Integration(t *testing.T) {
 
 	s := grpc.NewServer()
 	apiv1.RegisterDaemonServiceServer(s, server)
+	serveErr := make(chan error, 1)
 	go func() {
-		_ = s.Serve(lis)
+		serveErr <- s.Serve(lis)
 	}()
 	defer s.Stop()
 
@@ -122,6 +123,18 @@ func TestDaemon_Integration(t *testing.T) {
 
 	if !bytes.Contains(stdout.Bytes(), []byte("hello daemon")) {
 		t.Errorf("unexpected stdout: %s", stdout.String())
+	}
+
+	if stderr.Len() > 0 {
+		t.Errorf("unexpected stderr: %s", stderr.String())
+	}
+
+	select {
+	case err := <-serveErr:
+		if err != nil && err != grpc.ErrServerStopped {
+			t.Errorf("daemon server exited with error: %v", err)
+		}
+	default:
 	}
 }
 

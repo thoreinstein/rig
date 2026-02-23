@@ -19,8 +19,8 @@ import (
 
 // Serve initializes and runs the Rig background daemon.
 // It handles PID management, UDS listener setup, and the gRPC server loop.
-func Serve(ctx context.Context, mgr *plugin.Manager, uiProxy *DaemonUIProxy, rigVersion string, logger *slog.Logger, pluginIdle, daemonIdle time.Duration) error {
-	server := NewDaemonServer(mgr, uiProxy, rigVersion, logger)
+func Serve(ctx context.Context, mgr *plugin.Manager, uiProxy *DaemonUIProxy, rig_version string, logger *slog.Logger, pluginIdle, daemonIdle time.Duration) error {
+	server := NewDaemonServer(mgr, uiProxy, rig_version, logger)
 	lifecycle := NewLifecycle(mgr, server, pluginIdle, daemonIdle, logger)
 
 	// 1. Setup UDS listener

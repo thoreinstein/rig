@@ -133,13 +133,18 @@ func NewManager(executor pluginExecutor, scanner *Scanner, rigVersion string, co
 
 // GetAssistantClient returns a gRPC client for the specified assistant plugin.
 // If the plugin is not running, it will be started.
-func (m *Manager) GetAssistantClient(ctx context.Context, name string) (apiv1.AssistantServiceClient, error) {
+func (m *Manager) GetAssistantClient(ctx context.Context, name string) (client apiv1.AssistantServiceClient, err error) {
 	p, err := m.getOrStartPlugin(ctx, name)
 	if err != nil {
 		return nil, err
 	}
 
 	p.AcquireSession()
+	defer func() {
+		if err != nil {
+			p.ReleaseSession()
+		}
+	}()
 
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -169,13 +174,18 @@ func (m *Manager) GetAssistantClient(ctx context.Context, name string) (apiv1.As
 
 // GetCommandClient returns a gRPC client for the specified command plugin.
 // If the plugin is not running, it will be started.
-func (m *Manager) GetCommandClient(ctx context.Context, name string) (apiv1.CommandServiceClient, error) {
+func (m *Manager) GetCommandClient(ctx context.Context, name string) (client apiv1.CommandServiceClient, err error) {
 	p, err := m.getOrStartPlugin(ctx, name)
 	if err != nil {
 		return nil, err
 	}
 
 	p.AcquireSession()
+	defer func() {
+		if err != nil {
+			p.ReleaseSession()
+		}
+	}()
 
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -277,7 +287,7 @@ func (m *Manager) getOrStartPlugin(ctx context.Context, name string) (*Plugin, e
 	}
 
 	m.mu.Lock()
-	target.lastUsed = time.Now()
+	target.last_used = time.Now()
 	m.plugins[name] = target
 	m.mu.Unlock()
 	return target, nil
@@ -375,7 +385,7 @@ func (m *Manager) ListPlugins() []*Plugin {
 			Manifest:     p.Manifest,
 			Error:        p.Error,
 			DiscoveryAt:  p.DiscoveryAt,
-			lastUsed:     p.lastUsed,
+			last_used:    p.last_used,
 			Capabilities: p.Capabilities,
 		}
 		p.mu.Unlock()

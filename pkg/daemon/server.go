@@ -18,30 +18,30 @@ import (
 // DaemonServer implements apiv1.DaemonServiceServer.
 type DaemonServer struct {
 	apiv1.UnimplementedDaemonServiceServer
-	manager    *plugin.Manager
-	uiProxy    *DaemonUIProxy
-	logger     *slog.Logger
-	startTime  time.Time
-	rigVersion string
+	manager     *plugin.Manager
+	uiProxy     *DaemonUIProxy
+	logger      *slog.Logger
+	start_time  time.Time
+	rig_version string
 
-	mu               sync.Mutex
-	activeSessions   int
-	busy             bool // Simple Phase 1 lock: one command at a time
-	lastActivityTime time.Time
-	shutdown         chan struct{}
-	shutdownOnce     sync.Once
+	mu                 sync.Mutex
+	active_sessions    int
+	busy               bool // Simple Phase 1 lock: one command at a time
+	last_activity_time time.Time
+	shutdown           chan struct{}
+	shutdownOnce       sync.Once
 }
 
-func NewDaemonServer(m *plugin.Manager, proxy *DaemonUIProxy, rigVersion string, logger *slog.Logger) *DaemonServer {
+func NewDaemonServer(m *plugin.Manager, proxy *DaemonUIProxy, rig_version string, logger *slog.Logger) *DaemonServer {
 	now := time.Now()
 	return &DaemonServer{
-		manager:          m,
-		uiProxy:          proxy,
-		logger:           logger,
-		startTime:        now,
-		rigVersion:       rigVersion,
-		lastActivityTime: now,
-		shutdown:         make(chan struct{}),
+		manager:            m,
+		uiProxy:            proxy,
+		logger:             logger,
+		start_time:         now,
+		rig_version:        rig_version,
+		last_activity_time: now,
+		shutdown:           make(chan struct{}),
 	}
 }
 
@@ -55,14 +55,14 @@ func (s *DaemonServer) Execute(stream apiv1.DaemonService_ExecuteServer) error {
 		return status.Error(codes.ResourceExhausted, "daemon is busy with another command")
 	}
 	s.busy = true
-	s.activeSessions++
+	s.active_sessions++
 	s.mu.Unlock()
 
 	defer func() {
 		s.mu.Lock()
 		s.busy = false
-		s.activeSessions--
-		s.lastActivityTime = time.Now()
+		s.active_sessions--
+		s.last_activity_time = time.Now()
 		s.mu.Unlock()
 		s.uiProxy.ClearActiveSession()
 		if pluginName != "" {
@@ -155,12 +155,12 @@ func (s *DaemonServer) Execute(stream apiv1.DaemonService_ExecuteServer) error {
 
 func (s *DaemonServer) Status(ctx context.Context, _ *apiv1.DaemonServiceStatusRequest) (*apiv1.DaemonServiceStatusResponse, error) {
 	s.mu.Lock()
-	active := s.activeSessions
+	active := s.active_sessions
 	s.mu.Unlock()
 
 	return &apiv1.DaemonServiceStatusResponse{
-		DaemonVersion:  s.rigVersion,
-		UptimeSeconds:  int64(time.Since(s.startTime).Seconds()),
+		DaemonVersion:  s.rig_version,
+		UptimeSeconds:  int64(time.Since(s.start_time).Seconds()),
 		ActiveSessions: int32(active),
 		Pid:            int32(os.Getpid()),
 		// Plugins: list of warm plugins could be added here in Phase 9
@@ -182,12 +182,12 @@ func (s *DaemonServer) ShutdownCh() <-chan struct{} {
 func (s *DaemonServer) LastActivityTime() time.Time {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.lastActivityTime
+	return s.last_activity_time
 }
 
 // ActiveSessions returns the current number of active command sessions.
 func (s *DaemonServer) ActiveSessions() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.activeSessions
+	return s.active_sessions
 }

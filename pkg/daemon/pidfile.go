@@ -67,16 +67,19 @@ func RemovePIDFile() error {
 	return os.Remove(PIDFilePath())
 }
 
-// IsRunning checks if the daemon is currently running by verifying the PID file
-// and checking if the process exists.
-// On Windows, process existence check is best-effort.
+// IsRunning checks if the daemon is currently running by verifying the PID file,
+// checking if the process exists, and verifying its identity.
 func IsRunning() bool {
 	pid, err := ReadPIDFile()
 	if err != nil {
 		return false
 	}
 
-	return isProcessRunning(pid)
+	if !isProcessRunning(pid) {
+		return false
+	}
+
+	return CheckIdentity(pid)
 }
 
 // CheckIdentity verifies that the process with the given PID is a Rig process.
