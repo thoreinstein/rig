@@ -43,6 +43,7 @@ func EnsureRunning(ctx context.Context, rigPath string) (*DaemonClient, error) {
 		select {
 		case <-ctx.Done():
 			_ = cmd.Process.Kill()
+			_ = RemovePIDFile()
 			return nil, ctx.Err()
 		case <-timeout:
 			_ = cmd.Process.Kill()

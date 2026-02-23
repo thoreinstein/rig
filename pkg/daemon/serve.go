@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/cockroachdb/errors"
 	"google.golang.org/grpc"
 
 	apiv1 "thoreinstein.com/rig/pkg/api/v1"
@@ -24,19 +25,19 @@ func Serve(ctx context.Context, mgr *plugin.Manager, uiProxy *DaemonUIProxy, rig
 
 	// 1. Setup UDS listener
 	if err := EnsureDir(); err != nil {
-		return err
+		return errors.Wrap(err, "failed to ensure daemon directory")
 	}
 	path := SocketPath()
 	_ = os.Remove(path) // Ensure clean start
 
 	lis, err := net.Listen("unix", path)
 	if err != nil {
-		return err
+		return errors.Wrapf(err, "failed to listen on unix socket %q", path)
 	}
 	defer lis.Close()
 
 	if err := os.Chmod(path, 0o600); err != nil {
-		return err
+		return errors.Wrapf(err, "failed to set permissions on unix socket %q", path)
 	}
 
 	// 2. Start gRPC server
@@ -44,7 +45,7 @@ func Serve(ctx context.Context, mgr *plugin.Manager, uiProxy *DaemonUIProxy, rig
 	apiv1.RegisterDaemonServiceServer(s, server)
 
 	if err := WritePIDFile(); err != nil {
-		return err
+		return errors.Wrap(err, "failed to write daemon PID file")
 	}
 	defer func() { _ = RemovePIDFile() }()
 

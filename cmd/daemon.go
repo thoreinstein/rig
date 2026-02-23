@@ -134,13 +134,33 @@ func newDaemonStatusCmd() *cobra.Command {
 
 			client, err := daemon.NewClient(cmd.Context())
 			if err != nil {
-				return err
+				return errors.Wrap(err, "failed to connect to daemon")
 			}
 			defer client.Close()
 
-			// Status RPC implementation in Phase 5 was basic,
-			// we can expand it here if needed.
-			fmt.Println("Daemon is running.")
+			status, err := client.Status(cmd.Context())
+			if err != nil {
+				return errors.Wrap(err, "failed to get daemon status")
+			}
+
+			fmt.Println("Rig Background Daemon")
+			fmt.Printf("  Status:  Running\n")
+			fmt.Printf("  PID:     %d\n", status.Pid)
+			fmt.Printf("  Version: %s\n", status.DaemonVersion)
+			fmt.Printf("  Uptime:  %s\n", time.Duration(status.UptimeSeconds)*time.Second)
+			fmt.Printf("  Active:  %d session(s)\n", status.ActiveSessions)
+
+			if len(status.Plugins) > 0 {
+				fmt.Println("  Plugins:")
+				for _, p := range status.Plugins {
+					lastUsed := "Never"
+					if p.LastUsedUnix > 0 {
+						lastUsed = time.Unix(p.LastUsedUnix, 0).Format(time.RFC3339)
+					}
+					fmt.Printf("    - %-20s [%s] (Last used: %s)\n", p.Name, p.Status, lastUsed)
+				}
+			}
+
 			return nil
 		},
 	}

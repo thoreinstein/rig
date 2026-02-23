@@ -17,9 +17,9 @@ func TestHelperProcess(t *testing.T) {
 
 func TestPIDFile_TableDriven(t *testing.T) {
 	tests := []struct {
-		name     string
-		preWrite func(tmpDir string) error
-		check    func(t *testing.T)
+		name      string
+		pre_write func(tmpDir string) error
+		check     func(t *testing.T)
 	}{
 		{
 			name: "HappyPath",
@@ -83,8 +83,8 @@ func TestPIDFile_TableDriven(t *testing.T) {
 			},
 		},
 		{
-			name:     "MissingDir",
-			preWrite: os.RemoveAll,
+			name:      "MissingDir",
+			pre_write: os.RemoveAll,
 			check: func(t *testing.T) {
 				// ReadPIDFile should fail if dir is missing
 				_, err := ReadPIDFile()
@@ -104,8 +104,8 @@ func TestPIDFile_TableDriven(t *testing.T) {
 				t.Fatalf("EnsureDir failed: %v", err)
 			}
 
-			if tt.preWrite != nil {
-				if err := tt.preWrite(tmpDir); err != nil {
+			if tt.pre_write != nil {
+				if err := tt.pre_write(tmpDir); err != nil {
 					t.Fatal(err)
 				}
 			}
