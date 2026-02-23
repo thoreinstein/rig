@@ -384,26 +384,57 @@ func (m *Manager) ListPlugins() []*Plugin {
 	plugins := make([]*Plugin, 0, len(m.plugins))
 	for _, p := range m.plugins {
 		p.mu.Lock()
-		// Return a shallow copy to prevent external mutation of internal state.
-		// We manually copy fields to avoid copying the mutex. Note that nested
-		// objects (Manifest, Capabilities, Error) are still shared references.
-		copy := &Plugin{
+		// Return a deep-enough copy to prevent external mutation of internal state.
+		// We manually copy fields to avoid copying the mutex and runtime handles.
+
+		// Copy Args slice
+		var args []string
+		if p.Args != nil {
+			args = make([]string, len(p.Args))
+			copy(args, p.Args)
+		}
+
+		// Copy Capabilities slice and objects
+		var caps []*apiv1.Capability
+		if p.Capabilities != nil {
+			caps = make([]*apiv1.Capability, len(p.Capabilities))
+			for i, c := range p.Capabilities {
+				caps[i] = &apiv1.Capability{
+					Name:    c.Name,
+					Version: c.Version,
+				}
+			}
+		}
+
+		// Copy Manifest and its Commands slice
+		var manifest *Manifest
+		if p.Manifest != nil {
+			mCopy := *p.Manifest
+			if p.Manifest.Commands != nil {
+				cmds := make([]CommandDescriptor, len(p.Manifest.Commands))
+				copy(cmds, p.Manifest.Commands)
+				mCopy.Commands = cmds
+			}
+			manifest = &mCopy
+		}
+
+		pCopy := &Plugin{
 			Name:         p.Name,
 			Version:      p.Version,
 			APIVersion:   p.APIVersion,
 			Path:         p.Path,
-			Args:         p.Args,
+			Args:         args,
 			Source:       p.Source,
 			Status:       p.Status,
 			Description:  p.Description,
-			Manifest:     p.Manifest,
-			Error:        p.Error,
+			Manifest:     manifest,
+			Error:        p.Error, // Error is an interface, effectively immutable
 			DiscoveryAt:  p.DiscoveryAt,
 			last_used:    p.last_used,
-			Capabilities: p.Capabilities,
+			Capabilities: caps,
 		}
 		p.mu.Unlock()
-		plugins = append(plugins, copy)
+		plugins = append(plugins, pCopy)
 	}
 	return plugins
 }
