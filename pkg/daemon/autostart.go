@@ -33,6 +33,17 @@ func EnsureRunning(ctx context.Context, rigPath string) (*DaemonClient, error) {
 		return nil, errors.Wrap(err, "failed to start daemon")
 	}
 
+	// Ensure the process is either released (on success) or reaped (on error/timeout).
+	// This prevents zombie processes if the daemon fails to initialize properly.
+	var released bool
+	defer func() {
+		if !released {
+			_ = cmd.Process.Kill()
+			_, _ = cmd.Process.Wait()
+			_ = RemovePIDFile()
+		}
+	}()
+
 	// Poll for socket readiness
 	path := SocketPath()
 	timeout := time.After(5 * time.Second)
@@ -42,14 +53,8 @@ func EnsureRunning(ctx context.Context, rigPath string) (*DaemonClient, error) {
 	for {
 		select {
 		case <-ctx.Done():
-			_ = cmd.Process.Kill()
-			_, _ = cmd.Process.Wait()
-			_ = RemovePIDFile()
 			return nil, ctx.Err()
 		case <-timeout:
-			_ = cmd.Process.Kill()
-			_, _ = cmd.Process.Wait()
-			_ = RemovePIDFile()
 			return nil, errors.New("timeout waiting for daemon to start")
 		case <-ticker.C:
 			if _, err := os.Stat(path); err == nil {
@@ -59,16 +64,14 @@ func EnsureRunning(ctx context.Context, rigPath string) (*DaemonClient, error) {
 				for range 3 {
 					client, connectErr = NewClient(ctx)
 					if connectErr == nil {
-						// Success! Release the process so it keeps running independently
+						// Success! Mark as released and detach the process.
+						released = true
 						_ = cmd.Process.Release()
 						return client, nil
 					}
 					time.Sleep(100 * time.Millisecond)
 				}
 				// All connection attempts failed
-				_ = cmd.Process.Kill()
-				_, _ = cmd.Process.Wait()
-				_ = RemovePIDFile()
 				return nil, errors.Wrap(connectErr, "daemon started but connection failed")
 			}
 		}
