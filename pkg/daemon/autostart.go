@@ -43,10 +43,12 @@ func EnsureRunning(ctx context.Context, rigPath string) (*DaemonClient, error) {
 		select {
 		case <-ctx.Done():
 			_ = cmd.Process.Kill()
+			_, _ = cmd.Process.Wait()
 			_ = RemovePIDFile()
 			return nil, ctx.Err()
 		case <-timeout:
 			_ = cmd.Process.Kill()
+			_, _ = cmd.Process.Wait()
 			_ = RemovePIDFile()
 			return nil, errors.New("timeout waiting for daemon to start")
 		case <-ticker.C:
@@ -65,6 +67,7 @@ func EnsureRunning(ctx context.Context, rigPath string) (*DaemonClient, error) {
 				}
 				// All connection attempts failed
 				_ = cmd.Process.Kill()
+				_, _ = cmd.Process.Wait()
 				_ = RemovePIDFile()
 				return nil, errors.Wrap(connectErr, "daemon started but connection failed")
 			}
