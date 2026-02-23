@@ -2,35 +2,26 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
-	"net"
-	"os"
-	"os/signal"
-	"syscall"
-
-	"google.golang.org/grpc"
 
 	apiv1 "thoreinstein.com/rig/pkg/api/v1"
+	"thoreinstein.com/rig/pkg/sdk"
 )
 
-type server struct {
-	apiv1.UnimplementedPluginServiceServer
-	apiv1.UnimplementedAssistantServiceServer
-}
+type assistant struct{}
 
-func (s *server) Handshake(ctx context.Context, req *apiv1.HandshakeRequest) (*apiv1.HandshakeResponse, error) {
-	return &apiv1.HandshakeResponse{
-		PluginId:     "sample-assistant",
-		ApiVersion:   "v1",
-		PluginSemver: "v0.1.0",
-		Capabilities: []*apiv1.Capability{
+func (a *assistant) Info() sdk.Info {
+	return sdk.Info{
+		ID:         "sample-assistant",
+		APIVersion: "v1",
+		SemVer:     "v0.1.0",
+		Capabilities: []sdk.Capability{
 			{Name: "assistant", Version: "1.0.0"},
 		},
-	}, nil
+	}
 }
 
-func (s *server) Chat(ctx context.Context, req *apiv1.ChatRequest) (*apiv1.ChatResponse, error) {
+func (a *assistant) Chat(ctx context.Context, req *apiv1.ChatRequest) (*apiv1.ChatResponse, error) {
 	return &apiv1.ChatResponse{
 		Content:      "This is a sample AI response.",
 		StopReason:   "end_turn",
@@ -39,7 +30,7 @@ func (s *server) Chat(ctx context.Context, req *apiv1.ChatRequest) (*apiv1.ChatR
 	}, nil
 }
 
-func (s *server) StreamChat(req *apiv1.StreamChatRequest, stream apiv1.AssistantService_StreamChatServer) error {
+func (a *assistant) StreamChat(req *apiv1.StreamChatRequest, stream apiv1.AssistantService_StreamChatServer) error {
 	words := []string{"Hello,", " I", " am", " a", " sample", " AI", " plugin!"}
 	for i, word := range words {
 		if err := stream.Send(&apiv1.StreamChatResponse{
@@ -53,33 +44,7 @@ func (s *server) StreamChat(req *apiv1.StreamChatRequest, stream apiv1.Assistant
 }
 
 func main() {
-	endpoint := os.Getenv("RIG_PLUGIN_ENDPOINT")
-	if endpoint == "" {
-		log.Fatal("RIG_PLUGIN_ENDPOINT environment variable not set")
-	}
-
-	// Remove socket if it already exists
-	_ = os.Remove(endpoint)
-
-	lis, err := net.Listen("unix", endpoint)
-	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
-	}
-
-	s := grpc.NewServer()
-	apiv1.RegisterPluginServiceServer(s, &server{})
-	apiv1.RegisterAssistantServiceServer(s, &server{})
-
-	// Handle graceful shutdown
-	go func() {
-		sigCh := make(chan os.Signal, 1)
-		signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
-		<-sigCh
-		s.GracefulStop()
-	}()
-
-	fmt.Printf("Plugin starting on %s\n", endpoint)
-	if err := s.Serve(lis); err != nil {
-		log.Fatalf("failed to serve: %v", err)
+	if err := sdk.Serve(&assistant{}); err != nil {
+		log.Fatal(err)
 	}
 }

@@ -1,44 +1,34 @@
 package main
 
 import (
-	"context"
-	"fmt"
-	"net"
-	"os"
+	"log"
 	"strings"
 
-	"google.golang.org/grpc"
-
 	apiv1 "thoreinstein.com/rig/pkg/api/v1"
+	"thoreinstein.com/rig/pkg/sdk"
 )
 
-type pluginService struct {
-	apiv1.UnimplementedPluginServiceServer
-}
+type plugin struct{}
 
-func (s *pluginService) Handshake(ctx context.Context, req *apiv1.HandshakeRequest) (*apiv1.HandshakeResponse, error) {
-	return &apiv1.HandshakeResponse{
-		PluginId:     "mock-cmd",
-		ApiVersion:   "v1",
-		PluginSemver: "0.1.0",
-		Capabilities: []*apiv1.Capability{
+func (p *plugin) Info() sdk.Info {
+	return sdk.Info{
+		ID:         "mock-cmd",
+		APIVersion: "v1",
+		SemVer:     "0.1.0",
+		Capabilities: []sdk.Capability{
 			{Name: "command", Version: "1.0.0"},
 		},
-		Commands: []*apiv1.CommandDescriptorProto{
+		Commands: []sdk.CommandDescriptor{
 			{
 				Name:  "echo",
 				Short: "Echo arguments",
 				Long:  "Echoes all provided arguments back to stdout",
 			},
 		},
-	}, nil
+	}
 }
 
-type commandService struct {
-	apiv1.UnimplementedCommandServiceServer
-}
-
-func (s *commandService) Execute(req *apiv1.ExecuteRequest, stream apiv1.CommandService_ExecuteServer) error {
+func (p *plugin) Execute(req *apiv1.ExecuteRequest, stream apiv1.CommandService_ExecuteServer) error {
 	if req.Command == "echo" {
 		output := strings.Join(req.Args, " ")
 		err := stream.Send(&apiv1.ExecuteResponse{
@@ -49,7 +39,7 @@ func (s *commandService) Execute(req *apiv1.ExecuteRequest, stream apiv1.Command
 		}
 	} else {
 		err := stream.Send(&apiv1.ExecuteResponse{
-			Stderr: []byte(fmt.Sprintf("Unknown command: %s", req.Command)),
+			Stderr: []byte("Unknown command: " + req.Command),
 		})
 		if err != nil {
 			return err
@@ -67,27 +57,7 @@ func (s *commandService) Execute(req *apiv1.ExecuteRequest, stream apiv1.Command
 }
 
 func main() {
-	endpoint := os.Getenv("RIG_PLUGIN_ENDPOINT")
-	if endpoint == "" {
-		fmt.Fprintln(os.Stderr, "RIG_PLUGIN_ENDPOINT not set")
-		os.Exit(1)
-	}
-
-	// Remove socket if it exists (though host usually handles this)
-	_ = os.Remove(endpoint)
-
-	lis, err := net.Listen("unix", endpoint)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to listen: %v\n", err)
-		os.Exit(1)
-	}
-
-	srv := grpc.NewServer()
-	apiv1.RegisterPluginServiceServer(srv, &pluginService{})
-	apiv1.RegisterCommandServiceServer(srv, &commandService{})
-
-	if err := srv.Serve(lis); err != nil {
-		fmt.Fprintf(os.Stderr, "failed to serve: %v\n", err)
-		os.Exit(1)
+	if err := sdk.Serve(&plugin{}); err != nil {
+		log.Fatal(err)
 	}
 }
