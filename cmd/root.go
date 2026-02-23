@@ -50,13 +50,6 @@ func Execute() {
 }
 
 func init() {
-	// initConfig is called here to allow global flags to be initialized before command execution.
-	// We ignore the error here because Execute() handles fatal configuration errors
-	// during initial process startup, and OnInitialize hooks should not exit the process.
-	cobra.OnInitialize(func() {
-		_ = initConfig()
-	})
-
 	// Here you will define your flags and configuration settings.
 	// Cobra supports persistent flags, which, if defined here,
 	// will be global for your application.
