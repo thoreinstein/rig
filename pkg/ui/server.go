@@ -296,12 +296,14 @@ func (s *UIServer) readInput(ctx context.Context, sensitive bool) (string, error
 	}
 
 	var reqCh chan<- readRequest
+	var readerDone <-chan struct{}
 	if s.in == os.Stdin {
 		reader := getStdinReader()
 		if reader == nil {
 			return "", rigerrors.New("stdin reader not initialized or stopped")
 		}
 		reqCh = reader.reqCh
+		readerDone = reader.done
 	} else {
 		reqCh = s.reqCh
 	}
@@ -312,6 +314,8 @@ func (s *UIServer) readInput(ctx context.Context, sensitive bool) (string, error
 		return "", rigerrors.Wrap(ctx.Err(), "input request canceled")
 	case <-s.ctx.Done():
 		return "", rigerrors.Wrap(s.ctx.Err(), "UI server stopped")
+	case <-readerDone:
+		return "", rigerrors.New("stdin reader stopped")
 	case reqCh <- req:
 	}
 
@@ -323,6 +327,9 @@ func (s *UIServer) readInput(ctx context.Context, sensitive bool) (string, error
 	case <-s.ctx.Done():
 		close(abandoned)
 		return "", rigerrors.Wrap(s.ctx.Err(), "UI server stopped")
+	case <-readerDone:
+		close(abandoned)
+		return "", rigerrors.New("stdin reader stopped")
 	case res := <-respCh:
 		if res.err != nil {
 			return "", rigerrors.Wrap(res.err, "failed to read input")
