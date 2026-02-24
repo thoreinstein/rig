@@ -200,3 +200,16 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 - **Idempotent Resource Registration:** In asynchronous UI proxying, register response channels *before* sending requests to the client to eliminate registration-vs-response race conditions.
 - **Single-Source Socket Truth:** Use `daemon.SocketPath()` as the sole source of truth for the daemon endpoint. Never hardcode or duplicate path logic in configuration if it can be derived from runtime context.
 - **Atomic Idle Verification:** Re-verify plugin idle state (active sessions + last used time) while holding the manager lock before stopping a plugin to prevent races with new session acquisitions.
+
+### UI & Stdin Management
+- **Singleton Stdin Reader Pattern (v2)**: Stdin is a shared process resource. Manage it via a singleton `sharedReader` with a "No-Loss" buffer. If a UI request is abandoned, buffer the input for the next caller.
+- **Sensitivity-Aware Buffering**: Never buffer sensitive input (passwords). Buffered responses must only be delivered if both the buffer and the current request are non-sensitive. Clear the buffer on sensitivity mismatch.
+- **Buffered IO Synchronization**: Always drain/discard buffered bytes from `bufio.Reader` before performing raw terminal reads (e.g., `term.ReadPassword`) to prevent input reordering or "stolen" keystrokes.
+- **Fail-Fast Shutdown Protocol**: UI request loops must monitor both the request context AND the global reader's shutdown signal (`done` channel) to prevent deadlocks during process exit.
+
+### Plugin SDK Conventions
+- **Type-Assertion Registration Pattern**: Use Go type assertions in the SDK's `Serve` or `Register` logic to automatically discover and register supported capability handlers (`AssistantHandler`, `CommandHandler`) from a base `PluginInfo` implementation.
+- **Double-Resolver Addressing**: Use `passthrough://bufnet` (or similar) when using `bufconn` in tests to ensure cross-platform compatibility with gRPC resolvers (especially on Darwin).
+
+### Resiliency Patterns
+- **Lying State Resiliency**: Treat external state artifacts (like UDS socket files) as hints, not absolute truth. Respect the full timeout loop for daemon connection attempts even if a (potentially stale) socket file exists.
