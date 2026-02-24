@@ -42,6 +42,11 @@ func getStdinReader() *sharedReader {
 // will continue running for the lifetime of the process, preserving
 // existing behavior.
 func CloseStdinReader() {
+	// Synchronize with initialization. If getStdinReader is running, wait for it.
+	// If it hasn't run yet, mark it as done so we don't start a reader just to close it.
+	// Design consequence: subsequent getStdinReader calls will return the nil/stopped singleton.
+	stdinOnce.Do(func() {})
+
 	if globalStdinReader == nil {
 		return
 	}
@@ -277,7 +282,11 @@ func (s *UIServer) readInput(ctx context.Context, sensitive bool) (string, error
 
 	var reqCh chan<- readRequest
 	if s.in == os.Stdin {
-		reqCh = getStdinReader().reqCh
+		reader := getStdinReader()
+		if reader == nil {
+			return "", rigerrors.New("stdin reader not initialized or stopped")
+		}
+		reqCh = reader.reqCh
 	} else {
 		reqCh = s.reqCh
 	}
