@@ -163,6 +163,8 @@ func NewUIServer() *UIServer {
 }
 
 // NewUIServerWithReader creates a new UI server with a specific input reader.
+// For reliable shutdown and to prevent goroutine leaks, the provided reader
+// should ideally implement io.Closer (e.g. *os.File or io.PipeReader).
 func NewUIServerWithReader(in io.Reader) *UIServer {
 	ctx, cancel := context.WithCancel(context.Background())
 	s := &UIServer{
@@ -259,11 +261,12 @@ func (s *UIServer) Stop() {
 		s.cancel()
 		if s.in != os.Stdin {
 			if closer, ok := s.in.(io.Closer); ok {
+				// Closing the reader unblocks any pending Read calls in runLocalReader.
 				_ = closer.Close()
 			}
-			if s.reqCh != nil {
-				close(s.reqCh)
-			}
+			// We don't close s.reqCh here to avoid panics in readInput if it
+			// attempts to send after Stop is called. The runLocalReader goroutine
+			// will exit via s.ctx.Done().
 			s.wg.Wait()
 		}
 	})
