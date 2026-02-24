@@ -118,6 +118,10 @@ func (s *sharedReader) performRead(in io.Reader, reader *bufio.Reader, sensitive
 
 	if sensitive {
 		if f, ok := in.(*os.File); ok && term.IsTerminal(int(f.Fd())) {
+			// Drain any buffered bytes from the reader to ensure FD synchronization
+			if n := reader.Buffered(); n > 0 {
+				_, _ = reader.Discard(n)
+			}
 			var b []byte
 			b, err = term.ReadPassword(int(f.Fd()))
 			fmt.Println()
@@ -231,6 +235,10 @@ func (s *UIServer) runLocalReader() {
 		res := readResponse{sensitive: req.sensitive}
 		if req.sensitive {
 			if f, ok := s.in.(*os.File); ok && term.IsTerminal(int(f.Fd())) {
+				// Drain any buffered bytes from the reader to ensure FD synchronization
+				if n := reader.Buffered(); n > 0 {
+					_, _ = reader.Discard(n)
+				}
 				var b []byte
 				b, res.err = term.ReadPassword(int(f.Fd()))
 				fmt.Println()
