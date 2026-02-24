@@ -2,8 +2,8 @@ package sdk
 
 import (
 	"context"
-	"errors"
 
+	"github.com/cockroachdb/errors"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -20,10 +20,11 @@ func mapError(err error) error {
 		return nil
 	}
 
-	// If it's already a gRPC status, pass it through.
-	// Note: status.FromError returns ok=true for nil, but the nil check above handles that.
-	if _, ok := status.FromError(err); ok {
-		return err
+	// Iterate the error chain to find a gRPC status.
+	for curr := err; curr != nil; curr = errors.Unwrap(curr) {
+		if _, ok := status.FromError(curr); ok {
+			return curr
+		}
 	}
 
 	if errors.Is(err, context.Canceled) {

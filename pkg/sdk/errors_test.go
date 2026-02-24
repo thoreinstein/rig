@@ -2,10 +2,10 @@ package sdk
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"testing"
 
+	"github.com/cockroachdb/errors"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -22,6 +22,7 @@ func TestMapError(t *testing.T) {
 		{"wrapped_canceled", fmt.Errorf("op failed: %w", context.Canceled), codes.Canceled},
 		{"wrapped_deadline", fmt.Errorf("op failed: %w", context.DeadlineExceeded), codes.DeadlineExceeded},
 		{"already_status", status.Error(codes.NotFound, "not found"), codes.NotFound},
+		{"wrapped_status", errors.Wrap(status.Error(codes.AlreadyExists, "exists"), "wrapped"), codes.AlreadyExists},
 		{"already_status_internal", status.Errorf(codes.Internal, "oops"), codes.Internal},
 		{"generic_error", errors.New("something broke"), codes.Internal},
 	}
