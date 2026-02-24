@@ -86,6 +86,8 @@ func (s *sharedReader) runLoop(in io.Reader) {
 				case <-req.abandoned:
 					// Current caller also abandoned. Keep buffer for next time.
 					continue
+				case <-s.done:
+					return
 				}
 			} else {
 				// Sensitivity mismatch or sensitive request.
@@ -104,6 +106,8 @@ func (s *sharedReader) runLoop(in io.Reader) {
 			if !req.sensitive {
 				bufferedRes = &res
 			}
+		case <-s.done:
+			return
 		}
 	}
 }
