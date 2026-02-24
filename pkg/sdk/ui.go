@@ -13,7 +13,7 @@ import (
 )
 
 // UI is a high-level client for interacting with the Rig host's UIService.
-// It handles lazy connection, environment variable resolution, and provide simplified wrappers.
+// It handles lazy connection, environment variable resolution, and provides simplified wrappers.
 type UI struct {
 	mu       sync.Mutex
 	endpoint string
