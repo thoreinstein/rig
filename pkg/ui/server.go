@@ -104,6 +104,9 @@ func (s *sharedReader) runLoop(in io.Reader) {
 			if !req.sensitive {
 				bufferedRes = &res
 			}
+		case <-s.done:
+			// Shutdown requested; exit the runLoop to avoid blocking indefinitely.
+			return
 		}
 	}
 }
@@ -273,7 +276,8 @@ func (s *UIServer) Stop() {
 }
 
 func (s *UIServer) readInput(ctx context.Context, sensitive bool) (string, error) {
-	// respCh MUST be unbuffered so the reader's default case hits when we stop waiting.
+	// respCh MUST be unbuffered so the reader can detect abandonment via the
+	// abandoned channel when the requester stops waiting (e.g., on timeout or cancel).
 	respCh := make(chan readResponse)
 	abandoned := make(chan struct{})
 
