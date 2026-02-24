@@ -41,13 +41,21 @@ func (s *sharedReader) runLoop(in io.Reader) {
 
 	for req := range s.reqCh {
 		if bufferedRes != nil {
-			select {
-			case req.respCh <- *bufferedRes:
+			// Delivery condition: both sides must be non-sensitive.
+			if !req.sensitive && !bufferedRes.sensitive {
+				select {
+				case req.respCh <- *bufferedRes:
+					bufferedRes = nil
+					continue // Satisfied current request from buffer
+				case <-req.abandoned:
+					// Current caller also abandoned. Keep buffer for next time.
+					continue
+				}
+			} else {
+				// Sensitivity mismatch or sensitive request.
+				// Drop the buffer and proceed to perform a fresh read for the current request.
 				bufferedRes = nil
-			case <-req.abandoned:
-				// Current caller also abandoned. Keep buffer for next time.
 			}
-			continue
 		}
 
 		res := s.performRead(in, reader, req.sensitive)
@@ -56,8 +64,10 @@ func (s *sharedReader) runLoop(in io.Reader) {
 		case req.respCh <- res:
 			// Delivered successfully.
 		case <-req.abandoned:
-			// Caller stopped waiting (timeout/cancel). Buffer for next time.
-			bufferedRes = &res
+			// Caller stopped waiting (timeout/cancel). Only buffer if not sensitive.
+			if !req.sensitive {
+				bufferedRes = &res
+			}
 		}
 	}
 }
@@ -81,7 +91,7 @@ func (s *sharedReader) performRead(in io.Reader, reader *bufio.Reader, sensitive
 		val = strings.TrimSpace(val)
 	}
 
-	return readResponse{value: val, err: err}
+	return readResponse{value: val, err: err, sensitive: sensitive}
 }
 
 type readRequest struct {
@@ -91,8 +101,9 @@ type readRequest struct {
 }
 
 type readResponse struct {
-	value string
-	err   error
+	value     string
+	err       error
+	sensitive bool
 }
 
 // UIServer implements the UIService gRPC interface, allowing plugins to
@@ -156,18 +167,26 @@ func (s *UIServer) runLocalReader() {
 		}
 
 		if bufferedRes != nil {
-			select {
-			case req.respCh <- *bufferedRes:
+			// Delivery condition: both sides must be non-sensitive.
+			if !req.sensitive && !bufferedRes.sensitive {
+				select {
+				case req.respCh <- *bufferedRes:
+					bufferedRes = nil
+					continue
+				case <-req.abandoned:
+					// Current caller also abandoned? Keep buffer.
+					continue
+				case <-s.ctx.Done():
+					return
+				}
+			} else {
+				// Sensitivity mismatch or sensitive request.
+				// Drop the buffer and proceed to perform a fresh read.
 				bufferedRes = nil
-			case <-req.abandoned:
-				// Current caller also abandoned? Keep buffer.
-			case <-s.ctx.Done():
-				return
 			}
-			continue
 		}
 
-		res := readResponse{}
+		res := readResponse{sensitive: req.sensitive}
 		if req.sensitive {
 			if f, ok := s.in.(*os.File); ok && term.IsTerminal(int(f.Fd())) {
 				var b []byte
@@ -187,8 +206,10 @@ func (s *UIServer) runLocalReader() {
 		case req.respCh <- res:
 			// Success
 		case <-req.abandoned:
-			// Caller gone.
-			bufferedRes = &res
+			// Caller gone. Only buffer if not sensitive.
+			if !req.sensitive {
+				bufferedRes = &res
+			}
 		case <-s.ctx.Done():
 			// Server stopping.
 			return
