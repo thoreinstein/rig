@@ -57,7 +57,7 @@ func TestUI_Prompt(t *testing.T) {
 	go func() {
 		_ = srv.Serve(lis)
 	}()
-	defer srv.Stop()
+	defer srv.GracefulStop()
 
 	ui := NewUI(WithHostEndpoint(socketPath))
 	defer ui.Close()

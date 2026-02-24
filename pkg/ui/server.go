@@ -23,23 +23,54 @@ var (
 
 type sharedReader struct {
 	reqCh chan readRequest
+	done  chan struct{}
 }
 
 func getStdinReader() *sharedReader {
 	stdinOnce.Do(func() {
 		globalStdinReader = &sharedReader{
 			reqCh: make(chan readRequest),
+			done:  make(chan struct{}),
 		}
 		go globalStdinReader.runLoop(os.Stdin)
 	})
 	return globalStdinReader
 }
 
+// CloseStdinReader requests shutdown of the global stdin reader goroutine.
+// Existing callers are not required to call this; if unused, the goroutine
+// will continue running for the lifetime of the process, preserving
+// existing behavior.
+func CloseStdinReader() {
+	if globalStdinReader == nil {
+		return
+	}
+	// Best-effort shutdown: closing done will unblock the runLoop.
+	select {
+	case <-globalStdinReader.done:
+		// already closed
+	default:
+		close(globalStdinReader.done)
+	}
+}
+
 func (s *sharedReader) runLoop(in io.Reader) {
 	reader := bufio.NewReader(in)
 	var bufferedRes *readResponse
 
-	for req := range s.reqCh {
+	for {
+		var req readRequest
+		var ok bool
+
+		select {
+		case <-s.done:
+			return
+		case req, ok = <-s.reqCh:
+			if !ok {
+				return
+			}
+		}
+
 		if bufferedRes != nil {
 			// Delivery condition: both sides must be non-sensitive.
 			if !req.sensitive && !bufferedRes.sensitive {
