@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/term"
@@ -34,6 +35,10 @@ type UIServer struct {
 
 	// Singleton reader infrastructure
 	readCh chan readRequest
+	ctx    context.Context
+	cancel context.CancelFunc
+	stop   sync.Once
+	wg     sync.WaitGroup
 }
 
 // NewUIServer creates a new UI server and starts the background stdin reader.
@@ -43,55 +48,75 @@ func NewUIServer() *UIServer {
 
 // NewUIServerWithReader creates a new UI server with a specific input reader.
 func NewUIServerWithReader(in io.Reader) *UIServer {
+	ctx, cancel := context.WithCancel(context.Background())
 	s := &UIServer{
 		coord:  NewCoordinator(),
 		in:     in,
 		readCh: make(chan readRequest, 10), // Buffered to prevent deadlocks on cancellation
+		ctx:    ctx,
+		cancel: cancel,
 	}
+	s.wg.Add(1)
 	go s.runReader()
 	return s
 }
 
 // Stop shuts down the UI server and its background reader.
 func (s *UIServer) Stop() {
-	// We don't close readCh here to avoid panics in in-flight readInput calls.
-	// Instead, we let the background reader naturally age out or be GC'd.
-	// In a CLI, the server lifetime usually matches the process lifetime.
+	s.stop.Do(func() {
+		s.cancel()
+		close(s.readCh)
+		s.wg.Wait()
+	})
 }
 
 // runReader is the singleton background goroutine that owns the input reader.
 // It ensures that only one read is active at a time and that no goroutines are leaked
 // when RPCs are canceled.
 func (s *UIServer) runReader() {
+	defer s.wg.Done()
 	reader := bufio.NewReader(s.in)
-	for req := range s.readCh {
-		var val string
-		var err error
 
-		if req.sensitive {
-			// Password reading only works on real terminals (os.Stdin)
-			if f, ok := s.in.(*os.File); ok && term.IsTerminal(int(f.Fd())) {
-				var b []byte
-				b, err = term.ReadPassword(int(f.Fd()))
-				fmt.Println() // Move to next line after password entry
-				val = string(b)
-			} else {
-				// Fallback for non-terminal readers (like tests)
-				val, err = reader.ReadString('\n')
-				val = strings.TrimSpace(val)
+	for {
+		select {
+		case <-s.ctx.Done():
+			return
+		case req, ok := <-s.readCh:
+			if !ok {
+				return
 			}
+			s.handleReadRequest(reader, req)
+		}
+	}
+}
+
+func (s *UIServer) handleReadRequest(reader *bufio.Reader, req readRequest) {
+	var val string
+	var err error
+
+	if req.sensitive {
+		// Password reading only works on real terminals (os.Stdin)
+		if f, ok := s.in.(*os.File); ok && term.IsTerminal(int(f.Fd())) {
+			var b []byte
+			b, err = term.ReadPassword(int(f.Fd()))
+			fmt.Println() // Move to next line after password entry
+			val = string(b)
 		} else {
+			// Fallback for non-terminal readers (like tests)
 			val, err = reader.ReadString('\n')
 			val = strings.TrimSpace(val)
 		}
+	} else {
+		val, err = reader.ReadString('\n')
+		val = strings.TrimSpace(val)
+	}
 
-		// Send response. If the requester has already timed out or canceled,
-		// we use a non-blocking send.
-		select {
-		case req.respCh <- readResponse{value: val, err: err}:
-		default:
-			// Requester is gone, discard the input
-		}
+	// Send response. If the requester has already timed out or canceled,
+	// we use a non-blocking send.
+	select {
+	case req.respCh <- readResponse{value: val, err: err}:
+	default:
+		// Requester is gone, discard the input
 	}
 }
 

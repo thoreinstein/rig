@@ -40,9 +40,10 @@ func PreParseGlobalFlags(args []string) (string, bool) {
 			break
 		}
 
-		// Stop parsing at the first non-flag argument (the subcommand)
+		// If it's a non-flag argument, just skip it and keep looking for global flags.
+		// Subcommands can have persistent flags placed after them.
 		if !strings.HasPrefix(arg, "-") {
-			break
+			continue
 		}
 
 		switch {

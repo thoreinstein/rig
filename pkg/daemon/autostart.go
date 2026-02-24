@@ -71,8 +71,9 @@ func EnsureRunning(ctx context.Context, rigPath string) (*DaemonClient, error) {
 					}
 					time.Sleep(100 * time.Millisecond)
 				}
-				// All connection attempts failed
-				return nil, errors.Wrap(connectErr, "daemon started but connection failed")
+				// Connection failed despite socket existing.
+				// This might be a stale socket file or the daemon is still binding.
+				// Continue waiting instead of returning early to respect the full timeout.
 			}
 		}
 	}

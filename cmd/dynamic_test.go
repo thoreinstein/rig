@@ -453,10 +453,10 @@ func TestPreParseGlobalFlags(t *testing.T) {
 			wantCfg: "attached.toml",
 		},
 		{
-			name:        "Stop parsing at subcommand",
+			name:        "Parse global flags after subcommand",
 			args:        []string{"rig", "--verbose", "my-subcommand", "--config", "plugin.yaml"},
 			wantVerbose: true,
-			wantCfg:     "", // Should NOT intercept plugin flag
+			wantCfg:     "plugin.yaml",
 		},
 		{
 			name:        "Stop parsing at double dash",
