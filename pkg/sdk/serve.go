@@ -76,7 +76,7 @@ func Serve(p PluginInfo, opts ...Option) error {
 
 	if endpoint == "" {
 		config.logger.Error("RIG_PLUGIN_ENDPOINT not set")
-		return os.ErrInvalid
+		return ErrNoEndpoint
 	}
 
 	// Handle graceful shutdown via context/signals
@@ -99,6 +99,7 @@ func Serve(p PluginInfo, opts ...Option) error {
 		return err
 	}
 	defer lis.Close()
+	defer os.Remove(endpoint)
 
 	srv := grpc.NewServer(config.grpcOpts...)
 	RegisterServices(srv, p)

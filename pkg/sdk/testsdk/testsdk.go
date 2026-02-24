@@ -41,10 +41,11 @@ type MockUIServer struct {
 func (m *MockUIServer) Prompt(ctx context.Context, req *apiv1.PromptRequest) (*apiv1.PromptResponse, error) {
 	m.mu.Lock()
 	m.PromptCalls = append(m.PromptCalls, req)
+	fn := m.PromptFunc
 	m.mu.Unlock()
 
-	if m.PromptFunc != nil {
-		return m.PromptFunc(req)
+	if fn != nil {
+		return fn(req)
 	}
 	return &apiv1.PromptResponse{Value: "mock-response"}, nil
 }
@@ -52,10 +53,11 @@ func (m *MockUIServer) Prompt(ctx context.Context, req *apiv1.PromptRequest) (*a
 func (m *MockUIServer) Confirm(ctx context.Context, req *apiv1.ConfirmRequest) (*apiv1.ConfirmResponse, error) {
 	m.mu.Lock()
 	m.ConfirmCalls = append(m.ConfirmCalls, req)
+	fn := m.ConfirmFunc
 	m.mu.Unlock()
 
-	if m.ConfirmFunc != nil {
-		return m.ConfirmFunc(req)
+	if fn != nil {
+		return fn(req)
 	}
 	return &apiv1.ConfirmResponse{Confirmed: true}, nil
 }
@@ -63,10 +65,11 @@ func (m *MockUIServer) Confirm(ctx context.Context, req *apiv1.ConfirmRequest) (
 func (m *MockUIServer) Select(ctx context.Context, req *apiv1.SelectRequest) (*apiv1.SelectResponse, error) {
 	m.mu.Lock()
 	m.SelectCalls = append(m.SelectCalls, req)
+	fn := m.SelectFunc
 	m.mu.Unlock()
 
-	if m.SelectFunc != nil {
-		return m.SelectFunc(req)
+	if fn != nil {
+		return fn(req)
 	}
 	return &apiv1.SelectResponse{SelectedIndices: []uint32{0}}, nil
 }
@@ -74,10 +77,11 @@ func (m *MockUIServer) Select(ctx context.Context, req *apiv1.SelectRequest) (*a
 func (m *MockUIServer) UpdateProgress(ctx context.Context, req *apiv1.UpdateProgressRequest) (*apiv1.UpdateProgressResponse, error) {
 	m.mu.Lock()
 	m.UpdateProgressCalls = append(m.UpdateProgressCalls, req)
+	fn := m.UpdateProgressFunc
 	m.mu.Unlock()
 
-	if m.UpdateProgressFunc != nil {
-		return m.UpdateProgressFunc(req)
+	if fn != nil {
+		return fn(req)
 	}
 	return &apiv1.UpdateProgressResponse{}, nil
 }

@@ -2,6 +2,8 @@ package sdk
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"testing"
 
 	"google.golang.org/grpc/codes"
@@ -17,10 +19,11 @@ func TestMapError(t *testing.T) {
 		{"nil", nil, codes.OK},
 		{"canceled", context.Canceled, codes.Canceled},
 		{"deadline", context.DeadlineExceeded, codes.DeadlineExceeded},
-		{"generic", context.DeadlineExceeded, codes.DeadlineExceeded}, // context.DeadlineExceeded is actually a good case for its code
-		{"already status", status.Error(codes.NotFound, "not found"), codes.NotFound},
-		{"unknown", t.Context().Err(), codes.OK}, // t.Context().Err() is nil
-		{"internal", status.Errorf(codes.Internal, "oops"), codes.Internal},
+		{"wrapped_canceled", fmt.Errorf("op failed: %w", context.Canceled), codes.Canceled},
+		{"wrapped_deadline", fmt.Errorf("op failed: %w", context.DeadlineExceeded), codes.DeadlineExceeded},
+		{"already_status", status.Error(codes.NotFound, "not found"), codes.NotFound},
+		{"already_status_internal", status.Errorf(codes.Internal, "oops"), codes.Internal},
+		{"generic_error", errors.New("something broke"), codes.Internal},
 	}
 
 	for _, tt := range tests {

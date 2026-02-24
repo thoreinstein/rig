@@ -74,7 +74,7 @@ func (u *UI) connect() (apiv1.UIServiceClient, error) {
 	}
 
 	if u.endpoint == "" {
-		return nil, os.ErrInvalid // Or a more descriptive error
+		return nil, ErrNoEndpoint
 	}
 
 	opts := append([]grpc.DialOption{
@@ -159,11 +159,11 @@ func (u *UI) Confirm(ctx context.Context, label string, defaultValue bool) (bool
 }
 
 // Select asks the user to choose from a list of options.
-// It returns the index of the selected option.
+// It returns the 0-based index of the selected option, or -1 if no selection was made.
 func (u *UI) Select(ctx context.Context, label string, options []string) (int, error) {
 	client, err := u.connect()
 	if err != nil {
-		return 0, err
+		return -1, err
 	}
 
 	resp, err := client.Select(ctx, &apiv1.SelectRequest{
@@ -171,11 +171,11 @@ func (u *UI) Select(ctx context.Context, label string, options []string) (int, e
 		Options: options,
 	})
 	if err != nil {
-		return 0, mapError(err)
+		return -1, mapError(err)
 	}
 
 	if len(resp.SelectedIndices) == 0 {
-		return 0, nil
+		return -1, nil
 	}
 	return int(resp.SelectedIndices[0]), nil
 }
