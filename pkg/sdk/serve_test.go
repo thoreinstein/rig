@@ -98,7 +98,8 @@ func TestServe_StaleSocketRemoval(t *testing.T) {
 	// Just wait a bit and check if we can dial it (which means it was replaced by a listener)
 	deadline := time.Now().Add(1 * time.Second)
 	for time.Now().Before(deadline) {
-		if _, err := net.Dial("unix", socketPath); err == nil {
+		if conn, err := net.Dial("unix", socketPath); err == nil {
+			conn.Close()
 			return
 		}
 		time.Sleep(50 * time.Millisecond)
