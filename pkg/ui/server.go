@@ -22,15 +22,15 @@ var (
 )
 
 type sharedReader struct {
-	reqCh chan readRequest
-	done  chan struct{}
+	shared_reader chan readRequest
+	done          chan struct{}
 }
 
 func getStdinReader() *sharedReader {
 	stdinOnce.Do(func() {
 		globalStdinReader = &sharedReader{
-			reqCh: make(chan readRequest),
-			done:  make(chan struct{}),
+			shared_reader: make(chan readRequest),
+			done:          make(chan struct{}),
 		}
 		go globalStdinReader.runLoop(os.Stdin)
 	})
@@ -70,7 +70,7 @@ func (s *sharedReader) runLoop(in io.Reader) {
 		select {
 		case <-s.done:
 			return
-		case req, ok = <-s.reqCh:
+		case req, ok = <-s.shared_reader:
 			if !ok {
 				return
 			}
@@ -80,11 +80,11 @@ func (s *sharedReader) runLoop(in io.Reader) {
 			// Delivery condition: both sides must be non-sensitive.
 			if !req.sensitive && !bufferedRes.sensitive {
 				select {
-				case req.respCh <- *bufferedRes:
+				case req.resp_ch <- *bufferedRes:
 					bufferedRes = nil
 					continue // Satisfied current request from buffer
 				case <-req.abandoned:
-					// Current caller also abandoned. Keep buffer for next time.
+					// Current caller also abandoned? Keep buffer for next time.
 					continue
 				case <-s.done:
 					return
@@ -96,10 +96,10 @@ func (s *sharedReader) runLoop(in io.Reader) {
 			}
 		}
 
-		res := s.performRead(in, reader, req.sensitive)
+		res := performRead(in, reader, req.sensitive)
 
 		select {
-		case req.respCh <- res:
+		case req.resp_ch <- res:
 			// Delivered successfully.
 		case <-req.abandoned:
 			// Caller stopped waiting (timeout/cancel). Only buffer if not sensitive.
@@ -112,7 +112,7 @@ func (s *sharedReader) runLoop(in io.Reader) {
 	}
 }
 
-func (s *sharedReader) performRead(in io.Reader, reader *bufio.Reader, sensitive bool) readResponse {
+func performRead(in io.Reader, reader *bufio.Reader, sensitive bool) readResponse {
 	var val string
 	var err error
 
@@ -140,7 +140,7 @@ func (s *sharedReader) performRead(in io.Reader, reader *bufio.Reader, sensitive
 
 type readRequest struct {
 	sensitive bool
-	respCh    chan readResponse
+	resp_ch   chan readResponse
 	abandoned <-chan struct{} // Closed by caller if they stop waiting
 }
 
@@ -158,7 +158,7 @@ type UIServer struct {
 	in    io.Reader
 
 	// reader infrastructure
-	reqCh  chan readRequest
+	req_ch chan readRequest
 	ctx    context.Context
 	cancel context.CancelFunc
 	stop   sync.Once
@@ -182,8 +182,11 @@ func NewUIServerWithReader(in io.Reader) *UIServer {
 		cancel: cancel,
 	}
 
-	if in != os.Stdin {
-		s.reqCh = make(chan readRequest)
+	if in == os.Stdin {
+		s.req_ch = getStdinReader().shared_reader
+	} else {
+		ch := make(chan readRequest)
+		s.req_ch = ch
 		s.wg.Add(1)
 		go func() {
 			defer s.wg.Done()
@@ -206,7 +209,7 @@ func (s *UIServer) runLocalReader() {
 		select {
 		case <-s.ctx.Done():
 			return
-		case req, ok = <-s.reqCh:
+		case req, ok = <-s.req_ch:
 			if !ok {
 				return
 			}
@@ -216,7 +219,7 @@ func (s *UIServer) runLocalReader() {
 			// Delivery condition: both sides must be non-sensitive.
 			if !req.sensitive && !bufferedRes.sensitive {
 				select {
-				case req.respCh <- *bufferedRes:
+				case req.resp_ch <- *bufferedRes:
 					bufferedRes = nil
 					continue
 				case <-req.abandoned:
@@ -232,28 +235,10 @@ func (s *UIServer) runLocalReader() {
 			}
 		}
 
-		res := readResponse{sensitive: req.sensitive}
-		if req.sensitive {
-			if f, ok := s.in.(*os.File); ok && term.IsTerminal(int(f.Fd())) {
-				// Drain any buffered bytes from the reader to ensure FD synchronization
-				if n := reader.Buffered(); n > 0 {
-					_, _ = reader.Discard(n)
-				}
-				var b []byte
-				b, res.err = term.ReadPassword(int(f.Fd()))
-				fmt.Println()
-				res.value = string(b)
-			} else {
-				res.value, res.err = reader.ReadString('\n')
-				res.value = strings.TrimSpace(res.value)
-			}
-		} else {
-			res.value, res.err = reader.ReadString('\n')
-			res.value = strings.TrimSpace(res.value)
-		}
+		res := performRead(s.in, reader, req.sensitive)
 
 		select {
-		case req.respCh <- res:
+		case req.resp_ch <- res:
 			// Success
 		case <-req.abandoned:
 			// Caller gone. Only buffer if not sensitive.
@@ -276,7 +261,7 @@ func (s *UIServer) Stop() {
 				// Closing the reader unblocks any pending Read calls in runLocalReader.
 				_ = closer.Close()
 			}
-			// We don't close s.reqCh here to avoid panics in readInput if it
+			// We don't close s.req_ch here to avoid panics in readInput if it
 			// attempts to send after Stop is called. The runLocalReader goroutine
 			// will exit via s.ctx.Done().
 			s.wg.Wait()
@@ -285,27 +270,28 @@ func (s *UIServer) Stop() {
 }
 
 func (s *UIServer) readInput(ctx context.Context, sensitive bool) (string, error) {
-	// respCh MUST be unbuffered so the reader's default case hits when we stop waiting.
-	respCh := make(chan readResponse)
+	// resp_ch MUST be unbuffered so the reader can detect abandonment via the
+	// abandoned channel when the requester stops waiting (e.g., on timeout or cancel).
+	resp_ch := make(chan readResponse)
 	abandoned := make(chan struct{})
 
 	req := readRequest{
 		sensitive: sensitive,
-		respCh:    respCh,
+		resp_ch:   resp_ch,
 		abandoned: abandoned,
 	}
 
-	var reqCh chan<- readRequest
+	var req_ch chan<- readRequest
 	var readerDone <-chan struct{}
 	if s.in == os.Stdin {
 		reader := getStdinReader()
 		if reader == nil {
 			return "", rigerrors.New("stdin reader not initialized or stopped")
 		}
-		reqCh = reader.reqCh
+		req_ch = reader.shared_reader
 		readerDone = reader.done
 	} else {
-		reqCh = s.reqCh
+		req_ch = s.req_ch
 	}
 
 	// Request a read
@@ -316,7 +302,7 @@ func (s *UIServer) readInput(ctx context.Context, sensitive bool) (string, error
 		return "", rigerrors.Wrap(s.ctx.Err(), "UI server stopped")
 	case <-readerDone:
 		return "", rigerrors.New("stdin reader stopped")
-	case reqCh <- req:
+	case req_ch <- req:
 	}
 
 	// Wait for the response
@@ -330,7 +316,7 @@ func (s *UIServer) readInput(ctx context.Context, sensitive bool) (string, error
 	case <-readerDone:
 		close(abandoned)
 		return "", rigerrors.New("stdin reader stopped")
-	case res := <-respCh:
+	case res := <-resp_ch:
 		if res.err != nil {
 			return "", rigerrors.Wrap(res.err, "failed to read input")
 		}
