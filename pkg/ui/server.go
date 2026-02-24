@@ -17,27 +17,73 @@ import (
 )
 
 var (
-	stdinReader *sharedReader
-	stdinOnce   sync.Once
+	globalStdinReader *sharedReader
+	stdinOnce         sync.Once
 )
 
 type sharedReader struct {
-	readCh chan readRequest
+	reqCh chan readRequest
 }
 
 func getStdinReader() *sharedReader {
 	stdinOnce.Do(func() {
-		stdinReader = &sharedReader{
-			readCh: make(chan readRequest, 10),
+		globalStdinReader = &sharedReader{
+			reqCh: make(chan readRequest),
 		}
-		go runReaderLoop(os.Stdin, stdinReader.readCh, context.Background())
+		go globalStdinReader.runLoop(os.Stdin)
 	})
-	return stdinReader
+	return globalStdinReader
+}
+
+func (s *sharedReader) runLoop(in io.Reader) {
+	reader := bufio.NewReader(in)
+	var bufferedRes *readResponse
+
+	for req := range s.reqCh {
+		if bufferedRes != nil {
+			req.respCh <- *bufferedRes
+			bufferedRes = nil
+			continue
+		}
+
+		res := s.performRead(in, reader, req.sensitive)
+
+		select {
+		case req.respCh <- res:
+			// Delivered successfully.
+		case <-req.abandoned:
+			// Caller stopped waiting (timeout/cancel). Buffer for next time.
+			bufferedRes = &res
+		}
+	}
+}
+
+func (s *sharedReader) performRead(in io.Reader, reader *bufio.Reader, sensitive bool) readResponse {
+	var val string
+	var err error
+
+	if sensitive {
+		if f, ok := in.(*os.File); ok && term.IsTerminal(int(f.Fd())) {
+			var b []byte
+			b, err = term.ReadPassword(int(f.Fd()))
+			fmt.Println()
+			val = string(b)
+		} else {
+			val, err = reader.ReadString('\n')
+			val = strings.TrimSpace(val)
+		}
+	} else {
+		val, err = reader.ReadString('\n')
+		val = strings.TrimSpace(val)
+	}
+
+	return readResponse{value: val, err: err}
 }
 
 type readRequest struct {
 	sensitive bool
 	respCh    chan readResponse
+	abandoned <-chan struct{} // Closed by caller if they stop waiting
 }
 
 type readResponse struct {
@@ -52,8 +98,8 @@ type UIServer struct {
 	coord *Coordinator
 	in    io.Reader
 
-	// Singleton reader infrastructure
-	readCh chan readRequest
+	// reader infrastructure
+	reqCh  chan readRequest
 	ctx    context.Context
 	cancel context.CancelFunc
 	stop   sync.Once
@@ -75,19 +121,75 @@ func NewUIServerWithReader(in io.Reader) *UIServer {
 		cancel: cancel,
 	}
 
-	if in == os.Stdin {
-		s.readCh = getStdinReader().readCh
-	} else {
-		ch := make(chan readRequest, 10)
-		s.readCh = ch
+	if in != os.Stdin {
+		s.reqCh = make(chan readRequest)
 		s.wg.Add(1)
 		go func() {
 			defer s.wg.Done()
-			runReaderLoop(in, ch, ctx)
+			s.runLocalReader()
 		}()
 	}
 
 	return s
+}
+
+// runLocalReader is used for non-stdin readers (like tests).
+func (s *UIServer) runLocalReader() {
+	reader := bufio.NewReader(s.in)
+	var bufferedRes *readResponse
+
+	for {
+		var req readRequest
+		var ok bool
+
+		select {
+		case <-s.ctx.Done():
+			return
+		case req, ok = <-s.reqCh:
+			if !ok {
+				return
+			}
+		}
+
+		if bufferedRes != nil {
+			select {
+			case req.respCh <- *bufferedRes:
+				bufferedRes = nil
+			case <-req.abandoned:
+				// Current caller also abandoned? Keep buffer.
+			case <-s.ctx.Done():
+				return
+			}
+			continue
+		}
+
+		res := readResponse{}
+		if req.sensitive {
+			if f, ok := s.in.(*os.File); ok && term.IsTerminal(int(f.Fd())) {
+				var b []byte
+				b, res.err = term.ReadPassword(int(f.Fd()))
+				fmt.Println()
+				res.value = string(b)
+			} else {
+				res.value, res.err = reader.ReadString('\n')
+				res.value = strings.TrimSpace(res.value)
+			}
+		} else {
+			res.value, res.err = reader.ReadString('\n')
+			res.value = strings.TrimSpace(res.value)
+		}
+
+		select {
+		case req.respCh <- res:
+			// Success
+		case <-req.abandoned:
+			// Caller gone.
+			bufferedRes = &res
+		case <-s.ctx.Done():
+			// Server stopping.
+			return
+		}
+	}
 }
 
 // Stop shuts down the UI server and its background reader.
@@ -95,103 +197,50 @@ func (s *UIServer) Stop() {
 	s.stop.Do(func() {
 		s.cancel()
 		if s.in != os.Stdin {
-			// For non-stdin readers (like tests), we close the channel.
-			// The runReaderLoop will exit either via ctx.Done() or channel closure.
-			if s.readCh != nil {
-				close(s.readCh)
+			if closer, ok := s.in.(io.Closer); ok {
+				_ = closer.Close()
+			}
+			if s.reqCh != nil {
+				close(s.reqCh)
 			}
 			s.wg.Wait()
 		}
 	})
 }
 
-// runReaderLoop is the background loop that owns the input reader.
-// It ensures that only one read is active at a time.
-func runReaderLoop(in io.Reader, ch <-chan readRequest, ctx context.Context) {
-	reader := bufio.NewReader(in)
-	for {
-		var req readRequest
-		var ok bool
-
-		select {
-		case <-ctx.Done():
-			return
-		case req, ok = <-ch:
-			if !ok {
-				return
-			}
-		}
-
-		// Use a separate goroutine for the blocking read so we can observe ctx.Done().
-		// This prevents deadlocks when Stop() is called while a read is in progress.
-		readDone := make(chan struct{})
-		go func() {
-			handleReadRequest(in, reader, req)
-			close(readDone)
-		}()
-
-		select {
-		case <-readDone:
-			// Read finished normally
-		case <-ctx.Done():
-			// Shutdown requested. We return immediately to unblock callers.
-			// Note: The goroutine above remains leaked until input is provided or EOF.
-			return
-		}
-	}
-}
-
-func handleReadRequest(in io.Reader, reader *bufio.Reader, req readRequest) {
-	var val string
-	var err error
-
-	if req.sensitive {
-		// Password reading only works on real terminals (os.Stdin)
-		if f, ok := in.(*os.File); ok && term.IsTerminal(int(f.Fd())) {
-			var b []byte
-			b, err = term.ReadPassword(int(f.Fd()))
-			fmt.Println() // Move to next line after password entry
-			val = string(b)
-		} else {
-			// Fallback for non-terminal readers (like tests)
-			val, err = reader.ReadString('\n')
-			val = strings.TrimSpace(val)
-		}
-	} else {
-		val, err = reader.ReadString('\n')
-		val = strings.TrimSpace(val)
-	}
-
-	// Send response. If the requester has already timed out or canceled,
-	// we use a non-blocking send.
-	select {
-	case req.respCh <- readResponse{value: val, err: err}:
-	default:
-		// Requester is gone, discard the input
-	}
-}
-
 func (s *UIServer) readInput(ctx context.Context, sensitive bool) (string, error) {
-	respCh := make(chan readResponse, 1)
+	respCh := make(chan readResponse)
+	abandoned := make(chan struct{})
+
 	req := readRequest{
 		sensitive: sensitive,
 		respCh:    respCh,
+		abandoned: abandoned,
 	}
 
-	// Request a read from the singleton reader
+	var reqCh chan<- readRequest
+	if s.in == os.Stdin {
+		reqCh = getStdinReader().reqCh
+	} else {
+		reqCh = s.reqCh
+	}
+
+	// Request a read
 	select {
 	case <-ctx.Done():
 		return "", rigerrors.Wrap(ctx.Err(), "input request canceled")
 	case <-s.ctx.Done():
 		return "", rigerrors.Wrap(s.ctx.Err(), "UI server stopped")
-	case s.readCh <- req:
+	case reqCh <- req:
 	}
 
-	// Wait for the response or cancellation
+	// Wait for the response
 	select {
 	case <-ctx.Done():
+		close(abandoned)
 		return "", rigerrors.Wrap(ctx.Err(), "input read timed out or canceled")
 	case <-s.ctx.Done():
+		close(abandoned)
 		return "", rigerrors.Wrap(s.ctx.Err(), "UI server stopped")
 	case res := <-respCh:
 		if res.err != nil {
