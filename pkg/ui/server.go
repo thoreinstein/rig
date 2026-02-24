@@ -41,8 +41,12 @@ func (s *sharedReader) runLoop(in io.Reader) {
 
 	for req := range s.reqCh {
 		if bufferedRes != nil {
-			req.respCh <- *bufferedRes
-			bufferedRes = nil
+			select {
+			case req.respCh <- *bufferedRes:
+				bufferedRes = nil
+			case <-req.abandoned:
+				// Current caller also abandoned. Keep buffer for next time.
+			}
 			continue
 		}
 
@@ -209,6 +213,7 @@ func (s *UIServer) Stop() {
 }
 
 func (s *UIServer) readInput(ctx context.Context, sensitive bool) (string, error) {
+	// respCh MUST be unbuffered so the reader's default case hits when we stop waiting.
 	respCh := make(chan readResponse)
 	abandoned := make(chan struct{})
 
