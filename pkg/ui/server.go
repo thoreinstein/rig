@@ -16,6 +16,25 @@ import (
 	rigerrors "thoreinstein.com/rig/pkg/errors"
 )
 
+var (
+	stdinReader *sharedReader
+	stdinOnce   sync.Once
+)
+
+type sharedReader struct {
+	readCh chan readRequest
+}
+
+func getStdinReader() *sharedReader {
+	stdinOnce.Do(func() {
+		stdinReader = &sharedReader{
+			readCh: make(chan readRequest, 10),
+		}
+		go runReaderLoop(os.Stdin, stdinReader.readCh, context.Background())
+	})
+	return stdinReader
+}
+
 type readRequest struct {
 	sensitive bool
 	respCh    chan readResponse
@@ -52,12 +71,22 @@ func NewUIServerWithReader(in io.Reader) *UIServer {
 	s := &UIServer{
 		coord:  NewCoordinator(),
 		in:     in,
-		readCh: make(chan readRequest, 10), // Buffered to prevent deadlocks on cancellation
 		ctx:    ctx,
 		cancel: cancel,
 	}
-	s.wg.Add(1)
-	go s.runReader()
+
+	if in == os.Stdin {
+		s.readCh = getStdinReader().readCh
+	} else {
+		ch := make(chan readRequest, 10)
+		s.readCh = ch
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			runReaderLoop(in, ch, ctx)
+		}()
+	}
+
 	return s
 }
 
@@ -65,38 +94,60 @@ func NewUIServerWithReader(in io.Reader) *UIServer {
 func (s *UIServer) Stop() {
 	s.stop.Do(func() {
 		s.cancel()
-		close(s.readCh)
-		s.wg.Wait()
+		if s.in != os.Stdin {
+			// For non-stdin readers (like tests), we close the channel.
+			// The runReaderLoop will exit either via ctx.Done() or channel closure.
+			if s.readCh != nil {
+				close(s.readCh)
+			}
+			s.wg.Wait()
+		}
 	})
 }
 
-// runReader is the singleton background goroutine that owns the input reader.
-// It ensures that only one read is active at a time and that no goroutines are leaked
-// when RPCs are canceled.
-func (s *UIServer) runReader() {
-	defer s.wg.Done()
-	reader := bufio.NewReader(s.in)
-
+// runReaderLoop is the background loop that owns the input reader.
+// It ensures that only one read is active at a time.
+func runReaderLoop(in io.Reader, ch <-chan readRequest, ctx context.Context) {
+	reader := bufio.NewReader(in)
 	for {
+		var req readRequest
+		var ok bool
+
 		select {
-		case <-s.ctx.Done():
+		case <-ctx.Done():
 			return
-		case req, ok := <-s.readCh:
+		case req, ok = <-ch:
 			if !ok {
 				return
 			}
-			s.handleReadRequest(reader, req)
+		}
+
+		// Use a separate goroutine for the blocking read so we can observe ctx.Done().
+		// This prevents deadlocks when Stop() is called while a read is in progress.
+		readDone := make(chan struct{})
+		go func() {
+			handleReadRequest(in, reader, req)
+			close(readDone)
+		}()
+
+		select {
+		case <-readDone:
+			// Read finished normally
+		case <-ctx.Done():
+			// Shutdown requested. We return immediately to unblock callers.
+			// Note: The goroutine above remains leaked until input is provided or EOF.
+			return
 		}
 	}
 }
 
-func (s *UIServer) handleReadRequest(reader *bufio.Reader, req readRequest) {
+func handleReadRequest(in io.Reader, reader *bufio.Reader, req readRequest) {
 	var val string
 	var err error
 
 	if req.sensitive {
 		// Password reading only works on real terminals (os.Stdin)
-		if f, ok := s.in.(*os.File); ok && term.IsTerminal(int(f.Fd())) {
+		if f, ok := in.(*os.File); ok && term.IsTerminal(int(f.Fd())) {
 			var b []byte
 			b, err = term.ReadPassword(int(f.Fd()))
 			fmt.Println() // Move to next line after password entry
@@ -131,6 +182,8 @@ func (s *UIServer) readInput(ctx context.Context, sensitive bool) (string, error
 	select {
 	case <-ctx.Done():
 		return "", rigerrors.Wrap(ctx.Err(), "input request canceled")
+	case <-s.ctx.Done():
+		return "", rigerrors.Wrap(s.ctx.Err(), "UI server stopped")
 	case s.readCh <- req:
 	}
 
@@ -138,6 +191,8 @@ func (s *UIServer) readInput(ctx context.Context, sensitive bool) (string, error
 	select {
 	case <-ctx.Done():
 		return "", rigerrors.Wrap(ctx.Err(), "input read timed out or canceled")
+	case <-s.ctx.Done():
+		return "", rigerrors.Wrap(s.ctx.Err(), "UI server stopped")
 	case res := <-respCh:
 		if res.err != nil {
 			return "", rigerrors.Wrap(res.err, "failed to read input")
@@ -227,6 +282,8 @@ func (s *UIServer) Select(ctx context.Context, req *apiv1.SelectRequest) (*apiv1
 		select {
 		case <-ctx.Done():
 			return nil, rigerrors.Wrap(ctx.Err(), "selection canceled")
+		case <-s.ctx.Done():
+			return nil, rigerrors.Wrap(s.ctx.Err(), "UI server stopped")
 		default:
 			fmt.Printf("Select (1-%d): ", len(req.Options))
 			input, err := s.readInput(ctx, false)
