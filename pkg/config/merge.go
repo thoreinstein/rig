@@ -55,7 +55,9 @@ func CollectProjectConfigs(gitRoot, cwd string) []string {
 	return configs
 }
 
-// DiffSettings returns flat dotted keys whose values changed between before and after snapshots.
+// DiffSettings returns flat dotted keys whose values were added or changed in 'after'
+// compared to 'before'. This is a one-directional diff used for tracking which
+// keys were overridden by a higher-priority configuration tier.
 func DiffSettings(before, after map[string]interface{}, prefix string) []string {
 	var diffs []string
 
