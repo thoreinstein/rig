@@ -47,10 +47,12 @@ func resolveRecursive(m map[string]interface{}, sources SourceMap, prefix string
 
 				// Resolve successful
 				m[k] = secret
-				sources[key] = SourceEntry{
-					Value:  secret,
-					Source: SourceKeychain,
-					File:   fmt.Sprintf("%s/%s", service, account),
+				if sources != nil {
+					sources[key] = SourceEntry{
+						Value:  secret,
+						Source: SourceKeychain,
+						File:   fmt.Sprintf("%s/%s", service, account),
+					}
 				}
 			}
 		case map[string]interface{}:
