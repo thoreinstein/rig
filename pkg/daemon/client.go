@@ -178,6 +178,13 @@ func (c *DaemonClient) ExecuteCommand(ctx context.Context, req *apiv1.CommandReq
 					return errors.Wrap(err, "failed to send UI response to daemon")
 				}
 			}
+
+		case *apiv1.DaemonServiceExecuteResponse_Error:
+			return &errors.DaemonError{
+				Operation: "Execute",
+				Message:   p.Error,
+				Fallback:  false,
+			}
 		}
 
 		if gotDone {
