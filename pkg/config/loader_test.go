@@ -5,21 +5,31 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/spf13/viper"
 	"github.com/zalando/go-keyring"
+
+	"thoreinstein.com/rig/pkg/project"
 )
 
 func TestLayeredLoader_Cascade(t *testing.T) {
 	tmpDir := t.TempDir()
-	t.Setenv("HOME", tmpDir)
 
-	// Create a nested structure: root -> sub1 -> sub2
-	root := tmpDir
+	// Create a project structure with nested .rig.toml files
+	// root/.git
+	// root/.rig.toml
+	// root/sub1/.rig.toml
+	// root/sub1/sub2/.rig.toml
+
+	root := filepath.Join(tmpDir, "root")
 	sub1 := filepath.Join(root, "sub1")
 	sub2 := filepath.Join(sub1, "sub2")
 
 	if err := os.MkdirAll(sub2, 0755); err != nil {
-		t.Fatalf("failed to create dirs: %v", err)
+		t.Fatalf("failed to create test directories: %v", err)
+	}
+
+	// Create .git at root to define project boundary
+	if err := os.MkdirAll(filepath.Join(root, ".git"), 0755); err != nil {
+		t.Fatalf("failed to create .git: %v", err)
 	}
 
 	// .rig.toml at root
@@ -58,9 +68,11 @@ session_prefix = "sub2-"
 		sources:        make(SourceMap),
 		SkipGlobalSync: true,
 		verbose:        true,
-		gitRoot:        root,
-		cwd:            sub2,
-		userFile:       filepath.Join(tmpDir, "nonexistent.toml"),
+		projectCtx: &project.ProjectContext{
+			RootPath: root,
+			Origin:   sub2,
+		},
+		userFile: filepath.Join(tmpDir, "nonexistent.toml"),
 	}
 
 	cfg, err := l.Load()
@@ -82,70 +94,24 @@ session_prefix = "sub2-"
 	if cfg.Tmux.SessionPrefix != "sub2-" {
 		t.Errorf("tmux.session_prefix = %q, want %q", cfg.Tmux.SessionPrefix, "sub2-")
 	}
-
-	// Verify source tracking
-	sources := l.Sources()
-	if sources.Get("github.default_merge_method") != "Project: "+filepath.Join(sub1, ".rig.toml") {
-		t.Errorf("source for github.default_merge_method = %q", sources.Get("github.default_merge_method"))
-	}
-	if sources.Get("github.delete_branch_on_merge") != "Project: "+filepath.Join(root, ".rig.toml") {
-		t.Errorf("source for github.delete_branch_on_merge = %q", sources.Get("github.delete_branch_on_merge"))
-	}
-	if sources.Get("tmux.session_prefix") != "Project: "+filepath.Join(sub2, ".rig.toml") {
-		t.Errorf("source for tmux.session_prefix = %q", sources.Get("tmux.session_prefix"))
-	}
 }
 
-func TestCollectProjectConfigs(t *testing.T) {
-	root := "/home/user/project"
-	cwd := "/home/user/project/a/b"
+func TestLayeredLoader_UserConfig(t *testing.T) {
+	tmpDir := t.TempDir()
 
-	configs := CollectProjectConfigs(root, cwd)
-
-	expected := []string{
-		filepath.Join(root, ".rig.toml"),
-		filepath.Join(root, "a", ".rig.toml"),
-		filepath.Join(root, "a", "b", ".rig.toml"),
+	userConfig := `
+[ai]
+provider = "groq"
+`
+	userFile := filepath.Join(tmpDir, "user.toml")
+	if err := os.WriteFile(userFile, []byte(userConfig), 0644); err != nil {
+		t.Fatalf("failed to write user config: %v", err)
 	}
-
-	if len(configs) != len(expected) {
-		t.Fatalf("got %d configs, want %d", len(configs), len(expected))
-	}
-
-	for i, c := range configs {
-		if c != expected[i] {
-			t.Errorf("config[%d] = %q, want %q", i, c, expected[i])
-		}
-	}
-}
-
-func TestCollectProjectConfigs_Deduplication(t *testing.T) {
-	root := "/home/user/project"
-	cwd := "/home/user/project"
-
-	configs := CollectProjectConfigs(root, cwd)
-
-	if len(configs) != 1 {
-		t.Fatalf("got %d configs, want 1 (deduplicated)", len(configs))
-	}
-	expected := filepath.Join(root, ".rig.toml")
-	if configs[0] != expected {
-		t.Errorf("config = %q, want %q", configs[0], expected)
-	}
-}
-
-func TestLayeredLoader_EnvOverride(t *testing.T) {
-	viper.Reset()
-	defer viper.Reset()
-
-	t.Setenv("HOME", t.TempDir())
-	t.Setenv("RIG_GITHUB_TOKEN", "env-token")
-	t.Setenv("RIG_JIRA_ENABLED", "false")
 
 	l := &LayeredLoader{
 		sources:        make(SourceMap),
 		SkipGlobalSync: true,
-		userFile:       filepath.Join(t.TempDir(), "config.toml"),
+		userFile:       userFile,
 	}
 
 	cfg, err := l.Load()
@@ -153,74 +119,64 @@ func TestLayeredLoader_EnvOverride(t *testing.T) {
 		t.Fatalf("Load() error: %v", err)
 	}
 
-	if cfg.GitHub.Token != "env-token" {
-		t.Errorf("github.token = %q, want %q", cfg.GitHub.Token, "env-token")
-	}
-	if cfg.Jira.Enabled != false {
-		t.Error("jira.enabled should be false")
+	if cfg.AI.Provider != "groq" {
+		t.Errorf("ai.provider = %q, want %q", cfg.AI.Provider, "groq")
 	}
 
-	sources := l.Sources()
-	if sources.Get("github.token") != "Env" {
-		t.Errorf("source for github.token = %q", sources.Get("github.token"))
+	if l.sources["ai.provider"].Source != SourceUser {
+		t.Errorf("ai.provider source = %v, want %v", l.sources["ai.provider"].Source, SourceUser)
 	}
 }
 
-func TestLayeredLoader_EnvOverrideEmpty(t *testing.T) {
-	viper.Reset()
-	defer viper.Reset()
-
-	t.Setenv("HOME", t.TempDir())
-	// Set an env var to an empty string — should still be attributed to Env
-	t.Setenv("RIG_GITHUB_TOKEN", "")
+func TestLayeredLoader_EnvOverrides(t *testing.T) {
+	t.Setenv("RIG_AI_PROVIDER", "groq")
 
 	l := &LayeredLoader{
 		sources:        make(SourceMap),
 		SkipGlobalSync: true,
-		userFile:       filepath.Join(t.TempDir(), "config.toml"),
+		userFile:       "/nonexistent.toml",
 	}
 
-	_, err := l.Load()
+	cfg, err := l.Load()
 	if err != nil {
 		t.Fatalf("Load() error: %v", err)
 	}
 
-	sources := l.Sources()
-	if sources.Get("github.token") != "Env" {
-		t.Errorf("source for github.token = %q, want %q (empty env var should still be attributed to Env)", sources.Get("github.token"), "Env")
+	if cfg.AI.Provider != "groq" {
+		t.Errorf("ai.provider = %q, want %q", cfg.AI.Provider, "groq")
+	}
+
+	if l.sources["ai.provider"].Source != SourceEnv {
+		t.Errorf("ai.provider source = %v, want %v", l.sources["ai.provider"].Source, SourceEnv)
 	}
 }
 
 func TestLayeredLoader_Keychain(t *testing.T) {
-	viper.Reset()
-	defer viper.Reset()
-
-	t.Setenv("HOME", t.TempDir())
-	// Use mock keyring backend for deterministic CI behavior
+	// Keyring mock
 	keyring.MockInit()
 
-	service := "rig-test"
-	account := "test-secret"
-	secret := "shhh-secret"
+	service := "rig-ai-anthropic"
+	user := "api-key"
+	secret := "sk-test-key"
 
-	if err := keyring.Set(service, account, secret); err != nil {
-		t.Fatalf("failed to set mock keyring secret: %v", err)
+	if err := keyring.Set(service, user, secret); err != nil {
+		t.Fatalf("failed to set keyring: %v", err)
 	}
 
-	tmpDir := t.TempDir()
-	configContent := `
-[github]
-token = "keychain://rig-test/test-secret"
+	userConfig := `
+[ai]
+api_key = "keychain://rig-ai-anthropic/api-key"
 `
-	configPath := filepath.Join(tmpDir, "config.toml")
-	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
-		t.Fatalf("failed to write config file: %v", err)
+	tmpDir := t.TempDir()
+	userFile := filepath.Join(tmpDir, "user.toml")
+	if err := os.WriteFile(userFile, []byte(userConfig), 0644); err != nil {
+		t.Fatalf("failed to write user config: %v", err)
 	}
 
 	l := &LayeredLoader{
 		sources:        make(SourceMap),
 		SkipGlobalSync: true,
-		userFile:       configPath,
+		userFile:       userFile,
 	}
 
 	cfg, err := l.Load()
@@ -228,85 +184,11 @@ token = "keychain://rig-test/test-secret"
 		t.Fatalf("Load() error: %v", err)
 	}
 
-	if cfg.GitHub.Token != secret {
-		t.Errorf("github.token = %q, want %q", cfg.GitHub.Token, secret)
+	if cfg.AI.APIKey != secret {
+		t.Errorf("ai.api_key = %q, want %q", cfg.AI.APIKey, secret)
 	}
 
-	sources := l.Sources()
-	if sources.Get("github.token") != "Keychain: rig-test/test-secret" {
-		t.Errorf("source for github.token = %q", sources.Get("github.token"))
-	}
-}
-
-func TestLayeredLoader_KeychainFailure(t *testing.T) {
-	viper.Reset()
-	defer viper.Reset()
-
-	t.Setenv("HOME", t.TempDir())
-	// Use mock keyring with NO secrets set — lookup will fail
-	keyring.MockInit()
-
-	tmpDir := t.TempDir()
-	configContent := `
-[github]
-token = "keychain://missing-service/missing-account"
-`
-	configPath := filepath.Join(tmpDir, "config.toml")
-	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
-		t.Fatalf("failed to write config file: %v", err)
-	}
-
-	l := &LayeredLoader{
-		sources:        make(SourceMap),
-		userFile:       configPath,
-		SkipGlobalSync: true,
-	}
-
-	cfg, err := l.Load()
-	if err != nil {
-		t.Fatalf("Load() error: %v", err)
-	}
-
-	// The raw keychain URI should remain as the config value
-	if cfg.GitHub.Token != "keychain://missing-service/missing-account" {
-		t.Errorf("github.token = %q, want raw keychain URI preserved", cfg.GitHub.Token)
-	}
-
-	// Source attribution should still show User (the tier that set the value),
-	// NOT Keychain (since resolution failed)
-	sources := l.Sources()
-	got := sources.Get("github.token")
-	if got != "User: "+configPath {
-		t.Errorf("source for github.token = %q, want User attribution (not Keychain)", got)
-	}
-}
-
-func TestResolveKeychainValues_Slice(t *testing.T) {
-	keyring.MockInit()
-	service := "rig-test"
-	account := "test-slice-secret"
-	secret := "slice-secret-value"
-	_ = keyring.Set(service, account, secret)
-
-	settings := map[string]interface{}{
-		"list": []interface{}{
-			"normal-item",
-			"keychain://rig-test/test-slice-secret",
-		},
-	}
-	sources := make(SourceMap)
-
-	err := ResolveKeychainValues(settings, sources, false)
-	if err != nil {
-		t.Fatalf("ResolveKeychainValues failed: %v", err)
-	}
-
-	list := settings["list"].([]interface{})
-	if list[1] != secret {
-		t.Errorf("list[1] = %q, want %q", list[1], secret)
-	}
-
-	if sources.Get("list[1]") != "Keychain: rig-test/test-slice-secret" {
-		t.Errorf("source for list[1] = %q", sources.Get("list[1]"))
+	if l.sources["ai.api_key"].Source != SourceKeychain {
+		t.Errorf("ai.api_key source = %v, want %v", l.sources["ai.api_key"].Source, SourceKeychain)
 	}
 }

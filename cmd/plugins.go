@@ -9,8 +9,8 @@ import (
 	"github.com/cockroachdb/errors"
 	"github.com/spf13/cobra"
 
-	"thoreinstein.com/rig/pkg/bootstrap"
 	"thoreinstein.com/rig/pkg/plugin"
+	"thoreinstein.com/rig/pkg/project"
 )
 
 // pluginsCmd represents the plugins command
@@ -44,8 +44,8 @@ func runPluginsListCommand() error {
 	var scanner *plugin.Scanner
 	var err error
 
-	if gitRoot, gitErr := bootstrap.FindGitRoot(); gitErr == nil && gitRoot != "" {
-		scanner, err = plugin.NewScannerWithProjectRoot(gitRoot)
+	if ctx, ctxErr := project.CachedDiscover(""); ctxErr == nil && ctx.HasMarker(project.MarkerGit) {
+		scanner, err = plugin.NewScannerWithProjectRoot(ctx.Markers[project.MarkerGit])
 	} else {
 		scanner, err = plugin.NewScanner()
 	}

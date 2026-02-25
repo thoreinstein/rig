@@ -1,8 +1,8 @@
 package workflow
 
 import (
-	"thoreinstein.com/rig/pkg/beads"
 	"thoreinstein.com/rig/pkg/config"
+	"thoreinstein.com/rig/pkg/project"
 )
 
 // TicketSource identifies the origin system for a ticket.
@@ -49,13 +49,9 @@ func NewTicketRouter(cfg *config.Config, projectPath string, verbose bool) *Tick
 func (r *TicketRouter) RouteTicket(ticketID string) TicketSource {
 	// First, check if it could be a beads ticket
 	if r.beadsEnabled && IsBeadsTicket(ticketID) {
-		// Verify the project actually has beads
-		if r.projectPath != "" && beads.IsBeadsProject(r.projectPath) {
-			return TicketSourceBeads
-		}
-		// Also check by walking up from project path
-		if r.projectPath != "" {
-			if _, found := beads.FindBeadsRoot(r.projectPath); found {
+		// Verify the project actually has beads via discovery context
+		if ctx, err := project.CachedDiscover(r.projectPath); err == nil {
+			if ctx.HasMarker(project.MarkerBeads) {
 				return TicketSourceBeads
 			}
 		}

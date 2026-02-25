@@ -8,16 +8,17 @@ import (
 
 	"github.com/cockroachdb/errors"
 	"github.com/spf13/viper"
+
+	"thoreinstein.com/rig/pkg/project"
 )
 
 // LayeredLoader orchestrates the 5-tier configuration cascade.
 // Not safe for concurrent use if SkipGlobalSync is false (default).
 type LayeredLoader struct {
-	sources  SourceMap
-	verbose  bool
-	gitRoot  string
-	cwd      string
-	userFile string
+	sources    SourceMap
+	verbose    bool
+	projectCtx *project.ProjectContext
+	userFile   string
 
 	// SkipGlobalSync prevents the loader from updating the global viper singleton.
 	// Useful for tests to avoid side effects.
@@ -31,7 +32,7 @@ func NewLayeredLoader(cfgFile string, verbose bool) (*LayeredLoader, error) {
 		return nil, errors.Wrap(err, "failed to get current directory")
 	}
 
-	gitRoot, _ := GetGitRoot(cwd)
+	projectCtx, _ := project.CachedDiscover(cwd)
 
 	userFile := cfgFile
 	if userFile == "" {
@@ -45,11 +46,10 @@ func NewLayeredLoader(cfgFile string, verbose bool) (*LayeredLoader, error) {
 	}
 
 	return &LayeredLoader{
-		sources:  make(SourceMap),
-		verbose:  verbose,
-		gitRoot:  gitRoot,
-		cwd:      cwd,
-		userFile: userFile,
+		sources:    make(SourceMap),
+		verbose:    verbose,
+		projectCtx: projectCtx,
+		userFile:   userFile,
 	}, nil
 }
 
@@ -84,7 +84,13 @@ func (l *LayeredLoader) Load() (*Config, error) {
 	}
 
 	// Tier 3: Project Cascade (.rig.toml)
-	projectConfigs := CollectProjectConfigs(l.gitRoot, l.cwd)
+	var projectConfigs []string
+	if l.projectCtx != nil {
+		projectConfigs = CollectProjectConfigs(l.projectCtx.RootPath, l.projectCtx.Origin)
+	} else {
+		cwd, _ := os.Getwd()
+		projectConfigs = CollectProjectConfigs("", cwd)
+	}
 	for _, pc := range projectConfigs {
 		if _, err := os.Stat(pc); err == nil {
 			localViper := viper.New()
@@ -200,28 +206,16 @@ func flattenSettings(m map[string]interface{}, prefix string) map[string]struct{
 }
 
 // GetGitRoot finds the root of the current git repository.
+//
+// Deprecated: Use project.Discover or project.CachedDiscover instead.
+// This is maintained for legacy support and returns ("", nil) on no-context to match old behavior.
 func GetGitRoot(cwd string) (string, error) {
-	dir := cwd
-	if dir == "" {
-		var err error
-		dir, err = os.Getwd()
-		if err != nil {
-			return "", err
-		}
-	}
-
-	for {
-		gitPath := filepath.Join(dir, ".git")
-		if info, err := os.Stat(gitPath); err == nil {
-			if info.IsDir() || info.Mode().IsRegular() {
-				return dir, nil
-			}
-		}
-
-		parent := filepath.Dir(dir)
-		if parent == dir {
+	ctx, err := project.Discover(cwd)
+	if err != nil {
+		if project.IsNoProjectContext(err) {
 			return "", nil
 		}
-		dir = parent
+		return "", err
 	}
+	return ctx.Markers[project.MarkerGit], nil
 }

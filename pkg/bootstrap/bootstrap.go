@@ -11,11 +11,11 @@ import (
 	"github.com/cockroachdb/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
-	"github.com/spf13/viper"
 
 	apiv1 "thoreinstein.com/rig/pkg/api/v1"
 	"thoreinstein.com/rig/pkg/config"
 	"thoreinstein.com/rig/pkg/plugin"
+	"thoreinstein.com/rig/pkg/project"
 )
 
 // PreParseGlobalFlags manually scans os.Args for --config and --verbose flags
@@ -93,8 +93,8 @@ func RegisterPluginCommandsFromConfig(rootCmd *cobra.Command, cfg *config.Config
 	var scanner *plugin.Scanner
 	var err error
 
-	if gitRoot, gitErr := FindGitRoot(); gitErr == nil && gitRoot != "" {
-		scanner, err = plugin.NewScannerWithProjectRoot(gitRoot)
+	if ctx, ctxErr := project.CachedDiscover(""); ctxErr == nil && ctx.HasMarker(project.MarkerGit) {
+		scanner, err = plugin.NewScannerWithProjectRoot(ctx.Markers[project.MarkerGit])
 	} else {
 		scanner, err = plugin.NewScanner()
 	}
@@ -213,8 +213,8 @@ func RunPluginCommand(ctx context.Context, hostFlags *pflag.FlagSet, pluginName,
 
 	// 4. Initialize plugin components
 	var scanner *plugin.Scanner
-	if gitRoot, gitErr := FindGitRoot(); gitErr == nil && gitRoot != "" {
-		scanner, err = plugin.NewScannerWithProjectRoot(gitRoot)
+	if ctx, ctxErr := project.CachedDiscover(""); ctxErr == nil && ctx.HasMarker(project.MarkerGit) {
+		scanner, err = plugin.NewScannerWithProjectRoot(ctx.Markers[project.MarkerGit])
 	} else {
 		scanner, err = plugin.NewScanner()
 	}
@@ -410,39 +410,21 @@ func ParsePluginFlags(args []string) map[string]string {
 	return flags
 }
 
-// FindGitRoot finds the root of the current git repository
+// FindGitRoot finds the root of the current git repository.
+//
+// Deprecated: Use project.CachedDiscover instead.
 func FindGitRoot() (string, error) {
-	return config.GetGitRoot("")
-}
-
-// LoadRepoLocalConfig is a deprecated shim for testing.
-// TODO: Remove once all tests are migrated to use LayeredLoader directly.
-// This bypasses the LayeredLoader and writes directly to global viper.
-func LoadRepoLocalConfig(verbose bool) {
-	cwd, _ := os.Getwd()
-	gitRoot, _ := config.GetGitRoot(cwd)
-	projectConfigs := config.CollectProjectConfigs(gitRoot, cwd)
-	for _, pc := range projectConfigs {
-		if _, err := os.Stat(pc); err == nil {
-			localViper := viper.New()
-			localViper.SetConfigFile(pc)
-			localViper.SetConfigType("toml")
-			if err := localViper.ReadInConfig(); err != nil {
-				if verbose {
-					fmt.Fprintf(os.Stderr, "Warning: could not read local config %s: %v\n", pc, err)
-				}
-				continue
-			}
-
-			if verbose {
-				fmt.Fprintf(os.Stderr, "Using repository config: %s\n", pc)
-			}
-			_ = viper.MergeConfigMap(localViper.AllSettings())
+	ctx, err := project.CachedDiscover("")
+	if err != nil {
+		if project.IsNoProjectContext(err) {
+			return "", nil
 		}
+		return "", err
 	}
+	return ctx.Markers[project.MarkerGit], nil
 }
 
 // Reset clears the cached configuration state.
-// Intentionally empty — retained for callers (e.g. cmd/root.go:resetConfig).
 func Reset() {
+	project.ResetCache()
 }

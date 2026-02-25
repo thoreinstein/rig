@@ -1,18 +1,17 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
-	"os"
-	"syscall"
 	"time"
 
 	"github.com/cockroachdb/errors"
 	"github.com/spf13/cobra"
 
-	"thoreinstein.com/rig/pkg/bootstrap"
 	"thoreinstein.com/rig/pkg/daemon"
 	"thoreinstein.com/rig/pkg/plugin"
+	"thoreinstein.com/rig/pkg/project"
 )
 
 func init() {
@@ -43,7 +42,10 @@ func newDaemonStartCmd() *cobra.Command {
 			}
 
 			// 1. Initialize components
-			gitRoot, _ := bootstrap.FindGitRoot()
+			var gitRoot string
+			if ctx, err := project.CachedDiscover(""); err == nil {
+				gitRoot = ctx.Markers[project.MarkerGit]
+			}
 			var scanner *plugin.Scanner
 			var err error
 			if gitRoot != "" {
@@ -57,118 +59,89 @@ func newDaemonStartCmd() *cobra.Command {
 
 			executor := plugin.NewExecutor("")
 
-			if err := initConfig(); err != nil {
-				return err
+			// Get rig version from root command
+			rigVersion := rootCmd.Version
+			if rigVersion == "" {
+				rigVersion = "dev"
 			}
-			cfg := appConfig
 
+			// 2. Setup UI Proxy and Manager
 			uiProxy := daemon.NewDaemonUIProxy()
-			mgr, err := plugin.NewManager(executor, scanner, GetVersion(), cfg.PluginConfig, slog.Default(), plugin.WithUIServer(uiProxy))
+			manager, err := plugin.NewManager(executor, scanner, rigVersion, nil, slog.Default())
 			if err != nil {
-				return err
+				return errors.Wrap(err, "failed to initialize plugin manager")
 			}
 
-			pluginIdle, err := time.ParseDuration(cfg.Daemon.PluginIdleTimeout)
-			if err != nil {
-				slog.Error("Invalid plugin idle timeout", "value", cfg.Daemon.PluginIdleTimeout, "error", err)
-				pluginIdle = 5 * time.Minute
-			}
-			daemonIdle, err := time.ParseDuration(cfg.Daemon.DaemonIdleTimeout)
-			if err != nil {
-				slog.Error("Invalid daemon idle timeout", "value", cfg.Daemon.DaemonIdleTimeout, "error", err)
-				daemonIdle = 15 * time.Minute
-			}
+			// 3. Start daemon server via Serve
+			fmt.Printf("Starting Rig daemon (version %s)...\n", rigVersion)
+			fmt.Printf("Socket: %s\n", daemon.SocketPath())
 
-			// 2. Delegate to pkg/daemon.Serve
-			return daemon.Serve(cmd.Context(), mgr, uiProxy, GetVersion(), slog.Default(), pluginIdle, daemonIdle)
+			// Serve handles context, signals, and server loop
+			return daemon.Serve(context.Background(), manager, uiProxy, rigVersion, slog.Default(), 5*time.Minute, 15*time.Minute)
 		},
 	}
 }
 
 func newDaemonStopCmd() *cobra.Command {
-	var force bool
-	cmd := &cobra.Command{
+	return &cobra.Command{
 		Use:   "stop",
 		Short: "Stop the Rig background daemon",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			pid, err := daemon.ReadPIDFile()
-			if err != nil {
-				if os.IsNotExist(err) {
-					fmt.Println("Daemon is not running.")
-					return nil
-				}
-				return errors.Wrapf(err, "failed to read PID file")
-			}
-
-			// 1. Try to connect and shut down via gRPC
-			client, err := daemon.NewClient(cmd.Context())
-			if err == nil {
-				defer client.Close()
-				status, err := client.Status(cmd.Context())
-				if err == nil && int(status.Pid) == pid {
-					fmt.Println("Shutting down daemon via gRPC...")
-					return client.Shutdown(cmd.Context(), force)
-				}
-			}
-
-			// 2. If gRPC fails or PID mismatch, validate process before signaling
-			process, err := os.FindProcess(pid)
-			if err != nil {
-				return errors.Wrapf(err, "failed to find daemon process %d", pid)
-			}
-
-			if !daemon.CheckIdentity(pid) && !force {
-				return errors.Newf("daemon socket is unreachable and PID %d could not be verified as Rig. Use --force to signal anyway", pid)
-			}
-
-			fmt.Printf("Signaling PID %d with SIGTERM...\n", pid)
-			return process.Signal(syscall.SIGTERM)
-		},
-	}
-
-	cmd.Flags().BoolVarP(&force, "force", "f", false, "Force stop by signaling PID if daemon is unresponsive")
-	return cmd
-}
-
-func newDaemonStatusCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "status",
-		Short: "Show the status of the Rig background daemon",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if !daemon.IsRunning() {
 				fmt.Println("Daemon is not running.")
 				return nil
 			}
 
-			client, err := daemon.NewClient(cmd.Context())
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+
+			client, err := daemon.NewClient(ctx)
 			if err != nil {
 				return errors.Wrap(err, "failed to connect to daemon")
 			}
 			defer client.Close()
 
-			status, err := client.Status(cmd.Context())
+			if err := client.Shutdown(ctx, false); err != nil {
+				return errors.Wrap(err, "failed to shutdown daemon")
+			}
+
+			fmt.Println("Daemon stop requested.")
+			return nil
+		},
+	}
+}
+
+func newDaemonStatusCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "status",
+		Short: "Check the status of the Rig background daemon",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if !daemon.IsRunning() {
+				fmt.Println("Daemon is not running.")
+				return nil
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+
+			client, err := daemon.NewClient(ctx)
+			if err != nil {
+				fmt.Printf("Daemon is running (PID file exists) but connection failed: %v\n", err)
+				fmt.Printf("Socket: %s\n", daemon.SocketPath())
+				return nil
+			}
+			defer client.Close()
+
+			resp, err := client.Status(ctx)
 			if err != nil {
 				return errors.Wrap(err, "failed to get daemon status")
 			}
 
-			fmt.Println("Rig Background Daemon")
-			fmt.Printf("  Status:  Running\n")
-			fmt.Printf("  PID:     %d\n", status.Pid)
-			fmt.Printf("  Version: %s\n", status.DaemonVersion)
-			fmt.Printf("  Uptime:  %s\n", time.Duration(status.UptimeSeconds)*time.Second)
-			fmt.Printf("  Active:  %d session(s)\n", status.ActiveSessions)
-
-			if len(status.Plugins) > 0 {
-				fmt.Println("  Plugins:")
-				for _, p := range status.Plugins {
-					lastUsed := "Never"
-					if p.LastUsedUnix > 0 {
-						lastUsed = time.Unix(p.LastUsedUnix, 0).Format(time.RFC3339)
-					}
-					fmt.Printf("    - %-20s [%s] (Last used: %s)\n", p.Name, p.Status, lastUsed)
-				}
-			}
-
+			fmt.Printf("Daemon is running.\n")
+			fmt.Printf("Version: %s\n", resp.DaemonVersion)
+			fmt.Printf("PID:     %d\n", resp.Pid)
+			fmt.Printf("Uptime:  %ds\n", resp.UptimeSeconds)
+			fmt.Printf("Socket:  %s\n", daemon.SocketPath())
 			return nil
 		},
 	}

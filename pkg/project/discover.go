@@ -94,10 +94,11 @@ func checkMarkers(dir string, markers map[MarkerKind]string) (bool, bool, error)
 
 	// 3. Check for .git (dir or file for worktrees)
 	// This is the project boundary - we stop walking if found.
+	// Store the directory containing .git, not the .git path itself.
 	gitPath := filepath.Join(dir, ".git")
 	if _, err := os.Stat(gitPath); err == nil {
 		if _, exists := markers[MarkerGit]; !exists {
-			markers[MarkerGit] = gitPath
+			markers[MarkerGit] = dir
 		}
 		foundAny = true
 		stopWalk = true
