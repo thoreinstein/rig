@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
+	"syscall"
 	"time"
 
 	"github.com/cockroachdb/errors"
@@ -59,20 +61,32 @@ func newDaemonStartCmd() *cobra.Command {
 
 			executor := plugin.NewExecutor("")
 
-			// Get rig version from root command
-			rigVersion := rootCmd.Version
-			if rigVersion == "" {
-				rigVersion = "dev"
+			// Load configuration to get daemon settings
+			if err := initConfig(); err != nil {
+				return err
 			}
+			cfg := appConfig
+
+			// Get rig version from build-time info
+			rigVersion := GetVersion()
 
 			// 2. Setup UI Proxy and Manager
-			// Plugin config is nil — daemon discovers plugins via scanner only.
-			// Config-driven plugin settings will be restored when config loading
-			// is wired through pkg/project in a future change.
 			uiProxy := daemon.NewDaemonUIProxy()
-			manager, err := plugin.NewManager(executor, scanner, rigVersion, nil, slog.Default(), plugin.WithUIServer(uiProxy))
+			manager, err := plugin.NewManager(executor, scanner, rigVersion, appConfig.PluginConfig, slog.Default(), plugin.WithUIServer(uiProxy))
 			if err != nil {
 				return errors.Wrap(err, "failed to initialize plugin manager")
+			}
+
+			// Parse timeouts from config
+			pluginIdle, err := time.ParseDuration(cfg.Daemon.PluginIdleTimeout)
+			if err != nil {
+				slog.Error("Invalid plugin idle timeout", "value", cfg.Daemon.PluginIdleTimeout, "error", err)
+				pluginIdle = 5 * time.Minute
+			}
+			daemonIdle, err := time.ParseDuration(cfg.Daemon.DaemonIdleTimeout)
+			if err != nil {
+				slog.Error("Invalid daemon idle timeout", "value", cfg.Daemon.DaemonIdleTimeout, "error", err)
+				daemonIdle = 15 * time.Minute
 			}
 
 			// 3. Start daemon server via Serve
@@ -80,13 +94,14 @@ func newDaemonStartCmd() *cobra.Command {
 			fmt.Printf("Socket: %s\n", daemon.SocketPath())
 
 			// Serve handles context, signals, and server loop
-			return daemon.Serve(context.Background(), manager, uiProxy, rigVersion, slog.Default(), 5*time.Minute, 15*time.Minute)
+			return daemon.Serve(context.Background(), manager, uiProxy, rigVersion, slog.Default(), pluginIdle, daemonIdle)
 		},
 	}
 }
 
 func newDaemonStopCmd() *cobra.Command {
-	return &cobra.Command{
+	var force bool
+	cmd := &cobra.Command{
 		Use:   "stop",
 		Short: "Stop the Rig background daemon",
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -95,23 +110,51 @@ func newDaemonStopCmd() *cobra.Command {
 				return nil
 			}
 
+			// Try graceful shutdown via gRPC first
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
 
 			client, err := daemon.NewClient(ctx)
+			if err == nil {
+				defer client.Close()
+				fmt.Println("Shutting down daemon via gRPC...")
+				if err := client.Shutdown(ctx, force); err == nil {
+					fmt.Println("Daemon stop requested.")
+					return nil
+				}
+				fmt.Printf("Graceful shutdown failed: %v\n", err)
+			} else {
+				fmt.Printf("Could not connect to daemon for graceful shutdown: %v\n", err)
+			}
+
+			// Fallback: Signal the process directly
+			pid, err := daemon.ReadPIDFile()
 			if err != nil {
-				return errors.Wrap(err, "failed to connect to daemon")
-			}
-			defer client.Close()
-
-			if err := client.Shutdown(ctx, false); err != nil {
-				return errors.Wrap(err, "failed to shutdown daemon")
+				return errors.Wrap(err, "failed to read PID file for fallback shutdown")
 			}
 
-			fmt.Println("Daemon stop requested.")
+			process, err := os.FindProcess(pid)
+			if err != nil {
+				return errors.Wrapf(err, "failed to find daemon process %d", pid)
+			}
+
+			// Verify identity before signaling if not forced
+			if !daemon.CheckIdentity(pid) && !force {
+				return errors.Newf("daemon socket is unreachable and PID %d could not be verified as Rig. Use --force to signal anyway", pid)
+			}
+
+			fmt.Printf("Signaling PID %d with SIGTERM (fallback)...\n", pid)
+			if err := process.Signal(syscall.SIGTERM); err != nil {
+				return errors.Wrap(err, "failed to signal daemon process")
+			}
+
+			fmt.Println("Daemon process signaled.")
 			return nil
 		},
 	}
+
+	cmd.Flags().BoolVarP(&force, "force", "f", false, "Force stop by signaling PID if daemon is unresponsive")
+	return cmd
 }
 
 func newDaemonStatusCmd() *cobra.Command {
