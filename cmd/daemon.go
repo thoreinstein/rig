@@ -118,11 +118,12 @@ func newDaemonStopCmd() *cobra.Command {
 			if err == nil {
 				defer client.Close()
 				fmt.Println("Shutting down daemon via gRPC...")
-				if err := client.Shutdown(ctx, force); err == nil {
+				if shutdownErr := client.Shutdown(ctx, force); shutdownErr == nil {
 					fmt.Println("Daemon stop requested.")
 					return nil
+				} else {
+					fmt.Printf("Graceful shutdown failed: %v\n", shutdownErr)
 				}
-				fmt.Printf("Graceful shutdown failed: %v\n", err)
 			} else {
 				fmt.Printf("Could not connect to daemon for graceful shutdown: %v\n", err)
 			}

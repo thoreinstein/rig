@@ -590,6 +590,7 @@ func TestFindGitRoot_FromRepoRoot(t *testing.T) {
 	t.Chdir(tmpDir)
 
 	// Find git root
+	project.ResetCache()
 	ctx, err := project.CachedDiscover("")
 	var root string
 	if err != nil {
@@ -623,6 +624,7 @@ func TestFindGitRoot_FromSubdirectory(t *testing.T) {
 	t.Chdir(subDir)
 
 	// Find git root
+	project.ResetCache()
 	ctx, err := project.CachedDiscover("")
 	var root string
 	if err != nil {
@@ -647,6 +649,7 @@ func TestFindGitRoot_NotInGitRepo(t *testing.T) {
 	t.Chdir(tmpDir)
 
 	// Find git root - should return empty string, no error (if we check carefully)
+	project.ResetCache()
 	ctx, err := project.CachedDiscover("")
 	var root string
 	if err != nil {
@@ -677,6 +680,7 @@ func TestFindGitRoot_GitWorktree(t *testing.T) {
 	t.Chdir(tmpDir)
 
 	// Find git root - should recognize .git file as valid
+	project.ResetCache()
 	ctx, err := project.CachedDiscover("")
 	var root string
 	if err != nil {
@@ -712,6 +716,7 @@ func TestFindGitRoot_WorktreeSubdirectory(t *testing.T) {
 	t.Chdir(subDir)
 
 	// Find git root from worktree subdirectory
+	project.ResetCache()
 	ctx, err := project.CachedDiscover("")
 	var root string
 	if err != nil {
@@ -762,7 +767,10 @@ ollama_model = "codellama"
 
 	// Load repo local config
 	project.ResetCache()
-	loader, _ := config.NewLayeredLoader("", false)
+	loader, err := config.NewLayeredLoader("", false)
+	if err != nil {
+		t.Fatalf("NewLayeredLoader() error: %v", err)
+	}
 	loader.SkipGlobalSync = true
 	cfg, _ := loader.Load()
 
@@ -813,7 +821,10 @@ session_prefix = "api-"
 
 	// Load repo local config
 	project.ResetCache()
-	loader, _ := config.NewLayeredLoader("", false)
+	loader, err := config.NewLayeredLoader("", false)
+	if err != nil {
+		t.Fatalf("NewLayeredLoader() error: %v", err)
+	}
 	loader.SkipGlobalSync = true
 	cfg, _ := loader.Load()
 
@@ -878,7 +889,10 @@ session_prefix = "api-"
 
 	// Load repo local config
 	project.ResetCache()
-	loader, _ := config.NewLayeredLoader("", false)
+	loader, err := config.NewLayeredLoader("", false)
+	if err != nil {
+		t.Fatalf("NewLayeredLoader() error: %v", err)
+	}
 	loader.SkipGlobalSync = true
 	cfg, _ := loader.Load()
 
@@ -923,7 +937,10 @@ func TestLoadRepoLocalConfig_NoConfigPresent(t *testing.T) {
 
 	// Should not panic or error when no .rig.toml exists
 	project.ResetCache()
-	loader, _ := config.NewLayeredLoader("", false)
+	loader, err := config.NewLayeredLoader("", false)
+	if err != nil {
+		t.Fatalf("NewLayeredLoader() error: %v", err)
+	}
 	loader.SkipGlobalSync = true
 	_, _ = loader.Load()
 
@@ -965,7 +982,10 @@ this is not valid toml syntax
 
 	// Should not panic - gracefully handle malformed config
 	project.ResetCache()
-	loader, _ := config.NewLayeredLoader("", false)
+	loader, err := config.NewLayeredLoader("", false)
+	if err != nil {
+		t.Fatalf("NewLayeredLoader() error: %v", err)
+	}
 	loader.SkipGlobalSync = true
 	_, _ = loader.Load()
 
@@ -999,7 +1019,10 @@ func TestLoadRepoLocalConfig_MalformedConfigVerbose(t *testing.T) {
 	t.Chdir(tmpDir)
 
 	project.ResetCache()
-	loader, _ := config.NewLayeredLoader("", false)
+	loader, loaderErr := config.NewLayeredLoader("", false)
+	if loaderErr != nil {
+		t.Fatalf("NewLayeredLoader() error: %v", loaderErr)
+	}
 	loader.SkipGlobalSync = true
 	_, err := loader.Load()
 
@@ -1035,7 +1058,10 @@ default_merge_method = "rebase"
 
 	// Load repo local config - should use fallback to current directory
 	project.ResetCache()
-	loader, _ := config.NewLayeredLoader("", false)
+	loader, err := config.NewLayeredLoader("", false)
+	if err != nil {
+		t.Fatalf("NewLayeredLoader() error: %v", err)
+	}
 	loader.SkipGlobalSync = true
 	cfg, _ := loader.Load()
 
@@ -1076,7 +1102,10 @@ default_merge_method = "squash"
 	os.Stderr = w
 
 	project.ResetCache()
-	loader, _ := config.NewLayeredLoader("", true) // verbose=true
+	loader, err := config.NewLayeredLoader("", true) // verbose=true
+	if err != nil {
+		t.Fatalf("NewLayeredLoader() error: %v", err)
+	}
 	loader.SkipGlobalSync = true
 	_, _ = loader.Load()
 
@@ -1391,6 +1420,7 @@ func TestFindGitRoot_TableDriven(t *testing.T) {
 
 			t.Chdir(cwd)
 
+			project.ResetCache()
 			ctx, err := project.CachedDiscover("")
 			var root string
 			if err != nil {

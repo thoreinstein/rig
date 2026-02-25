@@ -17,6 +17,7 @@ import (
 	"thoreinstein.com/rig/pkg/bootstrap"
 	"thoreinstein.com/rig/pkg/daemon"
 	"thoreinstein.com/rig/pkg/errors"
+	"thoreinstein.com/rig/pkg/project"
 )
 
 func TestRegisterPluginCommands(t *testing.T) {
@@ -141,6 +142,7 @@ func TestRegisterPluginCommands(t *testing.T) {
 			rootCmd = &cobra.Command{Use: "rig"}
 			defer func() { rootCmd = oldRootCmd }()
 
+			project.ResetCache()
 			registerPluginCommands()
 
 			// Verify command registration
@@ -233,6 +235,7 @@ func TestRegisterPluginCommands_Incompatible(t *testing.T) {
 			rootCmd = &cobra.Command{Use: "rig"}
 			defer func() { rootCmd = oldRootCmd }()
 
+			project.ResetCache()
 			registerPluginCommands()
 
 			// Verify command registration
@@ -319,6 +322,7 @@ func TestRegisterPluginCommands_Collision(t *testing.T) {
 			rootCmd.AddCommand(&cobra.Command{Use: "help", Short: "Built-in help"})
 			defer func() { rootCmd = oldRootCmd }()
 
+			project.ResetCache()
 			registerPluginCommands()
 
 			// Check expected commands
@@ -389,6 +393,7 @@ func TestRegisterPluginCommands_Reserved(t *testing.T) {
 			rootCmd = &cobra.Command{Use: "rig"}
 			defer func() { rootCmd = oldRootCmd }()
 
+			project.ResetCache()
 			registerPluginCommands()
 
 			// Verify reservations

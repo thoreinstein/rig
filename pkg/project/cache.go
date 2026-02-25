@@ -16,35 +16,36 @@ type cacheEntry struct {
 
 // CachedDiscover is a mutex-guarded version of Discover that caches results
 // by the resolved absolute path of the start directory.
+// Only successful results are cached to avoid persisting transient errors.
 func CachedDiscover(startDir string) (*ProjectContext, error) {
-	// Resolve CWD once so we have a stable cache key.
-	if startDir == "" {
-		ctx, err := Discover("")
-		if err != nil {
-			return nil, err
-		}
-		cacheMu.Lock()
-		cache[ctx.Origin] = &cacheEntry{ctx: ctx, err: nil}
-		cacheMu.Unlock()
-		return ctx, nil
-	}
+	key := startDir
 
+	// Check cache first (even for empty startDir, using "" as lookup key).
 	cacheMu.RLock()
-	entry, ok := cache[startDir]
+	entry, ok := cache[key]
 	cacheMu.RUnlock()
 
 	if ok {
 		return entry.ctx, entry.err
 	}
 
-	// Cache miss
+	// Cache miss — call Discover.
 	ctx, err := Discover(startDir)
+	if err != nil {
+		return nil, err
+	}
 
+	// Cache the successful result under the requested key.
+	// When startDir was "", also store under ctx.Origin so that
+	// subsequent calls with the resolved path hit the cache.
 	cacheMu.Lock()
-	cache[startDir] = &cacheEntry{ctx: ctx, err: err}
+	cache[key] = &cacheEntry{ctx: ctx}
+	if key == "" && ctx.Origin != "" {
+		cache[ctx.Origin] = &cacheEntry{ctx: ctx}
+	}
 	cacheMu.Unlock()
 
-	return ctx, err
+	return ctx, nil
 }
 
 // ResetCache clears all cached project discovery results.
