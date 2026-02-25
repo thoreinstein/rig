@@ -11,6 +11,7 @@ import (
 
 func TestLayeredLoader_Cascade(t *testing.T) {
 	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
 
 	// Create a nested structure: root -> sub1 -> sub2
 	root := tmpDir
@@ -121,6 +122,7 @@ func TestLayeredLoader_EnvOverride(t *testing.T) {
 	viper.Reset()
 	defer viper.Reset()
 
+	t.Setenv("HOME", t.TempDir())
 	t.Setenv("RIG_GITHUB_TOKEN", "env-token")
 	t.Setenv("RIG_JIRA_ENABLED", "false")
 
@@ -151,6 +153,7 @@ func TestLayeredLoader_EnvOverrideEmpty(t *testing.T) {
 	viper.Reset()
 	defer viper.Reset()
 
+	t.Setenv("HOME", t.TempDir())
 	// Set an env var to an empty string — should still be attributed to Env
 	t.Setenv("RIG_GITHUB_TOKEN", "")
 
@@ -174,6 +177,7 @@ func TestLayeredLoader_Keychain(t *testing.T) {
 	viper.Reset()
 	defer viper.Reset()
 
+	t.Setenv("HOME", t.TempDir())
 	// Use mock keyring backend for deterministic CI behavior
 	keyring.MockInit()
 
@@ -219,6 +223,7 @@ func TestLayeredLoader_KeychainFailure(t *testing.T) {
 	viper.Reset()
 	defer viper.Reset()
 
+	t.Setenv("HOME", t.TempDir())
 	// Use mock keyring with NO secrets set — lookup will fail
 	keyring.MockInit()
 
