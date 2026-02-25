@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"io"
 	"os"
 
 	apiv1 "thoreinstein.com/rig/pkg/api/v1"
@@ -10,6 +11,17 @@ import (
 	"thoreinstein.com/rig/pkg/errors"
 	"thoreinstein.com/rig/pkg/ui"
 )
+
+// daemonExecutor defines the interface for the daemon client used by runPluginCommand.
+// This allows mocking the daemon in tests.
+type daemonExecutor interface {
+	ExecuteCommand(ctx context.Context, req *apiv1.CommandRequest, ui daemon.UIHandler, stdout, stderr io.Writer) error
+	Close() error
+}
+
+var daemonEnsureRunning = func(ctx context.Context, rigPath string) (daemonExecutor, error) {
+	return daemon.EnsureRunning(ctx, rigPath)
+}
 
 // registerPluginCommands scans for plugins and dynamically adds their commands to the root command.
 func registerPluginCommands() {
@@ -22,7 +34,7 @@ func runPluginCommand(ctx context.Context, pluginName, commandName string, args 
 	if appConfig != nil && appConfig.Daemon.Enabled {
 		rigPath, err := os.Executable()
 		if err == nil {
-			client, err := daemon.EnsureRunning(ctx, rigPath)
+			client, err := daemonEnsureRunning(ctx, rigPath)
 			if err == nil {
 				defer client.Close()
 

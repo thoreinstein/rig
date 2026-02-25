@@ -1,8 +1,11 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
+	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -10,7 +13,10 @@ import (
 
 	"github.com/spf13/cobra"
 
+	apiv1 "thoreinstein.com/rig/pkg/api/v1"
 	"thoreinstein.com/rig/pkg/bootstrap"
+	"thoreinstein.com/rig/pkg/daemon"
+	"thoreinstein.com/rig/pkg/errors"
 )
 
 func TestRegisterPluginCommands(t *testing.T) {
@@ -575,3 +581,105 @@ func TestFilterHostFlags(t *testing.T) {
 		})
 	}
 }
+
+func TestDaemonFallback(t *testing.T) {
+	// Skip if git is not available
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not found in PATH, skipping test")
+	}
+
+	tmpDir := t.TempDir()
+	projectDir := filepath.Join(tmpDir, "project")
+	if err := os.MkdirAll(projectDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a project-local plugin
+	projectPluginDir := filepath.Join(projectDir, ".rig", "plugins")
+	if err := os.MkdirAll(projectPluginDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	pluginPath := filepath.Join(projectPluginDir, "local-plugin")
+	outputFile := filepath.Join(tmpDir, "output.txt")
+	script := fmt.Sprintf("#!/bin/sh\necho 'fallback-success' > %s\n", outputFile)
+	if err := os.WriteFile(pluginPath, []byte(script), 0755); err != nil {
+		t.Fatal(err)
+	}
+	manifestContent := "name: local-plugin\nversion: 1.0.0\ncommands:\n  - name: local-cmd\n"
+	if err := os.WriteFile(pluginPath+".manifest.yaml", []byte(manifestContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Setup git root
+	if err := os.Mkdir(filepath.Join(projectDir, ".git"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Chdir(projectDir)
+
+	t.Run("connection failure fallback", func(t *testing.T) {
+		// Mock config and environment
+		t.Setenv("RIG_DAEMON_SOCKET", filepath.Join(tmpDir, "bogus.sock"))
+		t.Setenv("HOME", tmpDir)
+
+		// Reset state
+		resetConfig()
+		defer resetConfig()
+
+		// Initialize config so appConfig is populated
+		_, _, _, err := bootstrap.InitConfig("", false)
+		if err != nil {
+			t.Fatalf("InitConfig failed: %v", err)
+		}
+
+		err = runPluginCommand(t.Context(), "local-plugin", "local-cmd", []string{})
+		// We expect failure because the dummy plugin doesn't implement gRPC,
+		// but we want to see that it reached the direct execution phase.
+		if err == nil {
+			t.Fatal("expected runPluginCommand to fail (handshake)")
+		}
+		if !strings.Contains(err.Error(), "handshake failed") {
+			t.Errorf("error = %v, want it to contain 'handshake failed' (direct execution indicator)", err)
+		}
+	})
+
+	t.Run("plugin not found fallback", func(t *testing.T) {
+		// Mock the daemon to return a Fallback=true error
+		oldEnsure := daemonEnsureRunning
+		defer func() { daemonEnsureRunning = oldEnsure }()
+
+		daemonEnsureRunning = func(ctx context.Context, rigPath string) (daemonExecutor, error) {
+			return &mockDaemonClient{
+				executeFunc: func() error {
+					return &errors.DaemonError{
+						Operation: "Execute",
+						Message:   "plugin not found in daemon scope",
+						Fallback:  true,
+					}
+				},
+			}, nil
+		}
+
+		t.Setenv("HOME", tmpDir)
+		resetConfig()
+		defer resetConfig()
+		_, _, _, _ = bootstrap.InitConfig("", false)
+
+		err := runPluginCommand(t.Context(), "local-plugin", "local-cmd", []string{})
+		// We expect failure because the dummy plugin doesn't implement gRPC,
+		// but we want to see that it reached the direct execution phase.
+		if err == nil || !strings.Contains(err.Error(), "handshake failed") {
+			t.Errorf("error = %v, want it to contain 'handshake failed' (direct execution indicator)", err)
+		}
+	})
+}
+
+type mockDaemonClient struct {
+	executeFunc func() error
+}
+
+func (m *mockDaemonClient) ExecuteCommand(ctx context.Context, req *apiv1.CommandRequest, ui daemon.UIHandler, stdout, stderr io.Writer) error {
+	return m.executeFunc()
+}
+
+func (m *mockDaemonClient) Close() error { return nil }
