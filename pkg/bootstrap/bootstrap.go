@@ -6,7 +6,6 @@ import (
 	"io"
 	"log/slog"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/cockroachdb/errors"
@@ -17,12 +16,6 @@ import (
 	apiv1 "thoreinstein.com/rig/pkg/api/v1"
 	"thoreinstein.com/rig/pkg/config"
 	"thoreinstein.com/rig/pkg/plugin"
-)
-
-var (
-	lastLoadedConfig  string
-	lastLoadedVerbose bool
-	loadedConfig      *config.Config
 )
 
 // PreParseGlobalFlags manually scans os.Args for --config and --verbose flags
@@ -67,42 +60,22 @@ func PreParseGlobalFlags(args []string) (string, bool) {
 }
 
 // InitConfig reads in config file and ENV variables if set.
-// It returns the loaded config and the actual verbosity state.
-func InitConfig(cfgFile string, verbose bool) (*config.Config, bool, error) {
-	// Skip if already loaded with same parameters (unless in test)
-	if os.Getenv("GO_TEST") != "true" && loadedConfig != nil && cfgFile == lastLoadedConfig && verbose == lastLoadedVerbose {
-		return loadedConfig, verbose, nil
-	}
-
-	// Reset Viper state to avoid carrying over stale settings from previous loads.
-	viper.Reset()
-
-	if cfgFile != "" {
-		viper.SetConfigFile(cfgFile)
-	} else {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return nil, verbose, errors.Wrap(err, "failed to get home directory")
-		}
-		viper.AddConfigPath(filepath.Join(home, ".config", "rig"))
-		viper.SetConfigType("toml")
-		viper.SetConfigName("config")
-	}
-
-	viper.SetEnvPrefix("RIG")
-	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
-	viper.AutomaticEnv()
-
-	if err := viper.ReadInConfig(); err == nil && verbose {
-		fmt.Fprintln(os.Stderr, "Using config file:", viper.ConfigFileUsed())
-	}
-
-	// Load repository-local config (.rig.toml) if present
-	LoadRepoLocalConfig(verbose)
-
-	cfg, err := config.Load()
+// It returns the loader, the loaded config and the actual verbosity state.
+func InitConfig(cfgFile string, verbose bool) (*config.LayeredLoader, *config.Config, bool, error) {
+	loader, err := config.NewLayeredLoader(cfgFile, verbose)
 	if err != nil {
-		return nil, verbose, err
+		return nil, nil, verbose, err
+	}
+
+	cfg, err := loader.Load()
+	if err != nil {
+		return nil, nil, verbose, err
+	}
+
+	if verbose {
+		if _, err := os.Stat(loader.UserFile()); err == nil {
+			fmt.Fprintln(os.Stderr, "Using config file:", loader.UserFile())
+		}
 	}
 
 	// Check for security warnings
@@ -111,12 +84,7 @@ func InitConfig(cfgFile string, verbose bool) (*config.Config, bool, error) {
 		fmt.Fprintf(os.Stderr, "Warning: %s\n", w.Message)
 	}
 
-	// Update state
-	lastLoadedConfig = cfgFile
-	lastLoadedVerbose = verbose
-	loadedConfig = cfg
-
-	return cfg, verbose, nil
+	return loader, cfg, verbose, nil
 }
 
 // RegisterPluginCommandsFromConfig scans for plugins and dynamically adds their commands to the root command.
@@ -237,7 +205,7 @@ func RunPluginCommand(ctx context.Context, hostFlags *pflag.FlagSet, pluginName,
 	}
 
 	// 3. Re-initialize configuration if host flags were parsed.
-	cfg, verb, err := InitConfig(*cfgFile, *verbose)
+	_, cfg, verb, err := InitConfig(*cfgFile, *verbose)
 	if err != nil {
 		return errors.Wrap(err, "failed to load configuration")
 	}
@@ -408,72 +376,36 @@ func FilterHostFlags(fs *pflag.FlagSet, args []string) ([]string, []string) {
 	return pluginArgs, hostArgs
 }
 
-// LoadRepoLocalConfig loads .rig.toml from current directory or git root.
+// FindGitRoot finds the root of the current git repository
+func FindGitRoot() (string, error) {
+	return config.GetGitRoot("")
+}
+
+// LoadRepoLocalConfig is a deprecated shim for testing.
 func LoadRepoLocalConfig(verbose bool) {
-	var localConfigPaths []string
-
-	if gitRoot, err := FindGitRoot(); err == nil && gitRoot != "" {
-		localConfigPaths = append(localConfigPaths, filepath.Join(gitRoot, ".rig.toml"))
-		cwd, _ := os.Getwd()
-		if cwd != gitRoot {
-			localConfigPaths = append(localConfigPaths, ".rig.toml")
-		}
-	} else {
-		localConfigPaths = append(localConfigPaths, ".rig.toml")
-	}
-
-	for _, configPath := range localConfigPaths {
-		if _, err := os.Stat(configPath); err == nil {
+	cwd, _ := os.Getwd()
+	gitRoot, _ := config.GetGitRoot(cwd)
+	projectConfigs := config.CollectProjectConfigs(gitRoot, cwd)
+	for _, pc := range projectConfigs {
+		if _, err := os.Stat(pc); err == nil {
 			localViper := viper.New()
-			localViper.SetConfigFile(configPath)
-
+			localViper.SetConfigFile(pc)
+			localViper.SetConfigType("toml")
 			if err := localViper.ReadInConfig(); err != nil {
 				if verbose {
-					fmt.Fprintf(os.Stderr, "Warning: could not read local config %s: %v\n", configPath, err)
+					fmt.Fprintf(os.Stderr, "Warning: could not read local config %s: %v\n", pc, err)
 				}
 				continue
 			}
 
 			if verbose {
-				fmt.Fprintf(os.Stderr, "Using repository config: %s\n", configPath)
+				fmt.Fprintf(os.Stderr, "Using repository config: %s\n", pc)
 			}
-
-			if err := viper.MergeConfigMap(localViper.AllSettings()); err != nil {
-				if verbose {
-					fmt.Fprintf(os.Stderr, "Warning: could not merge local config: %v\n", err)
-				}
-			}
+			_ = viper.MergeConfigMap(localViper.AllSettings())
 		}
-	}
-}
-
-// FindGitRoot finds the root of the current git repository
-func FindGitRoot() (string, error) {
-	cwd, err := os.Getwd()
-	if err != nil {
-		return "", err
-	}
-
-	dir := cwd
-	for {
-		gitPath := filepath.Join(dir, ".git")
-		if info, err := os.Stat(gitPath); err == nil {
-			if info.IsDir() || info.Mode().IsRegular() {
-				return dir, nil
-			}
-		}
-
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			return "", nil
-		}
-		dir = parent
 	}
 }
 
 // Reset clears the cached configuration state.
 func Reset() {
-	lastLoadedConfig = ""
-	lastLoadedVerbose = false
-	loadedConfig = nil
 }

@@ -13,6 +13,7 @@ import (
 var cfgFile string
 var verbose bool
 var appConfig *config.Config
+var appLoader *config.LayeredLoader
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -64,13 +65,16 @@ func init() {
 // initConfig reads in config file and ENV variables if set.
 func initConfig() error {
 	var err error
-	appConfig, verbose, err = bootstrap.InitConfig(cfgFile, verbose)
+	appLoader, appConfig, verbose, err = bootstrap.InitConfig(cfgFile, verbose)
 	return err
 }
 
 // loadConfig returns the already loaded configuration or loads it if it hasn't been yet.
 // It always returns the latest configuration derived from viper.
 func loadConfig() (*config.Config, error) {
+	if appLoader != nil {
+		return appLoader.Load()
+	}
 	return config.Load()
 }
 

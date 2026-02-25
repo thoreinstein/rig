@@ -264,10 +264,14 @@ func (c *Config) PluginConfig(name string) ([]byte, error) {
 
 // setDefaults sets default configuration values
 func setDefaults() {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		// Fall back to current directory if home dir can't be determined
-		homeDir = "."
+	homeDir := os.Getenv("HOME")
+	if homeDir == "" {
+		var err error
+		homeDir, err = os.UserHomeDir()
+		if err != nil {
+			// Fall back to current directory if home dir can't be determined
+			homeDir = "."
+		}
 	}
 
 	// Notes defaults

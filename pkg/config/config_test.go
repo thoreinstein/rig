@@ -97,29 +97,30 @@ func TestLoad_WithConfigFile(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	configContent := `
-notes:
-  path: "/test/notes"
-  daily_dir: "custom-daily"
-  template_dir: "/test/templates"
+[notes]
+path = "/test/notes"
+daily_dir = "custom-daily"
+template_dir = "/test/templates"
 
-git:
-  base_branch: "develop"
+[git]
+base_branch = "develop"
 
-jira:
-  enabled: false
-  cli_command: "custom-jira"
+[jira]
+enabled = false
+cli_command = "custom-jira"
 
-tmux:
-  session_prefix: "test-"
+[tmux]
+session_prefix = "test-"
 
-discovery:
-  search_paths:
-    - "/test/src"
-    - "~/projects"
-  max_depth: 5
+[discovery]
+search_paths = [
+    "/test/src",
+    "~/projects"
+]
+max_depth = 5
 `
 
-	configPath := filepath.Join(tmpDir, "config.yaml")
+	configPath := filepath.Join(tmpDir, "config.toml")
 	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
 		t.Fatalf("Failed to write config file: %v", err)
 	}
@@ -127,6 +128,7 @@ discovery:
 	// Reset viper and configure it to read our test file
 	viper.Reset()
 	viper.SetConfigFile(configPath)
+	viper.SetConfigType("toml")
 	if err := viper.ReadInConfig(); err != nil {
 		t.Fatalf("Failed to read config: %v", err)
 	}
