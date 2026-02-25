@@ -62,6 +62,7 @@ func setupTestGitRepo(t *testing.T) string {
 func setupTestConfig(t *testing.T, notesPath string) {
 	t.Helper()
 
+	t.Setenv("HOME", t.TempDir())
 	viper.Reset()
 	resetConfig()
 	viper.Set("notes.path", notesPath)

@@ -30,7 +30,7 @@ func NewLayeredLoader(cfgFile string, verbose bool) (*LayeredLoader, error) {
 
 	userFile := cfgFile
 	if userFile == "" {
-		home, err := os.UserHomeDir()
+		home, err := UserHomeDir()
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to get home directory")
 		}
@@ -52,24 +52,28 @@ func NewLayeredLoader(cfgFile string, verbose bool) (*LayeredLoader, error) {
 func (l *LayeredLoader) Load() (*Config, error) {
 	l.sources = make(SourceMap)
 
+	// We use a fresh viper instance for the entire resolution process
+	// to avoid pollution from previous loads or singleton state.
+	v := viper.New()
+
 	// Tier 1: Defaults
-	setDefaults()
-	defaultSettings := viper.AllSettings()
+	SetDefaults(v)
+	defaultSettings := v.AllSettings()
 	for k := range flattenSettings(defaultSettings, "") {
-		l.sources[k] = SourceEntry{Source: SourceDefault}
+		l.sources[k] = SourceEntry{Source: SourceDefault, Value: v.Get(k)}
 	}
 
 	// Tier 2: User File
-	viper.SetConfigFile(l.userFile)
-	viper.SetConfigType("toml")
 	if _, err := os.Stat(l.userFile); err == nil {
-		if err := viper.ReadInConfig(); err != nil {
+		v.SetConfigFile(l.userFile)
+		v.SetConfigType("toml")
+		if err := v.ReadInConfig(); err != nil {
 			return nil, errors.Wrapf(err, "failed to read user config file %q", l.userFile)
 		}
-		userSettings := viper.AllSettings()
+		userSettings := v.AllSettings()
 		diffs := DiffSettings(defaultSettings, userSettings, "")
 		for _, k := range diffs {
-			l.sources[k] = SourceEntry{Source: SourceUser, File: l.userFile}
+			l.sources[k] = SourceEntry{Source: SourceUser, File: l.userFile, Value: v.Get(k)}
 		}
 		defaultSettings = userSettings
 	}
@@ -86,16 +90,16 @@ func (l *LayeredLoader) Load() (*Config, error) {
 			}
 
 			projectSettings := localViper.AllSettings()
-			// Merge into main viper
-			if err := viper.MergeConfigMap(projectSettings); err != nil {
+			// Merge into our local viper
+			if err := v.MergeConfigMap(projectSettings); err != nil {
 				return nil, errors.Wrapf(err, "failed to merge project config %q", pc)
 			}
 
 			// Track provenance
-			currentSettings := viper.AllSettings()
+			currentSettings := v.AllSettings()
 			diffs := DiffSettings(defaultSettings, currentSettings, "")
 			for _, k := range diffs {
-				l.sources[k] = SourceEntry{Source: SourceProject, File: pc}
+				l.sources[k] = SourceEntry{Source: SourceProject, File: pc, Value: v.Get(k)}
 			}
 			defaultSettings = currentSettings
 
@@ -106,37 +110,33 @@ func (l *LayeredLoader) Load() (*Config, error) {
 	}
 
 	// Tier 4: Environment Variables
-	envSnapshot := viper.AllSettings()
-	viper.SetEnvPrefix("RIG")
-	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
-	viper.AutomaticEnv()
+	envSnapshot := v.AllSettings()
+	v.SetEnvPrefix("RIG")
+	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	v.AutomaticEnv()
 
 	// Capture which keys are overridden by ENV
-	// Note: AllSettings() only includes ENV vars if the key is already known.
-	// This is fine since we have Defaults + User + Project tiers loaded.
-	envSettings := viper.AllSettings()
+	envSettings := v.AllSettings()
 	envDiffs := DiffSettings(envSnapshot, envSettings, "")
 	for _, k := range envDiffs {
-		l.sources[k] = SourceEntry{Source: SourceEnv}
+		l.sources[k] = SourceEntry{Source: SourceEnv, Value: v.Get(k)}
 	}
 
 	// Tier 5: Flags (Attribution deferred to Phase 4 Command integration)
-	// We'll handle Flag attribution in the actual command execution context if possible,
-	// or here if we bind PFlags. For now, we'll mark it as deferred or handle common global flags.
 
 	// Tier 6: Secret Hydration (Keychain)
-	settings := viper.AllSettings()
+	settings := v.AllSettings()
 	if err := ResolveKeychainValues(settings, l.sources, l.verbose); err != nil {
 		return nil, errors.Wrap(err, "failed to resolve keychain secrets")
 	}
-	// Merge resolved secrets back into viper
-	if err := viper.MergeConfigMap(settings); err != nil {
+	// Merge resolved secrets back into our local viper
+	if err := v.MergeConfigMap(settings); err != nil {
 		return nil, errors.Wrap(err, "failed to merge resolved secrets")
 	}
 
 	// Finalize
 	cfg := &Config{}
-	if err := viper.Unmarshal(cfg); err != nil {
+	if err := v.Unmarshal(cfg); err != nil {
 		return nil, errors.Wrap(err, "failed to unmarshal config")
 	}
 
@@ -146,6 +146,12 @@ func (l *LayeredLoader) Load() (*Config, error) {
 
 	if err := cfg.Validate(); err != nil {
 		return nil, errors.Wrap(err, "config validation failed")
+	}
+
+	// Sync local viper back to global viper for the rest of the application
+	// This ensures that existing calls to viper.Get() work as expected.
+	if err := viper.MergeConfigMap(v.AllSettings()); err != nil {
+		return nil, errors.Wrap(err, "failed to sync to global viper")
 	}
 
 	return cfg, nil

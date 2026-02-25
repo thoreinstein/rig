@@ -82,6 +82,7 @@ func loadConfig() (*config.Config, error) {
 // This is primarily used in tests to ensure each test starts with a fresh config.
 func resetConfig() {
 	appConfig = nil
+	appLoader = nil
 	bootstrap.Reset()
 	viper.Reset()
 }

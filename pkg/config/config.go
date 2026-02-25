@@ -140,7 +140,7 @@ func Load() (*Config, error) {
 	config := &Config{}
 
 	// Set defaults
-	setDefaults()
+	SetDefaults(viper.GetViper())
 
 	// Unmarshal the config
 	if err := viper.Unmarshal(config); err != nil {
@@ -262,96 +262,100 @@ func (c *Config) PluginConfig(name string) ([]byte, error) {
 	return data, nil
 }
 
-// setDefaults sets default configuration values
-func setDefaults() {
-	homeDir := os.Getenv("HOME")
-	if homeDir == "" {
-		var err error
-		homeDir, err = os.UserHomeDir()
-		if err != nil {
-			// Fall back to current directory if home dir can't be determined
-			homeDir = "."
-		}
+// SetDefaults sets default configuration values
+func SetDefaults(v *viper.Viper) {
+	homeDir, err := UserHomeDir()
+	if err != nil {
+		homeDir = "."
 	}
 
 	// Notes defaults
-	viper.SetDefault("notes.path", filepath.Join(homeDir, "Documents", "Notes"))
-	viper.SetDefault("notes.daily_dir", "daily")
-	viper.SetDefault("notes.template_dir", filepath.Join(homeDir, ".config", "rig", "templates"))
+	v.SetDefault("notes.path", filepath.Join(homeDir, "Documents", "Notes"))
+	v.SetDefault("notes.daily_dir", "daily")
+	v.SetDefault("notes.template_dir", filepath.Join(homeDir, ".config", "rig", "templates"))
 
 	// Git defaults (empty means auto-detect)
-	viper.SetDefault("git.base_branch", "")
+	v.SetDefault("git.base_branch", "")
 
 	// Clone defaults (empty means ~/src)
-	viper.SetDefault("clone.base_path", "")
+	v.SetDefault("clone.base_path", "")
 
 	// History defaults
-	viper.SetDefault("history.database_path", filepath.Join(homeDir, ".histdb", "zsh-history.db"))
-	viper.SetDefault("history.ignore_patterns", []string{"ls", "cd", "pwd", "clear"})
+	v.SetDefault("history.database_path", filepath.Join(homeDir, ".histdb", "zsh-history.db"))
+	v.SetDefault("history.ignore_patterns", []string{"ls", "cd", "pwd", "clear"})
 
 	// JIRA defaults
-	viper.SetDefault("jira.enabled", true)
-	viper.SetDefault("jira.mode", "api")
-	viper.SetDefault("jira.base_url", "")
-	viper.SetDefault("jira.email", "")
-	viper.SetDefault("jira.token", "")
-	viper.SetDefault("jira.cli_command", "acli")
-	viper.SetDefault("jira.custom_fields", map[string]string{})
+	v.SetDefault("jira.enabled", true)
+	v.SetDefault("jira.mode", "api")
+	v.SetDefault("jira.base_url", "")
+	v.SetDefault("jira.email", "")
+	v.SetDefault("jira.token", "")
+	v.SetDefault("jira.cli_command", "acli")
+	v.SetDefault("jira.custom_fields", map[string]string{})
 
 	// Beads defaults
-	viper.SetDefault("beads.enabled", true)
-	viper.SetDefault("beads.cli_command", "bd")
+	v.SetDefault("beads.enabled", true)
+	v.SetDefault("beads.cli_command", "bd")
 
 	// Tmux defaults
-	viper.SetDefault("tmux.session_prefix", "")
-	viper.SetDefault("tmux.windows", []TmuxWindow{
+	v.SetDefault("tmux.session_prefix", "")
+	v.SetDefault("tmux.windows", []TmuxWindow{
 		{Name: "note", Command: "nvim {note_path}"},
 		{Name: "code", Command: "nvim", WorkingDir: "{worktree_path}"},
 		{Name: "term", WorkingDir: "{worktree_path}"},
 	})
 
 	// GitHub defaults
-	viper.SetDefault("github.auth_method", "gh_cli") // Prefer gh CLI auth
-	viper.SetDefault("github.client_id", "")         // OAuth app client ID for device flow
-	viper.SetDefault("github.token", "")
-	viper.SetDefault("github.default_reviewers", []string{})
-	viper.SetDefault("github.default_merge_method", "squash")
-	viper.SetDefault("github.delete_branch_on_merge", true)
+	v.SetDefault("github.auth_method", "gh_cli") // Prefer gh CLI auth
+	v.SetDefault("github.client_id", "")         // OAuth app client ID for device flow
+	v.SetDefault("github.token", "")
+	v.SetDefault("github.default_reviewers", []string{})
+	v.SetDefault("github.default_merge_method", "squash")
+	v.SetDefault("github.delete_branch_on_merge", true)
 
 	// AI defaults
-	viper.SetDefault("ai.enabled", true)
-	viper.SetDefault("ai.provider", "anthropic")
-	viper.SetDefault("ai.model", "") // Empty means use per-provider default
-	viper.SetDefault("ai.api_key", "")
-	viper.SetDefault("ai.endpoint", "") // Empty means use provider default
+	v.SetDefault("ai.enabled", true)
+	v.SetDefault("ai.provider", "anthropic")
+	v.SetDefault("ai.model", "") // Empty means use per-provider default
+	v.SetDefault("ai.api_key", "")
+	v.SetDefault("ai.endpoint", "") // Empty means use provider default
 
 	// Per-provider AI model defaults (configurable)
-	viper.SetDefault("ai.anthropic_model", "claude-sonnet-4-20250514")
-	viper.SetDefault("ai.groq_model", "llama-3.3-70b-versatile")
-	viper.SetDefault("ai.ollama_model", "llama3.2")
-	viper.SetDefault("ai.ollama_endpoint", "http://localhost:11434")
-	viper.SetDefault("ai.gemini_model", "")
+	v.SetDefault("ai.anthropic_model", "claude-sonnet-4-20250514")
+	v.SetDefault("ai.groq_model", "llama-3.3-70b-versatile")
+	v.SetDefault("ai.ollama_model", "llama3.2")
+	v.SetDefault("ai.ollama_endpoint", "http://localhost:11434")
+	v.SetDefault("ai.gemini_model", "")
 
 	// Workflow defaults
-	viper.SetDefault("workflow.transition_jira", true)
-	viper.SetDefault("workflow.kill_session", true)
-	viper.SetDefault("workflow.queue_worktree_cleanup", true)
+	v.SetDefault("workflow.transition_jira", true)
+	v.SetDefault("workflow.kill_session", true)
+	v.SetDefault("workflow.queue_worktree_cleanup", true)
 
 	// Discovery defaults
-	viper.SetDefault("discovery.search_paths", []string{filepath.Join(homeDir, "src")})
-	viper.SetDefault("discovery.max_depth", 3)
-	viper.SetDefault("discovery.cache_path", filepath.Join(homeDir, ".cache", "rig", "projects.json"))
+	v.SetDefault("discovery.search_paths", []string{filepath.Join(homeDir, "src")})
+	v.SetDefault("discovery.max_depth", 3)
+	v.SetDefault("discovery.cache_path", filepath.Join(homeDir, ".cache", "rig", "projects.json"))
 
 	// Daemon defaults
-	viper.SetDefault("daemon.enabled", true)
-	viper.SetDefault("daemon.plugin_idle_timeout", "5m")
-	viper.SetDefault("daemon.daemon_idle_timeout", "15m")
+	v.SetDefault("daemon.enabled", true)
+	v.SetDefault("daemon.plugin_idle_timeout", "5m")
+	v.SetDefault("daemon.daemon_idle_timeout", "15m")
 
 	// Plugin defaults
-	viper.SetDefault("plugins", map[string]interface{}{})
+	v.SetDefault("plugins", map[string]interface{}{})
 }
 
 // expandPaths expands ~ and environment variables in paths
+
+// UserHomeDir returns the user's home directory, prioritizing the HOME environment variable.
+func UserHomeDir() (string, error) {
+	if home := os.Getenv("HOME"); home != "" {
+		return home, nil
+	}
+	return os.UserHomeDir()
+}
+
 func expandPaths(config *Config) error {
 	var err error
 
@@ -396,7 +400,7 @@ func expandPath(path string) (string, error) {
 		return path, nil
 	}
 
-	homeDir, err := os.UserHomeDir()
+	homeDir, err := UserHomeDir()
 	if err != nil {
 		return "", err
 	}

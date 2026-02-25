@@ -533,6 +533,7 @@ func TestSyncCommandMaxArgs(t *testing.T) {
 func setupSyncTestConfig(t *testing.T, notesPath string) {
 	t.Helper()
 
+	t.Setenv("HOME", t.TempDir())
 	viper.Reset()
 	resetConfig()
 	viper.Set("notes.path", notesPath)
