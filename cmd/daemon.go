@@ -10,6 +10,7 @@ import (
 	"github.com/cockroachdb/errors"
 	"github.com/spf13/cobra"
 
+	"thoreinstein.com/rig/pkg/bootstrap"
 	"thoreinstein.com/rig/pkg/daemon"
 	"thoreinstein.com/rig/pkg/plugin"
 )
@@ -42,7 +43,14 @@ func newDaemonStartCmd() *cobra.Command {
 			}
 
 			// 1. Initialize components
-			scanner, err := plugin.NewScanner()
+			gitRoot, _ := bootstrap.FindGitRoot()
+			var scanner *plugin.Scanner
+			var err error
+			if gitRoot != "" {
+				scanner, err = plugin.NewScannerWithProjectRoot(gitRoot)
+			} else {
+				scanner, err = plugin.NewScanner()
+			}
 			if err != nil {
 				return err
 			}

@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/cockroachdb/errors"
+
+	"thoreinstein.com/rig/pkg/config"
 )
 
 // Scanner scans one or more directories for plugins.
@@ -20,7 +22,7 @@ type Scanner struct {
 // NewScanner creates a new scanner for the default system-level plugin path
 // (~/.config/rig/plugins).
 func NewScanner() (*Scanner, error) {
-	homeDir, err := os.UserHomeDir()
+	homeDir, err := config.UserHomeDir()
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to determine home directory")
 	}
@@ -34,7 +36,7 @@ func NewScanner() (*Scanner, error) {
 // plugin path and a project-level path (<projectRoot>/.rig/plugins).
 // Project-level plugins override system-level plugins with the same name.
 func NewScannerWithProjectRoot(projectRoot string) (*Scanner, error) {
-	homeDir, err := os.UserHomeDir()
+	homeDir, err := config.UserHomeDir()
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to determine home directory")
 	}
