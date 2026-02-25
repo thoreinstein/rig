@@ -23,10 +23,16 @@ func CollectProjectConfigs(gitRoot, cwd string) []string {
 	gitRoot = filepath.Clean(gitRoot)
 	cwd = filepath.Clean(cwd)
 
-	// If cwd is not within gitRoot, just return gitRoot's config if it exists
+	// If cwd is not within gitRoot, just return gitRoot and cwd configs.
+	// (Handling the rare case where they are disjoint but both have configs).
 	rel, err := filepath.Rel(gitRoot, cwd)
 	if err != nil || strings.HasPrefix(rel, "..") {
-		return []string{filepath.Join(gitRoot, ".rig.toml"), filepath.Join(cwd, ".rig.toml")}
+		rootCfg := filepath.Join(gitRoot, ".rig.toml")
+		cwdCfg := filepath.Join(cwd, ".rig.toml")
+		if rootCfg == cwdCfg {
+			return []string{rootCfg}
+		}
+		return []string{rootCfg, cwdCfg}
 	}
 
 	parts := strings.Split(rel, string(filepath.Separator))

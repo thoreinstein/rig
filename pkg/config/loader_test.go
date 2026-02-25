@@ -119,6 +119,21 @@ func TestCollectProjectConfigs(t *testing.T) {
 	}
 }
 
+func TestCollectProjectConfigs_Deduplication(t *testing.T) {
+	root := "/home/user/project"
+	cwd := "/home/user/project"
+
+	configs := CollectProjectConfigs(root, cwd)
+
+	if len(configs) != 1 {
+		t.Fatalf("got %d configs, want 1 (deduplicated)", len(configs))
+	}
+	expected := filepath.Join(root, ".rig.toml")
+	if configs[0] != expected {
+		t.Errorf("config = %q, want %q", configs[0], expected)
+	}
+}
+
 func TestLayeredLoader_EnvOverride(t *testing.T) {
 	viper.Reset()
 	defer viper.Reset()
