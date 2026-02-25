@@ -29,9 +29,10 @@ func CollectProjectConfigs(gitRoot, cwd string) []string {
 		return []string{filepath.Join(gitRoot, ".rig.toml"), filepath.Join(cwd, ".rig.toml")}
 	}
 
-	var configs []string
-	current := gitRoot
 	parts := strings.Split(rel, string(filepath.Separator))
+	// Pre-allocate: 1 for root + number of segments in rel
+	configs := make([]string, 0, len(parts)+1)
+	current := gitRoot
 
 	// Add root config
 	configs = append(configs, filepath.Join(current, ".rig.toml"))
