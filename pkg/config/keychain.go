@@ -39,9 +39,9 @@ func resolveRecursive(m map[string]interface{}, sources SourceMap, prefix string
 
 				secret, err := keyring.Get(service, account)
 				if err != nil {
-					if verbose {
-						fmt.Fprintf(os.Stderr, "Warning: failed to resolve keychain secret for key %q (%s/%s): %v\n", key, service, account, err)
-					}
+					// Always warn on keychain failures — a failed lookup is operationally
+					// significant and the raw URI will remain as the config value.
+					fmt.Fprintf(os.Stderr, "Warning: failed to resolve keychain secret for key %q (%s/%s): %v\n", key, service, account, err)
 					continue
 				}
 

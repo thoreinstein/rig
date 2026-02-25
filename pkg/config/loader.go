@@ -117,11 +117,13 @@ func (l *LayeredLoader) Load() (*Config, error) {
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	v.AutomaticEnv()
 
-	// Check each known key for an env override
+	// Check each known key for an env override.
+	// We use os.LookupEnv (not os.Getenv) so that explicitly-set-but-empty
+	// env vars (e.g. RIG_GITHUB_TOKEN="") are correctly attributed to Env.
 	knownKeys := flattenSettings(v.AllSettings(), "")
 	for key := range knownKeys {
 		envKey := "RIG_" + strings.ToUpper(strings.ReplaceAll(key, ".", "_"))
-		if envVal := os.Getenv(envKey); envVal != "" {
+		if _, ok := os.LookupEnv(envKey); ok {
 			l.sources[key] = SourceEntry{Source: SourceEnv, Value: v.Get(key)}
 		}
 	}

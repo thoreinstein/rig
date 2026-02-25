@@ -382,6 +382,8 @@ func FindGitRoot() (string, error) {
 }
 
 // LoadRepoLocalConfig is a deprecated shim for testing.
+// TODO: Remove once all tests are migrated to use LayeredLoader directly.
+// This bypasses the LayeredLoader and writes directly to global viper.
 func LoadRepoLocalConfig(verbose bool) {
 	cwd, _ := os.Getwd()
 	gitRoot, _ := config.GetGitRoot(cwd)
@@ -407,5 +409,6 @@ func LoadRepoLocalConfig(verbose bool) {
 }
 
 // Reset clears the cached configuration state.
+// Intentionally empty — retained for callers (e.g. cmd/root.go:resetConfig).
 func Reset() {
 }

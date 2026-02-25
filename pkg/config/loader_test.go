@@ -147,6 +147,29 @@ func TestLayeredLoader_EnvOverride(t *testing.T) {
 	}
 }
 
+func TestLayeredLoader_EnvOverrideEmpty(t *testing.T) {
+	viper.Reset()
+	defer viper.Reset()
+
+	// Set an env var to an empty string — should still be attributed to Env
+	t.Setenv("RIG_GITHUB_TOKEN", "")
+
+	l := &LayeredLoader{
+		sources:  make(SourceMap),
+		userFile: filepath.Join(t.TempDir(), "config.toml"),
+	}
+
+	_, err := l.Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+
+	sources := l.Sources()
+	if sources.Get("github.token") != "Env" {
+		t.Errorf("source for github.token = %q, want %q (empty env var should still be attributed to Env)", sources.Get("github.token"), "Env")
+	}
+}
+
 func TestLayeredLoader_Keychain(t *testing.T) {
 	viper.Reset()
 	defer viper.Reset()
@@ -189,5 +212,46 @@ token = "keychain://rig-test/test-secret"
 	sources := l.Sources()
 	if sources.Get("github.token") != "Keychain: rig-test/test-secret" {
 		t.Errorf("source for github.token = %q", sources.Get("github.token"))
+	}
+}
+
+func TestLayeredLoader_KeychainFailure(t *testing.T) {
+	viper.Reset()
+	defer viper.Reset()
+
+	// Use mock keyring with NO secrets set — lookup will fail
+	keyring.MockInit()
+
+	tmpDir := t.TempDir()
+	configContent := `
+[github]
+token = "keychain://missing-service/missing-account"
+`
+	configPath := filepath.Join(tmpDir, "config.toml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	l := &LayeredLoader{
+		sources:  make(SourceMap),
+		userFile: configPath,
+	}
+
+	cfg, err := l.Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+
+	// The raw keychain URI should remain as the config value
+	if cfg.GitHub.Token != "keychain://missing-service/missing-account" {
+		t.Errorf("github.token = %q, want raw keychain URI preserved", cfg.GitHub.Token)
+	}
+
+	// Source attribution should still show User (the tier that set the value),
+	// NOT Keychain (since resolution failed)
+	sources := l.Sources()
+	got := sources.Get("github.token")
+	if got != "User: "+configPath {
+		t.Errorf("source for github.token = %q, want User attribution (not Keychain)", got)
 	}
 }
