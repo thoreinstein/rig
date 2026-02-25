@@ -105,12 +105,34 @@ func (l *LayeredLoader) Load() (*Config, error) {
 		}
 	}
 
-	// Tier 4: Environment Variables (Attribution deferred to Phase 2)
+	// Tier 4: Environment Variables
+	envSnapshot := viper.AllSettings()
 	viper.SetEnvPrefix("RIG")
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	viper.AutomaticEnv()
 
-	// Tier 5: Flags (Attribution deferred to Phase 2)
+	// Capture which keys are overridden by ENV
+	// Note: AllSettings() only includes ENV vars if the key is already known.
+	// This is fine since we have Defaults + User + Project tiers loaded.
+	envSettings := viper.AllSettings()
+	envDiffs := DiffSettings(envSnapshot, envSettings, "")
+	for _, k := range envDiffs {
+		l.sources[k] = SourceEntry{Source: SourceEnv}
+	}
+
+	// Tier 5: Flags (Attribution deferred to Phase 4 Command integration)
+	// We'll handle Flag attribution in the actual command execution context if possible,
+	// or here if we bind PFlags. For now, we'll mark it as deferred or handle common global flags.
+
+	// Tier 6: Secret Hydration (Keychain)
+	settings := viper.AllSettings()
+	if err := ResolveKeychainValues(settings, l.sources, l.verbose); err != nil {
+		return nil, errors.Wrap(err, "failed to resolve keychain secrets")
+	}
+	// Merge resolved secrets back into viper
+	if err := viper.MergeConfigMap(settings); err != nil {
+		return nil, errors.Wrap(err, "failed to merge resolved secrets")
+	}
 
 	// Finalize
 	cfg := &Config{}

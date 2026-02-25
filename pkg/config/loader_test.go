@@ -4,6 +4,9 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/spf13/viper"
+	"github.com/zalando/go-keyring"
 )
 
 func TestLayeredLoader_Cascade(t *testing.T) {
@@ -111,5 +114,82 @@ func TestCollectProjectConfigs(t *testing.T) {
 		if c != expected[i] {
 			t.Errorf("config[%d] = %q, want %q", i, c, expected[i])
 		}
+	}
+}
+
+func TestLayeredLoader_EnvOverride(t *testing.T) {
+	viper.Reset()
+	defer viper.Reset()
+
+	t.Setenv("RIG_GITHUB_TOKEN", "env-token")
+	t.Setenv("RIG_JIRA_ENABLED", "false")
+
+	l := &LayeredLoader{
+		sources:  make(SourceMap),
+		userFile: filepath.Join(t.TempDir(), "config.toml"),
+	}
+
+	cfg, err := l.Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+
+	if cfg.GitHub.Token != "env-token" {
+		t.Errorf("github.token = %q, want %q", cfg.GitHub.Token, "env-token")
+	}
+	if cfg.Jira.Enabled != false {
+		t.Error("jira.enabled should be false")
+	}
+
+	sources := l.Sources()
+	if sources.Get("github.token") != "Env" {
+		t.Errorf("source for github.token = %q", sources.Get("github.token"))
+	}
+}
+
+func TestLayeredLoader_Keychain(t *testing.T) {
+	viper.Reset()
+	defer viper.Reset()
+
+	// Mock keychain data
+	service := "rig-test"
+	account := "test-secret"
+	secret := "shhh-secret"
+
+	// Use the real keyring but with a unique test service
+	// This might fail in some environments (headless CI), so we handle it.
+	err := keyring.Set(service, account, secret)
+	if err != nil {
+		t.Skipf("skipping keychain test: keyring not available: %v", err)
+	}
+	defer func() { _ = keyring.Delete(service, account) }()
+
+	tmpDir := t.TempDir()
+	configContent := `
+[github]
+token = "keychain://rig-test/test-secret"
+`
+	configPath := filepath.Join(tmpDir, "config.toml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	l := &LayeredLoader{
+		sources:  make(SourceMap),
+		userFile: configPath,
+	}
+
+	cfg, err := l.Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+
+	if cfg.GitHub.Token != secret {
+		t.Errorf("github.token = %q, want %q", cfg.GitHub.Token, secret)
+	}
+
+	sources := l.Sources()
+	if sources.Get("github.token") != "Keychain: rig-test/test-secret" {
+		t.Errorf("source for github.token = %q", sources.Get("github.token"))
 	}
 }
