@@ -241,6 +241,7 @@ func RunPluginCommand(ctx context.Context, hostFlags *pflag.FlagSet, pluginName,
 	stream, err := client.Execute(ctx, &apiv1.ExecuteRequest{
 		Command: commandName,
 		Args:    pluginArgs,
+		Flags:   ParsePluginFlags(pluginArgs),
 	})
 	if err != nil {
 		return errors.Wrapf(err, "failed to execute command %q on plugin %q", commandName, pluginName)
@@ -374,6 +375,39 @@ func FilterHostFlags(fs *pflag.FlagSet, args []string) ([]string, []string) {
 	}
 
 	return pluginArgs, hostArgs
+}
+
+// ParsePluginFlags parses a slice of arguments into a map of flags.
+// It supports --key=value and --key value forms.
+// Positional arguments (non-flags) are ignored as they are already in the args slice.
+func ParsePluginFlags(args []string) map[string]string {
+	flags := make(map[string]string)
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if !strings.HasPrefix(arg, "-") {
+			continue
+		}
+
+		// Handle --key=value
+		if strings.Contains(arg, "=") {
+			parts := strings.SplitN(strings.TrimLeft(arg, "-"), "=", 2)
+			if len(parts) == 2 {
+				flags[parts[0]] = parts[1]
+			}
+			continue
+		}
+
+		// Handle --key value
+		key := strings.TrimLeft(arg, "-")
+		if i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
+			flags[key] = args[i+1]
+			i++ // Skip the value in next iteration
+		} else {
+			// Boolean flag or missing value
+			flags[key] = "true"
+		}
+	}
+	return flags
 }
 
 // FindGitRoot finds the root of the current git repository

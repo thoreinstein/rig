@@ -72,6 +72,7 @@ func tryDaemonExecution(ctx context.Context, pluginName, commandName string, arg
 		PluginName:  pluginName,
 		CommandName: commandName,
 		Args:        pluginArgs,
+		Flags:       bootstrap.ParsePluginFlags(pluginArgs),
 		ConfigJson:  configJSON,
 		RigVersion:  GetVersion(),
 	}, uiHandler, os.Stdout, os.Stderr)
