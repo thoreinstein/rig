@@ -47,7 +47,7 @@ func checkProcessIdentity(pid int) bool {
 
 	var buf [windows.MAX_PATH]uint16
 	n := uint32(len(buf))
-	err = windows.QueryFullProcessImageName(handle, 0, \u0026buf[0], \u0026n)
+	err = windows.QueryFullProcessImageName(handle, 0, &buf[0], &n)
 	if err != nil {
 		return false
 	}
