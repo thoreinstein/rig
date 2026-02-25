@@ -213,3 +213,18 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 
 ### Resiliency Patterns
 - **Lying State Resiliency**: Treat external state artifacts (like UDS socket files) as hints, not absolute truth. Respect the full timeout loop for daemon connection attempts even if a (potentially stale) socket file exists.
+- **Daemon-CLI Scope Alignment**: Daemon plugin discovery must match CLI discovery scope. If a daemon cannot find a plugin (e.g., due to being started in a different directory), it MUST return a `codes.NotFound` gRPC error to trigger the CLI's fallback to direct execution.
+
+### Hierarchical Configuration System (V1)
+- **5-Tier Precedence**: Settings resolve in strict order: **Flags > Env > Project Recursive > User > Defaults**.
+- **CSS-Style Cascading**: Project configuration (`.rig.toml`) recursively merges from the Git root down to the current working directory.
+- **LayeredLoader Orchestrator**: Centralize all configuration loading and merging in a `LayeredLoader` to manage provenance tracking and isolated test environments.
+- **Provenance Tracking**: Maintain a `SourceMap` during the cascade to record exactly which tier (and file) provided each value, surfaced via `rig config inspect`.
+- **Secure Hydration**: Use the `keychain://service/account` URI scheme for sensitive values to keep them out of plain-text configuration files while maintaining hierarchical precedence.
+- **Format Strictness**: Strictly enforce TOML for all configuration files to ensure deep-merging behavior is predictable.
+
+### Testing & OS Isolation
+- **Viper Singleton Pollution**: Always use `viper.New()` in library code and provide a `SkipGlobalSync` flag for tests to avoid side-effects on the global singleton.
+- **Darwin Home Directory Trap**: `os.UserHomeDir()` on macOS can ignore the `HOME` environment variable. Always use a wrapper function that prioritizes `os.Getenv("HOME")` for reliable test isolation.
+- **Unix-Only Mandate**: Rig does **NOT** support Windows. All code must prioritize Unix idioms (sockets, permission bits). Avoid Windows-specific hacks in the core logic.
+- **Tooling Mandate**: Use semantic editing tools (`replace`, `insert_after_symbol`, etc.) over `cat` and `sed` for all file modifications.
