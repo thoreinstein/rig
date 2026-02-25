@@ -32,6 +32,14 @@ token = "test-token"
 		t.Fatalf("InitConfig failed: %v", err)
 	}
 
+	// Capture and restore rootCmd state
+	prevOut := rootCmd.OutOrStdout()
+	prevArgs := rootCmd.Flags().Args()
+	t.Cleanup(func() {
+		rootCmd.SetOut(prevOut)
+		rootCmd.SetArgs(prevArgs)
+	})
+
 	// Capture output
 	buf := new(bytes.Buffer)
 	rootCmd.SetOut(buf)
