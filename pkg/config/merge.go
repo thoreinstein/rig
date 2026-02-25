@@ -48,32 +48,6 @@ func CollectProjectConfigs(gitRoot, cwd string) []string {
 	return configs
 }
 
-// DeepMergeMaps recursively merges override into base.
-// Maps merge recursively; arrays and scalars are replaced.
-func DeepMergeMaps(base, override map[string]interface{}) map[string]interface{} {
-	result := make(map[string]interface{})
-
-	// Copy base
-	for k, v := range base {
-		result[k] = v
-	}
-
-	// Apply overrides
-	for k, v := range override {
-		if baseVal, ok := result[k]; ok {
-			baseMap, ok1 := baseVal.(map[string]interface{})
-			overrideMap, ok2 := v.(map[string]interface{})
-			if ok1 && ok2 {
-				result[k] = DeepMergeMaps(baseMap, overrideMap)
-				continue
-			}
-		}
-		result[k] = v
-	}
-
-	return result
-}
-
 // DiffSettings returns flat dotted keys whose values changed between before and after snapshots.
 func DiffSettings(before, after map[string]interface{}, prefix string) []string {
 	var diffs []string
@@ -86,9 +60,12 @@ func DiffSettings(before, after map[string]interface{}, prefix string) []string 
 
 		oldVal, exists := before[k]
 		if !exists {
-			diffs = append(diffs, key)
+			// Recurse into new maps to capture leaf keys only — skip
+			// section headers (parent map keys) which are not config keys.
 			if nextMap, ok := v.(map[string]interface{}); ok {
 				diffs = append(diffs, DiffSettings(nil, nextMap, key)...)
+			} else {
+				diffs = append(diffs, key)
 			}
 			continue
 		}
@@ -102,14 +79,10 @@ func DiffSettings(before, after map[string]interface{}, prefix string) []string 
 		}
 
 		// Otherwise check for equality
-		if !reflectEqual(oldVal, v) {
+		if !reflect.DeepEqual(oldVal, v) {
 			diffs = append(diffs, key)
 		}
 	}
 
 	return diffs
-}
-
-func reflectEqual(a, b interface{}) bool {
-	return reflect.DeepEqual(a, b)
 }

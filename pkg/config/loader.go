@@ -110,16 +110,20 @@ func (l *LayeredLoader) Load() (*Config, error) {
 	}
 
 	// Tier 4: Environment Variables
-	envSnapshot := v.AllSettings()
+	// AutomaticEnv() is lazy — it sets a flag so future Get() calls check env,
+	// but AllSettings() won't reflect env values. We must explicitly check
+	// os.Getenv for each known config key to detect env overrides.
 	v.SetEnvPrefix("RIG")
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	v.AutomaticEnv()
 
-	// Capture which keys are overridden by ENV
-	envSettings := v.AllSettings()
-	envDiffs := DiffSettings(envSnapshot, envSettings, "")
-	for _, k := range envDiffs {
-		l.sources[k] = SourceEntry{Source: SourceEnv, Value: v.Get(k)}
+	// Check each known key for an env override
+	knownKeys := flattenSettings(v.AllSettings(), "")
+	for key := range knownKeys {
+		envKey := "RIG_" + strings.ToUpper(strings.ReplaceAll(key, ".", "_"))
+		if envVal := os.Getenv(envKey); envVal != "" {
+			l.sources[key] = SourceEntry{Source: SourceEnv, Value: v.Get(key)}
+		}
 	}
 
 	// Tier 5: Flags (Attribution deferred to Phase 4 Command integration)

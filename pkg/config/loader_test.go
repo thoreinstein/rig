@@ -151,18 +151,16 @@ func TestLayeredLoader_Keychain(t *testing.T) {
 	viper.Reset()
 	defer viper.Reset()
 
-	// Mock keychain data
+	// Use mock keyring backend for deterministic CI behavior
+	keyring.MockInit()
+
 	service := "rig-test"
 	account := "test-secret"
 	secret := "shhh-secret"
 
-	// Use the real keyring but with a unique test service
-	// This might fail in some environments (headless CI), so we handle it.
-	err := keyring.Set(service, account, secret)
-	if err != nil {
-		t.Skipf("skipping keychain test: keyring not available: %v", err)
+	if err := keyring.Set(service, account, secret); err != nil {
+		t.Fatalf("failed to set mock keyring secret: %v", err)
 	}
-	defer func() { _ = keyring.Delete(service, account) }()
 
 	tmpDir := t.TempDir()
 	configContent := `
