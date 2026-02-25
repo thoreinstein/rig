@@ -255,3 +255,33 @@ token = "keychain://missing-service/missing-account"
 		t.Errorf("source for github.token = %q, want User attribution (not Keychain)", got)
 	}
 }
+
+func TestResolveKeychainValues_Slice(t *testing.T) {
+	keyring.MockInit()
+	service := "rig-test"
+	account := "test-slice-secret"
+	secret := "slice-secret-value"
+	_ = keyring.Set(service, account, secret)
+
+	settings := map[string]interface{}{
+		"list": []interface{}{
+			"normal-item",
+			"keychain://rig-test/test-slice-secret",
+		},
+	}
+	sources := make(SourceMap)
+
+	err := ResolveKeychainValues(settings, sources, false)
+	if err != nil {
+		t.Fatalf("ResolveKeychainValues failed: %v", err)
+	}
+
+	list := settings["list"].([]interface{})
+	if list[1] != secret {
+		t.Errorf("list[1] = %q, want %q", list[1], secret)
+	}
+
+	if sources.Get("list[1]") != "Keychain: rig-test/test-slice-secret" {
+		t.Errorf("source for list[1] = %q", sources.Get("list[1]"))
+	}
+}

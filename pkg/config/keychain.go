@@ -22,44 +22,68 @@ func resolveRecursive(m map[string]interface{}, sources SourceMap, prefix string
 			key = prefix + "." + k
 		}
 
-		switch val := v.(type) {
-		case string:
-			if strings.HasPrefix(val, KeychainPrefix) {
-				uri := strings.TrimPrefix(val, KeychainPrefix)
-				parts := strings.SplitN(uri, "/", 2)
-				if len(parts) != 2 {
-					if verbose {
-						fmt.Fprintf(os.Stderr, "Warning: invalid keychain URI for key %q: %q (expected keychain://service/account)\n", key, val)
-					}
-					continue
-				}
-
-				service := parts[0]
-				account := parts[1]
-
-				secret, err := keyring.Get(service, account)
-				if err != nil {
-					// Always warn on keychain failures — a failed lookup is operationally
-					// significant and the raw URI will remain as the config value.
-					fmt.Fprintf(os.Stderr, "Warning: failed to resolve keychain secret for key %q (%s/%s): %v\n", key, service, account, err)
-					continue
-				}
-
-				// Resolve successful
-				m[k] = secret
-				if sources != nil {
-					sources[key] = SourceEntry{
-						Value:  secret,
-						Source: SourceKeychain,
-						File:   fmt.Sprintf("%s/%s", service, account),
-					}
-				}
-			}
-		case map[string]interface{}:
-			if err := resolveRecursive(val, sources, key, verbose); err != nil {
-				return err
-			}
+		resolved, err := resolveValue(v, sources, key, verbose)
+		if err != nil {
+			return err
 		}
+		m[k] = resolved
 	}
 	return nil
+}
+
+func resolveValue(v interface{}, sources SourceMap, key string, verbose bool) (interface{}, error) {
+	switch val := v.(type) {
+	case string:
+		if strings.HasPrefix(val, KeychainPrefix) {
+			uri := strings.TrimPrefix(val, KeychainPrefix)
+			parts := strings.SplitN(uri, "/", 2)
+			if len(parts) != 2 {
+				if verbose {
+					fmt.Fprintf(os.Stderr, "Warning: invalid keychain URI for key %q: %q (expected keychain://service/account)\n", key, val)
+				}
+				return val, nil
+			}
+
+			service := parts[0]
+			account := parts[1]
+
+			secret, err := keyring.Get(service, account)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: failed to resolve keychain secret for key %q (%s/%s): %v\n", key, service, account, err)
+				return val, nil
+			}
+
+			if sources != nil {
+				sources[key] = SourceEntry{
+					Value:  secret,
+					Source: SourceKeychain,
+					File:   fmt.Sprintf("%s/%s", service, account),
+				}
+			}
+			return secret, nil
+		}
+		return val, nil
+
+	case map[string]interface{}:
+		if err := resolveRecursive(val, sources, key, verbose); err != nil {
+			return nil, err
+		}
+		return val, nil
+
+	case []interface{}:
+		for i, elem := range val {
+			// Slices don't have individual source attribution in our SourceMap yet,
+			// but we still resolve them. Use index suffix for key tracking if needed.
+			elemKey := fmt.Sprintf("%s[%d]", key, i)
+			res, err := resolveValue(elem, sources, elemKey, verbose)
+			if err != nil {
+				return nil, err
+			}
+			val[i] = res
+		}
+		return val, nil
+
+	default:
+		return v, nil
+	}
 }
