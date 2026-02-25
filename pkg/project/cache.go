@@ -17,16 +17,16 @@ type cacheEntry struct {
 // CachedDiscover is a mutex-guarded version of Discover that caches results
 // by the resolved absolute path of the start directory.
 func CachedDiscover(startDir string) (*ProjectContext, error) {
-	// If empty, get CWD now to use as cache key
+	// Resolve CWD once so we have a stable cache key.
 	if startDir == "" {
 		ctx, err := Discover("")
 		if err != nil {
 			return nil, err
 		}
-		// Discover("") already resolved the path and potentially cached it?
-		// No, Discover is the raw engine.
-		// We use the Origin from the first raw discovery as the true start path.
-		startDir = ctx.Origin
+		cacheMu.Lock()
+		cache[ctx.Origin] = &cacheEntry{ctx: ctx, err: nil}
+		cacheMu.Unlock()
+		return ctx, nil
 	}
 
 	cacheMu.RLock()

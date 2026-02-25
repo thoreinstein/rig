@@ -66,8 +66,11 @@ func newDaemonStartCmd() *cobra.Command {
 			}
 
 			// 2. Setup UI Proxy and Manager
+			// Plugin config is nil — daemon discovers plugins via scanner only.
+			// Config-driven plugin settings will be restored when config loading
+			// is wired through pkg/project in a future change.
 			uiProxy := daemon.NewDaemonUIProxy()
-			manager, err := plugin.NewManager(executor, scanner, rigVersion, nil, slog.Default())
+			manager, err := plugin.NewManager(executor, scanner, rigVersion, nil, slog.Default(), plugin.WithUIServer(uiProxy))
 			if err != nil {
 				return errors.Wrap(err, "failed to initialize plugin manager")
 			}

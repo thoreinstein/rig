@@ -2,13 +2,16 @@ package project
 
 import (
 	"fmt"
+
+	"github.com/cockroachdb/errors"
 )
 
 // MarkerKind represents the types of markers used for project discovery.
 type MarkerKind int
 
 const (
-	MarkerGit MarkerKind = iota
+	markerUnknown MarkerKind = iota // zero value; never assigned deliberately
+	MarkerGit
 	MarkerRigToml
 	MarkerBeads
 )
@@ -53,24 +56,18 @@ type ErrorNoProjectContext struct {
 }
 
 func (e *ErrorNoProjectContext) Error() string {
-	return fmt.Sprintf("no rig project found (reached %s)", e.Value())
+	return fmt.Sprintf("no rig project found (reached %s)", e.value())
 }
 
-func (e *ErrorNoProjectContext) Value() string {
+func (e *ErrorNoProjectContext) value() string {
 	if e.Reached == "" || e.Reached == "/" || e.Reached == "." {
 		return "filesystem root"
 	}
 	return e.Reached
 }
 
-// ErrNoProjectContext is the sentinel error for missing project context.
-var ErrNoProjectContext = &ErrorNoProjectContext{}
-
-// IsNoProjectContext returns true if the error is an ErrorNoProjectContext.
+// IsNoProjectContext returns true if the error is (or wraps) an ErrorNoProjectContext.
 func IsNoProjectContext(err error) bool {
-	if err == nil {
-		return false
-	}
-	_, ok := err.(*ErrorNoProjectContext)
-	return ok
+	var target *ErrorNoProjectContext
+	return errors.As(err, &target)
 }
