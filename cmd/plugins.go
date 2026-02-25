@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"strings"
 	"text/tabwriter"
@@ -44,7 +45,11 @@ func runPluginsListCommand() error {
 	var scanner *plugin.Scanner
 	var err error
 
-	if ctx, ctxErr := project.CachedDiscover(""); ctxErr == nil && ctx.HasMarker(project.MarkerGit) {
+	ctx, ctxErr := project.CachedDiscover("")
+	if ctxErr != nil && !project.IsNoProjectContext(ctxErr) {
+		slog.Warn("project discovery failed during plugin scan", "error", ctxErr)
+	}
+	if ctxErr == nil && ctx.HasMarker(project.MarkerGit) {
 		scanner, err = plugin.NewScannerWithProjectRoot(ctx.Markers[project.MarkerGit])
 	} else {
 		scanner, err = plugin.NewScanner()

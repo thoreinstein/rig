@@ -19,6 +19,7 @@ type LayeredLoader struct {
 	verbose    bool
 	projectCtx *project.ProjectContext
 	userFile   string
+	cwd        string
 
 	// SkipGlobalSync prevents the loader from updating the global viper singleton.
 	// Useful for tests to avoid side effects.
@@ -50,6 +51,7 @@ func NewLayeredLoader(cfgFile string, verbose bool) (*LayeredLoader, error) {
 		verbose:    verbose,
 		projectCtx: projectCtx,
 		userFile:   userFile,
+		cwd:        cwd,
 	}, nil
 }
 
@@ -88,8 +90,7 @@ func (l *LayeredLoader) Load() (*Config, error) {
 	if l.projectCtx != nil {
 		projectConfigs = CollectProjectConfigs(l.projectCtx.RootPath, l.projectCtx.Origin)
 	} else {
-		cwd, _ := os.Getwd()
-		projectConfigs = CollectProjectConfigs("", cwd)
+		projectConfigs = CollectProjectConfigs("", l.cwd)
 	}
 	for _, pc := range projectConfigs {
 		if _, err := os.Stat(pc); err == nil {

@@ -134,7 +134,7 @@ func TestLayeredLoader_EnvOverrides(t *testing.T) {
 	l := &LayeredLoader{
 		sources:        make(SourceMap),
 		SkipGlobalSync: true,
-		userFile:       "/nonexistent.toml",
+		userFile:       filepath.Join(t.TempDir(), "nonexistent.toml"),
 	}
 
 	cfg, err := l.Load()

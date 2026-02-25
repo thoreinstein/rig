@@ -2,6 +2,7 @@ package project
 
 import (
 	"fmt"
+	"path/filepath"
 
 	"github.com/cockroachdb/errors"
 )
@@ -61,6 +62,10 @@ func (e *ErrorNoProjectContext) Error() string {
 
 func (e *ErrorNoProjectContext) value() string {
 	if e.Reached == "" || e.Reached == "/" || e.Reached == "." {
+		return "filesystem root"
+	}
+	// Detect Windows drive roots like "C:\"
+	if vol := filepath.VolumeName(e.Reached); vol != "" && e.Reached == vol+`\` {
 		return "filesystem root"
 	}
 	return e.Reached

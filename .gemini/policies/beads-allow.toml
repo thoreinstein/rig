@@ -1,5 +1,6 @@
+# Allow the beads CLI (bd) for issue tracking
 [[rule]]
 toolName = "run_shell_command"
 decision = "allow"
 priority = 100
-commandPrefix = [ "beads" ]
+commandPrefix = [ "bd " ]

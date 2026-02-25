@@ -1,6 +1,8 @@
 package workflow
 
 import (
+	"log/slog"
+
 	"thoreinstein.com/rig/pkg/config"
 	"thoreinstein.com/rig/pkg/project"
 )
@@ -54,6 +56,8 @@ func (r *TicketRouter) RouteTicket(ticketID string) TicketSource {
 			if ctx.HasMarker(project.MarkerBeads) {
 				return TicketSourceBeads
 			}
+		} else if r.verbose {
+			slog.Debug("project discovery failed during ticket routing", "path", r.projectPath, "error", err)
 		}
 	}
 
