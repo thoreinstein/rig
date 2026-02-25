@@ -626,11 +626,13 @@ func TestDaemonFallback(t *testing.T) {
 		resetConfig()
 		defer resetConfig()
 
-		// Initialize config so appConfig is populated
-		_, _, _, err := bootstrap.InitConfig("", false)
+		// Initialize config and ensure daemon path is taken
+		var err error
+		appLoader, appConfig, _, err = bootstrap.InitConfig("", false)
 		if err != nil {
 			t.Fatalf("InitConfig failed: %v", err)
 		}
+		appConfig.Daemon.Enabled = true
 
 		err = runPluginCommand(t.Context(), "local-plugin", "local-cmd", []string{})
 		// We expect failure because the dummy plugin doesn't implement gRPC,
@@ -663,9 +665,15 @@ func TestDaemonFallback(t *testing.T) {
 		t.Setenv("HOME", tmpDir)
 		resetConfig()
 		defer resetConfig()
-		_, _, _, _ = bootstrap.InitConfig("", false)
 
-		err := runPluginCommand(t.Context(), "local-plugin", "local-cmd", []string{})
+		var err error
+		appLoader, appConfig, _, err = bootstrap.InitConfig("", false)
+		if err != nil {
+			t.Fatalf("InitConfig failed: %v", err)
+		}
+		appConfig.Daemon.Enabled = true
+
+		err = runPluginCommand(t.Context(), "local-plugin", "local-cmd", []string{})
 		// We expect failure because the dummy plugin doesn't implement gRPC,
 		// but we want to see that it reached the direct execution phase.
 		if err == nil || !strings.Contains(err.Error(), "handshake failed") {
