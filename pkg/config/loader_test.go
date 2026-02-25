@@ -55,11 +55,12 @@ session_prefix = "sub2-"
 	// For testing, we'll mock the paths in the loader.
 
 	l := &LayeredLoader{
-		sources:  make(SourceMap),
-		verbose:  true,
-		gitRoot:  root,
-		cwd:      sub2,
-		userFile: filepath.Join(tmpDir, "nonexistent.toml"),
+		sources:        make(SourceMap),
+		SkipGlobalSync: true,
+		verbose:        true,
+		gitRoot:        root,
+		cwd:            sub2,
+		userFile:       filepath.Join(tmpDir, "nonexistent.toml"),
 	}
 
 	cfg, err := l.Load()
@@ -127,8 +128,9 @@ func TestLayeredLoader_EnvOverride(t *testing.T) {
 	t.Setenv("RIG_JIRA_ENABLED", "false")
 
 	l := &LayeredLoader{
-		sources:  make(SourceMap),
-		userFile: filepath.Join(t.TempDir(), "config.toml"),
+		sources:        make(SourceMap),
+		SkipGlobalSync: true,
+		userFile:       filepath.Join(t.TempDir(), "config.toml"),
 	}
 
 	cfg, err := l.Load()
@@ -158,8 +160,9 @@ func TestLayeredLoader_EnvOverrideEmpty(t *testing.T) {
 	t.Setenv("RIG_GITHUB_TOKEN", "")
 
 	l := &LayeredLoader{
-		sources:  make(SourceMap),
-		userFile: filepath.Join(t.TempDir(), "config.toml"),
+		sources:        make(SourceMap),
+		SkipGlobalSync: true,
+		userFile:       filepath.Join(t.TempDir(), "config.toml"),
 	}
 
 	_, err := l.Load()
@@ -200,8 +203,9 @@ token = "keychain://rig-test/test-secret"
 	}
 
 	l := &LayeredLoader{
-		sources:  make(SourceMap),
-		userFile: configPath,
+		sources:        make(SourceMap),
+		SkipGlobalSync: true,
+		userFile:       configPath,
 	}
 
 	cfg, err := l.Load()
@@ -238,8 +242,9 @@ token = "keychain://missing-service/missing-account"
 	}
 
 	l := &LayeredLoader{
-		sources:  make(SourceMap),
-		userFile: configPath,
+		sources:        make(SourceMap),
+		userFile:       configPath,
+		SkipGlobalSync: true,
 	}
 
 	cfg, err := l.Load()

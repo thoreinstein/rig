@@ -10,13 +10,18 @@ import (
 	"github.com/spf13/viper"
 )
 
-// LayeredLoader orchestrates the 5-tier configuration cascade
+// LayeredLoader orchestrates the 5-tier configuration cascade.
+// Not safe for concurrent use if SkipGlobalSync is false (default).
 type LayeredLoader struct {
 	sources  SourceMap
 	verbose  bool
 	gitRoot  string
 	cwd      string
 	userFile string
+
+	// SkipGlobalSync prevents the loader from updating the global viper singleton.
+	// Useful for tests to avoid side effects.
+	SkipGlobalSync bool
 }
 
 // NewLayeredLoader creates a new loader and resolves necessary paths
@@ -156,8 +161,10 @@ func (l *LayeredLoader) Load() (*Config, error) {
 
 	// Sync local viper back to global viper for the rest of the application
 	// This ensures that existing calls to viper.Get() work as expected.
-	if err := viper.MergeConfigMap(v.AllSettings()); err != nil {
-		return nil, errors.Wrap(err, "failed to sync to global viper")
+	if !l.SkipGlobalSync {
+		if err := viper.MergeConfigMap(v.AllSettings()); err != nil {
+			return nil, errors.Wrap(err, "failed to sync to global viper")
+		}
 	}
 
 	return cfg, nil
