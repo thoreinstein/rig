@@ -244,7 +244,7 @@ func (m *Manager) getOrStartPlugin(ctx context.Context, name string) (*Plugin, e
 	}
 
 	if target == nil {
-		return nil, errors.NewPluginError(name, "Discovery", "plugin not found")
+		return nil, ErrPluginNotFound
 	}
 
 	// Start the plugin

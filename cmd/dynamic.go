@@ -50,13 +50,24 @@ func runPluginCommand(ctx context.Context, pluginName, commandName string, args 
 					ConfigJson:  configJSON,
 					RigVersion:  GetVersion(),
 				}, uiHandler, os.Stdout, os.Stderr)
-				if err == nil || !errors.IsDaemonError(err) {
+
+				if err != nil {
+					var dErr *errors.DaemonError
+					if errors.As(err, &dErr) {
+						// Fallback if explicitly requested or if it's a connection/availability issue
+						// (Connect errors return nil client, so handled by the 'err == nil' check above).
+						if dErr.Fallback {
+							goto fallback
+						}
+					}
 					return err
 				}
-				// If it's a DaemonError (transport/availability), fallback to direct execution
+				return nil
 			}
 		}
-	} // Delegate to the bootstrap package for heavy orchestration (Fallback).
+	}
+
+fallback: // Delegate to the bootstrap package for heavy orchestration (Fallback).
 	return bootstrap.RunPluginCommand(
 		ctx,
 		rootCmd.PersistentFlags(),

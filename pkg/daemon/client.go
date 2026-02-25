@@ -7,7 +7,9 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 
 	apiv1 "thoreinstein.com/rig/pkg/api/v1"
 	"thoreinstein.com/rig/pkg/errors"
@@ -104,6 +106,15 @@ func (c *DaemonClient) ExecuteCommand(ctx context.Context, req *apiv1.CommandReq
 			break
 		}
 		if err != nil {
+			// Check if this is a NotFound error (plugin missing from daemon scope)
+			if s, ok := status.FromError(err); ok && s.Code() == codes.NotFound {
+				return &errors.DaemonError{
+					Operation: "Execute",
+					Message:   s.Message(),
+					Fallback:  true,
+					Cause:     err,
+				}
+			}
 			return errors.Wrap(err, "daemon stream error")
 		}
 
@@ -167,9 +178,6 @@ func (c *DaemonClient) ExecuteCommand(ctx context.Context, req *apiv1.CommandReq
 					return errors.Wrap(err, "failed to send UI response to daemon")
 				}
 			}
-
-		case *apiv1.DaemonServiceExecuteResponse_Error:
-			return errors.NewDaemonError("Execute", p.Error)
 		}
 
 		if gotDone {

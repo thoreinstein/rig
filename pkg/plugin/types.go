@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cockroachdb/errors"
 	"google.golang.org/grpc"
 
 	apiv1 "thoreinstein.com/rig/pkg/api/v1"
@@ -131,3 +132,5 @@ type Result struct {
 	// Duration is the time taken to complete the scan.
 	Duration time.Duration
 }
+
+var ErrPluginNotFound = errors.New("plugin not found")

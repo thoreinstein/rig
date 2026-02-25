@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cockroachdb/errors"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -115,6 +116,12 @@ func (s *DaemonServer) Execute(stream apiv1.DaemonService_ExecuteServer) error {
 	// 4. Execute the plugin command
 	client, err := s.manager.GetCommandClient(ctx, req.PluginName)
 	if err != nil {
+		// Use NotFound code if the plugin is missing from the manager's scope.
+		// This allows the CLI client to fall back to direct execution if the daemon
+		// was started in a different directory scope.
+		if errors.Is(err, plugin.ErrPluginNotFound) {
+			return status.Errorf(codes.NotFound, "plugin %q not found in daemon scope", req.PluginName)
+		}
 		return status.Errorf(codes.Internal, "failed to get plugin client: %v", err)
 	}
 

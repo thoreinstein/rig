@@ -318,6 +318,7 @@ func (e *PluginError) WithCause(cause error) *PluginError {
 type DaemonError struct {
 	Operation string // e.g., "Connect", "Execute", "Status"
 	Message   string
+	Fallback  bool // If true, caller should fall back to direct execution
 	Cause     error
 }
 
