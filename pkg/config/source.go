@@ -54,3 +54,10 @@ func (m SourceMap) Get(key string) string {
 	}
 	return entry.Source.String()
 }
+
+// DiscoveryEvent records a significant event in the configuration resolution process
+type DiscoveryEvent struct {
+	Tier    string `json:"tier"` // "default", "user", "project", "env", "keychain"
+	Message string `json:"message"`
+	File    string `json:"file,omitempty"`
+}

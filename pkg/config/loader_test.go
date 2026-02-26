@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/zalando/go-keyring"
@@ -531,5 +532,84 @@ default_merge_method = "squash"
 	}
 	if immutableCount != 2 {
 		t.Errorf("immutable violations for github.token = %d, want 2", immutableCount)
+	}
+}
+
+func TestLayeredLoader_DiscoveryLog(t *testing.T) {
+	tmpDir := t.TempDir()
+	root := filepath.Join(tmpDir, "root")
+	if err := os.MkdirAll(filepath.Join(root, ".git"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	userFile := filepath.Join(tmpDir, "user.toml")
+	if err := os.WriteFile(userFile, []byte("[notes]\npath=\"/tmp/notes\""), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	projectFile := filepath.Join(root, ".rig.toml")
+	if err := os.WriteFile(projectFile, []byte("[notes]\ndaily_dir=\"work-daily\""), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("RIG_GIT_BASE_BRANCH", "develop")
+
+	l := &LayeredLoader{
+		sources:        make(SourceMap),
+		SkipGlobalSync: true,
+		projectCtx: &project.ProjectContext{
+			RootPath: root,
+			Origin:   root,
+		},
+		userFile: userFile,
+	}
+
+	_, err := l.Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+
+	log := l.DiscoveryLog()
+	if len(log) == 0 {
+		t.Fatal("expected discovery log to be populated, but it is empty")
+	}
+
+	// Verify events for each expected tier
+	expectedTiers := []string{"default", "user", "project", "env", "keychain"}
+	foundTiers := make(map[string]bool)
+	for _, event := range log {
+		foundTiers[event.Tier] = true
+	}
+
+	for _, tier := range expectedTiers {
+		if !foundTiers[tier] {
+			t.Errorf("expected discovery log to contain tier %q, but it was not found", tier)
+		}
+	}
+
+	// Spot check specific messages
+	foundUser := false
+	foundProject := false
+	foundEnv := false
+	for _, event := range log {
+		if event.Tier == "user" && strings.Contains(event.Message, "Loaded user config") {
+			foundUser = true
+		}
+		if event.Tier == "project" && strings.Contains(event.Message, "Using project config") {
+			foundProject = true
+		}
+		if event.Tier == "env" && strings.Contains(event.Message, "Env override: git.base_branch") {
+			foundEnv = true
+		}
+	}
+
+	if !foundUser {
+		t.Error("discovery log missing 'Loaded user config' message")
+	}
+	if !foundProject {
+		t.Error("discovery log missing 'Loaded project config' message")
+	}
+	if !foundEnv {
+		t.Error("discovery log missing env override message for git.base_branch")
 	}
 }

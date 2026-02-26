@@ -70,12 +70,18 @@ func initConfig() error {
 }
 
 // loadConfig returns the already loaded configuration or loads it if it hasn't been yet.
-// It always returns the latest configuration derived from viper.
 func loadConfig() (*config.Config, error) {
-	if appLoader != nil {
-		return appLoader.Load()
+	if appConfig != nil {
+		return appConfig, nil
 	}
-	return config.Load()
+	if appLoader != nil {
+		var err error
+		appConfig, err = appLoader.Load()
+		return appConfig, err
+	}
+	var err error
+	appConfig, err = config.Load()
+	return appConfig, err
 }
 
 // resetConfig clears the cached configuration.

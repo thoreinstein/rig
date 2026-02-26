@@ -17,6 +17,7 @@ import (
 // Not safe for concurrent use if SkipGlobalSync is false (default).
 type LayeredLoader struct {
 	sources    SourceMap
+	discovery  []DiscoveryEvent
 	verbose    bool
 	projectCtx *project.ProjectContext
 	userFile   string
@@ -67,6 +68,7 @@ func NewLayeredLoader(cfgFile string, verbose bool) (*LayeredLoader, error) {
 // Load performs the configuration loading and merging
 func (l *LayeredLoader) Load() (*Config, error) {
 	l.sources = make(SourceMap)
+	l.discovery = nil
 	l.violations = nil
 
 	// We use a fresh viper instance for the entire resolution process
@@ -76,11 +78,14 @@ func (l *LayeredLoader) Load() (*Config, error) {
 	// Tier 1: Defaults
 	SetDefaults(v)
 	defaultSettings := v.AllSettings()
-	for k := range flattenSettings(defaultSettings, "") {
+	flatDefaults := flattenSettings(defaultSettings, "")
+	l.logDiscovery("default", fmt.Sprintf("Populated %d default keys", len(flatDefaults)))
+	for k := range flatDefaults {
 		l.sources[k] = SourceEntry{Source: SourceDefault, Value: v.Get(k)}
 	}
 
 	// Tier 2: User File
+	l.logDiscovery("user", "Looking for user config: "+l.userFile)
 	if _, err := os.Stat(l.userFile); err == nil {
 		v.SetConfigFile(l.userFile)
 		v.SetConfigType("toml")
@@ -89,21 +94,30 @@ func (l *LayeredLoader) Load() (*Config, error) {
 		}
 		userSettings := v.AllSettings()
 		diffs := DiffSettings(defaultSettings, userSettings, "")
+		l.logDiscovery("user", fmt.Sprintf("Loaded user config: %s (%d keys overridden)", l.userFile, len(diffs)), l.userFile)
 		for _, k := range diffs {
 			l.sources[k] = SourceEntry{Source: SourceUser, File: l.userFile, Value: v.Get(k)}
 		}
 		defaultSettings = userSettings
+	} else {
+		l.logDiscovery("user", "User config not found: "+l.userFile)
 	}
 
 	// Tier 3: Project Cascade (.rig.toml)
 	var projectConfigs []string
 	if l.projectCtx != nil {
 		projectConfigs = CollectProjectConfigs(l.projectCtx.RootPath, l.projectCtx.Origin)
+		trustStatus := "trusted"
+		if l.trustStore == nil || !l.trustStore.IsTrusted(l.projectCtx.RootPath) {
+			trustStatus = "untrusted"
+		}
+		l.logDiscovery("project", fmt.Sprintf("Project trust: %s (root: %s)", trustStatus, l.projectCtx.RootPath))
 	} else {
 		projectConfigs = CollectProjectConfigs("", l.cwd)
+		l.logDiscovery("project", "No project context discovered")
 	}
+
 	// Determine trust status once before iterating project configs.
-	// If trustStore is nil (failed to init), treat as untrusted — fail-closed.
 	var untrustedProject bool
 	if l.projectCtx != nil {
 		untrustedProject = l.trustStore == nil || !l.trustStore.IsTrusted(l.projectCtx.RootPath)
@@ -112,6 +126,7 @@ func (l *LayeredLoader) Load() (*Config, error) {
 	}
 
 	for _, pc := range projectConfigs {
+		l.logDiscovery("project", "Searching: "+pc)
 		if _, err := os.Stat(pc); err == nil {
 			localViper := viper.New()
 			localViper.SetConfigFile(pc)
@@ -124,23 +139,23 @@ func (l *LayeredLoader) Load() (*Config, error) {
 			diffs := DiffSettings(defaultSettings, projectSettings, "")
 
 			// Catch immutable keys even when their value matches the current default
-			// (DiffSettings would skip them since the values are equal).
 			for immKey := range immutableKeys {
 				if localViper.IsSet(immKey) && !slices.Contains(diffs, immKey) {
 					diffs = append(diffs, immKey)
 				}
 			}
 
+			var immutableBlocked int
 			for _, key := range diffs {
 				// 1. Check Immutability (Always Blocked)
 				if IsImmutable(key) {
+					immutableBlocked++
 					l.violations = append(l.violations, TrustViolation{
 						Key:            key,
 						File:           pc,
 						Reason:         ViolationImmutable,
 						AttemptedValue: localViper.Get(key),
 					})
-					// Remove from project settings so it's not merged
 					deleteFlatKey(projectSettings, key)
 					continue
 				}
@@ -163,40 +178,36 @@ func (l *LayeredLoader) Load() (*Config, error) {
 
 			// Track provenance
 			currentSettings := v.AllSettings()
-			diffs = DiffSettings(defaultSettings, currentSettings, "")
-			for _, k := range diffs {
+			newDiffs := DiffSettings(defaultSettings, currentSettings, "")
+			l.logDiscovery("project", fmt.Sprintf("Using project config: %s (%d keys overridden, %d immutable blocked)", pc, len(newDiffs), immutableBlocked), pc)
+
+			for _, k := range newDiffs {
 				l.sources[k] = SourceEntry{Source: SourceProject, File: pc, Value: v.Get(k)}
 			}
 			defaultSettings = currentSettings
-
-			if l.verbose {
-				fmt.Fprintf(os.Stderr, "Using project config: %s\n", pc)
-			}
+		} else {
+			l.logDiscovery("project", "Not found: "+pc)
 		}
 	}
 
 	// Tier 4: Environment Variables
-	// AutomaticEnv() is lazy — it sets a flag so future Get() calls check env,
-	// but AllSettings() won't reflect env values. We must explicitly check
-	// os.Getenv for each known config key to detect env overrides.
 	v.SetEnvPrefix("RIG")
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	v.AutomaticEnv()
 
-	// Check each known key for an env override.
-	// We use os.LookupEnv (not os.Getenv) so that explicitly-set-but-empty
-	// env vars (e.g. RIG_GITHUB_TOKEN="") are correctly attributed to Env.
 	knownKeys := flattenSettings(v.AllSettings(), "")
 	for key := range knownKeys {
 		envKey := "RIG_" + strings.ToUpper(strings.ReplaceAll(key, ".", "_"))
 		if _, ok := os.LookupEnv(envKey); ok {
+			l.logDiscovery("env", fmt.Sprintf("Env override: %s → %s", key, envKey))
 			l.sources[key] = SourceEntry{Source: SourceEnv, Value: v.Get(key)}
 		}
 	}
 
-	// Tier 5: Flags (Attribution deferred to Phase 4 Command integration)
+	// Tier 5: Flags (Attribution deferred to Command integration)
 
 	// Tier 6: Secret Hydration (Keychain)
+	l.logDiscovery("keychain", "Resolving keychain values")
 	settings := v.AllSettings()
 	if err := ResolveKeychainValues(settings, l.sources, l.verbose); err != nil {
 		return nil, errors.Wrap(err, "failed to resolve keychain secrets")
@@ -243,7 +254,31 @@ func (l *LayeredLoader) UserFile() string {
 
 // Violations returns the trust violations discovered during loading.
 func (l *LayeredLoader) Violations() []TrustViolation {
-	return slices.Clone(l.violations)
+	return l.violations
+}
+
+// DiscoveryLog returns the trace of events recorded during configuration loading.
+func (l *LayeredLoader) DiscoveryLog() []DiscoveryEvent {
+	return l.discovery
+}
+
+func (l *LayeredLoader) logDiscovery(tier, msg string, file ...string) {
+	event := DiscoveryEvent{
+		Tier:    tier,
+		Message: msg,
+	}
+	if len(file) > 0 {
+		event.File = file[0]
+	}
+	l.discovery = append(l.discovery, event)
+
+	if l.verbose {
+		if tier == "project" && strings.Contains(msg, "Using project config") {
+			fmt.Fprintln(os.Stderr, msg)
+		} else {
+			fmt.Fprintf(os.Stderr, "[%s] %s\n", tier, msg)
+		}
+	}
 }
 
 // deleteFlatKey removes a dotted key from a nested map.

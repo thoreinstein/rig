@@ -6,7 +6,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
-	"strings"
 	"text/tabwriter"
 
 	"github.com/cockroachdb/errors"
@@ -65,7 +64,7 @@ var inspectCmd = &cobra.Command{
 
 			// We mask potentially sensitive values (tokens, secrets)
 			val := fmt.Sprintf("%v", entry.Value)
-			if isSensitiveKey(k) {
+			if config.IsSensitiveKey(k) {
 				val = "********"
 			}
 
@@ -250,15 +249,4 @@ func editConfig() error {
 	cmd.Stderr = os.Stderr
 
 	return cmd.Run()
-}
-
-func isSensitiveKey(key string) bool {
-	sensitive := []string{"token", "secret", "key", "password", "api_key"}
-	lowerKey := strings.ToLower(key)
-	for _, s := range sensitive {
-		if strings.Contains(lowerKey, s) {
-			return true
-		}
-	}
-	return false
 }

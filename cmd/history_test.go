@@ -362,7 +362,7 @@ func TestStatusIconSelection(t *testing.T) {
 func setupHistoryTestConfig(t *testing.T, dbPath string) {
 	t.Helper()
 
-	viper.Reset()
+	resetConfig()
 	viper.Set("history.database_path", dbPath)
 	viper.Set("history.ignore_patterns", []string{"ls", "cd"})
 	viper.Set("notes.path", t.TempDir())

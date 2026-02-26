@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/cockroachdb/errors"
@@ -346,8 +347,6 @@ func SetDefaults(v *viper.Viper) {
 	v.SetDefault("plugins", map[string]interface{}{})
 }
 
-// expandPaths expands ~ and environment variables in paths
-
 // UserHomeDir returns the user's home directory, prioritizing the HOME environment variable.
 func UserHomeDir() (string, error) {
 	if home := os.Getenv("HOME"); home != "" {
@@ -406,4 +405,16 @@ func expandPath(path string) (string, error) {
 	}
 
 	return filepath.Join(homeDir, path[1:]), nil
+}
+
+// IsSensitiveKey returns true if the key likely contains sensitive information.
+func IsSensitiveKey(key string) bool {
+	sensitive := []string{"token", "secret", "key", "password", "api_key"}
+	lowerKey := strings.ToLower(key)
+	for _, s := range sensitive {
+		if strings.Contains(lowerKey, s) {
+			return true
+		}
+	}
+	return false
 }
