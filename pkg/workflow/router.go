@@ -51,13 +51,17 @@ func NewTicketRouter(cfg *config.Config, projectPath string, verbose bool) *Tick
 func (r *TicketRouter) RouteTicket(ticketID string) TicketSource {
 	// First, check if it could be a beads ticket
 	if r.beadsEnabled && IsBeadsTicket(ticketID) {
-		// Verify the project actually has beads via discovery context
-		if ctx, err := project.CachedDiscover(r.projectPath); err == nil {
-			if ctx.HasMarker(project.MarkerBeads) {
-				return TicketSourceBeads
+		// Verify the project actually has beads via discovery context.
+		// We only do this if a project path was provided to avoid accidental
+		// discovery of host project context during routing.
+		if r.projectPath != "" {
+			if ctx, err := project.CachedDiscover(r.projectPath); err == nil {
+				if ctx.HasMarker(project.MarkerBeads) {
+					return TicketSourceBeads
+				}
+			} else if r.verbose {
+				slog.Debug("project discovery failed during ticket routing", "path", r.projectPath, "error", err)
 			}
-		} else if r.verbose {
-			slog.Debug("project discovery failed during ticket routing", "path", r.projectPath, "error", err)
 		}
 	}
 
