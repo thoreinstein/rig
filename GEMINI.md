@@ -222,6 +222,9 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 - **Provenance Tracking**: Maintain a `SourceMap` during the cascade to record exactly which tier (and file) provided each value, surfaced via `rig config inspect`.
 - **Secure Hydration**: Use the `keychain://service/account` URI scheme for sensitive values to keep them out of plain-text configuration files while maintaining hierarchical precedence.
 - **Format Strictness**: Strictly enforce TOML for all configuration files to ensure deep-merging behavior is predictable.
+- **Rig Trust Model**: Protect the cascade with **Immutable Keys** (hardcoded sensitive keys like `github.token`) and a **Project Trust Gate**. Untrusted projects trigger warnings on override.
+- **Fail-Closed Security Pattern**: In security-sensitive components (like the `TrustStore`), treat initialization failures or missing state as the most restrictive state (e.g., `untrusted`).
+- **Atomic State Transitions**: Use the "temp-file + rename" pattern for local state persistence (e.g., `trusted-projects.json`) to prevent data corruption during writes.
 
 ### Project Discovery Patterns
 - **Unified Project Discovery**: Centralize project root detection and marker logic into `pkg/project`. Use a marker-based upward traversal engine that respects repository boundaries (`.git`, `.beads`).
@@ -233,3 +236,5 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 - **Hermetic Test Isolation**: Configuration and discovery tests MUST use `t.Chdir(t.TempDir())` or an explicit empty `projectCtx` to avoid reading the real `.rig.toml` from the repository or developer machine.
 - **Global Cache Pollution**: Reset the discovery cache (`project.ResetCache()`) in tests that modify the working directory or simulate different project structures to ensure test isolation.
 - **Linter Deprecation Formatting**: `golangci-lint` requires `Deprecated:` comments to be in their own paragraph, separated from the description by a blank line.
+- **Secret Leakage in Warnings**: NEVER include the attempted value in security warning messages for immutable or sensitive keys. Printing the "blocked" value echoes potentially sensitive credentials to stderr/logs.
+- **Ghost Trust Paths**: Trust entries must match discovered project roots. Rejection of non-project paths (paths without `.git` or `.rig.toml`) during `rig trust add` prevents users from trusting invalid paths that would never satisfy a trust check.
