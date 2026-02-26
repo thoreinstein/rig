@@ -10,20 +10,26 @@ import (
 // Discover resolves the physical path of startDir and traverses upward looking for markers.
 // It stops at the first .git directory/file found or when the filesystem root is reached.
 func Discover(startDir string) (*ProjectContext, error) {
-	if startDir == "" {
+	origin := startDir
+	if origin == "" {
 		cwd, err := os.Getwd()
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to get current working directory")
 		}
-		startDir = cwd
+		origin = cwd
 	}
 
-	// Resolve physical path (handle symlinks)
-	origin, err := filepath.EvalSymlinks(startDir)
+	// Ensure we are working with a clean, absolute physical path
+	abs, err := filepath.Abs(origin)
 	if err != nil {
-		return nil, errors.Wrapf(err, "failed to resolve physical path for %q", startDir)
+		return nil, errors.Wrapf(err, "failed to resolve absolute path for %q", origin)
 	}
-	origin = filepath.Clean(origin)
+
+	resolved, err := filepath.EvalSymlinks(abs)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to resolve physical path for %q", origin)
+	}
+	origin = filepath.Clean(resolved)
 
 	ctx := &ProjectContext{
 		Origin:  origin,

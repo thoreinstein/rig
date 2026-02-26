@@ -1554,14 +1554,7 @@ path = "/fallback/path"
 				t.Fatalf("Load failed: %v", err)
 			}
 
-			// We use viper to check values because Load() syncs back if SkipGlobalSync is false,
-			// but here we check the returned *Config or l.sources if we want provenance.
-			// Checking cfg struct is easiest for these tests.
-
-			// For simplicity in this large test file, I'll just check if we can get the values.
-			// Since we're refactoring, I'll check via viper directly by NOT skipping global sync
-			// OR by checking the config struct. Checking the config struct is cleaner.
-
+			// Verify values were loaded correctly into the config struct
 			if tt.wantValues["github.default_merge_method"] != "" {
 				if cfg.GitHub.DefaultMergeMethod != tt.wantValues["github.default_merge_method"] {
 					t.Errorf("github.default_merge_method = %q, want %q", cfg.GitHub.DefaultMergeMethod, tt.wantValues["github.default_merge_method"])

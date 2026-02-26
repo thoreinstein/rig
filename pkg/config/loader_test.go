@@ -108,10 +108,16 @@ provider = "groq"
 		t.Fatalf("failed to write user config: %v", err)
 	}
 
+	t.Chdir(tmpDir)
+
 	l := &LayeredLoader{
 		sources:        make(SourceMap),
 		SkipGlobalSync: true,
-		userFile:       userFile,
+		projectCtx: &project.ProjectContext{
+			RootPath: tmpDir,
+			Origin:   tmpDir,
+		},
+		userFile: userFile,
 	}
 
 	cfg, err := l.Load()
@@ -130,11 +136,17 @@ provider = "groq"
 
 func TestLayeredLoader_EnvOverrides(t *testing.T) {
 	t.Setenv("RIG_AI_PROVIDER", "groq")
+	tmpDir := t.TempDir()
+	t.Chdir(tmpDir)
 
 	l := &LayeredLoader{
 		sources:        make(SourceMap),
 		SkipGlobalSync: true,
-		userFile:       filepath.Join(t.TempDir(), "nonexistent.toml"),
+		projectCtx: &project.ProjectContext{
+			RootPath: tmpDir,
+			Origin:   tmpDir,
+		},
+		userFile: filepath.Join(tmpDir, "nonexistent.toml"),
 	}
 
 	cfg, err := l.Load()
@@ -173,11 +185,17 @@ api_key = "keychain://rig-ai-anthropic/api-key"
 		t.Fatalf("failed to write user config: %v", err)
 	}
 
+	t.Chdir(tmpDir)
+
 	l := &LayeredLoader{
 		sources:        make(SourceMap),
 		SkipGlobalSync: true,
 		userFile:       userFile,
 		cwd:            tmpDir,
+		projectCtx: &project.ProjectContext{
+			RootPath: tmpDir,
+			Origin:   tmpDir,
+		},
 	}
 
 	cfg, err := l.Load()
