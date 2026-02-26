@@ -211,3 +211,147 @@ api_key = "keychain://rig-ai-anthropic/api-key"
 		t.Errorf("ai.api_key source = %v, want %v", l.sources["ai.api_key"].Source, SourceKeychain)
 	}
 }
+
+func TestLayeredLoader_ImmutableKeyBlocked(t *testing.T) {
+	tmpDir := t.TempDir()
+	root := filepath.Join(tmpDir, "root")
+	if err := os.MkdirAll(filepath.Join(root, ".git"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Project config attempts to override immutable key
+	projectConfig := `
+[github]
+token = "malicious-token"
+default_merge_method = "squash"
+`
+	if err := os.WriteFile(filepath.Join(root, ".rig.toml"), []byte(projectConfig), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	l := &LayeredLoader{
+		sources:        make(SourceMap),
+		SkipGlobalSync: true,
+		projectCtx: &project.ProjectContext{
+			RootPath: root,
+			Origin:   root,
+		},
+		userFile: filepath.Join(tmpDir, "user.toml"),
+	}
+
+	// Set a "good" token in defaults/user level indirectly via viper default if needed,
+	// but here we just check if it's blocked.
+	cfg, err := l.Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+
+	// Verify immutable key NOT overridden (should be empty string if not set elsewhere)
+	if cfg.GitHub.Token == "malicious-token" {
+		t.Error("github.token (immutable) was overridden by project config")
+	}
+
+	// Verify non-immutable key WAS overridden
+	if cfg.GitHub.DefaultMergeMethod != "squash" {
+		t.Errorf("github.default_merge_method = %q, want %q", cfg.GitHub.DefaultMergeMethod, "squash")
+	}
+
+	// Verify violation recorded
+	found := false
+	for _, v := range l.Violations() {
+		if v.Key == "github.token" && v.Reason == "immutable" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected immutable violation not found in loader")
+	}
+}
+
+func TestLayeredLoader_TrustModel(t *testing.T) {
+	tmpDir := t.TempDir()
+	root := filepath.Join(tmpDir, "root")
+	if err := os.MkdirAll(filepath.Join(root, ".git"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	projectConfig := `
+[tmux]
+session_prefix = "custom-"
+`
+	if err := os.WriteFile(filepath.Join(root, ".rig.toml"), []byte(projectConfig), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Initialize TrustStore in a temp location
+	tsPath := filepath.Join(tmpDir, "trust.json")
+	ts := &TrustStore{
+		path:    tsPath,
+		trusted: make(map[string]TrustEntry),
+	}
+
+	t.Run("UntrustedProjectWarning", func(t *testing.T) {
+		l := &LayeredLoader{
+			sources:        make(SourceMap),
+			SkipGlobalSync: true,
+			projectCtx: &project.ProjectContext{
+				RootPath: root,
+				Origin:   root,
+			},
+			userFile:   filepath.Join(tmpDir, "user.toml"),
+			trustStore: ts,
+		}
+
+		cfg, err := l.Load()
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Non-immutable override SHOULD be applied
+		if cfg.Tmux.SessionPrefix != "custom-" {
+			t.Errorf("tmux.session_prefix = %q, want %q", cfg.Tmux.SessionPrefix, "custom-")
+		}
+
+		// Violation SHOULD be recorded
+		found := false
+		for _, v := range l.Violations() {
+			if v.Reason == "untrusted_project" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Error("expected untrusted_project violation not found")
+		}
+	})
+
+	t.Run("TrustedProjectNoWarning", func(t *testing.T) {
+		if err := ts.Add(root); err != nil {
+			t.Fatal(err)
+		}
+
+		l := &LayeredLoader{
+			sources:        make(SourceMap),
+			SkipGlobalSync: true,
+			projectCtx: &project.ProjectContext{
+				RootPath: root,
+				Origin:   root,
+			},
+			userFile:   filepath.Join(tmpDir, "user.toml"),
+			trustStore: ts,
+		}
+
+		_, err := l.Load()
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Violation should NOT be recorded
+		for _, v := range l.Violations() {
+			if v.Reason == "untrusted_project" {
+				t.Error("unexpected untrusted_project violation found for trusted project")
+			}
+		}
+	})
+}

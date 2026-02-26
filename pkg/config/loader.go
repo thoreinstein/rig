@@ -20,6 +20,8 @@ type LayeredLoader struct {
 	projectCtx *project.ProjectContext
 	userFile   string
 	cwd        string
+	trustStore *TrustStore
+	violations []TrustViolation
 
 	// SkipGlobalSync prevents the loader from updating the global viper singleton.
 	// Useful for tests to avoid side effects.
@@ -46,12 +48,15 @@ func NewLayeredLoader(cfgFile string, verbose bool) (*LayeredLoader, error) {
 		return nil, errors.New("config file must be TOML format (.toml extension)")
 	}
 
+	trustStore, _ := NewTrustStore()
+
 	return &LayeredLoader{
 		sources:    make(SourceMap),
 		verbose:    verbose,
 		projectCtx: projectCtx,
 		userFile:   userFile,
 		cwd:        cwd,
+		trustStore: trustStore,
 	}, nil
 }
 
@@ -102,6 +107,36 @@ func (l *LayeredLoader) Load() (*Config, error) {
 			}
 
 			projectSettings := localViper.AllSettings()
+
+			// Check for immutable violations and project trust
+			untrustedProject := l.trustStore != nil && l.projectCtx != nil && !l.trustStore.IsTrusted(l.projectCtx.RootPath)
+			diffs := DiffSettings(defaultSettings, projectSettings, "")
+
+			for _, key := range diffs {
+				// 1. Check Immutability (Always Blocked)
+				if IsImmutable(key) {
+					l.violations = append(l.violations, TrustViolation{
+						Key:            key,
+						File:           pc,
+						Reason:         "immutable",
+						AttemptedValue: localViper.Get(key),
+					})
+					// Remove from project settings so it's not merged
+					deleteFlatKey(projectSettings, key)
+					continue
+				}
+
+				// 2. Check Project Trust (Applied with warning)
+				if untrustedProject {
+					l.violations = append(l.violations, TrustViolation{
+						Key:            key,
+						File:           pc,
+						Reason:         "untrusted_project",
+						AttemptedValue: localViper.Get(key),
+					})
+				}
+			}
+
 			// Merge into our local viper
 			if err := v.MergeConfigMap(projectSettings); err != nil {
 				return nil, errors.Wrapf(err, "failed to merge project config %q", pc)
@@ -109,7 +144,7 @@ func (l *LayeredLoader) Load() (*Config, error) {
 
 			// Track provenance
 			currentSettings := v.AllSettings()
-			diffs := DiffSettings(defaultSettings, currentSettings, "")
+			diffs = DiffSettings(defaultSettings, currentSettings, "")
 			for _, k := range diffs {
 				l.sources[k] = SourceEntry{Source: SourceProject, File: pc, Value: v.Get(k)}
 			}
@@ -185,6 +220,25 @@ func (l *LayeredLoader) Sources() SourceMap {
 // UserFile returns the resolved user config file path
 func (l *LayeredLoader) UserFile() string {
 	return l.userFile
+}
+
+// Violations returns the trust violations discovered during loading.
+func (l *LayeredLoader) Violations() []TrustViolation {
+	return l.violations
+}
+
+// deleteFlatKey removes a dotted key from a nested map.
+func deleteFlatKey(m map[string]interface{}, key string) {
+	parts := strings.Split(key, ".")
+	current := m
+	for i := range len(parts) - 1 {
+		next, ok := current[parts[i]].(map[string]interface{})
+		if !ok {
+			return
+		}
+		current = next
+	}
+	delete(current, parts[len(parts)-1])
 }
 
 // flattenSettings is a helper for initial default population
