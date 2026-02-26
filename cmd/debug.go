@@ -3,6 +3,7 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"sort"
 	"text/tabwriter"
@@ -53,32 +54,32 @@ func runDebugConfig(cmd *cobra.Command, args []string) error {
 	userFile := appLoader.UserFile()
 
 	if debugJSON {
-		return outputConfigJSON(userFile, sources, discovery, violations)
+		return outputConfigJSON(os.Stdout, userFile, sources, discovery, violations)
 	}
 
-	return outputConfigHuman(userFile, sources, discovery, violations)
+	return outputConfigHuman(os.Stdout, userFile, sources, discovery, violations)
 }
 
-func outputConfigHuman(userFile string, sources config.SourceMap, discovery []config.DiscoveryEvent, violations []config.TrustViolation) error {
+func outputConfigHuman(w io.Writer, userFile string, sources config.SourceMap, discovery []config.DiscoveryEvent, violations []config.TrustViolation) error {
 	// 1. Context
-	fmt.Println("DIAGNOSTIC CONTEXT")
-	fmt.Println("------------------")
+	fmt.Fprintln(w, "DIAGNOSTIC CONTEXT")
+	fmt.Fprintln(w, "------------------")
 	if userFile != "" {
-		fmt.Printf("User Config:  %s\n", userFile)
+		fmt.Fprintf(w, "User Config:  %s\n", userFile)
 	}
-	fmt.Println()
+	fmt.Fprintln(w)
 
 	// 2. Discovery Log
-	fmt.Println("DISCOVERY LOG")
-	fmt.Println("-------------")
+	fmt.Fprintln(w, "DISCOVERY LOG")
+	fmt.Fprintln(w, "-------------")
 	for _, event := range discovery {
-		fmt.Printf("[%s] %s\n", event.Tier, event.Message)
+		fmt.Fprintf(w, "[%s] %s\n", event.Tier, event.Message)
 	}
-	fmt.Println()
+	fmt.Fprintln(w)
 
 	// 3. Effective Config Table
-	fmt.Println("EFFECTIVE CONFIGURATION")
-	fmt.Println("-----------------------")
+	fmt.Fprintln(w, "EFFECTIVE CONFIGURATION")
+	fmt.Fprintln(w, "-----------------------")
 	keys := make([]string, 0, len(sources))
 	for k := range sources {
 		keys = append(keys, k)
@@ -90,7 +91,7 @@ func outputConfigHuman(userFile string, sources config.SourceMap, discovery []co
 		violationsByKey[v.Key] = v.Reason
 	}
 
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(w, "KEY\tVALUE\tSOURCE\tPROTECTION")
 	fmt.Fprintln(w, "---\t-----\t------\t----------")
 
@@ -112,15 +113,15 @@ func outputConfigHuman(userFile string, sources config.SourceMap, discovery []co
 
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", k, val, sourceStr, protection)
 	}
-	w.Flush()
-	fmt.Println()
+	tw.Flush()
+	fmt.Fprintln(w)
 
 	// 4. Violations Summary
 	if len(violations) > 0 {
-		fmt.Println("TRUST VIOLATIONS")
-		fmt.Println("----------------")
+		fmt.Fprintln(w, "TRUST VIOLATIONS")
+		fmt.Fprintln(w, "----------------")
 		for _, v := range violations {
-			fmt.Printf("! %s: %s (File: %s)\n", v.Key, v.Reason, v.File)
+			fmt.Fprintf(w, "! %s: %s (File: %s)\n", v.Key, v.Reason, v.File)
 		}
 	}
 
@@ -141,7 +142,7 @@ type configValueOutput struct {
 	Protection string      `json:"protection,omitempty"`
 }
 
-func outputConfigJSON(userFile string, sources config.SourceMap, discovery []config.DiscoveryEvent, violations []config.TrustViolation) error {
+func outputConfigJSON(w io.Writer, userFile string, sources config.SourceMap, discovery []config.DiscoveryEvent, violations []config.TrustViolation) error {
 	ctx := make(map[string]string)
 	ctx["user_config"] = userFile
 
@@ -189,7 +190,7 @@ func outputConfigJSON(userFile string, sources config.SourceMap, discovery []con
 		Violations: redactedViolations,
 	}
 
-	encoder := json.NewEncoder(os.Stdout)
+	encoder := json.NewEncoder(w)
 	encoder.SetIndent("", "  ")
 	return encoder.Encode(output)
 }
