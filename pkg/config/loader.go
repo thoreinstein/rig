@@ -49,7 +49,10 @@ func NewLayeredLoader(cfgFile string, verbose bool) (*LayeredLoader, error) {
 		return nil, errors.New("config file must be TOML format (.toml extension)")
 	}
 
-	trustStore, _ := NewTrustStore()
+	trustStore, err := NewTrustStore()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to initialize trust store")
+	}
 
 	return &LayeredLoader{
 		sources:    make(SourceMap),
@@ -240,7 +243,7 @@ func (l *LayeredLoader) UserFile() string {
 
 // Violations returns the trust violations discovered during loading.
 func (l *LayeredLoader) Violations() []TrustViolation {
-	return l.violations
+	return slices.Clone(l.violations)
 }
 
 // deleteFlatKey removes a dotted key from a nested map.

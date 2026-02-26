@@ -93,6 +93,7 @@ func (s *TrustStore) Load() error {
 	}
 
 	if len(data) == 0 {
+		s.trusted = make(map[string]TrustEntry)
 		return nil
 	}
 
