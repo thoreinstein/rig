@@ -108,8 +108,9 @@ func (l *LayeredLoader) Load() (*Config, error) {
 
 			projectSettings := localViper.AllSettings()
 
-			// Check for immutable violations and project trust
-			untrustedProject := l.trustStore != nil && l.projectCtx != nil && !l.trustStore.IsTrusted(l.projectCtx.RootPath)
+			// Check for immutable violations and project trust.
+			// If trustStore is nil (failed to init), treat as untrusted — fail-closed.
+			untrustedProject := l.projectCtx != nil && (l.trustStore == nil || !l.trustStore.IsTrusted(l.projectCtx.RootPath))
 			diffs := DiffSettings(defaultSettings, projectSettings, "")
 
 			for _, key := range diffs {
@@ -118,7 +119,7 @@ func (l *LayeredLoader) Load() (*Config, error) {
 					l.violations = append(l.violations, TrustViolation{
 						Key:            key,
 						File:           pc,
-						Reason:         "immutable",
+						Reason:         ViolationImmutable,
 						AttemptedValue: localViper.Get(key),
 					})
 					// Remove from project settings so it's not merged
@@ -131,7 +132,7 @@ func (l *LayeredLoader) Load() (*Config, error) {
 					l.violations = append(l.violations, TrustViolation{
 						Key:            key,
 						File:           pc,
-						Reason:         "untrusted_project",
+						Reason:         ViolationUntrustedProject,
 						AttemptedValue: localViper.Get(key),
 					})
 				}

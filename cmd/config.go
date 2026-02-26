@@ -71,7 +71,7 @@ var inspectCmd = &cobra.Command{
 			} else {
 				// Check if this key was part of an untrusted project violation
 				for _, v := range violations {
-					if v.Key == k && v.Reason == "untrusted_project" {
+					if v.Key == k && v.Reason == config.ViolationUntrustedProject {
 						protection = "untrusted"
 						break
 					}

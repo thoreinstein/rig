@@ -88,9 +88,9 @@ func InitConfig(cfgFile string, verbose bool) (*config.LayeredLoader, *config.Co
 	violations := loader.Violations()
 	untrustedWarned := false
 	for _, v := range violations {
-		if v.Reason == "immutable" {
+		if v.Reason == config.ViolationImmutable {
 			fmt.Fprintf(os.Stderr, "Warning: project config %q attempted to override immutable key %q (ignored)\n", v.File, v.Key)
-		} else if v.Reason == "untrusted_project" && !untrustedWarned {
+		} else if v.Reason == config.ViolationUntrustedProject && !untrustedWarned {
 			fmt.Fprintf(os.Stderr, "Notice: project config loaded from untrusted project. Run 'rig trust add' to suppress this notice.\n")
 			untrustedWarned = true
 		}

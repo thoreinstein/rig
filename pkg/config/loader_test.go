@@ -259,7 +259,7 @@ default_merge_method = "squash"
 	// Verify violation recorded
 	found := false
 	for _, v := range l.Violations() {
-		if v.Key == "github.token" && v.Reason == "immutable" {
+		if v.Key == "github.token" && v.Reason == ViolationImmutable {
 			found = true
 			break
 		}
@@ -316,13 +316,48 @@ session_prefix = "custom-"
 		// Violation SHOULD be recorded
 		found := false
 		for _, v := range l.Violations() {
-			if v.Reason == "untrusted_project" {
+			if v.Reason == ViolationUntrustedProject {
 				found = true
 				break
 			}
 		}
 		if !found {
 			t.Error("expected untrusted_project violation not found")
+		}
+	})
+
+	t.Run("NilTrustStoreTreatedAsUntrusted", func(t *testing.T) {
+		l := &LayeredLoader{
+			sources:        make(SourceMap),
+			SkipGlobalSync: true,
+			projectCtx: &project.ProjectContext{
+				RootPath: root,
+				Origin:   root,
+			},
+			userFile:   filepath.Join(tmpDir, "user.toml"),
+			trustStore: nil, // simulate failed TrustStore initialization
+		}
+
+		cfg, err := l.Load()
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Override SHOULD still be applied (untrusted = warning, not block)
+		if cfg.Tmux.SessionPrefix != "custom-" {
+			t.Errorf("tmux.session_prefix = %q, want %q", cfg.Tmux.SessionPrefix, "custom-")
+		}
+
+		// Violation SHOULD be recorded because nil trustStore = untrusted
+		found := false
+		for _, v := range l.Violations() {
+			if v.Reason == ViolationUntrustedProject {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Error("expected untrusted_project violation when trustStore is nil")
 		}
 	})
 
@@ -349,7 +384,7 @@ session_prefix = "custom-"
 
 		// Violation should NOT be recorded
 		for _, v := range l.Violations() {
-			if v.Reason == "untrusted_project" {
+			if v.Reason == ViolationUntrustedProject {
 				t.Error("unexpected untrusted_project violation found for trusted project")
 			}
 		}

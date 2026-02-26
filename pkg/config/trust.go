@@ -27,11 +27,17 @@ func IsImmutable(key string) bool {
 	return immutableKeys[key]
 }
 
+// Violation reason constants.
+const (
+	ViolationImmutable        = "immutable"
+	ViolationUntrustedProject = "untrusted_project"
+)
+
 // TrustViolation represents an attempt by a project config to override a protected key or an untrusted project.
 type TrustViolation struct {
 	Key            string
 	File           string
-	Reason         string // "immutable" or "untrusted_project"
+	Reason         string // ViolationImmutable or ViolationUntrustedProject
 	AttemptedValue interface{}
 }
 

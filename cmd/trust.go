@@ -31,7 +31,7 @@ If no path is provided, the command applies to the current project root.`,
 		if trustRemove {
 			return runTrustRemove(args)
 		}
-		if len(args) == 0 && !trustRemove {
+		if len(args) == 0 {
 			// Without args or flags, show status of current project
 			return runTrustStatus()
 		}
