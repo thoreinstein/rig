@@ -173,11 +173,20 @@ func outputConfigJSON(userFile string, sources config.SourceMap, discovery []con
 		}
 	}
 
+	// Redact sensitive attempted values in violations
+	redactedViolations := make([]config.TrustViolation, len(violations))
+	for i, v := range violations {
+		redactedViolations[i] = v
+		if config.IsSensitiveKey(v.Key) {
+			redactedViolations[i].AttemptedValue = "********"
+		}
+	}
+
 	output := debugConfigOutput{
 		Context:    ctx,
 		Discovery:  discovery,
 		Config:     cfgOut,
-		Violations: violations,
+		Violations: redactedViolations,
 	}
 
 	encoder := json.NewEncoder(os.Stdout)
