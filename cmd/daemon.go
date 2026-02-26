@@ -94,7 +94,7 @@ func newDaemonStartCmd() *cobra.Command {
 			fmt.Printf("Socket: %s\n", daemon.SocketPath())
 
 			// Serve handles context, signals, and server loop
-			return daemon.Serve(context.Background(), manager, uiProxy, rigVersion, slog.Default(), pluginIdle, daemonIdle)
+			return daemon.Serve(cmd.Context(), manager, uiProxy, rigVersion, slog.Default(), pluginIdle, daemonIdle)
 		},
 	}
 }
@@ -111,7 +111,7 @@ func newDaemonStopCmd() *cobra.Command {
 			}
 
 			// Try graceful shutdown via gRPC first
-			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			ctx, cancel := context.WithTimeout(cmd.Context(), 2*time.Second)
 			defer cancel()
 
 			client, err := daemon.NewClient(ctx)

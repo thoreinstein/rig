@@ -96,12 +96,16 @@ func checkMarkers(dir string, markers map[MarkerKind]string) (bool, bool, error)
 	// This is the project boundary - we stop walking if found.
 	// Store the directory containing .git, not the .git path itself.
 	gitPath := filepath.Join(dir, ".git")
-	if _, err := os.Stat(gitPath); err == nil {
-		if _, exists := markers[MarkerGit]; !exists {
-			markers[MarkerGit] = dir
+	if info, err := os.Stat(gitPath); err == nil {
+		// Only treat .git as valid when it is a directory or a regular file.
+		mode := info.Mode()
+		if info.IsDir() || mode.IsRegular() {
+			if _, exists := markers[MarkerGit]; !exists {
+				markers[MarkerGit] = dir
+			}
+			foundAny = true
+			stopWalk = true
 		}
-		foundAny = true
-		stopWalk = true
 	} else if !os.IsNotExist(err) {
 		return false, false, errors.Wrapf(err, "failed to stat %q", gitPath)
 	}

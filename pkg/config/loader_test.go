@@ -177,6 +177,7 @@ api_key = "keychain://rig-ai-anthropic/api-key"
 		sources:        make(SourceMap),
 		SkipGlobalSync: true,
 		userFile:       userFile,
+		cwd:            tmpDir,
 	}
 
 	cfg, err := l.Load()

@@ -32,7 +32,9 @@ func (m MarkerKind) String() string {
 
 // ProjectContext holds the discovery result for a project.
 type ProjectContext struct {
-	// RootPath is the directory where the walk stopped (highest boundary).
+	// RootPath is the directory selected as the project root during discovery
+	// (typically the first directory where a project marker is found, possibly
+	// updated when a .git boundary is encountered).
 	RootPath string
 	// Markers maps the marker kind to the absolute path where it was found.
 	Markers map[MarkerKind]string
