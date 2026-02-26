@@ -105,24 +105,21 @@ func (l *LayeredLoader) Load() (*Config, error) {
 
 	// Tier 3: Project Cascade (.rig.toml)
 	var projectConfigs []string
+	// Determine trust status once before iterating project configs.
+	// If trustStore is nil (failed to init), treat as untrusted — fail-closed.
+	var untrustedProject bool
 	if l.projectCtx != nil {
 		projectConfigs = CollectProjectConfigs(l.projectCtx.RootPath, l.projectCtx.Origin)
+		untrustedProject = l.trustStore == nil || !l.trustStore.IsTrusted(l.projectCtx.RootPath)
 		trustStatus := "trusted"
-		if l.trustStore == nil || !l.trustStore.IsTrusted(l.projectCtx.RootPath) {
+		if untrustedProject {
 			trustStatus = "untrusted"
 		}
 		l.logDiscovery("project", fmt.Sprintf("Project trust: %s (root: %s)", trustStatus, l.projectCtx.RootPath))
 	} else {
 		projectConfigs = CollectProjectConfigs("", l.cwd)
+		untrustedProject = len(projectConfigs) > 0
 		l.logDiscovery("project", "No project context discovered")
-	}
-
-	// Determine trust status once before iterating project configs.
-	var untrustedProject bool
-	if l.projectCtx != nil {
-		untrustedProject = l.trustStore == nil || !l.trustStore.IsTrusted(l.projectCtx.RootPath)
-	} else if len(projectConfigs) > 0 {
-		untrustedProject = true
 	}
 
 	for _, pc := range projectConfigs {
@@ -273,6 +270,8 @@ func (l *LayeredLoader) logDiscovery(tier, msg string, file ...string) {
 	l.discovery = append(l.discovery, event)
 
 	if l.verbose {
+		// "Using project config: ..." is printed without a tier prefix for
+		// backward-compatibility with the pre-discovery verbose output.
 		if tier == "project" && strings.Contains(msg, "Using project config") {
 			fmt.Fprintln(os.Stderr, msg)
 		} else {

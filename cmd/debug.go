@@ -50,20 +50,21 @@ func runDebugConfig(cmd *cobra.Command, args []string) error {
 	sources := appLoader.Sources()
 	discovery := appLoader.DiscoveryLog()
 	violations := appLoader.Violations()
+	userFile := appLoader.UserFile()
 
 	if debugJSON {
-		return outputConfigJSON(sources, discovery, violations)
+		return outputConfigJSON(userFile, sources, discovery, violations)
 	}
 
-	return outputConfigHuman(sources, discovery, violations)
+	return outputConfigHuman(userFile, sources, discovery, violations)
 }
 
-func outputConfigHuman(sources config.SourceMap, discovery []config.DiscoveryEvent, violations []config.TrustViolation) error {
+func outputConfigHuman(userFile string, sources config.SourceMap, discovery []config.DiscoveryEvent, violations []config.TrustViolation) error {
 	// 1. Context
 	fmt.Println("DIAGNOSTIC CONTEXT")
 	fmt.Println("------------------")
-	if appLoader.UserFile() != "" {
-		fmt.Printf("User Config:  %s\n", appLoader.UserFile())
+	if userFile != "" {
+		fmt.Printf("User Config:  %s\n", userFile)
 	}
 	fmt.Println()
 
@@ -140,9 +141,9 @@ type configValueOutput struct {
 	Protection string      `json:"protection,omitempty"`
 }
 
-func outputConfigJSON(sources config.SourceMap, discovery []config.DiscoveryEvent, violations []config.TrustViolation) error {
+func outputConfigJSON(userFile string, sources config.SourceMap, discovery []config.DiscoveryEvent, violations []config.TrustViolation) error {
 	ctx := make(map[string]string)
-	ctx["user_config"] = appLoader.UserFile()
+	ctx["user_config"] = userFile
 
 	cfgOut := make(map[string]configValueOutput)
 
