@@ -164,13 +164,14 @@ func resolveProjectPath(args []string) (string, error) {
 			target = abs
 		}
 
-		// If we can't discover a project root at target, validate the path exists
+		// If we can't discover a project root at target, reject it.
+		// Trust entries must match discovered project roots to be effective.
 		ctx, err := project.Discover(target)
 		if err != nil {
-			if _, statErr := os.Stat(target); statErr != nil {
-				return "", errors.Newf("path %q does not exist", target)
+			if project.IsNoProjectContext(err) {
+				return "", errors.Newf("path %q is not a rig project (no .git or .rig.toml found)", target)
 			}
-			return target, nil
+			return "", errors.Wrapf(err, "failed to discover project at %q", target)
 		}
 		return ctx.RootPath, nil
 	}
