@@ -188,10 +188,16 @@ func (l *LayeredLoader) Load() (*Config, error) {
 	}
 
 	// Tier 4: Environment Variables
+	// AutomaticEnv() is lazy — it sets a flag so future Get() calls check env,
+	// but AllSettings() won't reflect env values. We must explicitly check
+	// os.Getenv for each known config key to detect env overrides.
 	v.SetEnvPrefix("RIG")
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	v.AutomaticEnv()
 
+	// Check each known key for an env override.
+	// We use os.LookupEnv (not os.Getenv) so that explicitly-set-but-empty
+	// env vars (e.g. RIG_GITHUB_TOKEN="") are correctly attributed to Env.
 	knownKeys := flattenSettings(v.AllSettings(), "")
 	for key := range knownKeys {
 		envKey := "RIG_" + strings.ToUpper(strings.ReplaceAll(key, ".", "_"))

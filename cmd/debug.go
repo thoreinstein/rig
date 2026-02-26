@@ -42,8 +42,10 @@ func runDebugConfig(cmd *cobra.Command, args []string) error {
 		return errors.New("configuration loader not initialized")
 	}
 
-	// Reload to ensure we have the latest and discovery log is populated
-	_, err := appLoader.Load()
+	// Reload to ensure we have the latest and discovery log is populated.
+	// We update the global appConfig to ensure consistency for subsequent calls.
+	var err error
+	appConfig, err = appLoader.Load()
 	if err != nil {
 		return errors.Wrap(err, "failed to reload configuration")
 	}
@@ -92,8 +94,8 @@ func outputConfigHuman(w io.Writer, userFile string, sources config.SourceMap, d
 	}
 
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "KEY\tVALUE\tSOURCE\tPROTECTION")
-	fmt.Fprintln(w, "---\t-----\t------\t----------")
+	fmt.Fprintln(tw, "KEY\tVALUE\tSOURCE\tPROTECTION")
+	fmt.Fprintln(tw, "---\t-----\t------\t----------")
 
 	for _, k := range keys {
 		entry := sources[k]
@@ -111,7 +113,7 @@ func outputConfigHuman(w io.Writer, userFile string, sources config.SourceMap, d
 			protection = "untrusted"
 		}
 
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", k, val, sourceStr, protection)
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", k, val, sourceStr, protection)
 	}
 	tw.Flush()
 	fmt.Fprintln(w)
