@@ -168,7 +168,7 @@ func newDaemonStatusCmd() *cobra.Command {
 				return nil
 			}
 
-			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			ctx, cancel := context.WithTimeout(cmd.Context(), 2*time.Second)
 			defer cancel()
 
 			client, err := daemon.NewClient(ctx)
