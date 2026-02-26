@@ -11,6 +11,8 @@ import (
 
 	"github.com/cockroachdb/errors"
 	"github.com/spf13/cobra"
+
+	"thoreinstein.com/rig/pkg/config"
 )
 
 // configCmd represents the config command
@@ -48,8 +50,10 @@ var inspectCmd = &cobra.Command{
 		sort.Strings(keys)
 
 		w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "KEY\tVALUE\tSOURCE")
-		fmt.Fprintln(w, "---\t-----\t------")
+		fmt.Fprintln(w, "KEY\tVALUE\tSOURCE\tPROTECTION")
+		fmt.Fprintln(w, "---\t-----\t------\t----------")
+
+		violations := appLoader.Violations()
 
 		for _, k := range keys {
 			entry := sources[k]
@@ -61,7 +65,20 @@ var inspectCmd = &cobra.Command{
 				val = "********"
 			}
 
-			fmt.Fprintf(w, "%s\t%s\t%s\n", k, val, sourceStr)
+			protection := ""
+			if config.IsImmutable(k) {
+				protection = "immutable"
+			} else {
+				// Check if this key was part of an untrusted project violation
+				for _, v := range violations {
+					if v.Key == k && v.Reason == "untrusted_project" {
+						protection = "untrusted"
+						break
+					}
+				}
+			}
+
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", k, val, sourceStr, protection)
 		}
 		w.Flush()
 		return nil
