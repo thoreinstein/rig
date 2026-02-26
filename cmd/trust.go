@@ -14,7 +14,8 @@ import (
 	"thoreinstein.com/rig/pkg/project"
 )
 
-var trustRemove bool
+// trustStore is shared across trust subcommands, initialized via PersistentPreRunE.
+var trustStore *config.TrustStore
 
 // trustCmd represents the trust command
 var trustCmd = &cobra.Command{
@@ -27,12 +28,16 @@ local .rig.toml files. Immutable keys (like credentials) are always protected
 regardless of trust.
 
 If no path is provided, the command applies to the current project root.`,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		if trustRemove {
-			return runTrustRemove(args)
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		ts, err := config.NewTrustStore()
+		if err != nil {
+			return err
 		}
+		trustStore = ts
+		return nil
+	},
+	RunE: func(cmd *cobra.Command, args []string) error {
 		if len(args) == 0 {
-			// Without args or flags, show status of current project
 			return runTrustStatus()
 		}
 		return runTrustAdd(args)
@@ -71,8 +76,6 @@ func init() {
 	trustCmd.AddCommand(trustAddCmd)
 	trustCmd.AddCommand(trustRemoveCmd)
 	trustCmd.AddCommand(trustListCmd)
-
-	trustCmd.Flags().BoolVarP(&trustRemove, "remove", "r", false, "Remove trust for the project")
 }
 
 func runTrustStatus() error {
@@ -84,12 +87,7 @@ func runTrustStatus() error {
 		return err
 	}
 
-	ts, err := config.NewTrustStore()
-	if err != nil {
-		return err
-	}
-
-	if ts.IsTrusted(ctx.RootPath) {
+	if trustStore.IsTrusted(ctx.RootPath) {
 		fmt.Printf("Project at %s: TRUSTED\n", ctx.RootPath)
 	} else {
 		fmt.Printf("Project at %s: NOT TRUSTED\n", ctx.RootPath)
@@ -105,12 +103,7 @@ func runTrustAdd(args []string) error {
 		return err
 	}
 
-	ts, err := config.NewTrustStore()
-	if err != nil {
-		return err
-	}
-
-	if err := ts.Add(path); err != nil {
+	if err := trustStore.Add(path); err != nil {
 		return err
 	}
 
@@ -124,12 +117,7 @@ func runTrustRemove(args []string) error {
 		return err
 	}
 
-	ts, err := config.NewTrustStore()
-	if err != nil {
-		return err
-	}
-
-	if err := ts.Remove(path); err != nil {
+	if err := trustStore.Remove(path); err != nil {
 		return err
 	}
 
@@ -138,12 +126,7 @@ func runTrustRemove(args []string) error {
 }
 
 func runTrustList() error {
-	ts, err := config.NewTrustStore()
-	if err != nil {
-		return err
-	}
-
-	list := ts.List()
+	list := trustStore.List()
 	if len(list) == 0 {
 		fmt.Println("No trusted projects found.")
 		return nil
@@ -181,10 +164,13 @@ func resolveProjectPath(args []string) (string, error) {
 			target = abs
 		}
 
-		// If we can't discover a project root at target, just use target as is (best effort)
+		// If we can't discover a project root at target, validate the path exists
 		ctx, err := project.Discover(target)
 		if err != nil {
-			return target, nil //nolint:nilerr // Returning original target as best effort if discovery fails
+			if _, statErr := os.Stat(target); statErr != nil {
+				return "", errors.Newf("path %q does not exist", target)
+			}
+			return target, nil
 		}
 		return ctx.RootPath, nil
 	}

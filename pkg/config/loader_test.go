@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/zalando/go-keyring"
@@ -389,4 +390,146 @@ session_prefix = "custom-"
 			}
 		}
 	})
+}
+
+func TestDeleteFlatKey(t *testing.T) {
+	tests := []struct {
+		name string
+		m    map[string]interface{}
+		key  string
+		want map[string]interface{}
+	}{
+		{
+			name: "dotted key in nested map",
+			m: map[string]interface{}{
+				"github": map[string]interface{}{
+					"token": "secret",
+					"org":   "acme",
+				},
+			},
+			key: "github.token",
+			want: map[string]interface{}{
+				"github": map[string]interface{}{
+					"org": "acme",
+				},
+			},
+		},
+		{
+			name: "simple top-level key",
+			m: map[string]interface{}{
+				"foo": "bar",
+			},
+			key:  "foo",
+			want: map[string]interface{}{},
+		},
+		{
+			name: "non-existent intermediate path",
+			m: map[string]interface{}{
+				"a": "b",
+			},
+			key: "x.y.z",
+			want: map[string]interface{}{
+				"a": "b",
+			},
+		},
+		{
+			name: "empty map",
+			m:    map[string]interface{}{},
+			key:  "foo",
+			want: map[string]interface{}{},
+		},
+		{
+			name: "deeply nested key",
+			m: map[string]interface{}{
+				"a": map[string]interface{}{
+					"b": map[string]interface{}{
+						"c": "value",
+					},
+				},
+			},
+			key: "a.b.c",
+			want: map[string]interface{}{
+				"a": map[string]interface{}{
+					"b": map[string]interface{}{},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			deleteFlatKey(tt.m, tt.key)
+			if !reflect.DeepEqual(tt.m, tt.want) {
+				t.Errorf("deleteFlatKey() = %v, want %v", tt.m, tt.want)
+			}
+		})
+	}
+}
+
+func TestLayeredLoader_ImmutableKeyNestedCascade(t *testing.T) {
+	tmpDir := t.TempDir()
+	root := filepath.Join(tmpDir, "root")
+	sub := filepath.Join(root, "sub")
+	if err := os.MkdirAll(filepath.Join(root, ".git"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(sub, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Root .rig.toml sets immutable key AND a normal cascading key
+	rootConfig := `
+[github]
+token = "root-token"
+default_merge_method = "merge"
+`
+	if err := os.WriteFile(filepath.Join(root, ".rig.toml"), []byte(rootConfig), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Sub .rig.toml overrides both
+	subConfig := `
+[github]
+token = "sub-token"
+default_merge_method = "squash"
+`
+	if err := os.WriteFile(filepath.Join(sub, ".rig.toml"), []byte(subConfig), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	l := &LayeredLoader{
+		sources:        make(SourceMap),
+		SkipGlobalSync: true,
+		projectCtx: &project.ProjectContext{
+			RootPath: root,
+			Origin:   sub,
+		},
+		userFile: filepath.Join(tmpDir, "user.toml"),
+	}
+
+	cfg, err := l.Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+
+	// github.token is immutable — must NOT be overridden by either level
+	if cfg.GitHub.Token != "" {
+		t.Errorf("github.token = %q, want empty (immutable key should be blocked)", cfg.GitHub.Token)
+	}
+
+	// default_merge_method should cascade normally to the sub value
+	if cfg.GitHub.DefaultMergeMethod != "squash" {
+		t.Errorf("github.default_merge_method = %q, want %q", cfg.GitHub.DefaultMergeMethod, "squash")
+	}
+
+	// Should have 2 immutable violations (one per config file)
+	var immutableCount int
+	for _, v := range l.Violations() {
+		if v.Key == "github.token" && v.Reason == ViolationImmutable {
+			immutableCount++
+		}
+	}
+	if immutableCount != 2 {
+		t.Errorf("immutable violations for github.token = %d, want 2", immutableCount)
+	}
 }

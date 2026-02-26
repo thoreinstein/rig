@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/cockroachdb/errors"
@@ -63,6 +64,7 @@ func NewLayeredLoader(cfgFile string, verbose bool) (*LayeredLoader, error) {
 // Load performs the configuration loading and merging
 func (l *LayeredLoader) Load() (*Config, error) {
 	l.sources = make(SourceMap)
+	l.violations = nil
 
 	// We use a fresh viper instance for the entire resolution process
 	// to avoid pollution from previous loads or singleton state.
@@ -97,6 +99,15 @@ func (l *LayeredLoader) Load() (*Config, error) {
 	} else {
 		projectConfigs = CollectProjectConfigs("", l.cwd)
 	}
+	// Determine trust status once before iterating project configs.
+	// If trustStore is nil (failed to init), treat as untrusted — fail-closed.
+	var untrustedProject bool
+	if l.projectCtx != nil {
+		untrustedProject = l.trustStore == nil || !l.trustStore.IsTrusted(l.projectCtx.RootPath)
+	} else if len(projectConfigs) > 0 {
+		untrustedProject = true
+	}
+
 	for _, pc := range projectConfigs {
 		if _, err := os.Stat(pc); err == nil {
 			localViper := viper.New()
@@ -107,11 +118,15 @@ func (l *LayeredLoader) Load() (*Config, error) {
 			}
 
 			projectSettings := localViper.AllSettings()
-
-			// Check for immutable violations and project trust.
-			// If trustStore is nil (failed to init), treat as untrusted — fail-closed.
-			untrustedProject := l.projectCtx != nil && (l.trustStore == nil || !l.trustStore.IsTrusted(l.projectCtx.RootPath))
 			diffs := DiffSettings(defaultSettings, projectSettings, "")
+
+			// Catch immutable keys even when their value matches the current default
+			// (DiffSettings would skip them since the values are equal).
+			for immKey := range immutableKeys {
+				if localViper.IsSet(immKey) && !slices.Contains(diffs, immKey) {
+					diffs = append(diffs, immKey)
+				}
+			}
 
 			for _, key := range diffs {
 				// 1. Check Immutability (Always Blocked)

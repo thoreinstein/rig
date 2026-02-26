@@ -54,6 +54,10 @@ var inspectCmd = &cobra.Command{
 		fmt.Fprintln(w, "---\t-----\t------\t----------")
 
 		violations := appLoader.Violations()
+		violationsByKey := make(map[string]config.ViolationReason, len(violations))
+		for _, v := range violations {
+			violationsByKey[v.Key] = v.Reason
+		}
 
 		for _, k := range keys {
 			entry := sources[k]
@@ -68,14 +72,8 @@ var inspectCmd = &cobra.Command{
 			protection := ""
 			if config.IsImmutable(k) {
 				protection = "immutable"
-			} else {
-				// Check if this key was part of an untrusted project violation
-				for _, v := range violations {
-					if v.Key == k && v.Reason == config.ViolationUntrustedProject {
-						protection = "untrusted"
-						break
-					}
-				}
+			} else if reason, ok := violationsByKey[k]; ok && reason == config.ViolationUntrustedProject {
+				protection = "untrusted"
 			}
 
 			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", k, val, sourceStr, protection)

@@ -9,7 +9,9 @@ import (
 	"github.com/cockroachdb/errors"
 )
 
-// immutableKeys defines the set of configuration keys that cannot be overridden by project-level configs.
+// immutableKeys defines the set of configuration keys that cannot be overridden
+// by project-level configs. This map is package-level and must not be modified
+// after initialization. Use IsImmutable() as the public accessor.
 var immutableKeys = map[string]bool{
 	"github.token":               true,
 	"github.client_id":           true,
@@ -27,17 +29,19 @@ func IsImmutable(key string) bool {
 	return immutableKeys[key]
 }
 
-// Violation reason constants.
+// ViolationReason is the type for trust violation reason constants.
+type ViolationReason string
+
 const (
-	ViolationImmutable        = "immutable"
-	ViolationUntrustedProject = "untrusted_project"
+	ViolationImmutable        ViolationReason = "immutable"
+	ViolationUntrustedProject ViolationReason = "untrusted_project"
 )
 
 // TrustViolation represents an attempt by a project config to override a protected key or an untrusted project.
 type TrustViolation struct {
 	Key            string
 	File           string
-	Reason         string // ViolationImmutable or ViolationUntrustedProject
+	Reason         ViolationReason
 	AttemptedValue interface{}
 }
 
@@ -73,7 +77,16 @@ func NewTrustStore() (*TrustStore, error) {
 }
 
 // Load reads the trust store from disk.
+// It refuses to follow symlinks to prevent trust-store hijacking.
 func (s *TrustStore) Load() error {
+	info, err := os.Lstat(s.path)
+	if err != nil {
+		return err
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return errors.Newf("trust store %q is a symlink; refusing to load", s.path)
+	}
+
 	data, err := os.ReadFile(s.path)
 	if err != nil {
 		return err
@@ -88,7 +101,7 @@ func (s *TrustStore) Load() error {
 	return json.Unmarshal(data, &s.trusted)
 }
 
-// Save writes the trust store to disk.
+// Save writes the trust store to disk atomically via temp-file + rename.
 func (s *TrustStore) Save() error {
 	dir := filepath.Dir(s.path)
 	if err := os.MkdirAll(dir, 0700); err != nil {
@@ -100,10 +113,35 @@ func (s *TrustStore) Save() error {
 		return errors.Wrap(err, "failed to marshal trust data")
 	}
 
-	return os.WriteFile(s.path, data, 0600)
+	tmp, err := os.CreateTemp(dir, "trusted-projects-*.json.tmp")
+	if err != nil {
+		return errors.Wrap(err, "failed to create temp file for trust store")
+	}
+	tmpPath := tmp.Name()
+
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		os.Remove(tmpPath)
+		return errors.Wrap(err, "failed to write trust data to temp file")
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(tmpPath)
+		return errors.Wrap(err, "failed to close temp file")
+	}
+	if err := os.Chmod(tmpPath, 0600); err != nil {
+		os.Remove(tmpPath)
+		return errors.Wrap(err, "failed to set permissions on temp file")
+	}
+	if err := os.Rename(tmpPath, s.path); err != nil {
+		os.Remove(tmpPath)
+		return errors.Wrap(err, "failed to atomically replace trust store")
+	}
+
+	return nil
 }
 
 // IsTrusted returns true if the given project root path is trusted.
+// The path is canonicalized via filepath.Clean before lookup.
 func (s *TrustStore) IsTrusted(projectRoot string) bool {
 	if projectRoot == "" {
 		return false
@@ -115,6 +153,7 @@ func (s *TrustStore) IsTrusted(projectRoot string) bool {
 }
 
 // Add adds a project root path to the trust store.
+// The path is canonicalized via filepath.Clean before storage.
 func (s *TrustStore) Add(projectRoot string) error {
 	if projectRoot == "" {
 		return errors.New("project root path cannot be empty")
@@ -127,6 +166,7 @@ func (s *TrustStore) Add(projectRoot string) error {
 }
 
 // Remove removes a project root path from the trust store.
+// The path is canonicalized via filepath.Clean before deletion.
 func (s *TrustStore) Remove(projectRoot string) error {
 	if projectRoot == "" {
 		return errors.New("project root path cannot be empty")
