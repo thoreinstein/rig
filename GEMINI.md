@@ -225,6 +225,7 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 - **Rig Trust Model**: Protect the cascade with **Immutable Keys** (hardcoded sensitive keys like `github.token`) and a **Project Trust Gate**. Untrusted projects trigger warnings on override.
 - **Fail-Closed Security Pattern**: In security-sensitive components (like the `TrustStore`), treat initialization failures or missing state as the most restrictive state (e.g., `untrusted`).
 - **Atomic State Transitions**: Use the "temp-file + rename" pattern for local state persistence (e.g., `trusted-projects.json`) to prevent data corruption during writes.
+- **Structured Discovery Trace**: Maintain an internal trace of resolution events (`DiscoveryEvent`) in the loader. This enables multi-format diagnostic output (Human/JSON) and unit testing of the discovery path without reliance on `stderr` parsing.
 
 ### Project Discovery Patterns
 - **Unified Project Discovery**: Centralize project root detection and marker logic into `pkg/project`. Use a marker-based upward traversal engine that respects repository boundaries (`.git`, `.beads`).
@@ -238,3 +239,5 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 - **Linter Deprecation Formatting**: `golangci-lint` requires `Deprecated:` comments to be in their own paragraph, separated from the description by a blank line.
 - **Secret Leakage in Warnings**: NEVER include the attempted value in security warning messages for immutable or sensitive keys. Printing the "blocked" value echoes potentially sensitive credentials to stderr/logs.
 - **Ghost Trust Paths**: Trust entries must match discovered project roots. Rejection of non-project paths (paths without `.git` or `.rig.toml`) during `rig trust add` prevents users from trusting invalid paths that would never satisfy a trust check.
+- **Sensitive Violation Leak**: Security violation logs (e.g., blocked overrides) often contain the `AttemptedValue`. Diagnostic outputs (especially JSON) must explicitly redact these values for sensitive keys, even if the primary configuration table is already redacted.
+- **Config Cache Staleness**: Global configuration caches (e.g., `appConfig`) must be explicitly cleared via a reset hook (e.g., `resetConfig()`) in unit tests. Failing to do so causes "cross-test contamination" where stale configuration from one test leaks into another. Commands that require fresh data (like `debug`) should bypass or explicitly refresh this cache.
