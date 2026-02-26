@@ -1456,7 +1456,6 @@ func TestCascadingConfig_TableDriven(t *testing.T) {
 		setupRepo    func(tmpDir string) string // returns directory to chdir to
 		setupConfigs func(tmpDir, cwd string)   // setup .rig.toml files
 		wantValues   map[string]string          // expected values after loading
-		wantMissing  []string                   // keys that should NOT be set
 	}{
 		{
 			name: "single config at git root",
