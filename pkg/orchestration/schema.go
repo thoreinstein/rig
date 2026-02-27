@@ -53,7 +53,8 @@ CREATE TABLE IF NOT EXISTS executions (
     completed_at TIMESTAMP NULL,
     error TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_execution_workflow FOREIGN KEY (workflow_id) REFERENCES workflows(id) ON DELETE CASCADE
+    CONSTRAINT fk_execution_workflow FOREIGN KEY (workflow_id) REFERENCES workflows(id) ON DELETE CASCADE,
+    INDEX idx_workflow_status (workflow_id, status)
 );`
 
 	// NodeStatesTableDDL defines the node_states table.
