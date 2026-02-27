@@ -354,8 +354,8 @@ func (dm *DatabaseManager) SaveWorkflowDefinition(ctx context.Context, w *Workfl
 	}
 
 	// 2. Clean existing nodes/edges if updating.
-	// Delete-and-replace strategy: edges reference nodes via FK with ON DELETE CASCADE,
-	// so deleting edges first avoids FK violations, then nodes are replaced entirely.
+	// Delete-and-replace strategy: edges reference nodes via FK (typically with ON DELETE CASCADE),
+	// but we explicitly delete edges first and then nodes for clarity and control over the update.
 	if _, err := tx.ExecContext(ctx, "DELETE FROM edges WHERE workflow_id = ?", deferredID); err != nil {
 		return errors.Wrap(err, "failed to clean edges")
 	}
