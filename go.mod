@@ -8,6 +8,7 @@ require (
 	github.com/cockroachdb/errors v1.12.0
 	github.com/creativeprojects/go-selfupdate v1.5.2
 	github.com/firebase/genkit/go v1.4.0
+	github.com/go-sql-driver/mysql v1.9.3
 	github.com/google/go-github/v68 v68.0.0
 	github.com/google/uuid v1.6.0
 	github.com/spf13/cobra v1.9.1
@@ -29,6 +30,7 @@ require (
 	cloud.google.com/go/auth v0.16.2 // indirect
 	cloud.google.com/go/compute/metadata v0.7.0 // indirect
 	code.gitea.io/sdk/gitea v0.22.1 // indirect
+	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/42wim/httpsig v1.2.3 // indirect
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
 	github.com/buger/jsonparser v1.1.1 // indirect
