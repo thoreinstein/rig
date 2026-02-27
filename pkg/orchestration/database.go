@@ -128,18 +128,29 @@ func (dm *DatabaseManager) GetWorkflow(ctx context.Context, id string) (*Workflo
 
 // UpdateWorkflow updates an existing workflow and increments its version.
 func (dm *DatabaseManager) UpdateWorkflow(ctx context.Context, w *Workflow) error {
-	active, err := dm.HasActiveExecutions(ctx, w.ID)
+	tx, err := dm.db.BeginTx(ctx, nil)
+	if err != nil {
+		return errors.Wrap(err, "failed to begin transaction")
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	// Lock the workflow row and fetch current state to ensure monotonic version and race-free guard
+	current := &Workflow{}
+	row := tx.QueryRowContext(ctx, "SELECT version, status FROM workflows WHERE id = ? FOR UPDATE", w.ID)
+	if err := row.Scan(&current.Version, &current.Status); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return errors.New("workflow not found")
+		}
+		return errors.Wrap(err, "failed to fetch current workflow in tx")
+	}
+
+	// Guard against active executions inside the locked transaction
+	active, err := dm.txHasActiveExecutions(ctx, tx, w.ID)
 	if err != nil {
 		return err
 	}
 	if active {
 		return errors.New("cannot update workflow with active executions")
-	}
-
-	// Fetch current state to ensure monotonic version and preserve existing status if zeroed
-	current, err := dm.GetWorkflow(ctx, w.ID)
-	if err != nil {
-		return err
 	}
 
 	newVersion := current.Version + 1
@@ -152,13 +163,17 @@ func (dm *DatabaseManager) UpdateWorkflow(ctx context.Context, w *Workflow) erro
 	}
 
 	query := `UPDATE workflows SET name = ?, description = ?, version = ?, status = ?, updated_at = ? WHERE id = ?`
-	_, err = dm.db.ExecContext(ctx, query, w.Name, w.Description, newVersion, status, now, w.ID)
-	if err != nil {
-		return errors.Wrap(err, "failed to update workflow")
+	if _, err := tx.ExecContext(ctx, query, w.Name, w.Description, newVersion, status, now, w.ID); err != nil {
+		return errors.Wrap(err, "failed to update workflow in tx")
 	}
 
-	if err := dm.autoCommit(ctx, fmt.Sprintf("Update workflow: %s (v%d)", w.Name, newVersion)); err != nil {
+	// Run Dolt versioning on the transaction so it's atomic with data changes.
+	if err := txAutoCommit(ctx, tx, fmt.Sprintf("Update workflow: %s (v%d)", w.Name, newVersion)); err != nil {
 		return err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return errors.Wrap(err, "failed to commit transaction")
 	}
 
 	// Only mutate the caller's struct after all DB operations succeed
@@ -270,16 +285,6 @@ func (dm *DatabaseManager) GetEdgesByWorkflow(ctx context.Context, workflowID st
 
 // SaveWorkflowDefinition transactionally saves a full workflow definition and creates a Dolt commit.
 func (dm *DatabaseManager) SaveWorkflowDefinition(ctx context.Context, w *Workflow, nodes []*Node, edges []*Edge) error {
-	if w.ID != "" {
-		active, err := dm.HasActiveExecutions(ctx, w.ID)
-		if err != nil {
-			return err
-		}
-		if active {
-			return errors.New("cannot update workflow definition with active executions")
-		}
-	}
-
 	tx, err := dm.db.BeginTx(ctx, nil)
 	if err != nil {
 		return errors.Wrap(err, "failed to begin transaction")
@@ -290,6 +295,7 @@ func (dm *DatabaseManager) SaveWorkflowDefinition(ctx context.Context, w *Workfl
 	// Track deferred mutations to apply only after all DB ops succeed.
 	var deferredID string
 	var deferredVersion int
+	var deferredStatus WorkflowStatus
 	var deferredCreatedAt, deferredUpdatedAt time.Time
 	isNew := w.ID == ""
 
@@ -298,32 +304,46 @@ func (dm *DatabaseManager) SaveWorkflowDefinition(ctx context.Context, w *Workfl
 		deferredVersion = 1
 		deferredCreatedAt = time.Now()
 		deferredUpdatedAt = deferredCreatedAt
-		if w.Status == "" {
-			w.Status = WorkflowStatusDraft
+		deferredStatus = w.Status
+		if deferredStatus == "" {
+			deferredStatus = WorkflowStatusDraft
 		}
 		query := `INSERT INTO workflows (id, name, description, version, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`
-		if _, err := tx.ExecContext(ctx, query, deferredID, w.Name, w.Description, deferredVersion, w.Status, deferredCreatedAt, deferredUpdatedAt); err != nil {
+		if _, err := tx.ExecContext(ctx, query, deferredID, w.Name, w.Description, deferredVersion, deferredStatus, deferredCreatedAt, deferredUpdatedAt); err != nil {
 			return errors.Wrap(err, "failed to insert workflow in tx")
 		}
 	} else {
 		deferredID = w.ID
-		// Fetch current state inside tx to ensure atomic merge and monotonic version
+		// Lock the workflow row and fetch current state inside tx to ensure atomic merge, monotonic version, and race-free guard
 		current := &Workflow{}
-		row := tx.QueryRowContext(ctx, "SELECT version, status FROM workflows WHERE id = ?", w.ID)
+		row := tx.QueryRowContext(ctx, "SELECT version, status FROM workflows WHERE id = ? FOR UPDATE", w.ID)
 		if err := row.Scan(&current.Version, &current.Status); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return errors.New("workflow not found")
+			}
 			return errors.Wrap(err, "failed to fetch current workflow in tx")
+		}
+
+		// Guard against active executions inside the locked transaction
+		active, err := dm.txHasActiveExecutions(ctx, tx, w.ID)
+		if err != nil {
+			return err
+		}
+		if active {
+			return errors.New("cannot update workflow definition with active executions")
 		}
 
 		deferredVersion = current.Version + 1
 		deferredUpdatedAt = time.Now()
+		deferredCreatedAt = w.CreatedAt // Preserve original creation time
 
-		status := w.Status
-		if status == "" {
-			status = current.Status
+		deferredStatus = w.Status
+		if deferredStatus == "" {
+			deferredStatus = current.Status
 		}
 
 		query := `UPDATE workflows SET name = ?, description = ?, version = ?, status = ?, updated_at = ? WHERE id = ?`
-		if _, err := tx.ExecContext(ctx, query, w.Name, w.Description, deferredVersion, status, deferredUpdatedAt, w.ID); err != nil {
+		if _, err := tx.ExecContext(ctx, query, w.Name, w.Description, deferredVersion, deferredStatus, deferredUpdatedAt, w.ID); err != nil {
 			return errors.Wrap(err, "failed to update workflow in tx")
 		}
 	}
@@ -377,6 +397,7 @@ func (dm *DatabaseManager) SaveWorkflowDefinition(ctx context.Context, w *Workfl
 	// Only mutate the caller's struct after all DB operations succeed
 	w.ID = deferredID
 	w.Version = deferredVersion
+	w.Status = deferredStatus
 	w.UpdatedAt = deferredUpdatedAt
 	if isNew {
 		w.CreatedAt = deferredCreatedAt
@@ -618,4 +639,15 @@ func (dm *DatabaseManager) DoltLog(ctx context.Context, limit int) ([]DoltCommit
 		return nil, errors.Wrap(err, "error iterating dolt log rows")
 	}
 	return commits, nil
+}
+
+// txHasActiveExecutions is like HasActiveExecutions but operates within a transaction.
+func (dm *DatabaseManager) txHasActiveExecutions(ctx context.Context, tx *sql.Tx, workflowID string) (bool, error) {
+	query := `SELECT COUNT(*) FROM executions WHERE workflow_id = ? AND status IN ('PENDING', 'RUNNING')`
+	var count int
+	err := tx.QueryRowContext(ctx, query, workflowID).Scan(&count)
+	if err != nil {
+		return false, errors.Wrap(err, "failed to check active executions in tx")
+	}
+	return count > 0, nil
 }
