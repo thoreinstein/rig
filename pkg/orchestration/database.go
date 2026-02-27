@@ -125,11 +125,19 @@ func (dm *DatabaseManager) GetWorkflow(ctx context.Context, id string) (*Workflo
 
 // UpdateWorkflow updates an existing workflow and increments its version.
 func (dm *DatabaseManager) UpdateWorkflow(ctx context.Context, w *Workflow) error {
+	active, err := dm.HasActiveExecutions(ctx, w.ID)
+	if err != nil {
+		return err
+	}
+	if active {
+		return errors.New("cannot update workflow with active executions")
+	}
+
 	w.Version++
 	w.UpdatedAt = time.Now()
 
 	query := `UPDATE workflows SET name = ?, description = ?, version = ?, status = ?, updated_at = ? WHERE id = ?`
-	_, err := dm.db.ExecContext(ctx, query, w.Name, w.Description, w.Version, w.Status, w.UpdatedAt, w.ID)
+	_, err = dm.db.ExecContext(ctx, query, w.Name, w.Description, w.Version, w.Status, w.UpdatedAt, w.ID)
 	if err != nil {
 		return errors.Wrap(err, "failed to update workflow")
 	}
@@ -230,6 +238,16 @@ func (dm *DatabaseManager) GetEdgesByWorkflow(ctx context.Context, workflowID st
 
 // SaveWorkflowDefinition transactionally saves a full workflow definition and creates a Dolt commit.
 func (dm *DatabaseManager) SaveWorkflowDefinition(ctx context.Context, w *Workflow, nodes []*Node, edges []*Edge) error {
+	if w.ID != "" {
+		active, err := dm.HasActiveExecutions(ctx, w.ID)
+		if err != nil {
+			return err
+		}
+		if active {
+			return errors.New("cannot update workflow definition with active executions")
+		}
+	}
+
 	tx, err := dm.db.BeginTx(ctx, nil)
 	if err != nil {
 		return errors.Wrap(err, "failed to begin transaction")
@@ -439,6 +457,19 @@ func (dm *DatabaseManager) GetNodeStatesByExecution(ctx context.Context, executi
 		states = append(states, ns)
 	}
 	return states, nil
+}
+
+// --- Phase 5: Backward Compatibility Guard ---
+
+// HasActiveExecutions checks if there are any PENDING or RUNNING executions for a given workflow.
+func (dm *DatabaseManager) HasActiveExecutions(ctx context.Context, workflowID string) (bool, error) {
+	query := `SELECT COUNT(*) FROM executions WHERE workflow_id = ? AND status IN ('PENDING', 'RUNNING')`
+	var count int
+	err := dm.db.QueryRowContext(ctx, query, workflowID).Scan(&count)
+	if err != nil {
+		return false, errors.Wrap(err, "failed to check active executions")
+	}
+	return count > 0, nil
 }
 
 func isValidExecutionTransition(from, to ExecutionStatus) bool {

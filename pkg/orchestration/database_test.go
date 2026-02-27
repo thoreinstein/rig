@@ -1,0 +1,207 @@
+package orchestration
+
+import (
+	"os"
+	"testing"
+
+	"github.com/google/uuid"
+)
+
+func skipWithoutDolt(t *testing.T) *DatabaseManager {
+	if testing.Short() {
+		t.Skip("skipping integration test (short mode)")
+	}
+
+	dsn := os.Getenv("RIG_TEST_DOLT_DSN")
+	if dsn == "" {
+		t.Skip("skipping integration test (RIG_TEST_DOLT_DSN not set)")
+	}
+
+	dm, err := NewDatabaseManager(dsn, true)
+	if err != nil {
+		t.Fatalf("Failed to connect to Dolt: %v", err)
+	}
+
+	return dm
+}
+
+func TestInitSchema(t *testing.T) {
+	dm := skipWithoutDolt(t)
+	defer dm.Close()
+
+	if err := dm.InitSchema(); err != nil {
+		t.Fatalf("InitSchema() failed: %v", err)
+	}
+}
+
+func TestWorkflowCRUD(t *testing.T) {
+	dm := skipWithoutDolt(t)
+	defer dm.Close()
+	ctx := t.Context()
+
+	_ = dm.InitSchema()
+
+	workflowName := "test-workflow-" + uuid.New().String()
+	w := &Workflow{
+		Name:        workflowName,
+		Description: "Test Description",
+		Version:     1,
+		Status:      WorkflowStatusDraft,
+	}
+
+	// Test Create
+	if err := dm.CreateWorkflow(ctx, w); err != nil {
+		t.Fatalf("CreateWorkflow() failed: %v", err)
+	}
+
+	// Test Get
+	retrieved, err := dm.GetWorkflow(ctx, w.ID)
+	if err != nil {
+		t.Fatalf("GetWorkflow() failed: %v", err)
+	}
+	if retrieved.Name != w.Name {
+		t.Errorf("Retrieved name = %q, want %q", retrieved.Name, w.Name)
+	}
+
+	// Test Update
+	retrieved.Description = "Updated Description"
+	if err := dm.UpdateWorkflow(ctx, retrieved); err != nil {
+		t.Fatalf("UpdateWorkflow() failed: %v", err)
+	}
+
+	updated, _ := dm.GetWorkflow(ctx, w.ID)
+	if updated.Version != 2 {
+		t.Errorf("Updated version = %d, want 2", updated.Version)
+	}
+
+	// Test List
+	workflows, err := dm.ListWorkflows(ctx)
+	if err != nil {
+		t.Fatalf("ListWorkflows() failed: %v", err)
+	}
+	found := false
+	for _, wf := range workflows {
+		if wf.ID == w.ID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("Workflow %s not found in list", w.ID)
+	}
+}
+
+func TestSaveWorkflowDefinition(t *testing.T) {
+	dm := skipWithoutDolt(t)
+	defer dm.Close()
+	ctx := t.Context()
+
+	_ = dm.InitSchema()
+
+	w := &Workflow{
+		Name:   "def-test-" + uuid.New().String(),
+		Status: WorkflowStatusActive,
+	}
+
+	nodes := []*Node{
+		{Name: "node1", Type: "task"},
+		{Name: "node2", Type: "task"},
+	}
+
+	// We'll set IDs after creation to satisfy FKs if needed,
+	// but SaveWorkflowDefinition handles it.
+
+	if err := dm.SaveWorkflowDefinition(ctx, w, nodes, nil); err != nil {
+		t.Fatalf("SaveWorkflowDefinition() failed: %v", err)
+	}
+
+	// Verify nodes
+	dbNodes, err := dm.GetNodesByWorkflow(ctx, w.ID)
+	if err != nil {
+		t.Fatalf("GetNodesByWorkflow() failed: %v", err)
+	}
+	if len(dbNodes) != 2 {
+		t.Errorf("Got %d nodes, want 2", len(dbNodes))
+	}
+
+	// Test Dolt Log
+	log, err := dm.DoltLog(ctx, 5)
+	if err != nil {
+		t.Fatalf("DoltLog() failed: %v", err)
+	}
+	if len(log) == 0 {
+		t.Error("Dolt log is empty, expected commits")
+	}
+}
+
+func TestExecutionLifecycle(t *testing.T) {
+	dm := skipWithoutDolt(t)
+	defer dm.Close()
+	ctx := t.Context()
+
+	_ = dm.InitSchema()
+
+	// Need a workflow first
+	w := &Workflow{Name: "exec-test-" + uuid.New().String()}
+	_ = dm.CreateWorkflow(ctx, w)
+
+	exec := &Execution{
+		WorkflowID:      w.ID,
+		WorkflowVersion: w.Version,
+	}
+
+	if err := dm.CreateExecution(ctx, exec); err != nil {
+		t.Fatalf("CreateExecution() failed: %v", err)
+	}
+
+	if err := dm.UpdateExecutionStatus(ctx, exec.ID, ExecutionStatusRunning); err != nil {
+		t.Fatalf("UpdateExecutionStatus(RUNNING) failed: %v", err)
+	}
+
+	updated, _ := dm.GetExecution(ctx, exec.ID)
+	if updated.Status != ExecutionStatusRunning || updated.StartedAt == nil {
+		t.Errorf("Execution not properly transitioned to RUNNING")
+	}
+
+	if err := dm.UpdateExecutionStatus(ctx, exec.ID, ExecutionStatusSuccess); err != nil {
+		t.Fatalf("UpdateExecutionStatus(SUCCESS) failed: %v", err)
+	}
+
+	updated, _ = dm.GetExecution(ctx, exec.ID)
+	if updated.Status != ExecutionStatusSuccess || updated.CompletedAt == nil {
+		t.Errorf("Execution not properly transitioned to SUCCESS")
+	}
+}
+
+func TestBackwardCompatibilityGuard(t *testing.T) {
+	dm := skipWithoutDolt(t)
+	defer dm.Close()
+	ctx := t.Context()
+
+	_ = dm.InitSchema()
+
+	w := &Workflow{Name: "guard-test-" + uuid.New().String()}
+	_ = dm.CreateWorkflow(ctx, w)
+
+	// Create an active execution
+	exec := &Execution{
+		WorkflowID:      w.ID,
+		WorkflowVersion: w.Version,
+		Status:          ExecutionStatusRunning,
+	}
+	_ = dm.CreateExecution(ctx, exec)
+	// Force it to RUNNING since CreateExecution defaults to PENDING (which is also active)
+	_ = dm.UpdateExecutionStatus(ctx, exec.ID, ExecutionStatusRunning)
+
+	// Try to update workflow
+	err := dm.UpdateWorkflow(ctx, w)
+	if err == nil {
+		t.Error("UpdateWorkflow should have failed due to active execution")
+	}
+
+	// Try to save definition
+	err = dm.SaveWorkflowDefinition(ctx, w, nil, nil)
+	if err == nil {
+		t.Error("SaveWorkflowDefinition should have failed due to active execution")
+	}
+}
