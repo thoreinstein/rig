@@ -25,8 +25,7 @@ CREATE TABLE IF NOT EXISTS nodes (
     type VARCHAR(50) NOT NULL,
     config JSON,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_node_workflow FOREIGN KEY (workflow_id) REFERENCES workflows(id) ON DELETE CASCADE,
-    UNIQUE(workflow_id, name)
+    CONSTRAINT fk_node_workflow FOREIGN KEY (workflow_id) REFERENCES workflows(id) ON DELETE CASCADE
 );`
 
 	// EdgesTableDDL defines the edges table.
@@ -70,7 +69,7 @@ CREATE TABLE IF NOT EXISTS node_states (
     error TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_nodestate_execution FOREIGN KEY (execution_id) REFERENCES executions(id) ON DELETE CASCADE,
-    CONSTRAINT fk_nodestate_node FOREIGN KEY (node_id) REFERENCES nodes(id) ON DELETE CASCADE,
+    CONSTRAINT fk_nodestate_node FOREIGN KEY (node_id) REFERENCES nodes(id),
     UNIQUE(execution_id, node_id)
 );`
 )

@@ -214,6 +214,9 @@ func (dm *DatabaseManager) ListWorkflows(ctx context.Context) ([]*Workflow, erro
 		}
 		workflows = append(workflows, w)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, errors.Wrap(err, "error iterating workflow rows")
+	}
 	return workflows, nil
 }
 
@@ -251,6 +254,9 @@ func (dm *DatabaseManager) GetNodesByWorkflow(ctx context.Context, workflowID st
 		}
 		nodes = append(nodes, n)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, errors.Wrap(err, "error iterating node rows")
+	}
 	return nodes, nil
 }
 
@@ -284,6 +290,9 @@ func (dm *DatabaseManager) GetEdgesByWorkflow(ctx context.Context, workflowID st
 			return nil, errors.Wrap(err, "failed to scan edge")
 		}
 		edges = append(edges, e)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, errors.Wrap(err, "error iterating edge rows")
 	}
 	return edges, nil
 }
@@ -355,7 +364,10 @@ func (dm *DatabaseManager) SaveWorkflowDefinition(ctx context.Context, w *Workfl
 
 	// 2. Clean existing edges if updating.
 	// Edges reference nodes via FK; deleting edges does not affect historical node_states,
-	// which are linked to nodes. We deliberately keep existing nodes to preserve history.
+	// which are linked to nodes. We deliberately keep existing nodes to preserve history, but
+	// note that the nodes table enforces name uniqueness per workflow (UNIQUE(workflow_id, name)),
+	// so callers must avoid reusing node names within the same workflow if they want to add new
+	// definitions while retaining historical node records.
 	if _, err := tx.ExecContext(ctx, "DELETE FROM edges WHERE workflow_id = ?", deferredID); err != nil {
 		return errors.Wrap(err, "failed to clean edges")
 	}
@@ -495,7 +507,7 @@ func (dm *DatabaseManager) UpdateExecutionStatus(ctx context.Context, id string,
 	return nil
 }
 
-// CreateNodeState inserts a initial state for a node in an execution.
+// CreateNodeState inserts an initial state for a node in an execution.
 func (dm *DatabaseManager) CreateNodeState(ctx context.Context, ns *NodeState) error {
 	if ns.ID == "" {
 		ns.ID = uuid.New().String()

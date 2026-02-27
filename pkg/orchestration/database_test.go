@@ -142,6 +142,66 @@ func TestSaveWorkflowDefinition(t *testing.T) {
 	}
 }
 
+func TestUpdateWorkflowDefinition(t *testing.T) {
+	dm := skipWithoutDolt(t)
+	defer dm.Close()
+	ctx := t.Context()
+
+	if err := dm.InitSchema(); err != nil {
+		t.Fatalf("InitSchema() failed: %v", err)
+	}
+
+	// Initial workflow definition
+	w := &Workflow{
+		Name:   "def-update-test-" + uuid.New().String(),
+		Status: WorkflowStatusActive,
+	}
+
+	initialNodes := []*Node{
+		{Name: "node1", Type: "task"},
+		{Name: "node2", Type: "task"},
+	}
+
+	if err := dm.SaveWorkflowDefinition(ctx, w, initialNodes, nil); err != nil {
+		t.Fatalf("initial SaveWorkflowDefinition() failed: %v", err)
+	}
+
+	// Updated definition with overlapping node name "node1" and a new node "node3".
+	// This should update the existing node1 record rather than violating a UNIQUE
+	// constraint on (workflow_id, name).
+	updatedNodes := []*Node{
+		{Name: "node1", Type: "updated-task"},
+		{Name: "node3", Type: "task"},
+	}
+
+	if err := dm.SaveWorkflowDefinition(ctx, w, updatedNodes, nil); err != nil {
+		t.Fatalf("updated SaveWorkflowDefinition() failed: %v", err)
+	}
+
+	dbNodes, err := dm.GetNodesByWorkflow(ctx, w.ID)
+	if err != nil {
+		t.Fatalf("GetNodesByWorkflow() after update failed: %v", err)
+	}
+
+	if len(dbNodes) != 2 {
+		t.Fatalf("Got %d nodes after update, want 2", len(dbNodes))
+	}
+
+	nodeByName := make(map[string]*Node, len(dbNodes))
+	for _, n := range dbNodes {
+		nodeByName[n.Name] = n
+	}
+
+	if n, ok := nodeByName["node1"]; !ok {
+		t.Fatalf("Updated nodes missing 'node1'")
+	} else if n.Type != "updated-task" {
+		t.Errorf("node1 type = %q, want %q", n.Type, "updated-task")
+	}
+
+	if _, ok := nodeByName["node3"]; !ok {
+		t.Fatalf("Updated nodes missing 'node3'")
+	}
+}
 func TestExecutionLifecycle(t *testing.T) {
 	dm := skipWithoutDolt(t)
 	defer dm.Close()
