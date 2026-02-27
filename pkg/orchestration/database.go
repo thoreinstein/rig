@@ -449,6 +449,47 @@ func (dm *DatabaseManager) CreateExecution(ctx context.Context, e *Execution) er
 	return nil
 }
 
+// CreateExecutionWithInitialStates creates an execution and initializes all node states.
+func (dm *DatabaseManager) CreateExecutionWithInitialStates(ctx context.Context, workflowID string, version int) (*Execution, error) {
+	nodes, err := dm.GetNodesByWorkflow(ctx, workflowID, version)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get nodes")
+	}
+
+	tx, err := dm.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to begin transaction")
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	e := &Execution{
+		ID:              uuid.New().String(),
+		WorkflowID:      workflowID,
+		WorkflowVersion: version,
+		Status:          ExecutionStatusPending,
+		CreatedAt:       time.Now(),
+	}
+
+	execQuery := `INSERT INTO executions (id, workflow_id, workflow_version, status, created_at) VALUES (?, ?, ?, ?, ?)`
+	if _, err := tx.ExecContext(ctx, execQuery, e.ID, e.WorkflowID, e.WorkflowVersion, e.Status, e.CreatedAt); err != nil {
+		return nil, errors.Wrap(err, "failed to insert execution")
+	}
+
+	nodeStateQuery := `INSERT INTO node_states (id, execution_id, node_id, status, created_at) VALUES (?, ?, ?, ?, ?)`
+	for _, node := range nodes {
+		nsID := uuid.New().String()
+		if _, err := tx.ExecContext(ctx, nodeStateQuery, nsID, e.ID, node.ID, NodeStatusPending, e.CreatedAt); err != nil {
+			return nil, errors.Wrap(err, "failed to insert node state")
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, errors.Wrap(err, "failed to commit transaction")
+	}
+
+	return e, nil
+}
+
 // GetExecution retrieves an execution by ID.
 func (dm *DatabaseManager) GetExecution(ctx context.Context, id string) (*Execution, error) {
 	query := `SELECT id, workflow_id, workflow_version, status, started_at, completed_at, error, created_at FROM executions WHERE id = ?`
