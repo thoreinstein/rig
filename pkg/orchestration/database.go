@@ -296,6 +296,11 @@ func (dm *DatabaseManager) GetEdgesByWorkflow(ctx context.Context, workflowID st
 
 // SaveWorkflowDefinition transactionally saves a full workflow definition and creates a Dolt commit.
 func (dm *DatabaseManager) SaveWorkflowDefinition(ctx context.Context, w *Workflow, nodes []*Node, edges []*Edge) error {
+	// 0. Validate DAG
+	if err := ValidateWorkflow(nodes, edges); err != nil {
+		return errors.Wrap(err, "invalid workflow definition")
+	}
+
 	tx, err := dm.db.BeginTx(ctx, nil)
 	if err != nil {
 		return errors.Wrap(err, "failed to begin transaction")
