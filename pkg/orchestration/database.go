@@ -298,6 +298,160 @@ func (dm *DatabaseManager) SaveWorkflowDefinition(ctx context.Context, w *Workfl
 	return dm.autoCommit(ctx, fmt.Sprintf("Save workflow definition: %s (v%d)", w.Name, w.Version))
 }
 
+// --- Phase 4: Execution State Management ---
+
+// CreateExecution inserts a new execution record.
+func (dm *DatabaseManager) CreateExecution(ctx context.Context, e *Execution) error {
+	if e.ID == "" {
+		e.ID = uuid.New().String()
+	}
+	if e.Status == "" {
+		e.Status = ExecutionStatusPending
+	}
+	if e.CreatedAt.IsZero() {
+		e.CreatedAt = time.Now()
+	}
+
+	query := `INSERT INTO executions (id, workflow_id, workflow_version, status, created_at) VALUES (?, ?, ?, ?, ?)`
+	_, err := dm.db.ExecContext(ctx, query, e.ID, e.WorkflowID, e.WorkflowVersion, e.Status, e.CreatedAt)
+	if err != nil {
+		return errors.Wrap(err, "failed to insert execution")
+	}
+	return nil
+}
+
+// GetExecution retrieves an execution by ID.
+func (dm *DatabaseManager) GetExecution(ctx context.Context, id string) (*Execution, error) {
+	query := `SELECT id, workflow_id, workflow_version, status, started_at, completed_at, error, created_at FROM executions WHERE id = ?`
+	e := &Execution{}
+	err := dm.db.QueryRowContext(ctx, query, id).Scan(
+		&e.ID, &e.WorkflowID, &e.WorkflowVersion, &e.Status, &e.StartedAt, &e.CompletedAt, &e.Error, &e.CreatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, errors.New("execution not found")
+		}
+		return nil, errors.Wrap(err, "failed to get execution")
+	}
+	return e, nil
+}
+
+// UpdateExecutionStatus transitions an execution to a new status.
+// It also sets started_at or completed_at based on the status.
+func (dm *DatabaseManager) UpdateExecutionStatus(ctx context.Context, id string, status ExecutionStatus) error {
+	current, err := dm.GetExecution(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	// Simple state machine validation
+	if !isValidExecutionTransition(current.Status, status) {
+		return errors.Errorf("invalid execution status transition from %s to %s", current.Status, status)
+	}
+
+	var query string
+	var args []interface{}
+	now := time.Now()
+
+	switch status {
+	case ExecutionStatusRunning:
+		query = `UPDATE executions SET status = ?, started_at = ? WHERE id = ?`
+		args = []interface{}{status, now, id}
+	case ExecutionStatusSuccess, ExecutionStatusFailed, ExecutionStatusCancelled:
+		query = `UPDATE executions SET status = ?, completed_at = ? WHERE id = ?`
+		if status == ExecutionStatusFailed {
+			// Error message should be set separately or we could add an argument
+			query = `UPDATE executions SET status = ?, completed_at = ? WHERE id = ?`
+		}
+		args = []interface{}{status, now, id}
+	default:
+		query = `UPDATE executions SET status = ? WHERE id = ?`
+		args = []interface{}{status, id}
+	}
+
+	_, err = dm.db.ExecContext(ctx, query, args...)
+	if err != nil {
+		return errors.Wrap(err, "failed to update execution status")
+	}
+	return nil
+}
+
+// CreateNodeState inserts a initial state for a node in an execution.
+func (dm *DatabaseManager) CreateNodeState(ctx context.Context, ns *NodeState) error {
+	if ns.ID == "" {
+		ns.ID = uuid.New().String()
+	}
+	if ns.Status == "" {
+		ns.Status = NodeStatusPending
+	}
+	if ns.CreatedAt.IsZero() {
+		ns.CreatedAt = time.Now()
+	}
+
+	query := `INSERT INTO node_states (id, execution_id, node_id, status, created_at) VALUES (?, ?, ?, ?, ?)`
+	_, err := dm.db.ExecContext(ctx, query, ns.ID, ns.ExecutionID, ns.NodeID, ns.Status, ns.CreatedAt)
+	if err != nil {
+		return errors.Wrap(err, "failed to insert node state")
+	}
+	return nil
+}
+
+// UpdateNodeStatus updates the status and result of a node in an execution.
+func (dm *DatabaseManager) UpdateNodeStatus(ctx context.Context, id string, status NodeStatus, result []byte, errMsg string) error {
+	var query string
+	var args []interface{}
+	now := time.Now()
+
+	switch status {
+	case NodeStatusRunning:
+		query = `UPDATE node_states SET status = ?, started_at = ? WHERE id = ?`
+		args = []interface{}{status, now, id}
+	case NodeStatusSuccess, NodeStatusFailed, NodeStatusSkipped:
+		query = `UPDATE node_states SET status = ?, completed_at = ?, result = ?, error = ? WHERE id = ?`
+		args = []interface{}{status, now, result, errMsg, id}
+	default:
+		query = `UPDATE node_states SET status = ? WHERE id = ?`
+		args = []interface{}{status, id}
+	}
+
+	_, err := dm.db.ExecContext(ctx, query, args...)
+	if err != nil {
+		return errors.Wrap(err, "failed to update node status")
+	}
+	return nil
+}
+
+// GetNodeStatesByExecution retrieves all node states for a given execution.
+func (dm *DatabaseManager) GetNodeStatesByExecution(ctx context.Context, executionID string) ([]*NodeState, error) {
+	query := `SELECT id, execution_id, node_id, status, started_at, completed_at, result, error, created_at FROM node_states WHERE execution_id = ?`
+	rows, err := dm.db.QueryContext(ctx, query, executionID)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get node states")
+	}
+	defer rows.Close()
+
+	var states []*NodeState
+	for rows.Next() {
+		ns := &NodeState{}
+		if err := rows.Scan(&ns.ID, &ns.ExecutionID, &ns.NodeID, &ns.Status, &ns.StartedAt, &ns.CompletedAt, &ns.Result, &ns.Error, &ns.CreatedAt); err != nil {
+			return nil, errors.Wrap(err, "failed to scan node state")
+		}
+		states = append(states, ns)
+	}
+	return states, nil
+}
+
+func isValidExecutionTransition(from, to ExecutionStatus) bool {
+	switch from {
+	case ExecutionStatusPending:
+		return to == ExecutionStatusRunning || to == ExecutionStatusCancelled || to == ExecutionStatusFailed
+	case ExecutionStatusRunning:
+		return to == ExecutionStatusSuccess || to == ExecutionStatusFailed || to == ExecutionStatusCancelled
+	default:
+		return false
+	}
+}
+
 // --- Dolt Versioning Helpers ---
 
 func (dm *DatabaseManager) autoCommit(ctx context.Context, message string) error {
