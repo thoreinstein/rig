@@ -133,16 +133,23 @@ func (dm *DatabaseManager) UpdateWorkflow(ctx context.Context, w *Workflow) erro
 		return errors.New("cannot update workflow with active executions")
 	}
 
-	w.Version++
-	w.UpdatedAt = time.Now()
+	newVersion := w.Version + 1
+	now := time.Now()
 
 	query := `UPDATE workflows SET name = ?, description = ?, version = ?, status = ?, updated_at = ? WHERE id = ?`
-	_, err = dm.db.ExecContext(ctx, query, w.Name, w.Description, w.Version, w.Status, w.UpdatedAt, w.ID)
+	_, err = dm.db.ExecContext(ctx, query, w.Name, w.Description, newVersion, w.Status, now, w.ID)
 	if err != nil {
 		return errors.Wrap(err, "failed to update workflow")
 	}
 
-	return dm.autoCommit(ctx, fmt.Sprintf("Update workflow: %s (v%d)", w.Name, w.Version))
+	if err := dm.autoCommit(ctx, fmt.Sprintf("Update workflow: %s (v%d)", w.Name, newVersion)); err != nil {
+		return err
+	}
+
+	// Only mutate the caller's struct after all DB operations succeed
+	w.Version = newVersion
+	w.UpdatedAt = now
+	return nil
 }
 
 // ListWorkflows retrieves all workflows.
@@ -161,6 +168,9 @@ func (dm *DatabaseManager) ListWorkflows(ctx context.Context) ([]*Workflow, erro
 			return nil, errors.Wrap(err, "failed to scan workflow")
 		}
 		workflows = append(workflows, w)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, errors.Wrap(err, "error iterating workflow rows")
 	}
 	return workflows, nil
 }
@@ -199,6 +209,9 @@ func (dm *DatabaseManager) GetNodesByWorkflow(ctx context.Context, workflowID st
 		}
 		nodes = append(nodes, n)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, errors.Wrap(err, "error iterating node rows")
+	}
 	return nodes, nil
 }
 
@@ -233,6 +246,9 @@ func (dm *DatabaseManager) GetEdgesByWorkflow(ctx context.Context, workflowID st
 		}
 		edges = append(edges, e)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, errors.Wrap(err, "error iterating edge rows")
+	}
 	return edges, nil
 }
 
@@ -255,36 +271,44 @@ func (dm *DatabaseManager) SaveWorkflowDefinition(ctx context.Context, w *Workfl
 	defer tx.Rollback() //nolint:errcheck
 
 	// 1. Update/Create Workflow
-	if w.ID == "" {
-		w.ID = uuid.New().String()
-		w.Version = 1
-		w.CreatedAt = time.Now()
-		w.UpdatedAt = w.CreatedAt
+	// Track deferred mutations to apply only after all DB ops succeed.
+	var deferredID string
+	var deferredVersion int
+	var deferredCreatedAt, deferredUpdatedAt time.Time
+	isNew := w.ID == ""
+
+	if isNew {
+		deferredID = uuid.New().String()
+		deferredVersion = 1
+		deferredCreatedAt = time.Now()
+		deferredUpdatedAt = deferredCreatedAt
 		query := `INSERT INTO workflows (id, name, description, version, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`
-		if _, err := tx.ExecContext(ctx, query, w.ID, w.Name, w.Description, w.Version, w.Status, w.CreatedAt, w.UpdatedAt); err != nil {
+		if _, err := tx.ExecContext(ctx, query, deferredID, w.Name, w.Description, deferredVersion, w.Status, deferredCreatedAt, deferredUpdatedAt); err != nil {
 			return errors.Wrap(err, "failed to insert workflow in tx")
 		}
 	} else {
-		w.Version++
-		w.UpdatedAt = time.Now()
+		deferredID = w.ID
+		deferredVersion = w.Version + 1
+		deferredUpdatedAt = time.Now()
 		query := `UPDATE workflows SET name = ?, description = ?, version = ?, status = ?, updated_at = ? WHERE id = ?`
-		if _, err := tx.ExecContext(ctx, query, w.Name, w.Description, w.Version, w.Status, w.UpdatedAt, w.ID); err != nil {
+		if _, err := tx.ExecContext(ctx, query, w.Name, w.Description, deferredVersion, w.Status, deferredUpdatedAt, w.ID); err != nil {
 			return errors.Wrap(err, "failed to update workflow in tx")
 		}
 	}
 
-	// 2. Clean existing nodes/edges if updating
-	// This is a simplified approach: replace definition entirely.
-	if _, err := tx.ExecContext(ctx, "DELETE FROM edges WHERE workflow_id = ?", w.ID); err != nil {
+	// 2. Clean existing nodes/edges if updating.
+	// Delete-and-replace strategy: edges reference nodes via FK with ON DELETE CASCADE,
+	// so deleting edges first avoids FK violations, then nodes are replaced entirely.
+	if _, err := tx.ExecContext(ctx, "DELETE FROM edges WHERE workflow_id = ?", deferredID); err != nil {
 		return errors.Wrap(err, "failed to clean edges")
 	}
-	if _, err := tx.ExecContext(ctx, "DELETE FROM nodes WHERE workflow_id = ?", w.ID); err != nil {
+	if _, err := tx.ExecContext(ctx, "DELETE FROM nodes WHERE workflow_id = ?", deferredID); err != nil {
 		return errors.Wrap(err, "failed to clean nodes")
 	}
 
 	// 3. Insert new nodes
 	for _, n := range nodes {
-		n.WorkflowID = w.ID
+		n.WorkflowID = deferredID
 		if n.ID == "" {
 			n.ID = uuid.New().String()
 		}
@@ -299,7 +323,7 @@ func (dm *DatabaseManager) SaveWorkflowDefinition(ctx context.Context, w *Workfl
 
 	// 4. Insert new edges
 	for _, e := range edges {
-		e.WorkflowID = w.ID
+		e.WorkflowID = deferredID
 		if e.ID == "" {
 			e.ID = uuid.New().String()
 		}
@@ -313,10 +337,24 @@ func (dm *DatabaseManager) SaveWorkflowDefinition(ctx context.Context, w *Workfl
 		return errors.Wrap(err, "failed to commit transaction")
 	}
 
-	return dm.autoCommit(ctx, fmt.Sprintf("Save workflow definition: %s (v%d)", w.Name, w.Version))
+	if err := dm.autoCommit(ctx, fmt.Sprintf("Save workflow definition: %s (v%d)", w.Name, deferredVersion)); err != nil {
+		return err
+	}
+
+	// Only mutate the caller's struct after all DB operations succeed
+	w.ID = deferredID
+	w.Version = deferredVersion
+	w.UpdatedAt = deferredUpdatedAt
+	if isNew {
+		w.CreatedAt = deferredCreatedAt
+	}
+	return nil
 }
 
 // --- Phase 4: Execution State Management ---
+// Note: Execution state changes (CreateExecution, CreateNodeState, UpdateExecutionStatus,
+// UpdateNodeStatus) intentionally do not create Dolt commits. Only workflow *definitions*
+// are versioned via Dolt. Execution state is transient runtime data.
 
 // CreateExecution inserts a new execution record.
 func (dm *DatabaseManager) CreateExecution(ctx context.Context, e *Execution) error {
@@ -356,7 +394,8 @@ func (dm *DatabaseManager) GetExecution(ctx context.Context, id string) (*Execut
 
 // UpdateExecutionStatus transitions an execution to a new status.
 // It also sets started_at or completed_at based on the status.
-func (dm *DatabaseManager) UpdateExecutionStatus(ctx context.Context, id string, status ExecutionStatus) error {
+// For FAILED status, errMsg is recorded in the error column.
+func (dm *DatabaseManager) UpdateExecutionStatus(ctx context.Context, id string, status ExecutionStatus, errMsg string) error {
 	current, err := dm.GetExecution(ctx, id)
 	if err != nil {
 		return err
@@ -375,12 +414,11 @@ func (dm *DatabaseManager) UpdateExecutionStatus(ctx context.Context, id string,
 	case ExecutionStatusRunning:
 		query = `UPDATE executions SET status = ?, started_at = ? WHERE id = ?`
 		args = []interface{}{status, now, id}
-	case ExecutionStatusSuccess, ExecutionStatusFailed, ExecutionStatusCancelled:
+	case ExecutionStatusFailed:
+		query = `UPDATE executions SET status = ?, completed_at = ?, error = ? WHERE id = ?`
+		args = []interface{}{status, now, errMsg, id}
+	case ExecutionStatusSuccess, ExecutionStatusCancelled:
 		query = `UPDATE executions SET status = ?, completed_at = ? WHERE id = ?`
-		if status == ExecutionStatusFailed {
-			// Error message should be set separately or we could add an argument
-			query = `UPDATE executions SET status = ?, completed_at = ? WHERE id = ?`
-		}
 		args = []interface{}{status, now, id}
 	default:
 		query = `UPDATE executions SET status = ? WHERE id = ?`
@@ -456,6 +494,9 @@ func (dm *DatabaseManager) GetNodeStatesByExecution(ctx context.Context, executi
 		}
 		states = append(states, ns)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, errors.Wrap(err, "error iterating node state rows")
+	}
 	return states, nil
 }
 
@@ -510,8 +551,11 @@ func (dm *DatabaseManager) doltCommit(ctx context.Context, message string) error
 
 // DoltLog retrieves commit information from the dolt_log system table.
 func (dm *DatabaseManager) DoltLog(ctx context.Context, limit int) ([]DoltCommitInfo, error) {
-	query := fmt.Sprintf("SELECT commit_hash, committer, message, date FROM dolt_log LIMIT %d", limit)
-	rows, err := dm.db.QueryContext(ctx, query)
+	if limit <= 0 {
+		limit = 10
+	}
+	query := `SELECT commit_hash, committer, message, date FROM dolt_log LIMIT ?`
+	rows, err := dm.db.QueryContext(ctx, query, limit)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to query dolt_log")
 	}
@@ -524,6 +568,9 @@ func (dm *DatabaseManager) DoltLog(ctx context.Context, limit int) ([]DoltCommit
 			return nil, errors.Wrap(err, "failed to scan commit info")
 		}
 		commits = append(commits, c)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, errors.Wrap(err, "error iterating dolt log rows")
 	}
 	return commits, nil
 }

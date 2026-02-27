@@ -154,7 +154,7 @@ func TestExecutionLifecycle(t *testing.T) {
 		t.Fatalf("CreateExecution() failed: %v", err)
 	}
 
-	if err := dm.UpdateExecutionStatus(ctx, exec.ID, ExecutionStatusRunning); err != nil {
+	if err := dm.UpdateExecutionStatus(ctx, exec.ID, ExecutionStatusRunning, ""); err != nil {
 		t.Fatalf("UpdateExecutionStatus(RUNNING) failed: %v", err)
 	}
 
@@ -163,7 +163,7 @@ func TestExecutionLifecycle(t *testing.T) {
 		t.Errorf("Execution not properly transitioned to RUNNING")
 	}
 
-	if err := dm.UpdateExecutionStatus(ctx, exec.ID, ExecutionStatusSuccess); err != nil {
+	if err := dm.UpdateExecutionStatus(ctx, exec.ID, ExecutionStatusSuccess, ""); err != nil {
 		t.Fatalf("UpdateExecutionStatus(SUCCESS) failed: %v", err)
 	}
 
@@ -191,7 +191,7 @@ func TestBackwardCompatibilityGuard(t *testing.T) {
 	}
 	_ = dm.CreateExecution(ctx, exec)
 	// Force it to RUNNING since CreateExecution defaults to PENDING (which is also active)
-	_ = dm.UpdateExecutionStatus(ctx, exec.ID, ExecutionStatusRunning)
+	_ = dm.UpdateExecutionStatus(ctx, exec.ID, ExecutionStatusRunning, "")
 
 	// Try to update workflow
 	err := dm.UpdateWorkflow(ctx, w)
