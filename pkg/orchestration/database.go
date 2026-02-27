@@ -353,20 +353,24 @@ func (dm *DatabaseManager) SaveWorkflowDefinition(ctx context.Context, w *Workfl
 		}
 	}
 
-	// 2. Clean existing nodes/edges if updating.
-	// Delete-and-replace strategy: edges reference nodes via FK (typically with ON DELETE CASCADE),
-	// but we explicitly delete edges first and then nodes for clarity and control over the update.
+	// 2. Clean existing edges if updating.
+	// Edges reference nodes via FK; deleting edges does not affect historical node_states,
+	// which are linked to nodes. We deliberately keep existing nodes to preserve history.
 	if _, err := tx.ExecContext(ctx, "DELETE FROM edges WHERE workflow_id = ?", deferredID); err != nil {
 		return errors.Wrap(err, "failed to clean edges")
 	}
-	if _, err := tx.ExecContext(ctx, "DELETE FROM nodes WHERE workflow_id = ?", deferredID); err != nil {
-		return errors.Wrap(err, "failed to clean nodes")
-	}
 
 	// 3. Insert new nodes
+	// Determine whether this is an update (version > 1) so we avoid reusing node IDs
+	// and thereby preserve existing nodes referenced by historical node_states.
+	isUpdate := deferredVersion > 1
 	for _, n := range nodes {
 		n.WorkflowID = deferredID
-		if n.ID == "" {
+		if isUpdate {
+			// On update, always assign a fresh ID to avoid primary key conflicts
+			// and to keep old nodes (and their node_states) intact.
+			n.ID = uuid.New().String()
+		} else if n.ID == "" {
 			n.ID = uuid.New().String()
 		}
 		if n.CreatedAt.IsZero() {
