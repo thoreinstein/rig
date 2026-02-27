@@ -88,6 +88,9 @@ func (dm *DatabaseManager) CreateWorkflow(ctx context.Context, w *Workflow) erro
 	if w.Status == "" {
 		w.Status = WorkflowStatusDraft
 	}
+	if w.Version == 0 {
+		w.Version = 1
+	}
 
 	query := `INSERT INTO workflows (id, name, description, version, status, created_at, updated_at)
 	          VALUES (?, ?, ?, ?, ?, ?, ?)`
@@ -282,6 +285,9 @@ func (dm *DatabaseManager) SaveWorkflowDefinition(ctx context.Context, w *Workfl
 		deferredVersion = 1
 		deferredCreatedAt = time.Now()
 		deferredUpdatedAt = deferredCreatedAt
+		if w.Status == "" {
+			w.Status = WorkflowStatusDraft
+		}
 		query := `INSERT INTO workflows (id, name, description, version, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`
 		if _, err := tx.ExecContext(ctx, query, deferredID, w.Name, w.Description, deferredVersion, w.Status, deferredCreatedAt, deferredUpdatedAt); err != nil {
 			return errors.Wrap(err, "failed to insert workflow in tx")

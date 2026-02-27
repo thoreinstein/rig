@@ -208,7 +208,7 @@ func TestBackwardCompatibilityGuard(t *testing.T) {
 	exec := &Execution{
 		WorkflowID:      w.ID,
 		WorkflowVersion: w.Version,
-		Status:          ExecutionStatusRunning,
+		Status:          ExecutionStatusPending,
 	}
 	if err := dm.CreateExecution(ctx, exec); err != nil {
 		t.Fatalf("CreateExecution() failed: %v", err)
