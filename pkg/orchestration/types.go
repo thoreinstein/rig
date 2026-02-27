@@ -62,21 +62,23 @@ type Workflow struct {
 
 // Node represents a single task/step in a workflow.
 type Node struct {
-	ID         string          `json:"id"`
-	WorkflowID string          `json:"workflow_id"`
-	Name       string          `json:"name"`
-	Type       string          `json:"type"`
-	Config     json.RawMessage `json:"config"`
-	CreatedAt  time.Time       `json:"created_at"`
+	ID              string          `json:"id"`
+	WorkflowID      string          `json:"workflow_id"`
+	WorkflowVersion int             `json:"workflow_version"`
+	Name            string          `json:"name"`
+	Type            string          `json:"type"`
+	Config          json.RawMessage `json:"config"`
+	CreatedAt       time.Time       `json:"created_at"`
 }
 
 // Edge represents a dependency relationship between nodes in a DAG.
 type Edge struct {
-	ID           string `json:"id"`
-	WorkflowID   string `json:"workflow_id"`
-	SourceNodeID string `json:"source_node_id"`
-	TargetNodeID string `json:"target_node_id"`
-	Condition    string `json:"condition,omitempty"`
+	ID              string `json:"id"`
+	WorkflowID      string `json:"workflow_id"`
+	WorkflowVersion int    `json:"workflow_version"`
+	SourceNodeID    string `json:"source_node_id"`
+	TargetNodeID    string `json:"target_node_id"`
+	Condition       string `json:"condition,omitempty"`
 }
 
 // Execution represents a single run of a workflow.

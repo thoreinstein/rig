@@ -21,11 +21,13 @@ CREATE TABLE IF NOT EXISTS workflows (
 CREATE TABLE IF NOT EXISTS nodes (
     id VARCHAR(36) PRIMARY KEY,
     workflow_id VARCHAR(36) NOT NULL,
+    workflow_version INT NOT NULL,
     name VARCHAR(255) NOT NULL,
     type VARCHAR(50) NOT NULL,
     config JSON,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_node_workflow FOREIGN KEY (workflow_id) REFERENCES workflows(id) ON DELETE CASCADE
+    CONSTRAINT fk_node_workflow FOREIGN KEY (workflow_id) REFERENCES workflows(id) ON DELETE CASCADE,
+    UNIQUE(workflow_id, workflow_version, name)
 );`
 
 	// EdgesTableDDL defines the edges table.
@@ -33,13 +35,14 @@ CREATE TABLE IF NOT EXISTS nodes (
 CREATE TABLE IF NOT EXISTS edges (
     id VARCHAR(36) PRIMARY KEY,
     workflow_id VARCHAR(36) NOT NULL,
+    workflow_version INT NOT NULL,
     source_node_id VARCHAR(36) NOT NULL,
     target_node_id VARCHAR(36) NOT NULL,
     condition TEXT,
     CONSTRAINT fk_edge_workflow FOREIGN KEY (workflow_id) REFERENCES workflows(id) ON DELETE CASCADE,
     CONSTRAINT fk_edge_source FOREIGN KEY (source_node_id) REFERENCES nodes(id) ON DELETE CASCADE,
     CONSTRAINT fk_edge_target FOREIGN KEY (target_node_id) REFERENCES nodes(id) ON DELETE CASCADE,
-    UNIQUE(workflow_id, source_node_id, target_node_id)
+    UNIQUE(workflow_id, workflow_version, source_node_id, target_node_id)
 );`
 
 	// ExecutionsTableDDL defines the executions table.

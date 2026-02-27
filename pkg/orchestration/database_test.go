@@ -116,15 +116,12 @@ func TestSaveWorkflowDefinition(t *testing.T) {
 		{Name: "node2", Type: "task"},
 	}
 
-	// We'll set IDs after creation to satisfy FKs if needed,
-	// but SaveWorkflowDefinition handles it.
-
 	if err := dm.SaveWorkflowDefinition(ctx, w, nodes, nil); err != nil {
 		t.Fatalf("SaveWorkflowDefinition() failed: %v", err)
 	}
 
-	// Verify nodes
-	dbNodes, err := dm.GetNodesByWorkflow(ctx, w.ID)
+	// Verify nodes for version 1
+	dbNodes, err := dm.GetNodesByWorkflow(ctx, w.ID, 1)
 	if err != nil {
 		t.Fatalf("GetNodesByWorkflow() failed: %v", err)
 	}
@@ -142,66 +139,6 @@ func TestSaveWorkflowDefinition(t *testing.T) {
 	}
 }
 
-func TestUpdateWorkflowDefinition(t *testing.T) {
-	dm := skipWithoutDolt(t)
-	defer dm.Close()
-	ctx := t.Context()
-
-	if err := dm.InitSchema(); err != nil {
-		t.Fatalf("InitSchema() failed: %v", err)
-	}
-
-	// Initial workflow definition
-	w := &Workflow{
-		Name:   "def-update-test-" + uuid.New().String(),
-		Status: WorkflowStatusActive,
-	}
-
-	initialNodes := []*Node{
-		{Name: "node1", Type: "task"},
-		{Name: "node2", Type: "task"},
-	}
-
-	if err := dm.SaveWorkflowDefinition(ctx, w, initialNodes, nil); err != nil {
-		t.Fatalf("initial SaveWorkflowDefinition() failed: %v", err)
-	}
-
-	// Updated definition with overlapping node name "node1" and a new node "node3".
-	// This should update the existing node1 record rather than violating a UNIQUE
-	// constraint on (workflow_id, name).
-	updatedNodes := []*Node{
-		{Name: "node1", Type: "updated-task"},
-		{Name: "node3", Type: "task"},
-	}
-
-	if err := dm.SaveWorkflowDefinition(ctx, w, updatedNodes, nil); err != nil {
-		t.Fatalf("updated SaveWorkflowDefinition() failed: %v", err)
-	}
-
-	dbNodes, err := dm.GetNodesByWorkflow(ctx, w.ID)
-	if err != nil {
-		t.Fatalf("GetNodesByWorkflow() after update failed: %v", err)
-	}
-
-	if len(dbNodes) != 2 {
-		t.Fatalf("Got %d nodes after update, want 2", len(dbNodes))
-	}
-
-	nodeByName := make(map[string]*Node, len(dbNodes))
-	for _, n := range dbNodes {
-		nodeByName[n.Name] = n
-	}
-
-	if n, ok := nodeByName["node1"]; !ok {
-		t.Fatalf("Updated nodes missing 'node1'")
-	} else if n.Type != "updated-task" {
-		t.Errorf("node1 type = %q, want %q", n.Type, "updated-task")
-	}
-
-	if _, ok := nodeByName["node3"]; !ok {
-		t.Fatalf("Updated nodes missing 'node3'")
-	}
-}
 func TestExecutionLifecycle(t *testing.T) {
 	dm := skipWithoutDolt(t)
 	defer dm.Close()
@@ -297,7 +234,9 @@ func TestWorkflowUpdateMerging(t *testing.T) {
 	defer dm.Close()
 	ctx := t.Context()
 
-	_ = dm.InitSchema()
+	if err := dm.InitSchema(); err != nil {
+		t.Fatalf("InitSchema() failed: %v", err)
+	}
 
 	w := &Workflow{
 		Name:   "merge-test-" + uuid.New().String(),
@@ -341,7 +280,9 @@ func TestWorkflowConcurrency(t *testing.T) {
 	defer dm.Close()
 	ctx := t.Context()
 
-	_ = dm.InitSchema()
+	if err := dm.InitSchema(); err != nil {
+		t.Fatalf("InitSchema() failed: %v", err)
+	}
 
 	w := &Workflow{
 		Name:   "concurrency-test-" + uuid.New().String(),
@@ -400,5 +341,50 @@ func TestWorkflowConcurrency(t *testing.T) {
 	err = dm.UpdateWorkflow(ctx, final)
 	if err == nil {
 		t.Error("UpdateWorkflow should have failed due to active PENDING execution")
+	}
+}
+
+func TestNodeHistoricalVersioning(t *testing.T) {
+	dm := skipWithoutDolt(t)
+	defer dm.Close()
+	ctx := t.Context()
+
+	if err := dm.InitSchema(); err != nil {
+		t.Fatalf("InitSchema() failed: %v", err)
+	}
+
+	w := &Workflow{
+		Name:   "history-test-" + uuid.New().String(),
+		Status: WorkflowStatusActive,
+	}
+
+	// Version 1
+	nodes1 := []*Node{{Name: "node-v1", Type: "task"}}
+	if err := dm.SaveWorkflowDefinition(ctx, w, nodes1, nil); err != nil {
+		t.Fatalf("SaveWorkflowDefinition V1 failed: %v", err)
+	}
+
+	// Version 2
+	nodes2 := []*Node{{Name: "node-v2", Type: "task"}}
+	if err := dm.SaveWorkflowDefinition(ctx, w, nodes2, nil); err != nil {
+		t.Fatalf("SaveWorkflowDefinition V2 failed: %v", err)
+	}
+
+	// Verify Version 1 still has its node
+	dbNodes1, err := dm.GetNodesByWorkflow(ctx, w.ID, 1)
+	if err != nil {
+		t.Fatalf("GetNodesByWorkflow V1 failed: %v", err)
+	}
+	if len(dbNodes1) != 1 || dbNodes1[0].Name != "node-v1" {
+		t.Errorf("Expected node-v1 for version 1, got %v", dbNodes1)
+	}
+
+	// Verify Version 2 has its node
+	dbNodes2, err := dm.GetNodesByWorkflow(ctx, w.ID, 2)
+	if err != nil {
+		t.Fatalf("GetNodesByWorkflow V2 failed: %v", err)
+	}
+	if len(dbNodes2) != 1 || dbNodes2[0].Name != "node-v2" {
+		t.Errorf("Expected node-v2 for version 2, got %v", dbNodes2)
 	}
 }

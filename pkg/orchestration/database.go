@@ -214,9 +214,6 @@ func (dm *DatabaseManager) ListWorkflows(ctx context.Context) ([]*Workflow, erro
 		}
 		workflows = append(workflows, w)
 	}
-	if err := rows.Err(); err != nil {
-		return nil, errors.Wrap(err, "error iterating workflow rows")
-	}
 	return workflows, nil
 }
 
@@ -229,18 +226,18 @@ func (dm *DatabaseManager) CreateNode(ctx context.Context, n *Node) error {
 		n.CreatedAt = time.Now()
 	}
 
-	query := `INSERT INTO nodes (id, workflow_id, name, type, config, created_at) VALUES (?, ?, ?, ?, ?, ?)`
-	_, err := dm.db.ExecContext(ctx, query, n.ID, n.WorkflowID, n.Name, n.Type, n.Config, n.CreatedAt)
+	query := `INSERT INTO nodes (id, workflow_id, workflow_version, name, type, config, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`
+	_, err := dm.db.ExecContext(ctx, query, n.ID, n.WorkflowID, n.WorkflowVersion, n.Name, n.Type, n.Config, n.CreatedAt)
 	if err != nil {
 		return errors.Wrap(err, "failed to insert node")
 	}
 	return nil
 }
 
-// GetNodesByWorkflow retrieves all nodes for a given workflow.
-func (dm *DatabaseManager) GetNodesByWorkflow(ctx context.Context, workflowID string) ([]*Node, error) {
-	query := `SELECT id, workflow_id, name, type, config, created_at FROM nodes WHERE workflow_id = ? ORDER BY created_at ASC`
-	rows, err := dm.db.QueryContext(ctx, query, workflowID)
+// GetNodesByWorkflow retrieves all nodes for a given workflow version.
+func (dm *DatabaseManager) GetNodesByWorkflow(ctx context.Context, workflowID string, version int) ([]*Node, error) {
+	query := `SELECT id, workflow_id, workflow_version, name, type, config, created_at FROM nodes WHERE workflow_id = ? AND workflow_version = ? ORDER BY created_at ASC`
+	rows, err := dm.db.QueryContext(ctx, query, workflowID, version)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get nodes")
 	}
@@ -249,7 +246,7 @@ func (dm *DatabaseManager) GetNodesByWorkflow(ctx context.Context, workflowID st
 	var nodes []*Node
 	for rows.Next() {
 		n := &Node{}
-		if err := rows.Scan(&n.ID, &n.WorkflowID, &n.Name, &n.Type, &n.Config, &n.CreatedAt); err != nil {
+		if err := rows.Scan(&n.ID, &n.WorkflowID, &n.WorkflowVersion, &n.Name, &n.Type, &n.Config, &n.CreatedAt); err != nil {
 			return nil, errors.Wrap(err, "failed to scan node")
 		}
 		nodes = append(nodes, n)
@@ -266,18 +263,18 @@ func (dm *DatabaseManager) CreateEdge(ctx context.Context, e *Edge) error {
 		e.ID = uuid.New().String()
 	}
 
-	query := `INSERT INTO edges (id, workflow_id, source_node_id, target_node_id, condition) VALUES (?, ?, ?, ?, ?)`
-	_, err := dm.db.ExecContext(ctx, query, e.ID, e.WorkflowID, e.SourceNodeID, e.TargetNodeID, e.Condition)
+	query := `INSERT INTO edges (id, workflow_id, workflow_version, source_node_id, target_node_id, condition) VALUES (?, ?, ?, ?, ?, ?)`
+	_, err := dm.db.ExecContext(ctx, query, e.ID, e.WorkflowID, e.WorkflowVersion, e.SourceNodeID, e.TargetNodeID, e.Condition)
 	if err != nil {
 		return errors.Wrap(err, "failed to insert edge")
 	}
 	return nil
 }
 
-// GetEdgesByWorkflow retrieves all edges for a given workflow.
-func (dm *DatabaseManager) GetEdgesByWorkflow(ctx context.Context, workflowID string) ([]*Edge, error) {
-	query := `SELECT id, workflow_id, source_node_id, target_node_id, condition FROM edges WHERE workflow_id = ?`
-	rows, err := dm.db.QueryContext(ctx, query, workflowID)
+// GetEdgesByWorkflow retrieves all edges for a given workflow version.
+func (dm *DatabaseManager) GetEdgesByWorkflow(ctx context.Context, workflowID string, version int) ([]*Edge, error) {
+	query := `SELECT id, workflow_id, workflow_version, source_node_id, target_node_id, condition FROM edges WHERE workflow_id = ? AND workflow_version = ?`
+	rows, err := dm.db.QueryContext(ctx, query, workflowID, version)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get edges")
 	}
@@ -286,7 +283,7 @@ func (dm *DatabaseManager) GetEdgesByWorkflow(ctx context.Context, workflowID st
 	var edges []*Edge
 	for rows.Next() {
 		e := &Edge{}
-		if err := rows.Scan(&e.ID, &e.WorkflowID, &e.SourceNodeID, &e.TargetNodeID, &e.Condition); err != nil {
+		if err := rows.Scan(&e.ID, &e.WorkflowID, &e.WorkflowVersion, &e.SourceNodeID, &e.TargetNodeID, &e.Condition); err != nil {
 			return nil, errors.Wrap(err, "failed to scan edge")
 		}
 		edges = append(edges, e)
@@ -362,34 +359,29 @@ func (dm *DatabaseManager) SaveWorkflowDefinition(ctx context.Context, w *Workfl
 		}
 	}
 
-	// 2. Clean existing edges if updating.
-	// Edges reference nodes via FK; deleting edges does not affect historical node_states,
-	// which are linked to nodes. We deliberately keep existing nodes to preserve history, but
-	// note that the nodes table enforces name uniqueness per workflow (UNIQUE(workflow_id, name)),
-	// so callers must avoid reusing node names within the same workflow if they want to add new
-	// definitions while retaining historical node records.
-	if _, err := tx.ExecContext(ctx, "DELETE FROM edges WHERE workflow_id = ?", deferredID); err != nil {
+	// 2. Clean existing edges for THIS version if updating.
+	// We don't clean old versions because they are referenced by historical executions.
+	// But since we increment version on every SaveWorkflowDefinition, there shouldn't be
+	// any existing edges for 'deferredVersion' anyway. We clean just in case of retries/idempotency.
+	if _, err := tx.ExecContext(ctx, "DELETE FROM edges WHERE workflow_id = ? AND workflow_version = ?", deferredID, deferredVersion); err != nil {
 		return errors.Wrap(err, "failed to clean edges")
+	}
+	if _, err := tx.ExecContext(ctx, "DELETE FROM nodes WHERE workflow_id = ? AND workflow_version = ?", deferredID, deferredVersion); err != nil {
+		return errors.Wrap(err, "failed to clean nodes")
 	}
 
 	// 3. Insert new nodes
-	// Determine whether this is an update (version > 1) so we avoid reusing node IDs
-	// and thereby preserve existing nodes referenced by historical node_states.
-	isUpdate := deferredVersion > 1
 	for _, n := range nodes {
 		n.WorkflowID = deferredID
-		if isUpdate {
-			// On update, always assign a fresh ID to avoid primary key conflicts
-			// and to keep old nodes (and their node_states) intact.
-			n.ID = uuid.New().String()
-		} else if n.ID == "" {
+		n.WorkflowVersion = deferredVersion
+		if n.ID == "" {
 			n.ID = uuid.New().String()
 		}
 		if n.CreatedAt.IsZero() {
 			n.CreatedAt = time.Now()
 		}
-		query := `INSERT INTO nodes (id, workflow_id, name, type, config, created_at) VALUES (?, ?, ?, ?, ?, ?)`
-		if _, err := tx.ExecContext(ctx, query, n.ID, n.WorkflowID, n.Name, n.Type, n.Config, n.CreatedAt); err != nil {
+		query := `INSERT INTO nodes (id, workflow_id, workflow_version, name, type, config, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`
+		if _, err := tx.ExecContext(ctx, query, n.ID, n.WorkflowID, n.WorkflowVersion, n.Name, n.Type, n.Config, n.CreatedAt); err != nil {
 			return errors.Wrap(err, "failed to insert node in tx")
 		}
 	}
@@ -397,11 +389,12 @@ func (dm *DatabaseManager) SaveWorkflowDefinition(ctx context.Context, w *Workfl
 	// 4. Insert new edges
 	for _, e := range edges {
 		e.WorkflowID = deferredID
+		e.WorkflowVersion = deferredVersion
 		if e.ID == "" {
 			e.ID = uuid.New().String()
 		}
-		query := `INSERT INTO edges (id, workflow_id, source_node_id, target_node_id, condition) VALUES (?, ?, ?, ?, ?)`
-		if _, err := tx.ExecContext(ctx, query, e.ID, e.WorkflowID, e.SourceNodeID, e.TargetNodeID, e.Condition); err != nil {
+		query := `INSERT INTO edges (id, workflow_id, workflow_version, source_node_id, target_node_id, condition) VALUES (?, ?, ?, ?, ?, ?)`
+		if _, err := tx.ExecContext(ctx, query, e.ID, e.WorkflowID, e.WorkflowVersion, e.SourceNodeID, e.TargetNodeID, e.Condition); err != nil {
 			return errors.Wrap(err, "failed to insert edge in tx")
 		}
 	}
@@ -507,7 +500,7 @@ func (dm *DatabaseManager) UpdateExecutionStatus(ctx context.Context, id string,
 	return nil
 }
 
-// CreateNodeState inserts an initial state for a node in an execution.
+// CreateNodeState inserts a initial state for a node in an execution.
 func (dm *DatabaseManager) CreateNodeState(ctx context.Context, ns *NodeState) error {
 	if ns.ID == "" {
 		ns.ID = uuid.New().String()
