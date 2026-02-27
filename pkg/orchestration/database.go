@@ -136,11 +136,23 @@ func (dm *DatabaseManager) UpdateWorkflow(ctx context.Context, w *Workflow) erro
 		return errors.New("cannot update workflow with active executions")
 	}
 
-	newVersion := w.Version + 1
+	// Fetch current state to ensure monotonic version and preserve existing status if zeroed
+	current, err := dm.GetWorkflow(ctx, w.ID)
+	if err != nil {
+		return err
+	}
+
+	newVersion := current.Version + 1
 	now := time.Now()
 
+	// Merge status
+	status := w.Status
+	if status == "" {
+		status = current.Status
+	}
+
 	query := `UPDATE workflows SET name = ?, description = ?, version = ?, status = ?, updated_at = ? WHERE id = ?`
-	_, err = dm.db.ExecContext(ctx, query, w.Name, w.Description, newVersion, w.Status, now, w.ID)
+	_, err = dm.db.ExecContext(ctx, query, w.Name, w.Description, newVersion, status, now, w.ID)
 	if err != nil {
 		return errors.Wrap(err, "failed to update workflow")
 	}
@@ -151,6 +163,7 @@ func (dm *DatabaseManager) UpdateWorkflow(ctx context.Context, w *Workflow) erro
 
 	// Only mutate the caller's struct after all DB operations succeed
 	w.Version = newVersion
+	w.Status = status
 	w.UpdatedAt = now
 	return nil
 }
@@ -294,10 +307,23 @@ func (dm *DatabaseManager) SaveWorkflowDefinition(ctx context.Context, w *Workfl
 		}
 	} else {
 		deferredID = w.ID
-		deferredVersion = w.Version + 1
+		// Fetch current state inside tx to ensure atomic merge and monotonic version
+		current := &Workflow{}
+		row := tx.QueryRowContext(ctx, "SELECT version, status FROM workflows WHERE id = ?", w.ID)
+		if err := row.Scan(&current.Version, &current.Status); err != nil {
+			return errors.Wrap(err, "failed to fetch current workflow in tx")
+		}
+
+		deferredVersion = current.Version + 1
 		deferredUpdatedAt = time.Now()
+
+		status := w.Status
+		if status == "" {
+			status = current.Status
+		}
+
 		query := `UPDATE workflows SET name = ?, description = ?, version = ?, status = ?, updated_at = ? WHERE id = ?`
-		if _, err := tx.ExecContext(ctx, query, w.Name, w.Description, deferredVersion, w.Status, deferredUpdatedAt, w.ID); err != nil {
+		if _, err := tx.ExecContext(ctx, query, w.Name, w.Description, deferredVersion, status, deferredUpdatedAt, w.ID); err != nil {
 			return errors.Wrap(err, "failed to update workflow in tx")
 		}
 	}

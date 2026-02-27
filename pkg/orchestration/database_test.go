@@ -230,3 +230,47 @@ func TestBackwardCompatibilityGuard(t *testing.T) {
 		t.Error("SaveWorkflowDefinition should have failed due to active execution")
 	}
 }
+
+func TestWorkflowUpdateMerging(t *testing.T) {
+	dm := skipWithoutDolt(t)
+	defer dm.Close()
+	ctx := t.Context()
+
+	_ = dm.InitSchema()
+
+	w := &Workflow{
+		Name:   "merge-test-" + uuid.New().String(),
+		Status: WorkflowStatusActive,
+	}
+	if err := dm.CreateWorkflow(ctx, w); err != nil {
+		t.Fatalf("CreateWorkflow failed: %v", err)
+	}
+
+	// 1. Update with zero status and stale version
+	update := &Workflow{
+		ID:          w.ID,
+		Name:        w.Name,
+		Description: "Updated description",
+		Version:     0,  // Stale/zero version
+		Status:      "", // Zero status (should merge)
+	}
+
+	if err := dm.UpdateWorkflow(ctx, update); err != nil {
+		t.Fatalf("UpdateWorkflow failed: %v", err)
+	}
+
+	updated, err := dm.GetWorkflow(ctx, w.ID)
+	if err != nil {
+		t.Fatalf("GetWorkflow failed: %v", err)
+	}
+
+	if updated.Version != 2 {
+		t.Errorf("Expected version 2, got %d", updated.Version)
+	}
+	if updated.Status != WorkflowStatusActive {
+		t.Errorf("Expected status %s, got %s", WorkflowStatusActive, updated.Status)
+	}
+	if updated.Description != "Updated description" {
+		t.Errorf("Expected updated description, got %s", updated.Description)
+	}
+}
