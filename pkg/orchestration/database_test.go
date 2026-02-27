@@ -39,7 +39,9 @@ func TestWorkflowCRUD(t *testing.T) {
 	defer dm.Close()
 	ctx := t.Context()
 
-	_ = dm.InitSchema()
+	if err := dm.InitSchema(); err != nil {
+		t.Fatalf("InitSchema() failed: %v", err)
+	}
 
 	workflowName := "test-workflow-" + uuid.New().String()
 	w := &Workflow{
@@ -69,7 +71,10 @@ func TestWorkflowCRUD(t *testing.T) {
 		t.Fatalf("UpdateWorkflow() failed: %v", err)
 	}
 
-	updated, _ := dm.GetWorkflow(ctx, w.ID)
+	updated, err := dm.GetWorkflow(ctx, w.ID)
+	if err != nil {
+		t.Fatalf("GetWorkflow() after update failed: %v", err)
+	}
 	if updated.Version != 2 {
 		t.Errorf("Updated version = %d, want 2", updated.Version)
 	}
@@ -96,7 +101,9 @@ func TestSaveWorkflowDefinition(t *testing.T) {
 	defer dm.Close()
 	ctx := t.Context()
 
-	_ = dm.InitSchema()
+	if err := dm.InitSchema(); err != nil {
+		t.Fatalf("InitSchema() failed: %v", err)
+	}
 
 	w := &Workflow{
 		Name:   "def-test-" + uuid.New().String(),
@@ -139,11 +146,15 @@ func TestExecutionLifecycle(t *testing.T) {
 	defer dm.Close()
 	ctx := t.Context()
 
-	_ = dm.InitSchema()
+	if err := dm.InitSchema(); err != nil {
+		t.Fatalf("InitSchema() failed: %v", err)
+	}
 
 	// Need a workflow first
 	w := &Workflow{Name: "exec-test-" + uuid.New().String()}
-	_ = dm.CreateWorkflow(ctx, w)
+	if err := dm.CreateWorkflow(ctx, w); err != nil {
+		t.Fatalf("CreateWorkflow() failed: %v", err)
+	}
 
 	exec := &Execution{
 		WorkflowID:      w.ID,
@@ -158,7 +169,10 @@ func TestExecutionLifecycle(t *testing.T) {
 		t.Fatalf("UpdateExecutionStatus(RUNNING) failed: %v", err)
 	}
 
-	updated, _ := dm.GetExecution(ctx, exec.ID)
+	updated, err := dm.GetExecution(ctx, exec.ID)
+	if err != nil {
+		t.Fatalf("GetExecution() failed: %v", err)
+	}
 	if updated.Status != ExecutionStatusRunning || updated.StartedAt == nil {
 		t.Errorf("Execution not properly transitioned to RUNNING")
 	}
@@ -167,7 +181,10 @@ func TestExecutionLifecycle(t *testing.T) {
 		t.Fatalf("UpdateExecutionStatus(SUCCESS) failed: %v", err)
 	}
 
-	updated, _ = dm.GetExecution(ctx, exec.ID)
+	updated, err = dm.GetExecution(ctx, exec.ID)
+	if err != nil {
+		t.Fatalf("GetExecution() failed: %v", err)
+	}
 	if updated.Status != ExecutionStatusSuccess || updated.CompletedAt == nil {
 		t.Errorf("Execution not properly transitioned to SUCCESS")
 	}
@@ -178,10 +195,14 @@ func TestBackwardCompatibilityGuard(t *testing.T) {
 	defer dm.Close()
 	ctx := t.Context()
 
-	_ = dm.InitSchema()
+	if err := dm.InitSchema(); err != nil {
+		t.Fatalf("InitSchema() failed: %v", err)
+	}
 
 	w := &Workflow{Name: "guard-test-" + uuid.New().String()}
-	_ = dm.CreateWorkflow(ctx, w)
+	if err := dm.CreateWorkflow(ctx, w); err != nil {
+		t.Fatalf("CreateWorkflow() failed: %v", err)
+	}
 
 	// Create an active execution
 	exec := &Execution{
@@ -189,9 +210,13 @@ func TestBackwardCompatibilityGuard(t *testing.T) {
 		WorkflowVersion: w.Version,
 		Status:          ExecutionStatusRunning,
 	}
-	_ = dm.CreateExecution(ctx, exec)
+	if err := dm.CreateExecution(ctx, exec); err != nil {
+		t.Fatalf("CreateExecution() failed: %v", err)
+	}
 	// Force it to RUNNING since CreateExecution defaults to PENDING (which is also active)
-	_ = dm.UpdateExecutionStatus(ctx, exec.ID, ExecutionStatusRunning, "")
+	if err := dm.UpdateExecutionStatus(ctx, exec.ID, ExecutionStatusRunning, ""); err != nil {
+		t.Fatalf("UpdateExecutionStatus(RUNNING) failed: %v", err)
+	}
 
 	// Try to update workflow
 	err := dm.UpdateWorkflow(ctx, w)

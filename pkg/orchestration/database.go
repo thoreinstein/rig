@@ -333,12 +333,13 @@ func (dm *DatabaseManager) SaveWorkflowDefinition(ctx context.Context, w *Workfl
 		}
 	}
 
-	if err := tx.Commit(); err != nil {
-		return errors.Wrap(err, "failed to commit transaction")
+	// Run Dolt versioning on the transaction so it's atomic with data changes.
+	if err := txAutoCommit(ctx, tx, fmt.Sprintf("Save workflow definition: %s (v%d)", w.Name, deferredVersion)); err != nil {
+		return err
 	}
 
-	if err := dm.autoCommit(ctx, fmt.Sprintf("Save workflow definition: %s (v%d)", w.Name, deferredVersion)); err != nil {
-		return err
+	if err := tx.Commit(); err != nil {
+		return errors.Wrap(err, "failed to commit transaction")
 	}
 
 	// Only mutate the caller's struct after all DB operations succeed
@@ -531,6 +532,18 @@ func (dm *DatabaseManager) autoCommit(ctx context.Context, message string) error
 		return err
 	}
 	return dm.doltCommit(ctx, message)
+}
+
+// txAutoCommit runs DOLT_ADD and DOLT_COMMIT on a transaction handle so the
+// Dolt commit is atomic with the surrounding SQL changes.
+func txAutoCommit(ctx context.Context, tx *sql.Tx, message string) error {
+	if _, err := tx.ExecContext(ctx, "CALL DOLT_ADD('-A')"); err != nil {
+		return errors.Wrap(err, "failed to CALL DOLT_ADD in tx")
+	}
+	if _, err := tx.ExecContext(ctx, "CALL DOLT_COMMIT('-m', ?)", message); err != nil {
+		return errors.Wrap(err, "failed to CALL DOLT_COMMIT in tx")
+	}
+	return nil
 }
 
 func (dm *DatabaseManager) doltAdd(ctx context.Context) error {
