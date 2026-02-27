@@ -8,13 +8,14 @@
 - **Documentation:** Markdown note creation (Obsidian-style) with JIRA and Beads integration.
 - **History Tracking:** Command history analysis and timeline export using SQLite.
 - **AI Integration:** Support for various AI providers (Anthropic, Gemini, Groq, Ollama) for workflow assistance.
+- **Orchestration:** Configuration-driven DAG execution engine with Dolt-backed persistence.
 
 ## Key Technologies
 
 - **Language:** Go (1.25+)
 - **CLI Framework:** [Cobra](https://github.com/spf13/cobra)
 - **Configuration:** [Viper](https://github.com/spf13/viper)
-- **Database:** SQLite (modernc.org/sqlite)
+- **Database:** SQLite (modernc.org/sqlite) and Dolt (MySQL protocol)
 - **Integrations:** Git, Tmux, JIRA, Beads, Obsidian, GitHub
 - **Error Handling:** [cockroachdb/errors](https://github.com/cockroachdb/errors)
 
@@ -32,6 +33,7 @@
   - `pkg/ai/`: AI provider implementations.
   - `pkg/github/`: GitHub API and CLI client.
   - `pkg/bootstrap/`: Heavy CLI initialization and bootstrap logic.
+  - `pkg/orchestration/`: Dolt-backed workflow persistence and DAG orchestration.
 - `main.go`: Application entry point.
 - `project.yaml`: Project metadata and governance.
 
@@ -241,3 +243,16 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 - **Ghost Trust Paths**: Trust entries must match discovered project roots. Rejection of non-project paths (paths without `.git` or `.rig.toml`) during `rig trust add` prevents users from trusting invalid paths that would never satisfy a trust check.
 - **Sensitive Violation Leak**: Security violation logs (e.g., blocked overrides) often contain the `AttemptedValue`. Diagnostic outputs (especially JSON) must explicitly redact these values for sensitive keys, even if the primary configuration table is already redacted.
 - **Config Cache Staleness**: Global configuration caches (e.g., `appConfig`) must be explicitly cleared via a reset hook (e.g., `resetConfig()`) in unit tests. Failing to do so causes "cross-test contamination" where stale configuration from one test leaks into another. Commands that require fresh data (like `debug`) should bypass or explicitly refresh this cache.
+
+## Orchestration & Persistence (Dolt)
+
+### Architectural Truths
+- **Atomic Transactional Versioning**: Data changes and Dolt versioning (`CALL DOLT_COMMIT`) MUST be executed within the same SQL transaction to ensure consistency between the working set and version history.
+- **Guard-Inside-Transaction Pattern**: Business invariants (e.g., active execution guards) MUST be checked inside a locked transaction (`SELECT ... FOR UPDATE`) to prevent race conditions under concurrent load.
+- **Fetch-and-Merge Strategy**: To handle Go's zero-value ambiguity in update paths, fetch the current database state and merge it with the incoming payload before writing. This preserves existing status and ensures monotonic version increments.
+- **Historical Entity Isolation**: Nodes and Edges are versioned alongside the Workflow definition. All queries for these entities MUST filter by `workflow_id` AND `workflow_version` to prevent "Version Bloat" and ensure historical execution integrity.
+
+### Persistence Traps
+- **Zero-Value Default Bypass**: Go's `database/sql` sends explicit zero-values (e.g., `""` for strings) to the database, which bypasses SQL `DEFAULT` clauses. Always normalize zero-valued fields in the DAL before insertion.
+- **Strict ENUM Validation**: Dolt/MySQL ENUM columns reject empty strings if not explicitly part of the ENUM definition. Normalization is mandatory for status fields.
+- **Integration Test Dependency**: Concurrency and locking tests are integration-tier and require a live Dolt environment via `RIG_TEST_DOLT_DSN`. They should be skipped in short mode.
