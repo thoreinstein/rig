@@ -132,6 +132,7 @@ func (o *Orchestrator) Execute(ctx context.Context, executionID string) error {
 
 	var mu sync.Mutex
 	results := make(map[string]json.RawMessage)
+	launched := make(map[string]bool)
 	failed := false
 	var failErr error
 	activeNodes := 0
@@ -147,19 +148,22 @@ func (o *Orchestrator) Execute(ctx context.Context, executionID string) error {
 
 	for {
 		mu.Lock()
-		// Wait if no nodes are ready and some are still running
-		for len(ready) == 0 && activeNodes > 0 && !failed {
+		// Wait until there's work to dispatch or all in-flight work has completed
+		for len(ready) == 0 && activeNodes > 0 {
 			cond.Wait()
 		}
 
-		// Check if we are done or failed
-		if (len(ready) == 0 && activeNodes == 0) || failed {
-			// If failed, mark remaining ready and downstream as skipped
-			if failed {
-				o.skipRemaining(ctx, ready, adj, inDegree, stateMap)
-			}
+		// All work is done when nothing is ready and nothing is in flight
+		if len(ready) == 0 && activeNodes == 0 {
 			mu.Unlock()
 			break
+		}
+
+		// After a failure, stop launching new nodes — drain in-flight goroutines
+		if failed {
+			ready = ready[:0]
+			mu.Unlock()
+			continue
 		}
 
 		// Take all ready nodes and run them
@@ -169,8 +173,9 @@ func (o *Orchestrator) Execute(ctx context.Context, executionID string) error {
 		mu.Unlock()
 
 		for _, nodeID := range currentReady {
+			launched[nodeID] = true
 			go func(id string) {
-				res, err := o.runNode(ctx, nodeMap[id], stateMap[id], results)
+				res, err := o.runNode(ctx, nodeMap[id], stateMap[id])
 
 				mu.Lock()
 				defer mu.Unlock()
@@ -195,40 +200,35 @@ func (o *Orchestrator) Execute(ctx context.Context, executionID string) error {
 	}
 
 	if failed {
+		// Skip all nodes that were never executed
+		o.skipUnprocessed(ctx, launched, stateMap)
+
 		errMsg := "execution failed"
 		if failErr != nil {
 			errMsg = failErr.Error()
 		}
-		_ = o.store.UpdateExecutionStatus(ctx, executionID, ExecutionStatusFailed, errMsg)
+		if updateErr := o.store.UpdateExecutionStatus(ctx, executionID, ExecutionStatusFailed, errMsg); updateErr != nil {
+			return errors.CombineErrors(failErr, errors.Wrap(updateErr, "failed to update execution status to failed"))
+		}
 		return failErr
 	}
 
 	return o.store.UpdateExecutionStatus(ctx, executionID, ExecutionStatusSuccess, "")
 }
 
-func (o *Orchestrator) skipRemaining(ctx context.Context, ready []string, adj map[string][]string, inDegree map[string]int, stateMap map[string]string) {
-	queue := ready
-	visited := make(map[string]bool)
-	for _, id := range queue {
-		visited[id] = true
-	}
-
-	for len(queue) > 0 {
-		id := queue[0]
-		queue = queue[1:]
-
-		_ = o.store.UpdateNodeStatus(ctx, stateMap[id], NodeStatusSkipped, nil, "upstream failure")
-
-		for _, v := range adj[id] {
-			if !visited[v] {
-				visited[v] = true
-				queue = append(queue, v)
-			}
+// skipUnprocessed marks all nodes that were never launched as SKIPPED.
+// Nodes that were launched (whether they succeeded or failed) already have
+// their terminal status set by runNode, so we only touch nodes that never ran.
+func (o *Orchestrator) skipUnprocessed(ctx context.Context, launched map[string]bool, stateMap map[string]string) {
+	for nodeID, stateID := range stateMap {
+		if launched[nodeID] {
+			continue
 		}
+		_ = o.store.UpdateNodeStatus(ctx, stateID, NodeStatusSkipped, nil, "upstream failure")
 	}
 }
 
-func (o *Orchestrator) runNode(ctx context.Context, node *Node, stateID string, results map[string]json.RawMessage) (json.RawMessage, error) {
+func (o *Orchestrator) runNode(ctx context.Context, node *Node, stateID string) (json.RawMessage, error) {
 	if err := o.store.UpdateNodeStatus(ctx, stateID, NodeStatusRunning, nil, ""); err != nil {
 		return nil, errors.Wrap(err, "failed to update node status to running")
 	}

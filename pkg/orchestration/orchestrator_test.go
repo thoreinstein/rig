@@ -117,6 +117,124 @@ func TestOrchestrator_Execute_Mock(t *testing.T) {
 	})
 }
 
+func TestOrchestrator_Execute_MockFailureSkip(t *testing.T) {
+	ctx := t.Context()
+
+	t.Run("failure propagation and skip", func(t *testing.T) {
+		wID := "w-fail"
+		eID := "e-fail"
+
+		// A (fail) -> B (should be skipped)
+		nodes := []*Node{
+			{ID: "n1", Name: "fail-node", Type: "fail"},
+			{ID: "n2", Name: "skip-node", Type: "world"},
+		}
+		edges := []*Edge{
+			{SourceNodeID: "n1", TargetNodeID: "n2"},
+		}
+
+		store := &MockStore{
+			workflows: map[string]*Workflow{
+				wID: {ID: wID, Version: 1},
+			},
+			executions: map[string]*Execution{
+				eID: {ID: eID, WorkflowID: wID, WorkflowVersion: 1, Status: ExecutionStatusPending},
+			},
+			nodes: map[string][]*Node{wID: nodes},
+			edges: map[string][]*Edge{wID: edges},
+			nodeStates: map[string][]*NodeState{
+				eID: {
+					{ID: "s1", NodeID: "n1", ExecutionID: eID, Status: NodeStatusPending},
+					{ID: "s2", NodeID: "n2", ExecutionID: eID, Status: NodeStatusPending},
+				},
+			},
+		}
+
+		o := NewOrchestrator(store)
+		err := o.Execute(ctx, eID)
+		if err == nil {
+			t.Fatal("Expected Execute to return an error")
+		}
+
+		if store.executions[eID].Status != ExecutionStatusFailed {
+			t.Errorf("Expected execution status FAILED, got %s", store.executions[eID].Status)
+		}
+
+		// Verify the failed node is FAILED and the downstream node is SKIPPED
+		for _, ns := range store.nodeStates[eID] {
+			switch ns.NodeID {
+			case "n1":
+				if ns.Status != NodeStatusFailed {
+					t.Errorf("Node n1 expected FAILED, got %s", ns.Status)
+				}
+			case "n2":
+				if ns.Status != NodeStatusSkipped {
+					t.Errorf("Node n2 expected SKIPPED, got %s", ns.Status)
+				}
+			}
+		}
+	})
+}
+
+func TestOrchestrator_Execute_MockDiamond(t *testing.T) {
+	ctx := t.Context()
+
+	t.Run("diamond DAG with concurrent middle nodes", func(t *testing.T) {
+		wID := "w-diamond"
+		eID := "e-diamond"
+
+		// A -> B, A -> C, B -> D, C -> D
+		nodes := []*Node{
+			{ID: "A", Name: "root", Type: "hello"},
+			{ID: "B", Name: "left", Type: "hello"},
+			{ID: "C", Name: "right", Type: "world"},
+			{ID: "D", Name: "join", Type: "hello"},
+		}
+		edges := []*Edge{
+			{SourceNodeID: "A", TargetNodeID: "B"},
+			{SourceNodeID: "A", TargetNodeID: "C"},
+			{SourceNodeID: "B", TargetNodeID: "D"},
+			{SourceNodeID: "C", TargetNodeID: "D"},
+		}
+
+		store := &MockStore{
+			workflows: map[string]*Workflow{
+				wID: {ID: wID, Version: 1},
+			},
+			executions: map[string]*Execution{
+				eID: {ID: eID, WorkflowID: wID, WorkflowVersion: 1, Status: ExecutionStatusPending},
+			},
+			nodes: map[string][]*Node{wID: nodes},
+			edges: map[string][]*Edge{wID: edges},
+			nodeStates: map[string][]*NodeState{
+				eID: {
+					{ID: "sA", NodeID: "A", ExecutionID: eID, Status: NodeStatusPending},
+					{ID: "sB", NodeID: "B", ExecutionID: eID, Status: NodeStatusPending},
+					{ID: "sC", NodeID: "C", ExecutionID: eID, Status: NodeStatusPending},
+					{ID: "sD", NodeID: "D", ExecutionID: eID, Status: NodeStatusPending},
+				},
+			},
+		}
+
+		o := NewOrchestrator(store)
+		err := o.Execute(ctx, eID)
+		if err != nil {
+			t.Fatalf("Execute failed: %v", err)
+		}
+
+		if store.executions[eID].Status != ExecutionStatusSuccess {
+			t.Errorf("Expected execution status SUCCESS, got %s", store.executions[eID].Status)
+		}
+
+		// All four nodes should be SUCCESS
+		for _, ns := range store.nodeStates[eID] {
+			if ns.Status != NodeStatusSuccess {
+				t.Errorf("Node %s expected SUCCESS, got %s", ns.NodeID, ns.Status)
+			}
+		}
+	})
+}
+
 func TestHelloWorldWorkflow(t *testing.T) {
 	dm := skipWithoutDolt(t)
 	defer dm.Close()
