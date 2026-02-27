@@ -82,6 +82,12 @@ func (dm *DatabaseManager) InitSchema() error {
 
 // CreateWorkflow inserts a new workflow record.
 func (dm *DatabaseManager) CreateWorkflow(ctx context.Context, w *Workflow) error {
+	tx, err := dm.db.BeginTx(ctx, nil)
+	if err != nil {
+		return errors.Wrap(err, "failed to begin transaction")
+	}
+	defer tx.Rollback() //nolint:errcheck
+
 	if w.ID == "" {
 		w.ID = uuid.New().String()
 	}
@@ -102,12 +108,20 @@ func (dm *DatabaseManager) CreateWorkflow(ctx context.Context, w *Workflow) erro
 		w.UpdatedAt = now
 	}
 
-	_, err := dm.db.ExecContext(ctx, query, w.ID, w.Name, w.Description, w.Version, w.Status, w.CreatedAt, w.UpdatedAt)
-	if err != nil {
+	if _, err := tx.ExecContext(ctx, query, w.ID, w.Name, w.Description, w.Version, w.Status, w.CreatedAt, w.UpdatedAt); err != nil {
 		return errors.Wrap(err, "failed to insert workflow")
 	}
 
-	return dm.autoCommit(ctx, "Create workflow: "+w.Name)
+	// Run Dolt versioning on the transaction so it's atomic with data changes.
+	if err := txAutoCommit(ctx, tx, "Create workflow: "+w.Name); err != nil {
+		return err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return errors.Wrap(err, "failed to commit transaction")
+	}
+
+	return nil
 }
 
 // GetWorkflow retrieves a workflow by ID.
@@ -200,9 +214,6 @@ func (dm *DatabaseManager) ListWorkflows(ctx context.Context) ([]*Workflow, erro
 		}
 		workflows = append(workflows, w)
 	}
-	if err := rows.Err(); err != nil {
-		return nil, errors.Wrap(err, "error iterating workflow rows")
-	}
 	return workflows, nil
 }
 
@@ -240,9 +251,6 @@ func (dm *DatabaseManager) GetNodesByWorkflow(ctx context.Context, workflowID st
 		}
 		nodes = append(nodes, n)
 	}
-	if err := rows.Err(); err != nil {
-		return nil, errors.Wrap(err, "error iterating node rows")
-	}
 	return nodes, nil
 }
 
@@ -276,9 +284,6 @@ func (dm *DatabaseManager) GetEdgesByWorkflow(ctx context.Context, workflowID st
 			return nil, errors.Wrap(err, "failed to scan edge")
 		}
 		edges = append(edges, e)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, errors.Wrap(err, "error iterating edge rows")
 	}
 	return edges, nil
 }
@@ -508,6 +513,20 @@ func (dm *DatabaseManager) CreateNodeState(ctx context.Context, ns *NodeState) e
 
 // UpdateNodeStatus updates the status and result of a node in an execution.
 func (dm *DatabaseManager) UpdateNodeStatus(ctx context.Context, id string, status NodeStatus, result []byte, errMsg string) error {
+	// Fetch current status to validate transition
+	var currentStatus NodeStatus
+	err := dm.db.QueryRowContext(ctx, "SELECT status FROM node_states WHERE id = ?", id).Scan(&currentStatus)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return errors.New("node state not found")
+		}
+		return errors.Wrap(err, "failed to fetch current node status")
+	}
+
+	if !isValidNodeTransition(currentStatus, status) {
+		return errors.Errorf("invalid node status transition from %s to %s", currentStatus, status)
+	}
+
 	var query string
 	var args []interface{}
 	now := time.Now()
@@ -524,7 +543,7 @@ func (dm *DatabaseManager) UpdateNodeStatus(ctx context.Context, id string, stat
 		args = []interface{}{status, id}
 	}
 
-	_, err := dm.db.ExecContext(ctx, query, args...)
+	_, err = dm.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return errors.Wrap(err, "failed to update node status")
 	}
@@ -567,6 +586,17 @@ func (dm *DatabaseManager) HasActiveExecutions(ctx context.Context, workflowID s
 	return count > 0, nil
 }
 
+// txHasActiveExecutions is like HasActiveExecutions but operates within a transaction.
+func (dm *DatabaseManager) txHasActiveExecutions(ctx context.Context, tx *sql.Tx, workflowID string) (bool, error) {
+	query := `SELECT COUNT(*) FROM executions WHERE workflow_id = ? AND status IN ('PENDING', 'RUNNING')`
+	var count int
+	err := tx.QueryRowContext(ctx, query, workflowID).Scan(&count)
+	if err != nil {
+		return false, errors.Wrap(err, "failed to check active executions in tx")
+	}
+	return count > 0, nil
+}
+
 func isValidExecutionTransition(from, to ExecutionStatus) bool {
 	switch from {
 	case ExecutionStatusPending:
@@ -578,14 +608,18 @@ func isValidExecutionTransition(from, to ExecutionStatus) bool {
 	}
 }
 
-// --- Dolt Versioning Helpers ---
-
-func (dm *DatabaseManager) autoCommit(ctx context.Context, message string) error {
-	if err := dm.doltAdd(ctx); err != nil {
-		return err
+func isValidNodeTransition(from, to NodeStatus) bool {
+	switch from {
+	case NodeStatusPending:
+		return to == NodeStatusRunning || to == NodeStatusSkipped || to == NodeStatusFailed
+	case NodeStatusRunning:
+		return to == NodeStatusSuccess || to == NodeStatusFailed || to == NodeStatusSkipped
+	default:
+		return false
 	}
-	return dm.doltCommit(ctx, message)
 }
+
+// --- Dolt Versioning Helpers ---
 
 // txAutoCommit runs DOLT_ADD and DOLT_COMMIT on a transaction handle so the
 // Dolt commit is atomic with the surrounding SQL changes.
@@ -595,22 +629,6 @@ func txAutoCommit(ctx context.Context, tx *sql.Tx, message string) error {
 	}
 	if _, err := tx.ExecContext(ctx, "CALL DOLT_COMMIT('-m', ?)", message); err != nil {
 		return errors.Wrap(err, "failed to CALL DOLT_COMMIT in tx")
-	}
-	return nil
-}
-
-func (dm *DatabaseManager) doltAdd(ctx context.Context) error {
-	_, err := dm.db.ExecContext(ctx, "CALL DOLT_ADD('-A')")
-	if err != nil {
-		return errors.Wrap(err, "failed to CALL DOLT_ADD")
-	}
-	return nil
-}
-
-func (dm *DatabaseManager) doltCommit(ctx context.Context, message string) error {
-	_, err := dm.db.ExecContext(ctx, "CALL DOLT_COMMIT('-m', ?)", message)
-	if err != nil {
-		return errors.Wrap(err, "failed to CALL DOLT_COMMIT")
 	}
 	return nil
 }
@@ -639,15 +657,4 @@ func (dm *DatabaseManager) DoltLog(ctx context.Context, limit int) ([]DoltCommit
 		return nil, errors.Wrap(err, "error iterating dolt log rows")
 	}
 	return commits, nil
-}
-
-// txHasActiveExecutions is like HasActiveExecutions but operates within a transaction.
-func (dm *DatabaseManager) txHasActiveExecutions(ctx context.Context, tx *sql.Tx, workflowID string) (bool, error) {
-	query := `SELECT COUNT(*) FROM executions WHERE workflow_id = ? AND status IN ('PENDING', 'RUNNING')`
-	var count int
-	err := tx.QueryRowContext(ctx, query, workflowID).Scan(&count)
-	if err != nil {
-		return false, errors.Wrap(err, "failed to check active executions in tx")
-	}
-	return count > 0, nil
 }
