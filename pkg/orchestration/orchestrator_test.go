@@ -2,6 +2,7 @@ package orchestration
 
 import (
 	"context"
+	"sync"
 	"testing"
 
 	"github.com/cockroachdb/errors"
@@ -9,6 +10,7 @@ import (
 )
 
 type MockStore struct {
+	mu            sync.Mutex
 	workflows     map[string]*Workflow
 	executions    map[string]*Execution
 	nodes         map[string][]*Node
@@ -19,6 +21,8 @@ type MockStore struct {
 }
 
 func (m *MockStore) GetWorkflow(ctx context.Context, id string) (*Workflow, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if w, ok := m.workflows[id]; ok {
 		return w, nil
 	}
@@ -26,6 +30,8 @@ func (m *MockStore) GetWorkflow(ctx context.Context, id string) (*Workflow, erro
 }
 
 func (m *MockStore) GetExecution(ctx context.Context, id string) (*Execution, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if e, ok := m.executions[id]; ok {
 		return e, nil
 	}
@@ -33,22 +39,33 @@ func (m *MockStore) GetExecution(ctx context.Context, id string) (*Execution, er
 }
 
 func (m *MockStore) GetNodesByWorkflow(ctx context.Context, workflowID string, version int) ([]*Node, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	return m.nodes[workflowID], nil
 }
 
 func (m *MockStore) GetEdgesByWorkflow(ctx context.Context, workflowID string, version int) ([]*Edge, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	return m.edges[workflowID], nil
 }
 
 func (m *MockStore) GetNodeStatesByExecution(ctx context.Context, executionID string) ([]*NodeState, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	return m.nodeStates[executionID], nil
 }
 
 func (m *MockStore) UpdateExecutionStatus(ctx context.Context, id string, status ExecutionStatus, errMsg string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if m.updateExecErr != nil {
 		return m.updateExecErr
 	}
 	if e, ok := m.executions[id]; ok {
+		if !isValidExecutionTransition(e.Status, status) {
+			return errors.Errorf("invalid execution status transition from %s to %s", e.Status, status)
+		}
 		e.Status = status
 		e.Error = errMsg
 		return nil
@@ -57,12 +74,17 @@ func (m *MockStore) UpdateExecutionStatus(ctx context.Context, id string, status
 }
 
 func (m *MockStore) UpdateNodeStatus(ctx context.Context, id string, status NodeStatus, result []byte, errMsg string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if m.updateNodeErr != nil {
 		return m.updateNodeErr
 	}
 	for _, states := range m.nodeStates {
 		for _, s := range states {
 			if s.ID == id {
+				if !isValidNodeTransition(s.Status, status) {
+					return errors.Errorf("invalid node status transition from %s to %s", s.Status, status)
+				}
 				s.Status = status
 				s.Result = result
 				s.Error = errMsg
@@ -269,7 +291,10 @@ func TestHelloWorldWorkflow(t *testing.T) {
 	}
 
 	// Persist checks
-	finalExec, _ := dm.GetExecution(ctx, exec.ID)
+	finalExec, err := dm.GetExecution(ctx, exec.ID)
+	if err != nil {
+		t.Fatalf("GetExecution() failed: %v", err)
+	}
 	if finalExec.Status != ExecutionStatusSuccess {
 		t.Errorf("Expected SUCCESS state, got %s", finalExec.Status)
 	}
@@ -419,12 +444,18 @@ func TestOrchestrator_Execute(t *testing.T) {
 		}
 
 		// Verify final status
-		finalExec, _ := dm.GetExecution(ctx, exec.ID)
+		finalExec, err := dm.GetExecution(ctx, exec.ID)
+		if err != nil {
+			t.Fatalf("GetExecution() failed: %v", err)
+		}
 		if finalExec.Status != ExecutionStatusSuccess {
 			t.Errorf("Expected status SUCCESS, got %s", finalExec.Status)
 		}
 
-		nodeStates, _ := dm.GetNodeStatesByExecution(ctx, exec.ID)
+		nodeStates, err := dm.GetNodeStatesByExecution(ctx, exec.ID)
+		if err != nil {
+			t.Fatalf("GetNodeStatesByExecution() failed: %v", err)
+		}
 		for _, ns := range nodeStates {
 			if ns.Status != NodeStatusSuccess {
 				t.Errorf("Node %s expected status SUCCESS, got %s", ns.NodeID, ns.Status)
@@ -442,20 +473,31 @@ func TestOrchestrator_Execute(t *testing.T) {
 			{ID: "fe1", SourceNodeID: "f1", TargetNodeID: "s1"},
 		}
 
-		_ = dm.SaveWorkflowDefinition(ctx, w, nodes, edges)
-		exec, _ := dm.CreateExecutionWithInitialStates(ctx, w.ID, w.Version)
+		if err := dm.SaveWorkflowDefinition(ctx, w, nodes, edges); err != nil {
+			t.Fatalf("SaveWorkflowDefinition() failed: %v", err)
+		}
+		exec, err := dm.CreateExecutionWithInitialStates(ctx, w.ID, w.Version)
+		if err != nil {
+			t.Fatalf("CreateExecutionWithInitialStates() failed: %v", err)
+		}
 
-		err := o.Execute(ctx, exec.ID)
+		err = o.Execute(ctx, exec.ID)
 		if err == nil {
 			t.Error("Expected Execute() to fail")
 		}
 
-		finalExec, _ := dm.GetExecution(ctx, exec.ID)
+		finalExec, err := dm.GetExecution(ctx, exec.ID)
+		if err != nil {
+			t.Fatalf("GetExecution() failed: %v", err)
+		}
 		if finalExec.Status != ExecutionStatusFailed {
 			t.Errorf("Expected status FAILED, got %s", finalExec.Status)
 		}
 
-		nodeStates, _ := dm.GetNodeStatesByExecution(ctx, exec.ID)
+		nodeStates, err := dm.GetNodeStatesByExecution(ctx, exec.ID)
+		if err != nil {
+			t.Fatalf("GetNodeStatesByExecution() failed: %v", err)
+		}
 		for _, ns := range nodeStates {
 			if ns.NodeID == "f1" && ns.Status != NodeStatusFailed {
 				t.Errorf("Node f1 expected status FAILED, got %s", ns.Status)

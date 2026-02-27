@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/cockroachdb/errors"
@@ -50,11 +51,8 @@ func (dm *DatabaseManager) IsAvailable() bool {
 	if dm.db == nil {
 		return false
 	}
-	err := dm.db.Ping()
-	if err != nil {
-		if dm.Verbose {
-			fmt.Printf("Dolt database not available: %v\n", err)
-		}
+	if err := dm.db.Ping(); err != nil {
+		log.Printf("Dolt database not available: %v", err)
 		return false
 	}
 	return true
@@ -68,7 +66,7 @@ func (dm *DatabaseManager) InitSchema() error {
 
 	for _, ddl := range AllTableDDLs() {
 		if dm.Verbose {
-			fmt.Printf("Executing DDL:\n%s\n", ddl)
+			log.Printf("Executing DDL:\n%s", ddl)
 		}
 		if _, err := dm.db.Exec(ddl); err != nil {
 			return errors.Wrapf(err, "failed to execute DDL: %s", ddl)
@@ -114,7 +112,7 @@ func (dm *DatabaseManager) CreateWorkflow(ctx context.Context, w *Workflow) erro
 
 	// Run Dolt versioning on the transaction so it's atomic with data changes.
 	if err := txAutoCommit(ctx, tx, "Create workflow: "+w.Name); err != nil {
-		return err
+		return errors.Wrap(err, "failed to dolt-commit create workflow")
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -183,7 +181,7 @@ func (dm *DatabaseManager) UpdateWorkflow(ctx context.Context, w *Workflow) erro
 
 	// Run Dolt versioning on the transaction so it's atomic with data changes.
 	if err := txAutoCommit(ctx, tx, fmt.Sprintf("Update workflow: %s (v%d)", w.Name, newVersion)); err != nil {
-		return err
+		return errors.Wrap(err, "failed to dolt-commit update workflow")
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -213,6 +211,9 @@ func (dm *DatabaseManager) ListWorkflows(ctx context.Context) ([]*Workflow, erro
 			return nil, errors.Wrap(err, "failed to scan workflow")
 		}
 		workflows = append(workflows, w)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, errors.Wrap(err, "error iterating workflow rows")
 	}
 	return workflows, nil
 }
@@ -406,7 +407,7 @@ func (dm *DatabaseManager) SaveWorkflowDefinition(ctx context.Context, w *Workfl
 
 	// Run Dolt versioning on the transaction so it's atomic with data changes.
 	if err := txAutoCommit(ctx, tx, fmt.Sprintf("Save workflow definition: %s (v%d)", w.Name, deferredVersion)); err != nil {
-		return err
+		return errors.Wrap(err, "failed to dolt-commit save workflow definition")
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -510,14 +511,24 @@ func (dm *DatabaseManager) GetExecution(ctx context.Context, id string) (*Execut
 // It also sets started_at or completed_at based on the status.
 // For FAILED status, errMsg is recorded in the error column.
 func (dm *DatabaseManager) UpdateExecutionStatus(ctx context.Context, id string, status ExecutionStatus, errMsg string) error {
-	current, err := dm.GetExecution(ctx, id)
+	tx, err := dm.db.BeginTx(ctx, nil)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "failed to begin transaction")
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	// Lock the row and fetch current status atomically
+	var currentStatus ExecutionStatus
+	row := tx.QueryRowContext(ctx, "SELECT status FROM executions WHERE id = ? FOR UPDATE", id)
+	if err := row.Scan(&currentStatus); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return errors.New("execution not found")
+		}
+		return errors.Wrap(err, "failed to fetch current execution status")
 	}
 
-	// Simple state machine validation
-	if !isValidExecutionTransition(current.Status, status) {
-		return errors.Errorf("invalid execution status transition from %s to %s", current.Status, status)
+	if !isValidExecutionTransition(currentStatus, status) {
+		return errors.Errorf("invalid execution status transition from %s to %s", currentStatus, status)
 	}
 
 	var query string
@@ -539,11 +550,11 @@ func (dm *DatabaseManager) UpdateExecutionStatus(ctx context.Context, id string,
 		args = []interface{}{status, id}
 	}
 
-	_, err = dm.db.ExecContext(ctx, query, args...)
-	if err != nil {
+	if _, err := tx.ExecContext(ctx, query, args...); err != nil {
 		return errors.Wrap(err, "failed to update execution status")
 	}
-	return nil
+
+	return tx.Commit()
 }
 
 // CreateNodeState inserts a initial state for a node in an execution.
@@ -568,10 +579,16 @@ func (dm *DatabaseManager) CreateNodeState(ctx context.Context, ns *NodeState) e
 
 // UpdateNodeStatus updates the status and result of a node in an execution.
 func (dm *DatabaseManager) UpdateNodeStatus(ctx context.Context, id string, status NodeStatus, result []byte, errMsg string) error {
-	// Fetch current status to validate transition
-	var currentStatus NodeStatus
-	err := dm.db.QueryRowContext(ctx, "SELECT status FROM node_states WHERE id = ?", id).Scan(&currentStatus)
+	tx, err := dm.db.BeginTx(ctx, nil)
 	if err != nil {
+		return errors.Wrap(err, "failed to begin transaction")
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	// Lock the row and fetch current status atomically
+	var currentStatus NodeStatus
+	row := tx.QueryRowContext(ctx, "SELECT status FROM node_states WHERE id = ? FOR UPDATE", id)
+	if err := row.Scan(&currentStatus); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return errors.New("node state not found")
 		}
@@ -598,11 +615,11 @@ func (dm *DatabaseManager) UpdateNodeStatus(ctx context.Context, id string, stat
 		args = []interface{}{status, id}
 	}
 
-	_, err = dm.db.ExecContext(ctx, query, args...)
-	if err != nil {
+	if _, err := tx.ExecContext(ctx, query, args...); err != nil {
 		return errors.Wrap(err, "failed to update node status")
 	}
-	return nil
+
+	return tx.Commit()
 }
 
 // GetNodeStatesByExecution retrieves all node states for a given execution.

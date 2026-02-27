@@ -129,12 +129,17 @@ func (o *Orchestrator) Execute(ctx context.Context, executionID string) error {
 	for _, s := range states {
 		stateMap[s.NodeID] = s.ID
 	}
+	for _, node := range nodes {
+		if _, ok := stateMap[node.ID]; !ok {
+			return errors.Errorf("missing node state for node %s in execution %s", node.ID, executionID)
+		}
+	}
 
 	var mu sync.Mutex
 	results := make(map[string]json.RawMessage)
 	launched := make(map[string]bool)
 	failed := false
-	var failErr error
+	var failErrs []error
 	activeNodes := 0
 	cond := sync.NewCond(&mu)
 
@@ -145,6 +150,18 @@ func (o *Orchestrator) Execute(ctx context.Context, executionID string) error {
 			ready = append(ready, nodeID)
 		}
 	}
+
+	// Watch for context cancellation and wake the execution loop.
+	go func() {
+		<-ctx.Done()
+		mu.Lock()
+		if !failed {
+			failed = true
+			failErrs = append(failErrs, ctx.Err())
+		}
+		mu.Unlock()
+		cond.Broadcast()
+	}()
 
 	for {
 		mu.Lock()
@@ -170,11 +187,24 @@ func (o *Orchestrator) Execute(ctx context.Context, executionID string) error {
 		currentReady := ready
 		ready = []string{}
 		activeNodes += len(currentReady)
+		for _, id := range currentReady {
+			launched[id] = true
+		}
 		mu.Unlock()
 
 		for _, nodeID := range currentReady {
-			launched[nodeID] = true
 			go func(id string) {
+				defer func() {
+					if r := recover(); r != nil {
+						mu.Lock()
+						failed = true
+						failErrs = append(failErrs, errors.Errorf("panic in node %s: %v", id, r))
+						activeNodes--
+						mu.Unlock()
+						cond.Broadcast()
+					}
+				}()
+
 				res, err := o.runNode(ctx, nodeMap[id], stateMap[id])
 
 				mu.Lock()
@@ -183,7 +213,7 @@ func (o *Orchestrator) Execute(ctx context.Context, executionID string) error {
 
 				if err != nil {
 					failed = true
-					failErr = err
+					failErrs = append(failErrs, err)
 				} else {
 					results[id] = res
 					// Success: check downstream nodes
@@ -201,7 +231,10 @@ func (o *Orchestrator) Execute(ctx context.Context, executionID string) error {
 
 	if failed {
 		// Skip all nodes that were never executed
-		o.skipUnprocessed(ctx, launched, stateMap)
+		skipErr := o.skipUnprocessed(ctx, launched, stateMap)
+
+		failErr := errors.Join(failErrs...)
+		failErr = errors.CombineErrors(failErr, skipErr)
 
 		errMsg := "execution failed"
 		if failErr != nil {
@@ -219,13 +252,17 @@ func (o *Orchestrator) Execute(ctx context.Context, executionID string) error {
 // skipUnprocessed marks all nodes that were never launched as SKIPPED.
 // Nodes that were launched (whether they succeeded or failed) already have
 // their terminal status set by runNode, so we only touch nodes that never ran.
-func (o *Orchestrator) skipUnprocessed(ctx context.Context, launched map[string]bool, stateMap map[string]string) {
+func (o *Orchestrator) skipUnprocessed(ctx context.Context, launched map[string]bool, stateMap map[string]string) error {
+	var errs []error
 	for nodeID, stateID := range stateMap {
 		if launched[nodeID] {
 			continue
 		}
-		_ = o.store.UpdateNodeStatus(ctx, stateID, NodeStatusSkipped, nil, "upstream failure")
+		if err := o.store.UpdateNodeStatus(ctx, stateID, NodeStatusSkipped, nil, "upstream failure"); err != nil {
+			errs = append(errs, errors.Wrapf(err, "failed to skip node %s", nodeID))
+		}
 	}
+	return errors.Join(errs...)
 }
 
 func (o *Orchestrator) runNode(ctx context.Context, node *Node, stateID string) (json.RawMessage, error) {
@@ -245,8 +282,7 @@ func (o *Orchestrator) runNode(ctx context.Context, node *Node, stateID string) 
 	case "fail":
 		execErr = errors.New("simulated failure")
 	default:
-		// Default success with empty result
-		result = json.RawMessage(`{}`)
+		execErr = errors.Errorf("unrecognized node type: %s", node.Type)
 	}
 
 	status := NodeStatusSuccess
