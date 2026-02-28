@@ -31,12 +31,22 @@ type NodeIOSchema struct {
 	Outputs map[string]IOType `json:"outputs"`
 }
 
+// IsValid reports whether t is a recognized IOType constant.
+func (t IOType) IsValid() bool {
+	switch t {
+	case IOTypeString, IOTypeNumber, IOTypeBoolean, IOTypeObject, IOTypeArray:
+		return true
+	default:
+		return false
+	}
+}
+
 // ParseNodeConfig extracts the capabilities, IO schema, and the opaque plugin
 // configuration from the raw JSON config of a Node. It supports both the
 // explicit wrapper format and the legacy flat format.
 func ParseNodeConfig(raw json.RawMessage) (*NodeCapabilities, *NodeIOSchema, json.RawMessage, error) {
 	if len(raw) == 0 {
-		return &NodeCapabilities{}, &NodeIOSchema{}, json.RawMessage(`{}`), nil
+		return &NodeCapabilities{}, nil, json.RawMessage(`{}`), nil
 	}
 
 	var rawMap map[string]json.RawMessage
@@ -45,7 +55,7 @@ func ParseNodeConfig(raw json.RawMessage) (*NodeCapabilities, *NodeIOSchema, jso
 	}
 
 	caps := &NodeCapabilities{}
-	io := &NodeIOSchema{}
+	var io *NodeIOSchema
 	var pluginConfig json.RawMessage
 
 	// We determine if this is the explicit wrapper format. It is a wrapper if:
@@ -88,6 +98,7 @@ func ParseNodeConfig(raw json.RawMessage) (*NodeCapabilities, *NodeIOSchema, jso
 		}
 
 		if ioRaw, ok := rawMap["io"]; ok && len(ioRaw) > 0 && string(ioRaw) != "null" {
+			io = &NodeIOSchema{}
 			if err := json.Unmarshal(ioRaw, io); err != nil {
 				return nil, nil, nil, err
 			}
@@ -119,67 +130,11 @@ func ParseNodeConfig(raw json.RawMessage) (*NodeCapabilities, *NodeIOSchema, jso
 // ParseNodeCapabilities extracts the capabilities and the opaque plugin configuration
 // from the raw JSON config of a Node. If no capabilities are defined, it returns
 // a deny-all default.
+//
+// This delegates to ParseNodeConfig and discards the IO schema.
 func ParseNodeCapabilities(raw json.RawMessage) (*NodeCapabilities, json.RawMessage, error) {
-	if len(raw) == 0 {
-		return &NodeCapabilities{}, json.RawMessage(`{}`), nil
-	}
-
-	var rawMap map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &rawMap); err != nil {
-		return nil, nil, err
-	}
-
-	caps := &NodeCapabilities{}
-	var pluginConfig json.RawMessage
-
-	// We determine if this is the explicit wrapper format. It is a wrapper if:
-	// 1. The "plugin" key is explicitly present.
-	// 2. ONLY the "capabilities" key is present (to support capabilities-only configs).
-	isWrapper := false
-	if _, hasPlugin := rawMap["plugin"]; hasPlugin {
-		isWrapper = true
-	} else if _, hasCaps := rawMap["capabilities"]; hasCaps {
-		hasOtherKeys := false
-		for k := range rawMap {
-			if k != "capabilities" {
-				hasOtherKeys = true
-				break
-			}
-		}
-		if !hasOtherKeys {
-			isWrapper = true
-		}
-	}
-
-	if isWrapper {
-		// Wrapper format detected
-		if capRaw, ok := rawMap["capabilities"]; ok && len(capRaw) > 0 && string(capRaw) != "null" {
-			if err := json.Unmarshal(capRaw, caps); err != nil {
-				return nil, nil, err
-			}
-		}
-
-		pluginRaw, ok := rawMap["plugin"]
-		if ok && string(pluginRaw) != "null" && len(pluginRaw) > 0 {
-			pluginConfig = pluginRaw
-		} else {
-			pluginConfig = json.RawMessage(`{}`)
-		}
-	} else {
-		// Legacy format: treat top-level JSON entirely as plugin config.
-		// Host capabilities remain deny-all.
-		if len(rawMap) == 0 {
-			pluginConfig = json.RawMessage(`{}`)
-		} else {
-			repacked, err := json.Marshal(rawMap)
-			if err != nil {
-				return nil, nil, err
-			}
-			pluginConfig = repacked
-		}
-	}
-
-	return caps, pluginConfig, nil
+	caps, _, pluginCfg, err := ParseNodeConfig(raw)
+	return caps, pluginCfg, err
 }
 
 // resolveSymlinks safely evaluates symlinks for the longest existing prefix of the path.

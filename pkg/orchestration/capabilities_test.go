@@ -26,7 +26,7 @@ func TestParseNodeConfig(t *testing.T) {
 				NetworkAccess:  false,
 				SecretsMapping: nil,
 			},
-			expectIO:     &NodeIOSchema{},
+			expectIO:     nil,
 			expectPlugin: `{}`,
 			expectErr:    false,
 		},
@@ -79,7 +79,7 @@ func TestParseNodeConfig(t *testing.T) {
 				"temperature": 0.2
 			}`,
 			expectCaps:   &NodeCapabilities{},
-			expectIO:     &NodeIOSchema{},
+			expectIO:     nil,
 			expectPlugin: `{"model":"gpt-4","temperature":0.2}`,
 			expectErr:    false,
 		},
@@ -115,13 +115,28 @@ func TestParseNodeConfig(t *testing.T) {
 				t.Errorf("expected network_access %v, got %v", tt.expectCaps.NetworkAccess, caps.NetworkAccess)
 			}
 
-			if tt.expectIO != nil {
+			if tt.expectIO == nil {
+				if io != nil {
+					t.Errorf("expected nil IO schema, got %+v", io)
+				}
+			} else {
+				if io == nil {
+					t.Fatalf("expected IO schema %+v, got nil", tt.expectIO)
+				}
 				if len(io.Inputs) != len(tt.expectIO.Inputs) {
 					t.Errorf("expected %d inputs, got %d", len(tt.expectIO.Inputs), len(io.Inputs))
 				}
 				for k, v := range tt.expectIO.Inputs {
 					if io.Inputs[k] != v {
 						t.Errorf("expected input %q to be %q, got %q", k, v, io.Inputs[k])
+					}
+				}
+				if len(io.Outputs) != len(tt.expectIO.Outputs) {
+					t.Errorf("expected %d outputs, got %d", len(tt.expectIO.Outputs), len(io.Outputs))
+				}
+				for k, v := range tt.expectIO.Outputs {
+					if io.Outputs[k] != v {
+						t.Errorf("expected output %q to be %q, got %q", k, v, io.Outputs[k])
 					}
 				}
 			}
@@ -205,6 +220,25 @@ func TestParseNodeCapabilities(t *testing.T) {
 			rawJSON: `{
 				"capabilities": {
 					"network_access": true
+				}
+			}`,
+			expectCaps: &NodeCapabilities{
+				Workspace:      "",
+				AllowedPaths:   nil,
+				NetworkAccess:  true,
+				SecretsMapping: nil,
+			},
+			expectPlugin: `{}`,
+			expectErr:    false,
+		},
+		{
+			name: "capabilities and io without plugin key",
+			rawJSON: `{
+				"capabilities": {
+					"network_access": true
+				},
+				"io": {
+					"inputs": {"prompt": "string"}
 				}
 			}`,
 			expectCaps: &NodeCapabilities{
