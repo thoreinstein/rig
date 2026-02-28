@@ -76,6 +76,21 @@ func TestParseNodeCapabilities(t *testing.T) {
 			expectErr:    false,
 		},
 		{
+			name: "legacy top-level config containing 'capabilities' key",
+			rawJSON: `{
+				"capabilities": {"internal_feature": true},
+				"model": "gpt-4"
+			}`,
+			expectCaps: &NodeCapabilities{
+				Workspace:      "",
+				AllowedPaths:   nil,
+				NetworkAccess:  false,
+				SecretsMapping: nil,
+			},
+			expectPlugin: `{"capabilities":{"internal_feature":true},"model":"gpt-4"}`,
+			expectErr:    false,
+		},
+		{
 			name:         "invalid json",
 			rawJSON:      `{invalid`,
 			expectCaps:   nil,

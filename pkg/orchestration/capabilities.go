@@ -34,22 +34,27 @@ func ParseNodeCapabilities(raw json.RawMessage) (*NodeCapabilities, json.RawMess
 	}
 
 	caps := &NodeCapabilities{}
-	if capRaw, ok := rawMap["capabilities"]; ok && len(capRaw) > 0 && string(capRaw) != "null" {
-		if err := json.Unmarshal(capRaw, caps); err != nil {
-			return nil, nil, err
-		}
-	}
-
 	var pluginConfig json.RawMessage
+
+	// We only interpret the "capabilities" key as host capabilities if the explicit
+	// "plugin" wrapper is present. This prevents a legacy plugin config that happens
+	// to use a "capabilities" key for its own internal purposes from accidentally
+	// granting itself elevated host permissions.
 	if pluginRaw, ok := rawMap["plugin"]; ok && string(pluginRaw) != "null" {
+		// Wrapper format detected
+		if capRaw, ok := rawMap["capabilities"]; ok && len(capRaw) > 0 && string(capRaw) != "null" {
+			if err := json.Unmarshal(capRaw, caps); err != nil {
+				return nil, nil, err
+			}
+		}
+
 		pluginConfig = pluginRaw
 		if len(pluginConfig) == 0 {
 			pluginConfig = json.RawMessage(`{}`)
 		}
 	} else {
-		// Treat top-level JSON as plugin config when "plugin" is absent.
-		// We do NOT delete "capabilities" here to prevent mutating legacy configs
-		// that might legitimately use that key for plugin-specific settings.
+		// Legacy format: treat top-level JSON entirely as plugin config.
+		// Host capabilities remain deny-all.
 		if len(rawMap) == 0 {
 			pluginConfig = json.RawMessage(`{}`)
 		} else {

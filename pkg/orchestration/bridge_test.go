@@ -47,7 +47,7 @@ func TestOrchestrator_Execute_WithBridge(t *testing.T) {
 
 	n1 := &Node{
 		ID: "n1", WorkflowID: "wf-1", WorkflowVersion: 1, Type: "test-plugin",
-		Config: json.RawMessage(`{"capabilities": {"secrets_mapping": {"KEY": "src-key"}}}`),
+		Config: json.RawMessage(`{"plugin": {}, "capabilities": {"secrets_mapping": {"KEY": "src-key"}}}`),
 	}
 	n2 := &Node{
 		ID: "n2", WorkflowID: "wf-1", WorkflowVersion: 1, Type: "test-plugin",
