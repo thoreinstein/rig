@@ -215,6 +215,47 @@ func (m *Manager) GetCommandClient(ctx context.Context, name string) (client api
 	return p.CommandClient, nil
 }
 
+// GetNodeClient returns a gRPC client for the specified node execution plugin.
+// If the plugin is not running, it will be started.
+func (m *Manager) GetNodeClient(ctx context.Context, name string) (client apiv1.NodeExecutionServiceClient, err error) {
+	p, err := m.getOrStartPlugin(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+
+	p.AcquireSession()
+	defer func() {
+		if err != nil {
+			p.ReleaseSession()
+		}
+	}()
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	// Verify the plugin has the node capability
+	hasNode := false
+	for _, cap := range p.Capabilities {
+		if cap.Name == NodeCapability {
+			hasNode = true
+			break
+		}
+	}
+
+	if !hasNode {
+		return nil, errors.NewPluginError(name, "GetNodeClient", "plugin does not support node capability")
+	}
+
+	if p.NodeClient == nil {
+		if p.conn == nil {
+			return nil, errors.NewPluginError(name, "GetNodeClient", "plugin connection not established")
+		}
+		p.NodeClient = apiv1.NewNodeExecutionServiceClient(p.conn)
+	}
+
+	return p.NodeClient, nil
+}
+
 func (m *Manager) getOrStartPlugin(ctx context.Context, name string) (*Plugin, error) {
 	m.mu.Lock()
 	p, ok := m.plugins[name]

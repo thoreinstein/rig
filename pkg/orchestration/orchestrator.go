@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"sync"
 
 	"github.com/cockroachdb/errors"
@@ -22,12 +23,49 @@ type WorkflowStore interface {
 
 // Orchestrator handles the execution logic for DAG-based workflows.
 type Orchestrator struct {
-	store WorkflowStore
+	store          WorkflowStore
+	bridge         NodeBridge
+	logger         *slog.Logger
+	secretResolver SecretResolver
+}
+
+// OrchestratorOption configures an Orchestrator.
+type OrchestratorOption func(*Orchestrator)
+
+// WithNodeBridge sets the bridge for executing nodes.
+func WithNodeBridge(bridge NodeBridge) OrchestratorOption {
+	return func(o *Orchestrator) {
+		o.bridge = bridge
+	}
+}
+
+// WithLogger sets the logger for the orchestrator.
+func WithLogger(logger *slog.Logger) OrchestratorOption {
+	return func(o *Orchestrator) {
+		o.logger = logger
+	}
+}
+
+// WithSecretResolver sets the secret resolver for mapping node secrets.
+func WithSecretResolver(resolver SecretResolver) OrchestratorOption {
+	return func(o *Orchestrator) {
+		o.secretResolver = resolver
+	}
 }
 
 // NewOrchestrator creates a new Orchestrator with the given WorkflowStore.
-func NewOrchestrator(store WorkflowStore) *Orchestrator {
-	return &Orchestrator{store: store}
+func NewOrchestrator(store WorkflowStore, opts ...OrchestratorOption) *Orchestrator {
+	o := &Orchestrator{
+		store:  store,
+		logger: slog.Default(),
+	}
+	for _, opt := range opts {
+		opt(o)
+	}
+	if o.secretResolver == nil {
+		o.secretResolver = NewEnvSecretResolver()
+	}
+	return o
 }
 
 // ValidateWorkflow checks a workflow definition for structural integrity,
@@ -219,7 +257,19 @@ func (o *Orchestrator) Execute(ctx context.Context, executionID string) error {
 					}
 				}()
 
-				res, err := o.runNode(ctx, nodeMap[id], stateMap[id])
+				// Snapshot inputs for this node
+				mu.Lock()
+				inputs := make(map[string]json.RawMessage)
+				for _, edge := range edges {
+					if edge.TargetNodeID == id {
+						if res, ok := results[edge.SourceNodeID]; ok {
+							inputs[edge.SourceNodeID] = res
+						}
+					}
+				}
+				mu.Unlock()
+
+				res, err := o.runNode(ctx, nodeMap[id], stateMap[id], inputs)
 
 				mu.Lock()
 				defer mu.Unlock()
@@ -283,26 +333,47 @@ func (o *Orchestrator) skipUnprocessed(ctx context.Context, launched map[string]
 	return errors.Join(errs...)
 }
 
-func (o *Orchestrator) runNode(ctx context.Context, node *Node, stateID string) (json.RawMessage, error) {
+func (o *Orchestrator) runNode(ctx context.Context, node *Node, stateID string, inputs map[string]json.RawMessage) (json.RawMessage, error) {
 	if err := o.store.UpdateNodeStatus(ctx, stateID, NodeStatusRunning, nil, ""); err != nil {
 		return nil, errors.Wrap(err, "failed to update node status to running")
 	}
 
-	// Simulated execution based on node type
 	var result json.RawMessage
 	var execErr error
 
-	switch node.Type {
-	case "hello":
-		result = json.RawMessage(`{"output": "Hello"}`)
-	case "world":
-		result = json.RawMessage(`{"output": "World"}`)
-	case "fail":
-		execErr = errors.New("simulated failure")
-	case "panic":
-		panic("simulated panic")
-	default:
-		execErr = errors.Errorf("unrecognized node type: %s", node.Type)
+	if o.bridge != nil {
+		caps, pluginCfg, err := ParseNodeCapabilities(node.Config)
+		if err != nil {
+			execErr = errors.Wrap(err, "failed to parse node capabilities")
+		} else {
+			secrets := make(map[string]string)
+			for destKey, srcKey := range caps.SecretsMapping {
+				val, err := o.secretResolver.Resolve(ctx, srcKey)
+				if err != nil {
+					execErr = errors.Wrapf(err, "failed to resolve secret %q for node", srcKey)
+					break
+				}
+				secrets[destKey] = val
+			}
+
+			if execErr == nil {
+				result, execErr = o.bridge.ExecuteNode(ctx, node, caps, pluginCfg, inputs, secrets)
+			}
+		}
+	} else {
+		// Simulated execution based on node type
+		switch node.Type {
+		case "hello":
+			result = json.RawMessage(`{"output": "Hello"}`)
+		case "world":
+			result = json.RawMessage(`{"output": "World"}`)
+		case "fail":
+			execErr = errors.New("simulated failure")
+		case "panic":
+			panic("simulated panic")
+		default:
+			execErr = errors.Errorf("unrecognized node type: %s", node.Type)
+		}
 	}
 
 	status := NodeStatusSuccess

@@ -28,6 +28,9 @@ const (
 	// CommandCapability is the name of the capability for plugins that provide CLI commands.
 	CommandCapability = "command"
 
+	// NodeCapability is the name of the capability for plugins that can execute workflow nodes.
+	NodeCapability = "node"
+
 	// APIVersion is the current version of the Rig Plugin API contract.
 	APIVersion = "v1"
 )
@@ -80,6 +83,7 @@ type Plugin struct {
 	client          apiv1.PluginServiceClient
 	AssistantClient apiv1.AssistantServiceClient
 	CommandClient   apiv1.CommandServiceClient
+	NodeClient      apiv1.NodeExecutionServiceClient
 	conn            *grpc.ClientConn
 	cancel          context.CancelFunc
 }
