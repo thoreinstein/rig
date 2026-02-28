@@ -214,6 +214,8 @@ func (o *Orchestrator) Execute(ctx context.Context, executionID string) error {
 			failErrs = append(failErrs, errors.Errorf("node %s previously failed: %s", s.NodeID, s.Error))
 			launched[s.NodeID] = true
 		case NodeStatusSkipped:
+			failed = true
+			failErrs = append(failErrs, errors.Errorf("node %s was previously skipped", s.NodeID))
 			launched[s.NodeID] = true
 		}
 	}

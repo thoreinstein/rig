@@ -436,8 +436,24 @@ func TestOrchestrator_Execute_Recovery(t *testing.T) {
 				"D": NodeStatusSkipped,
 			},
 		},
+		{
+			name: "Resuming with SKIPPED nodes (no FAILED nodes)",
+			initialStates: []*NodeState{
+				{ID: "sA", NodeID: "A", ExecutionID: eID, Status: NodeStatusSuccess, Result: json.RawMessage(`{"output":"A"}`)},
+				{ID: "sB", NodeID: "B", ExecutionID: eID, Status: NodeStatusSkipped, Error: "upstream failure"},
+				{ID: "sC", NodeID: "C", ExecutionID: eID, Status: NodeStatusSkipped, Error: "upstream failure"},
+				{ID: "sD", NodeID: "D", ExecutionID: eID, Status: NodeStatusPending},
+			},
+			expectRun:    map[string]bool{},
+			expectStatus: ExecutionStatusFailed,
+			expectNodeStatus: map[string]NodeStatus{
+				"A": NodeStatusSuccess,
+				"B": NodeStatusSkipped,
+				"C": NodeStatusSkipped,
+				"D": NodeStatusSkipped,
+			},
+		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			executed := make(map[string]int)
