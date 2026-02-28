@@ -3,6 +3,7 @@ package orchestration
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"sync"
 	"testing"
 
@@ -629,8 +630,8 @@ func TestOrchestrator_Execute_TerminalStateGuard(t *testing.T) {
 			if err == nil {
 				t.Fatalf("Expected error for terminal status %s, got nil", status)
 			}
-			if !errors.Is(err, err) { // ensure it's a real error, not nil
-				t.Fatalf("Unexpected error type: %v", err)
+			if !strings.Contains(err.Error(), "terminal state") {
+				t.Fatalf("Expected error about terminal state, got: %v", err)
 			}
 		})
 	}
