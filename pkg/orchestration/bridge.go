@@ -103,6 +103,16 @@ func (b *PluginNodeBridge) ExecuteNode(
 	}()
 	defer srv.GracefulStop()
 
+	// Check for immediate server failure
+	select {
+	case err := <-errChan:
+		if err != nil {
+			return nil, fmt.Errorf("resource server failed to start: %w", err)
+		}
+	default:
+		// Server started successfully, continue
+	}
+
 	// 4. Prepare inputs
 	reqInputs := make(map[string][]byte)
 	for k, v := range inputs {

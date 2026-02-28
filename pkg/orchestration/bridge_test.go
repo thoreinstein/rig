@@ -3,6 +3,7 @@ package orchestration
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -158,14 +159,14 @@ func (s *MemoryStore) GetExecution(ctx context.Context, id string) (*Execution, 
 func (s *MemoryStore) GetNodesByWorkflow(ctx context.Context, workflowID string, version int) ([]*Node, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	key := workflowID + ":" + string(rune(version+'0'))
+	key := fmt.Sprintf("%s:%d", workflowID, version)
 	return s.nodes[key], nil
 }
 
 func (s *MemoryStore) GetEdgesByWorkflow(ctx context.Context, workflowID string, version int) ([]*Edge, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	key := workflowID + ":" + string(rune(version+'0'))
+	key := fmt.Sprintf("%s:%d", workflowID, version)
 	return s.edges[key], nil
 }
 
