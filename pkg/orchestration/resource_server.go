@@ -62,9 +62,12 @@ func (s *resourceServer) ReadFile(ctx context.Context, req *apiv1.ReadFileReques
 		return nil, status.Errorf(codes.Internal, "failed to open file: %v", err)
 	}
 	defer f.Close()
-	content, err := io.ReadAll(io.LimitReader(f, maxFileSize))
+	content, err := io.ReadAll(io.LimitReader(f, maxFileSize+1))
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to read file: %v", err)
+	}
+	if len(content) > maxFileSize {
+		return nil, status.Errorf(codes.ResourceExhausted, "file too large: maximum allowed size is %d bytes", maxFileSize)
 	}
 	return &apiv1.ReadFileResponse{Content: content}, nil
 }
