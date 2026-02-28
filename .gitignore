@@ -32,6 +32,10 @@ credentials*
 *.bak
 roadmap.json
 
+# Claude Code - override global .claude/ ignore for shared config
+!.claude/
+.claude/settings.local.json
+
 # bv (beads viewer) local config and caches
 .bv/
 discovery.db
