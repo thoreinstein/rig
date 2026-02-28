@@ -59,15 +59,26 @@ func TestParseNodeConfig(t *testing.T) {
 			expectErr:    false,
 		},
 		{
-			name: "io-only wrapper",
+			name: "io-only legacy config (NOT a wrapper)",
 			rawJSON: `{
+				"io": {"plugin_input": "val"}
+			}`,
+			expectCaps:   &NodeCapabilities{},
+			expectIO:     nil,
+			expectPlugin: `{"io":{"plugin_input":"val"}}`,
+			expectErr:    false,
+		},
+		{
+			name: "io and capabilities wrapper",
+			rawJSON: `{
+				"capabilities": {"network_access": true},
 				"io": {
-					"inputs": {"input1": "boolean"}
+					"inputs": {"input1": "string"}
 				}
 			}`,
-			expectCaps: &NodeCapabilities{},
+			expectCaps: &NodeCapabilities{NetworkAccess: true},
 			expectIO: &NodeIOSchema{
-				Inputs: map[string]IOType{"input1": IOTypeBoolean},
+				Inputs: map[string]IOType{"input1": IOTypeString},
 			},
 			expectPlugin: `{}`,
 			expectErr:    false,

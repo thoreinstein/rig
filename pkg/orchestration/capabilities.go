@@ -60,32 +60,21 @@ func ParseNodeConfig(raw json.RawMessage) (*NodeCapabilities, *NodeIOSchema, jso
 
 	// We determine if this is the explicit wrapper format. It is a wrapper if:
 	// 1. The "plugin" key is explicitly present.
-	// 2. The "capabilities" or "io" keys are present WITHOUT other top-level keys
-	//    that would imply a legacy flat plugin config.
+	// 2. The "capabilities" key is present WITHOUT other top-level keys
+	//    (except "io") that would imply a legacy flat plugin config.
 	isWrapper := false
 	if _, hasPlugin := rawMap["plugin"]; hasPlugin {
 		isWrapper = true
-	} else {
-		hasCaps := false
-		if _, ok := rawMap["capabilities"]; ok {
-			hasCaps = true
-		}
-		hasIO := false
-		if _, ok := rawMap["io"]; ok {
-			hasIO = true
-		}
-
-		if hasCaps || hasIO {
-			hasOtherKeys := false
-			for k := range rawMap {
-				if k != "capabilities" && k != "io" {
-					hasOtherKeys = true
-					break
-				}
+	} else if _, hasCaps := rawMap["capabilities"]; hasCaps {
+		hasOtherKeys := false
+		for k := range rawMap {
+			if k != "capabilities" && k != "io" {
+				hasOtherKeys = true
+				break
 			}
-			if !hasOtherKeys {
-				isWrapper = true
-			}
+		}
+		if !hasOtherKeys {
+			isWrapper = true
 		}
 	}
 

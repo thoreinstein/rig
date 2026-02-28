@@ -56,10 +56,10 @@ func TestDryRunValidate(t *testing.T) {
 		{
 			name: "diamond dag with matching IO",
 			nodes: []*Node{
-				{ID: "a", Name: "Root", Type: "t1", Config: json.RawMessage(`{"io": {"outputs": {"x": "string"}}}`)},
-				{ID: "b", Name: "Left", Type: "t2", Config: json.RawMessage(`{"io": {"inputs": {"x": "string"}, "outputs": {"y": "number"}}}`)},
-				{ID: "c", Name: "Right", Type: "t3", Config: json.RawMessage(`{"io": {"inputs": {"x": "string"}, "outputs": {"z": "number"}}}`)},
-				{ID: "d", Name: "Sink", Type: "t4", Config: json.RawMessage(`{"io": {"inputs": {"y": "number", "z": "number"}}}`)},
+				{ID: "a", Name: "Root", Type: "t1", Config: json.RawMessage(`{"plugin": {}, "io": {"outputs": {"x": "string"}}}`)},
+				{ID: "b", Name: "Left", Type: "t2", Config: json.RawMessage(`{"plugin": {}, "io": {"inputs": {"x": "string"}, "outputs": {"y": "number"}}}`)},
+				{ID: "c", Name: "Right", Type: "t3", Config: json.RawMessage(`{"plugin": {}, "io": {"inputs": {"x": "string"}, "outputs": {"z": "number"}}}`)},
+				{ID: "d", Name: "Sink", Type: "t4", Config: json.RawMessage(`{"plugin": {}, "io": {"inputs": {"y": "number", "z": "number"}}}`)},
 			},
 			edges: []*Edge{
 				{SourceNodeID: "a", TargetNodeID: "b"},
@@ -79,8 +79,8 @@ func TestDryRunValidate(t *testing.T) {
 		{
 			name: "type mismatch error",
 			nodes: []*Node{
-				{ID: "n1", Type: "t1", Config: json.RawMessage(`{"io": {"outputs": {"val": "string"}}}`)},
-				{ID: "n2", Type: "t2", Config: json.RawMessage(`{"io": {"inputs": {"val": "number"}}}`)},
+				{ID: "n1", Type: "t1", Config: json.RawMessage(`{"plugin": {}, "io": {"outputs": {"val": "string"}}}`)},
+				{ID: "n2", Type: "t2", Config: json.RawMessage(`{"plugin": {}, "io": {"inputs": {"val": "number"}}}`)},
 			},
 			edges: []*Edge{
 				{SourceNodeID: "n1", TargetNodeID: "n2"},
@@ -97,8 +97,8 @@ func TestDryRunValidate(t *testing.T) {
 		{
 			name: "unsatisfied input key",
 			nodes: []*Node{
-				{ID: "n1", Type: "t1", Config: json.RawMessage(`{"io": {"outputs": {"y": "string"}}}`)},
-				{ID: "n2", Type: "t2", Config: json.RawMessage(`{"io": {"inputs": {"x": "string"}}}`)},
+				{ID: "n1", Type: "t1", Config: json.RawMessage(`{"plugin": {}, "io": {"outputs": {"y": "string"}}}`)},
+				{ID: "n2", Type: "t2", Config: json.RawMessage(`{"plugin": {}, "io": {"inputs": {"x": "string"}}}`)},
 			},
 			edges: []*Edge{
 				{SourceNodeID: "n1", TargetNodeID: "n2"},
@@ -115,7 +115,7 @@ func TestDryRunValidate(t *testing.T) {
 		{
 			name: "root node with declared inputs",
 			nodes: []*Node{
-				{ID: "n1", Type: "t1", Config: json.RawMessage(`{"io": {"inputs": {"prompt": "string"}}}`)},
+				{ID: "n1", Type: "t1", Config: json.RawMessage(`{"plugin": {}, "io": {"inputs": {"prompt": "string"}}}`)},
 			},
 			expectValid: false,
 			expectSteps: []DryRunStep{
@@ -129,7 +129,7 @@ func TestDryRunValidate(t *testing.T) {
 			name: "undeclared upstream outputs (warning)",
 			nodes: []*Node{
 				{ID: "n1", Type: "t1"}, // no IO schema
-				{ID: "n2", Type: "t2", Config: json.RawMessage(`{"io": {"inputs": {"x": "string"}}}`)},
+				{ID: "n2", Type: "t2", Config: json.RawMessage(`{"plugin": {}, "io": {"inputs": {"x": "string"}}}`)},
 			},
 			edges: []*Edge{
 				{SourceNodeID: "n1", TargetNodeID: "n2"},
@@ -146,9 +146,9 @@ func TestDryRunValidate(t *testing.T) {
 		{
 			name: "multiple upstreams satisfy input",
 			nodes: []*Node{
-				{ID: "n1", Type: "t1", Config: json.RawMessage(`{"io": {"outputs": {"x": "string"}}}`)},
-				{ID: "n2", Type: "t2", Config: json.RawMessage(`{"io": {"outputs": {"x": "string"}}}`)},
-				{ID: "n3", Type: "t3", Config: json.RawMessage(`{"io": {"inputs": {"x": "string"}}}`)},
+				{ID: "n1", Type: "t1", Config: json.RawMessage(`{"plugin": {}, "io": {"outputs": {"x": "string"}}}`)},
+				{ID: "n2", Type: "t2", Config: json.RawMessage(`{"plugin": {}, "io": {"outputs": {"x": "string"}}}`)},
+				{ID: "n3", Type: "t3", Config: json.RawMessage(`{"plugin": {}, "io": {"inputs": {"x": "string"}}}`)},
 			},
 			edges: []*Edge{
 				{SourceNodeID: "n1", TargetNodeID: "n3"},
@@ -223,9 +223,9 @@ func TestDryRunValidate(t *testing.T) {
 		{
 			name: "mixed schema and no-schema nodes",
 			nodes: []*Node{
-				{ID: "n1", Type: "t1", Config: json.RawMessage(`{"io": {"outputs": {"x": "string"}}}`)},
+				{ID: "n1", Type: "t1", Config: json.RawMessage(`{"plugin": {}, "io": {"outputs": {"x": "string"}}}`)},
 				{ID: "n2", Type: "t2"}, // no schema — pass-through
-				{ID: "n3", Type: "t3", Config: json.RawMessage(`{"io": {"inputs": {"x": "string"}}}`)},
+				{ID: "n3", Type: "t3", Config: json.RawMessage(`{"plugin": {}, "io": {"inputs": {"x": "string"}}}`)},
 			},
 			edges: []*Edge{
 				{SourceNodeID: "n1", TargetNodeID: "n2"},
