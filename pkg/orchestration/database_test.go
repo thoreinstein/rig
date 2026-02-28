@@ -388,3 +388,87 @@ func TestNodeHistoricalVersioning(t *testing.T) {
 		t.Errorf("Expected node-v2 for version 2, got %v", dbNodes2)
 	}
 }
+
+func TestIdempotentRecovery(t *testing.T) {
+	dm := skipWithoutDolt(t)
+	defer dm.Close()
+	ctx := t.Context()
+
+	if err := dm.InitSchema(); err != nil {
+		t.Fatalf("InitSchema() failed: %v", err)
+	}
+
+	w := &Workflow{Name: "recovery-test-" + uuid.New().String()}
+	if err := dm.CreateWorkflow(ctx, w); err != nil {
+		t.Fatalf("CreateWorkflow failed: %v", err)
+	}
+
+	exec := &Execution{
+		WorkflowID:      w.ID,
+		WorkflowVersion: w.Version,
+		Status:          ExecutionStatusPending,
+	}
+	if err := dm.CreateExecution(ctx, exec); err != nil {
+		t.Fatalf("CreateExecution failed: %v", err)
+	}
+
+	// 1. Initial Transition to RUNNING
+	if err := dm.UpdateExecutionStatus(ctx, exec.ID, ExecutionStatusRunning, ""); err != nil {
+		t.Fatalf("First UpdateExecutionStatus(RUNNING) failed: %v", err)
+	}
+
+	initial, err := dm.GetExecution(ctx, exec.ID)
+	if err != nil {
+		t.Fatalf("GetExecution failed: %v", err)
+	}
+	if initial.StartedAt == nil {
+		t.Fatal("StartedAt should be set")
+	}
+	firstStart := *initial.StartedAt
+
+	// 2. Idempotent Transition to RUNNING
+	if err := dm.UpdateExecutionStatus(ctx, exec.ID, ExecutionStatusRunning, ""); err != nil {
+		t.Fatalf("Second UpdateExecutionStatus(RUNNING) failed: %v", err)
+	}
+
+	recovered, err := dm.GetExecution(ctx, exec.ID)
+	if err != nil {
+		t.Fatalf("GetExecution failed: %v", err)
+	}
+	if recovered.StartedAt == nil || !recovered.StartedAt.Equal(firstStart) {
+		t.Errorf("StartedAt was not preserved: got %v, want %v", recovered.StartedAt, firstStart)
+	}
+
+	// 3. Node Idempotent Transition
+	nodes, err := dm.CreateExecutionWithInitialStates(ctx, w.ID, w.Version)
+	if err != nil {
+		t.Fatalf("CreateExecutionWithInitialStates failed: %v", err)
+	}
+	states, err := dm.GetNodeStatesByExecution(ctx, nodes.ID)
+	if err != nil {
+		t.Fatalf("GetNodeStatesByExecution failed: %v", err)
+	}
+	ns := states[0]
+
+	if err := dm.UpdateNodeStatus(ctx, ns.ID, NodeStatusRunning, nil, ""); err != nil {
+		t.Fatalf("First UpdateNodeStatus(RUNNING) failed: %v", err)
+	}
+
+	nsInitial, err := dm.GetNodeStatesByExecution(ctx, nodes.ID)
+	if err != nil {
+		t.Fatalf("GetNodeStatesByExecution failed: %v", err)
+	}
+	nsFirstStart := *nsInitial[0].StartedAt
+
+	if err := dm.UpdateNodeStatus(ctx, ns.ID, NodeStatusRunning, nil, ""); err != nil {
+		t.Fatalf("Second UpdateNodeStatus(RUNNING) failed: %v", err)
+	}
+
+	nsRecovered, err := dm.GetNodeStatesByExecution(ctx, nodes.ID)
+	if err != nil {
+		t.Fatalf("GetNodeStatesByExecution failed: %v", err)
+	}
+	if nsRecovered[0].StartedAt == nil || !nsRecovered[0].StartedAt.Equal(nsFirstStart) {
+		t.Errorf("Node StartedAt was not preserved: got %v, want %v", nsRecovered[0].StartedAt, nsFirstStart)
+	}
+}

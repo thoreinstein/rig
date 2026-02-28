@@ -545,7 +545,7 @@ func (dm *DatabaseManager) UpdateExecutionStatus(ctx context.Context, id string,
 
 	switch status {
 	case ExecutionStatusRunning:
-		query = `UPDATE executions SET status = ?, started_at = ? WHERE id = ?`
+		query = `UPDATE executions SET status = ?, started_at = COALESCE(started_at, ?) WHERE id = ?`
 		args = []interface{}{status, now, id}
 	case ExecutionStatusFailed:
 		query = `UPDATE executions SET status = ?, completed_at = ?, error = ? WHERE id = ?`
@@ -616,7 +616,7 @@ func (dm *DatabaseManager) UpdateNodeStatus(ctx context.Context, id string, stat
 
 	switch status {
 	case NodeStatusRunning:
-		query = `UPDATE node_states SET status = ?, started_at = ? WHERE id = ?`
+		query = `UPDATE node_states SET status = ?, started_at = COALESCE(started_at, ?) WHERE id = ?`
 		args = []interface{}{status, now, id}
 	case NodeStatusSuccess, NodeStatusFailed, NodeStatusSkipped:
 		query = `UPDATE node_states SET status = ?, completed_at = ?, result = ?, error = ? WHERE id = ?`
@@ -688,7 +688,7 @@ func isValidExecutionTransition(from, to ExecutionStatus) bool {
 	case ExecutionStatusPending:
 		return to == ExecutionStatusRunning || to == ExecutionStatusCancelled || to == ExecutionStatusFailed
 	case ExecutionStatusRunning:
-		return to == ExecutionStatusSuccess || to == ExecutionStatusFailed || to == ExecutionStatusCancelled
+		return to == ExecutionStatusRunning || to == ExecutionStatusSuccess || to == ExecutionStatusFailed || to == ExecutionStatusCancelled
 	default:
 		return false
 	}
@@ -699,7 +699,7 @@ func isValidNodeTransition(from, to NodeStatus) bool {
 	case NodeStatusPending:
 		return to == NodeStatusRunning || to == NodeStatusSkipped || to == NodeStatusFailed
 	case NodeStatusRunning:
-		return to == NodeStatusSuccess || to == NodeStatusFailed || to == NodeStatusSkipped
+		return to == NodeStatusRunning || to == NodeStatusSuccess || to == NodeStatusFailed || to == NodeStatusSkipped
 	default:
 		return false
 	}
