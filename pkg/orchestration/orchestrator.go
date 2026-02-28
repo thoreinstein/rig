@@ -144,6 +144,12 @@ func (o *Orchestrator) Execute(ctx context.Context, executionID string) error {
 		return errors.Wrap(err, "failed to get execution")
 	}
 
+	// Guard: reject executions already in a terminal state.
+	switch execution.Status {
+	case ExecutionStatusSuccess, ExecutionStatusFailed, ExecutionStatusCancelled:
+		return errors.Errorf("execution %s is already in terminal state %s", executionID, execution.Status)
+	}
+
 	nodes, err := o.store.GetNodesByWorkflow(ctx, execution.WorkflowID, execution.WorkflowVersion)
 	if err != nil {
 		return errors.Wrap(err, "failed to get nodes")
@@ -218,11 +224,20 @@ func (o *Orchestrator) Execute(ctx context.Context, executionID string) error {
 		if execution.Status == ExecutionStatusPending {
 			_ = o.store.UpdateExecutionStatus(ctx, executionID, ExecutionStatusRunning, "")
 		}
-		// Use detached context for cleanup
+		// Use detached context for cleanup — the original ctx may be cancelled.
 		cleanupCtx := context.WithoutCancel(ctx)
-		_ = o.skipUnprocessed(cleanupCtx, launched, stateMap)
+		skipErr := o.skipUnprocessed(cleanupCtx, launched, stateMap)
+
 		failErr := errors.Join(failErrs...)
-		_ = o.store.UpdateExecutionStatus(cleanupCtx, executionID, ExecutionStatusFailed, failErr.Error())
+		failErr = errors.CombineErrors(failErr, skipErr)
+
+		errMsg := "execution failed"
+		if failErr != nil {
+			errMsg = failErr.Error()
+		}
+		if updateErr := o.store.UpdateExecutionStatus(cleanupCtx, executionID, ExecutionStatusFailed, errMsg); updateErr != nil {
+			return errors.CombineErrors(failErr, errors.Wrap(updateErr, "failed to update execution status to failed"))
+		}
 		return failErr
 	}
 

@@ -440,6 +440,16 @@ func TestIdempotentRecovery(t *testing.T) {
 	}
 
 	// 3. Node Idempotent Transition
+	node := &Node{
+		WorkflowID:      w.ID,
+		WorkflowVersion: w.Version,
+		Name:            "idempotent-test-node",
+		Type:            "task",
+	}
+	if err := dm.CreateNode(ctx, node); err != nil {
+		t.Fatalf("CreateNode failed: %v", err)
+	}
+
 	nodes, err := dm.CreateExecutionWithInitialStates(ctx, w.ID, w.Version)
 	if err != nil {
 		t.Fatalf("CreateExecutionWithInitialStates failed: %v", err)

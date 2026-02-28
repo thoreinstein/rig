@@ -342,21 +342,31 @@ func TestOrchestrator_Execute_Recovery(t *testing.T) {
 	}
 
 	tests := []struct {
-		name          string
-		initialStates []*NodeState
-		expectRun     map[string]bool // which nodes we expect to be executed
-		expectStatus  ExecutionStatus
+		name             string
+		initialStates    []*NodeState
+		expectRun        map[string]bool // which nodes we expect the bridge to execute
+		expectStatus     ExecutionStatus
+		expectNodeStatus map[string]NodeStatus // expected final status of every node
 	}{
 		{
 			name: "Linear resume - A success, resume B and C",
 			initialStates: []*NodeState{
 				{ID: "sA", NodeID: "A", ExecutionID: eID, Status: NodeStatusSuccess, Result: json.RawMessage(`{"output":"A"}`)},
+				// B was RUNNING when the process crashed. Recovery does not mark
+				// RUNNING nodes as "launched" — they must be re-executed because
+				// the goroutine doing the work is gone.
 				{ID: "sB", NodeID: "B", ExecutionID: eID, Status: NodeStatusRunning},
 				{ID: "sC", NodeID: "C", ExecutionID: eID, Status: NodeStatusPending},
 				{ID: "sD", NodeID: "D", ExecutionID: eID, Status: NodeStatusPending},
 			},
 			expectRun:    map[string]bool{"B": true, "C": true, "D": true},
 			expectStatus: ExecutionStatusSuccess,
+			expectNodeStatus: map[string]NodeStatus{
+				"A": NodeStatusSuccess,
+				"B": NodeStatusSuccess,
+				"C": NodeStatusSuccess,
+				"D": NodeStatusSuccess,
+			},
 		},
 		{
 			name: "Diamond resume - A, B success, resume C and D",
@@ -368,6 +378,12 @@ func TestOrchestrator_Execute_Recovery(t *testing.T) {
 			},
 			expectRun:    map[string]bool{"C": true, "D": true},
 			expectStatus: ExecutionStatusSuccess,
+			expectNodeStatus: map[string]NodeStatus{
+				"A": NodeStatusSuccess,
+				"B": NodeStatusSuccess,
+				"C": NodeStatusSuccess,
+				"D": NodeStatusSuccess,
+			},
 		},
 		{
 			name: "All complete no-op",
@@ -379,6 +395,12 @@ func TestOrchestrator_Execute_Recovery(t *testing.T) {
 			},
 			expectRun:    map[string]bool{},
 			expectStatus: ExecutionStatusSuccess,
+			expectNodeStatus: map[string]NodeStatus{
+				"A": NodeStatusSuccess,
+				"B": NodeStatusSuccess,
+				"C": NodeStatusSuccess,
+				"D": NodeStatusSuccess,
+			},
 		},
 		{
 			name: "Pre-crash failure - short circuit",
@@ -390,6 +412,29 @@ func TestOrchestrator_Execute_Recovery(t *testing.T) {
 			},
 			expectRun:    map[string]bool{},
 			expectStatus: ExecutionStatusFailed,
+			expectNodeStatus: map[string]NodeStatus{
+				"A": NodeStatusSuccess,
+				"B": NodeStatusFailed,
+				"C": NodeStatusSkipped,
+				"D": NodeStatusSkipped,
+			},
+		},
+		{
+			name: "RUNNING node with FAILED sibling - short circuit",
+			initialStates: []*NodeState{
+				{ID: "sA", NodeID: "A", ExecutionID: eID, Status: NodeStatusSuccess, Result: json.RawMessage(`{"output":"A"}`)},
+				{ID: "sB", NodeID: "B", ExecutionID: eID, Status: NodeStatusRunning},
+				{ID: "sC", NodeID: "C", ExecutionID: eID, Status: NodeStatusFailed, Error: "boom"},
+				{ID: "sD", NodeID: "D", ExecutionID: eID, Status: NodeStatusPending},
+			},
+			expectRun:    map[string]bool{},
+			expectStatus: ExecutionStatusFailed,
+			expectNodeStatus: map[string]NodeStatus{
+				"A": NodeStatusSuccess,
+				"B": NodeStatusSkipped,
+				"C": NodeStatusFailed,
+				"D": NodeStatusSkipped,
+			},
 		},
 	}
 
@@ -447,6 +492,17 @@ func TestOrchestrator_Execute_Recovery(t *testing.T) {
 			for id := range tt.expectRun {
 				if executed[id] == 0 {
 					t.Errorf("Node %s was NOT executed, expected it to run", id)
+				}
+			}
+
+			// Verify every node reached its expected terminal status in the store.
+			for _, ns := range store.nodeStates[eID] {
+				want, ok := tt.expectNodeStatus[ns.NodeID]
+				if !ok {
+					continue
+				}
+				if ns.Status != want {
+					t.Errorf("Node %s expected status %s, got %s", ns.NodeID, want, ns.Status)
 				}
 			}
 		})

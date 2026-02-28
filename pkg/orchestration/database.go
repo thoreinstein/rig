@@ -688,6 +688,9 @@ func isValidExecutionTransition(from, to ExecutionStatus) bool {
 	case ExecutionStatusPending:
 		return to == ExecutionStatusRunning || to == ExecutionStatusCancelled || to == ExecutionStatusFailed
 	case ExecutionStatusRunning:
+		// RUNNING -> RUNNING is permitted for crash recovery: the orchestrator
+		// re-drives interrupted executions, and the COALESCE on started_at
+		// prevents the original timestamp from being overwritten.
 		return to == ExecutionStatusRunning || to == ExecutionStatusSuccess || to == ExecutionStatusFailed || to == ExecutionStatusCancelled
 	default:
 		return false
@@ -699,6 +702,9 @@ func isValidNodeTransition(from, to NodeStatus) bool {
 	case NodeStatusPending:
 		return to == NodeStatusRunning || to == NodeStatusSkipped || to == NodeStatusFailed
 	case NodeStatusRunning:
+		// RUNNING -> RUNNING is permitted for crash recovery: nodes interrupted
+		// mid-execution are re-dispatched, and the COALESCE on started_at
+		// prevents the original timestamp from being overwritten.
 		return to == NodeStatusRunning || to == NodeStatusSuccess || to == NodeStatusFailed || to == NodeStatusSkipped
 	default:
 		return false
