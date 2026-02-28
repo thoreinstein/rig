@@ -52,7 +52,9 @@ func (dm *DatabaseManager) IsAvailable() bool {
 		return false
 	}
 	if err := dm.db.Ping(); err != nil {
-		log.Printf("Dolt database not available: %v", err)
+		if dm.Verbose {
+			log.Printf("Dolt database not available: %v", err)
+		}
 		return false
 	}
 	return true
@@ -297,7 +299,19 @@ func (dm *DatabaseManager) GetEdgesByWorkflow(ctx context.Context, workflowID st
 
 // SaveWorkflowDefinition transactionally saves a full workflow definition and creates a Dolt commit.
 func (dm *DatabaseManager) SaveWorkflowDefinition(ctx context.Context, w *Workflow, nodes []*Node, edges []*Edge) error {
-	// 0. Validate DAG
+	// 0. Assign stable IDs before validation so empty-ID nodes don't collapse.
+	for _, n := range nodes {
+		if n.ID == "" {
+			n.ID = uuid.New().String()
+		}
+	}
+	for _, e := range edges {
+		if e.ID == "" {
+			e.ID = uuid.New().String()
+		}
+	}
+
+	// 1. Validate DAG
 	if err := ValidateWorkflow(nodes, edges); err != nil {
 		return errors.Wrap(err, "invalid workflow definition")
 	}
@@ -308,7 +322,7 @@ func (dm *DatabaseManager) SaveWorkflowDefinition(ctx context.Context, w *Workfl
 	}
 	defer tx.Rollback() //nolint:errcheck
 
-	// 1. Update/Create Workflow
+	// 2. Update/Create Workflow
 	// Track deferred mutations to apply only after all DB ops succeed.
 	var deferredID string
 	var deferredVersion int
@@ -365,7 +379,7 @@ func (dm *DatabaseManager) SaveWorkflowDefinition(ctx context.Context, w *Workfl
 		}
 	}
 
-	// 2. Clean existing edges for THIS version if updating.
+	// 3. Clean existing edges for THIS version if updating.
 	// We don't clean old versions because they are referenced by historical executions.
 	// But since we increment version on every SaveWorkflowDefinition, there shouldn't be
 	// any existing edges for 'deferredVersion' anyway. We clean just in case of retries/idempotency.
@@ -376,13 +390,10 @@ func (dm *DatabaseManager) SaveWorkflowDefinition(ctx context.Context, w *Workfl
 		return errors.Wrap(err, "failed to clean nodes")
 	}
 
-	// 3. Insert new nodes
+	// 4. Insert new nodes
 	for _, n := range nodes {
 		n.WorkflowID = deferredID
 		n.WorkflowVersion = deferredVersion
-		if n.ID == "" {
-			n.ID = uuid.New().String()
-		}
 		if n.CreatedAt.IsZero() {
 			n.CreatedAt = time.Now()
 		}
@@ -392,13 +403,10 @@ func (dm *DatabaseManager) SaveWorkflowDefinition(ctx context.Context, w *Workfl
 		}
 	}
 
-	// 4. Insert new edges
+	// 5. Insert new edges
 	for _, e := range edges {
 		e.WorkflowID = deferredID
 		e.WorkflowVersion = deferredVersion
-		if e.ID == "" {
-			e.ID = uuid.New().String()
-		}
 		query := `INSERT INTO edges (id, workflow_id, workflow_version, source_node_id, target_node_id, condition) VALUES (?, ?, ?, ?, ?, ?)`
 		if _, err := tx.ExecContext(ctx, query, e.ID, e.WorkflowID, e.WorkflowVersion, e.SourceNodeID, e.TargetNodeID, e.Condition); err != nil {
 			return errors.Wrap(err, "failed to insert edge in tx")

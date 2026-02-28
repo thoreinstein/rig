@@ -3,6 +3,7 @@ package orchestration
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"sync"
 
 	"github.com/cockroachdb/errors"
@@ -104,8 +105,9 @@ func (o *Orchestrator) Execute(ctx context.Context, executionID string) error {
 		return errors.Wrap(err, "failed to get edges")
 	}
 
-	if err := o.store.UpdateExecutionStatus(ctx, executionID, ExecutionStatusRunning, ""); err != nil {
-		return errors.Wrap(err, "failed to start execution")
+	// Validate the workflow definition before transitioning to RUNNING.
+	if err := ValidateWorkflow(nodes, edges); err != nil {
+		return errors.Wrap(err, "workflow validation failed")
 	}
 
 	// Build graph
@@ -135,6 +137,11 @@ func (o *Orchestrator) Execute(ctx context.Context, executionID string) error {
 		}
 	}
 
+	// All preflight checks passed — transition to RUNNING.
+	if err := o.store.UpdateExecutionStatus(ctx, executionID, ExecutionStatusRunning, ""); err != nil {
+		return errors.Wrap(err, "failed to start execution")
+	}
+
 	var mu sync.Mutex
 	results := make(map[string]json.RawMessage)
 	launched := make(map[string]bool)
@@ -151,23 +158,17 @@ func (o *Orchestrator) Execute(ctx context.Context, executionID string) error {
 		}
 	}
 
-	// Watch for context cancellation and wake the execution loop.
-	go func() {
-		<-ctx.Done()
-		mu.Lock()
-		if !failed {
-			failed = true
-			failErrs = append(failErrs, ctx.Err())
-		}
-		mu.Unlock()
-		cond.Broadcast()
-	}()
-
 	for {
 		mu.Lock()
 		// Wait until there's work to dispatch or all in-flight work has completed
 		for len(ready) == 0 && activeNodes > 0 {
 			cond.Wait()
+		}
+
+		// Check for context cancellation after every wake-up.
+		if err := ctx.Err(); err != nil && !failed {
+			failed = true
+			failErrs = append(failErrs, err)
 		}
 
 		// All work is done when nothing is ready and nothing is in flight
@@ -196,6 +197,10 @@ func (o *Orchestrator) Execute(ctx context.Context, executionID string) error {
 			go func(id string) {
 				defer func() {
 					if r := recover(); r != nil {
+						// Best-effort: mark the panicked node as FAILED.
+						cleanupCtx := context.WithoutCancel(ctx)
+						_ = o.store.UpdateNodeStatus(cleanupCtx, stateMap[id], NodeStatusFailed, nil, fmt.Sprintf("panic: %v", r))
+
 						mu.Lock()
 						failed = true
 						failErrs = append(failErrs, errors.Errorf("panic in node %s: %v", id, r))
@@ -230,8 +235,11 @@ func (o *Orchestrator) Execute(ctx context.Context, executionID string) error {
 	}
 
 	if failed {
+		// Use a detached context for cleanup — the original ctx may be cancelled.
+		cleanupCtx := context.WithoutCancel(ctx)
+
 		// Skip all nodes that were never executed
-		skipErr := o.skipUnprocessed(ctx, launched, stateMap)
+		skipErr := o.skipUnprocessed(cleanupCtx, launched, stateMap)
 
 		failErr := errors.Join(failErrs...)
 		failErr = errors.CombineErrors(failErr, skipErr)
@@ -240,7 +248,7 @@ func (o *Orchestrator) Execute(ctx context.Context, executionID string) error {
 		if failErr != nil {
 			errMsg = failErr.Error()
 		}
-		if updateErr := o.store.UpdateExecutionStatus(ctx, executionID, ExecutionStatusFailed, errMsg); updateErr != nil {
+		if updateErr := o.store.UpdateExecutionStatus(cleanupCtx, executionID, ExecutionStatusFailed, errMsg); updateErr != nil {
 			return errors.CombineErrors(failErr, errors.Wrap(updateErr, "failed to update execution status to failed"))
 		}
 		return failErr
