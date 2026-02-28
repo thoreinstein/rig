@@ -256,3 +256,19 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 - **Zero-Value Default Bypass**: Go's `database/sql` sends explicit zero-values (e.g., `""` for strings) to the database, which bypasses SQL `DEFAULT` clauses. Always normalize zero-valued fields in the DAL before insertion.
 - **Strict ENUM Validation**: Dolt/MySQL ENUM columns reject empty strings if not explicitly part of the ENUM definition. Normalization is mandatory for status fields.
 - **Integration Test Dependency**: Concurrency and locking tests are integration-tier and require a live Dolt environment via `RIG_TEST_DOLT_DSN`. They should be skipped in short mode.
+
+### Plugin Security & Isolation
+- **Back-Channel Resource Proxy Pattern**: Plugins are executed as isolated processes stripped of their environment. Privileged operations (Filesystem, Network) are proxied back to the host via an ephemeral gRPC-over-UDS service (`ResourceService`). The host explicitly grants capabilities (allowed paths, network access) per execution.
+- **Parent-Recursive Symlink Defense**: Path validation must use recursive parent resolution (beyond `filepath.EvalSymlinks`) to prevent symlink escapes on non-existent files during write operations.
+- **Resource Boundary Enforcement**: Always apply hard constraints (e.g., 10MB `io.LimitReader`) at the proxy layer for file and network IO to protect the host from resource exhaustion attacks.
+
+### Configuration & Compatibility
+- **Heuristic Envelope Detection Pattern**: Support both legacy flat JSON and modern wrapped (`plugin`/`capabilities`) configurations by prioritizing the explicit envelope. To prevent unintended privilege grants, only honor host-side capabilities if the explicit envelope is present.
+- **Empty JSON Defaulting**: Always default empty or missing JSON configurations to a valid empty object (`{}`) rather than `nil` to prevent unmarshaling failures in downstream components.
+
+### Persistence Traps (Orchestration)
+- **Stale Memory Store State**: In-memory test stores (`MemoryStore`) must use strict `sync.Mutex` locking across all methods to prevent race conditions during concurrent workflow execution.
+- **Key Construction Fragility**: Use `fmt.Sprintf("%s:%d", id, version)` for cache or map keys involving versions to ensure multi-digit support and prevent separator collisions.
+
+### Development & CI Traps
+- **Linter Version Parity**: Discrepancies between local and CI `golangci-lint` versions can cause CI-only failures (like `prealloc`). Always align CI environment variables with the local development standard.
