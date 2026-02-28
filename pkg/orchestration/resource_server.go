@@ -1,12 +1,12 @@
 package orchestration
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -123,7 +123,7 @@ func (s *resourceServer) HttpRequest(ctx context.Context, req *apiv1.HttpRequest
 
 	var bodyReader io.Reader
 	if len(req.Body) > 0 {
-		bodyReader = strings.NewReader(string(req.Body))
+		bodyReader = bytes.NewReader(req.Body)
 	}
 
 	httpReq, err := http.NewRequestWithContext(ctx, req.Method, req.Url, bodyReader)
