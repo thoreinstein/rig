@@ -76,7 +76,10 @@ func (b *PluginNodeBridge) ExecuteNode(
 		return nil, errors.Wrap(err, "failed to secure resource socket dir")
 	}
 
-	u, _ := uuid.NewRandom()
+	u, err := uuid.NewRandom()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to generate resource socket UUID")
+	}
 	socketPath := filepath.Join(socketDir, fmt.Sprintf("res-%s.sock", u.String()[:8]))
 
 	lis, err := net.Listen("unix", socketPath)
