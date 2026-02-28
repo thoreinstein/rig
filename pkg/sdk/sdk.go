@@ -50,3 +50,8 @@ type AssistantHandler interface {
 type CommandHandler interface {
 	Execute(req *apiv1.ExecuteRequest, server apiv1.CommandService_ExecuteServer) error
 }
+
+// NodeHandler is an optional interface for plugins providing workflow node execution capabilities.
+type NodeHandler interface {
+	ExecuteNode(ctx context.Context, req *apiv1.ExecuteNodeRequest) (*apiv1.ExecuteNodeResponse, error)
+}

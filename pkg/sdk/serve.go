@@ -131,4 +131,8 @@ func RegisterServices(reg grpc.ServiceRegistrar, p PluginInfo) {
 	if h, ok := p.(CommandHandler); ok {
 		apiv1.RegisterCommandServiceServer(reg, newCommandBridge(h))
 	}
+
+	if h, ok := p.(NodeHandler); ok {
+		apiv1.RegisterNodeExecutionServiceServer(reg, &nodeBridge{handler: h})
+	}
 }
