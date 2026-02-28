@@ -14,6 +14,108 @@ type NodeCapabilities struct {
 	SecretsMapping map[string]string `json:"secrets_mapping"`
 }
 
+// IOType defines the expected data type for a node input or output.
+type IOType string
+
+const (
+	IOTypeString  IOType = "string"
+	IOTypeNumber  IOType = "number"
+	IOTypeBoolean IOType = "boolean"
+	IOTypeObject  IOType = "object"
+	IOTypeArray   IOType = "array"
+)
+
+// NodeIOSchema defines the static inputs and outputs for a node.
+type NodeIOSchema struct {
+	Inputs  map[string]IOType `json:"inputs"`
+	Outputs map[string]IOType `json:"outputs"`
+}
+
+// ParseNodeConfig extracts the capabilities, IO schema, and the opaque plugin
+// configuration from the raw JSON config of a Node. It supports both the
+// explicit wrapper format and the legacy flat format.
+func ParseNodeConfig(raw json.RawMessage) (*NodeCapabilities, *NodeIOSchema, json.RawMessage, error) {
+	if len(raw) == 0 {
+		return &NodeCapabilities{}, &NodeIOSchema{}, json.RawMessage(`{}`), nil
+	}
+
+	var rawMap map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &rawMap); err != nil {
+		return nil, nil, nil, err
+	}
+
+	caps := &NodeCapabilities{}
+	io := &NodeIOSchema{}
+	var pluginConfig json.RawMessage
+
+	// We determine if this is the explicit wrapper format. It is a wrapper if:
+	// 1. The "plugin" key is explicitly present.
+	// 2. The "capabilities" or "io" keys are present WITHOUT other top-level keys
+	//    that would imply a legacy flat plugin config.
+	isWrapper := false
+	if _, hasPlugin := rawMap["plugin"]; hasPlugin {
+		isWrapper = true
+	} else {
+		hasCaps := false
+		if _, ok := rawMap["capabilities"]; ok {
+			hasCaps = true
+		}
+		hasIO := false
+		if _, ok := rawMap["io"]; ok {
+			hasIO = true
+		}
+
+		if hasCaps || hasIO {
+			hasOtherKeys := false
+			for k := range rawMap {
+				if k != "capabilities" && k != "io" {
+					hasOtherKeys = true
+					break
+				}
+			}
+			if !hasOtherKeys {
+				isWrapper = true
+			}
+		}
+	}
+
+	if isWrapper {
+		// Wrapper format detected
+		if capRaw, ok := rawMap["capabilities"]; ok && len(capRaw) > 0 && string(capRaw) != "null" {
+			if err := json.Unmarshal(capRaw, caps); err != nil {
+				return nil, nil, nil, err
+			}
+		}
+
+		if ioRaw, ok := rawMap["io"]; ok && len(ioRaw) > 0 && string(ioRaw) != "null" {
+			if err := json.Unmarshal(ioRaw, io); err != nil {
+				return nil, nil, nil, err
+			}
+		}
+
+		pluginRaw, ok := rawMap["plugin"]
+		if ok && string(pluginRaw) != "null" && len(pluginRaw) > 0 {
+			pluginConfig = pluginRaw
+		} else {
+			pluginConfig = json.RawMessage(`{}`)
+		}
+	} else {
+		// Legacy format: treat top-level JSON entirely as plugin config.
+		// Host capabilities and IO remain empty.
+		if len(rawMap) == 0 {
+			pluginConfig = json.RawMessage(`{}`)
+		} else {
+			repacked, err := json.Marshal(rawMap)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+			pluginConfig = repacked
+		}
+	}
+
+	return caps, io, pluginConfig, nil
+}
+
 // ParseNodeCapabilities extracts the capabilities and the opaque plugin configuration
 // from the raw JSON config of a Node. If no capabilities are defined, it returns
 // a deny-all default.

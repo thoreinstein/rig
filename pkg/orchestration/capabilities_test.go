@@ -8,6 +8,131 @@ import (
 	"testing"
 )
 
+func TestParseNodeConfig(t *testing.T) {
+	tests := []struct {
+		name         string
+		rawJSON      string
+		expectCaps   *NodeCapabilities
+		expectIO     *NodeIOSchema
+		expectPlugin string
+		expectErr    bool
+	}{
+		{
+			name:    "empty config",
+			rawJSON: ``,
+			expectCaps: &NodeCapabilities{
+				Workspace:      "",
+				AllowedPaths:   nil,
+				NetworkAccess:  false,
+				SecretsMapping: nil,
+			},
+			expectIO:     &NodeIOSchema{},
+			expectPlugin: `{}`,
+			expectErr:    false,
+		},
+		{
+			name: "full capabilities and io",
+			rawJSON: `{
+				"capabilities": {
+					"workspace": "/tmp/work",
+					"allowed_paths": ["/shared/data"],
+					"network_access": true,
+					"secrets_mapping": {"API_KEY": "prod/api-key"}
+				},
+				"io": {
+					"inputs": {"input1": "string"},
+					"outputs": {"output1": "number"}
+				},
+				"plugin": {"temperature": 0.7}
+			}`,
+			expectCaps: &NodeCapabilities{
+				Workspace:      "/tmp/work",
+				AllowedPaths:   []string{"/shared/data"},
+				NetworkAccess:  true,
+				SecretsMapping: map[string]string{"API_KEY": "prod/api-key"},
+			},
+			expectIO: &NodeIOSchema{
+				Inputs:  map[string]IOType{"input1": IOTypeString},
+				Outputs: map[string]IOType{"output1": IOTypeNumber},
+			},
+			expectPlugin: `{"temperature": 0.7}`,
+			expectErr:    false,
+		},
+		{
+			name: "io-only wrapper",
+			rawJSON: `{
+				"io": {
+					"inputs": {"input1": "boolean"}
+				}
+			}`,
+			expectCaps: &NodeCapabilities{},
+			expectIO: &NodeIOSchema{
+				Inputs: map[string]IOType{"input1": IOTypeBoolean},
+			},
+			expectPlugin: `{}`,
+			expectErr:    false,
+		},
+		{
+			name: "legacy top-level plugin config",
+			rawJSON: `{
+				"model": "gpt-4",
+				"temperature": 0.2
+			}`,
+			expectCaps:   &NodeCapabilities{},
+			expectIO:     &NodeIOSchema{},
+			expectPlugin: `{"model":"gpt-4","temperature":0.2}`,
+			expectErr:    false,
+		},
+		{
+			name:         "invalid json",
+			rawJSON:      `{invalid`,
+			expectCaps:   nil,
+			expectIO:     nil,
+			expectPlugin: ``,
+			expectErr:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			caps, io, pluginCfg, err := ParseNodeConfig(json.RawMessage(tt.rawJSON))
+
+			if tt.expectErr {
+				if err == nil {
+					t.Fatalf("expected error, got nil")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if caps.Workspace != tt.expectCaps.Workspace {
+				t.Errorf("expected workspace %q, got %q", tt.expectCaps.Workspace, caps.Workspace)
+			}
+			if caps.NetworkAccess != tt.expectCaps.NetworkAccess {
+				t.Errorf("expected network_access %v, got %v", tt.expectCaps.NetworkAccess, caps.NetworkAccess)
+			}
+
+			if tt.expectIO != nil {
+				if len(io.Inputs) != len(tt.expectIO.Inputs) {
+					t.Errorf("expected %d inputs, got %d", len(tt.expectIO.Inputs), len(io.Inputs))
+				}
+				for k, v := range tt.expectIO.Inputs {
+					if io.Inputs[k] != v {
+						t.Errorf("expected input %q to be %q, got %q", k, v, io.Inputs[k])
+					}
+				}
+			}
+
+			if string(pluginCfg) != tt.expectPlugin && len(pluginCfg) > 0 && len(tt.expectPlugin) > 0 {
+				t.Errorf("expected plugin config %q, got %q", tt.expectPlugin, string(pluginCfg))
+			}
+		})
+	}
+}
+
 func TestParseNodeCapabilities(t *testing.T) {
 	tests := []struct {
 		name         string
