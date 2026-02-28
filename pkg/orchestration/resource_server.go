@@ -98,7 +98,7 @@ func (s *resourceServer) ListDir(ctx context.Context, req *apiv1.ListDirRequest)
 		return nil, status.Errorf(codes.Internal, "failed to list directory: %v", err)
 	}
 
-	var infos []*apiv1.ListDirResponse_FileInfo
+	infos := make([]*apiv1.ListDirResponse_FileInfo, 0, len(entries))
 	for _, e := range entries {
 		info, err := e.Info()
 		if err != nil {
