@@ -143,9 +143,12 @@ func (s *resourceServer) HttpRequest(ctx context.Context, req *apiv1.HttpRequest
 
 	// Cap response body to 10MB to prevent OOM from a misbehaving upstream.
 	const maxResponseSize = 10 << 20
-	respBody, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseSize))
+	respBody, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseSize+1))
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to read response body: %v", err)
+	}
+	if int64(len(respBody)) > maxResponseSize {
+		return nil, status.Errorf(codes.ResourceExhausted, "http response body too large (>%d bytes)", maxResponseSize)
 	}
 
 	respHeaders := make(map[string]string)
