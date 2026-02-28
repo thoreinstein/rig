@@ -43,6 +43,12 @@ func ValidateWorkflow(nodes []*Node, edges []*Edge) error {
 	nodeMap := make(map[string]*Node)
 
 	for _, node := range nodes {
+		if node.ID == "" {
+			return errors.New("node ID must not be empty")
+		}
+		if _, exists := nodeMap[node.ID]; exists {
+			return errors.Errorf("duplicate node ID: %s", node.ID)
+		}
 		nodeMap[node.ID] = node
 		inDegree[node.ID] = 0
 	}
@@ -195,6 +201,7 @@ func (o *Orchestrator) Execute(ctx context.Context, executionID string) error {
 
 		for _, nodeID := range currentReady {
 			go func(id string) {
+				decremented := false
 				defer func() {
 					if r := recover(); r != nil {
 						// Best-effort: mark the panicked node as FAILED.
@@ -204,7 +211,9 @@ func (o *Orchestrator) Execute(ctx context.Context, executionID string) error {
 						mu.Lock()
 						failed = true
 						failErrs = append(failErrs, errors.Errorf("panic in node %s: %v", id, r))
-						activeNodes--
+						if !decremented {
+							activeNodes--
+						}
 						mu.Unlock()
 						cond.Broadcast()
 					}
@@ -215,6 +224,7 @@ func (o *Orchestrator) Execute(ctx context.Context, executionID string) error {
 				mu.Lock()
 				defer mu.Unlock()
 				activeNodes--
+				decremented = true
 
 				if err != nil {
 					failed = true
@@ -289,6 +299,8 @@ func (o *Orchestrator) runNode(ctx context.Context, node *Node, stateID string) 
 		result = json.RawMessage(`{"output": "World"}`)
 	case "fail":
 		execErr = errors.New("simulated failure")
+	case "panic":
+		panic("simulated panic")
 	default:
 		execErr = errors.Errorf("unrecognized node type: %s", node.Type)
 	}

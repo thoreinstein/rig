@@ -300,6 +300,119 @@ func TestHelloWorldWorkflow(t *testing.T) {
 	}
 }
 
+func TestOrchestrator_Execute_ContextCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel() // Pre-cancel to test cancellation handling
+
+	wID := "w-cancel"
+	eID := "e-cancel"
+
+	nodes := []*Node{
+		{ID: "n1", Name: "hello", Type: "hello"},
+		{ID: "n2", Name: "world", Type: "world"},
+	}
+	edges := []*Edge{
+		{SourceNodeID: "n1", TargetNodeID: "n2"},
+	}
+
+	store := &MockStore{
+		workflows: map[string]*Workflow{
+			wID: {ID: wID, Version: 1},
+		},
+		executions: map[string]*Execution{
+			eID: {ID: eID, WorkflowID: wID, WorkflowVersion: 1, Status: ExecutionStatusPending},
+		},
+		nodes: map[string][]*Node{wID: nodes},
+		edges: map[string][]*Edge{wID: edges},
+		nodeStates: map[string][]*NodeState{
+			eID: {
+				{ID: "s1", NodeID: "n1", ExecutionID: eID, Status: NodeStatusPending},
+				{ID: "s2", NodeID: "n2", ExecutionID: eID, Status: NodeStatusPending},
+			},
+		},
+	}
+
+	o := NewOrchestrator(store)
+	err := o.Execute(ctx, eID)
+	if err == nil {
+		t.Fatal("Expected Execute to return an error on cancelled context")
+	}
+
+	store.mu.Lock()
+	defer store.mu.Unlock()
+
+	if store.executions[eID].Status != ExecutionStatusFailed {
+		t.Errorf("Expected execution status FAILED, got %s", store.executions[eID].Status)
+	}
+
+	// All nodes should be SKIPPED since context was cancelled before any launched
+	for _, ns := range store.nodeStates[eID] {
+		if ns.Status != NodeStatusSkipped {
+			t.Errorf("Node %s expected SKIPPED, got %s", ns.NodeID, ns.Status)
+		}
+	}
+}
+
+func TestOrchestrator_Execute_PanicRecovery(t *testing.T) {
+	ctx := t.Context()
+
+	wID := "w-panic"
+	eID := "e-panic"
+
+	// A (panic) -> B (should be skipped)
+	nodes := []*Node{
+		{ID: "n1", Name: "panic-node", Type: "panic"},
+		{ID: "n2", Name: "skip-node", Type: "world"},
+	}
+	edges := []*Edge{
+		{SourceNodeID: "n1", TargetNodeID: "n2"},
+	}
+
+	store := &MockStore{
+		workflows: map[string]*Workflow{
+			wID: {ID: wID, Version: 1},
+		},
+		executions: map[string]*Execution{
+			eID: {ID: eID, WorkflowID: wID, WorkflowVersion: 1, Status: ExecutionStatusPending},
+		},
+		nodes: map[string][]*Node{wID: nodes},
+		edges: map[string][]*Edge{wID: edges},
+		nodeStates: map[string][]*NodeState{
+			eID: {
+				{ID: "s1", NodeID: "n1", ExecutionID: eID, Status: NodeStatusPending},
+				{ID: "s2", NodeID: "n2", ExecutionID: eID, Status: NodeStatusPending},
+			},
+		},
+	}
+
+	o := NewOrchestrator(store)
+	err := o.Execute(ctx, eID)
+	if err == nil {
+		t.Fatal("Expected Execute to return an error on panic")
+	}
+
+	store.mu.Lock()
+	defer store.mu.Unlock()
+
+	if store.executions[eID].Status != ExecutionStatusFailed {
+		t.Errorf("Expected execution status FAILED, got %s", store.executions[eID].Status)
+	}
+
+	// Panicked node should be FAILED, downstream should be SKIPPED
+	for _, ns := range store.nodeStates[eID] {
+		switch ns.NodeID {
+		case "n1":
+			if ns.Status != NodeStatusFailed {
+				t.Errorf("Node n1 expected FAILED, got %s", ns.Status)
+			}
+		case "n2":
+			if ns.Status != NodeStatusSkipped {
+				t.Errorf("Node n2 expected SKIPPED, got %s", ns.Status)
+			}
+		}
+	}
+}
+
 func TestValidateWorkflow(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -396,6 +509,23 @@ func TestValidateWorkflow(t *testing.T) {
 			edges: []*Edge{
 				{SourceNodeID: "1", TargetNodeID: "2"},
 			},
+			wantErr: true,
+		},
+		{
+			name: "empty node ID",
+			nodes: []*Node{
+				{ID: ""},
+			},
+			edges:   nil,
+			wantErr: true,
+		},
+		{
+			name: "duplicate node IDs",
+			nodes: []*Node{
+				{ID: "1"},
+				{ID: "1"},
+			},
+			edges:   nil,
 			wantErr: true,
 		},
 	}

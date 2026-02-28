@@ -562,7 +562,10 @@ func (dm *DatabaseManager) UpdateExecutionStatus(ctx context.Context, id string,
 		return errors.Wrap(err, "failed to update execution status")
 	}
 
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return errors.Wrap(err, "failed to commit execution status update")
+	}
+	return nil
 }
 
 // CreateNodeState inserts a initial state for a node in an execution.
@@ -627,7 +630,10 @@ func (dm *DatabaseManager) UpdateNodeStatus(ctx context.Context, id string, stat
 		return errors.Wrap(err, "failed to update node status")
 	}
 
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return errors.Wrap(err, "failed to commit node status update")
+	}
+	return nil
 }
 
 // GetNodeStatesByExecution retrieves all node states for a given execution.
