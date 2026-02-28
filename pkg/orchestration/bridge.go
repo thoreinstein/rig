@@ -67,20 +67,13 @@ func (b *PluginNodeBridge) ExecuteNode(
 	defer b.pluginMgr.ReleasePlugin(node.Type)
 
 	// 2. Setup isolated UDS for the ResourceService for this specific node execution
-	socketDir, err := os.MkdirTemp("", "rig-r-")
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to create resource socket dir")
-	}
-	defer os.RemoveAll(socketDir)
-	if err := os.Chmod(socketDir, 0o700); err != nil {
-		return nil, errors.Wrap(err, "failed to secure resource socket dir")
-	}
-
+	// Use short name to avoid AF_UNIX path length limits (typically 104-108 chars)
 	u, err := uuid.NewRandom()
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to generate resource socket UUID")
 	}
-	socketPath := filepath.Join(socketDir, fmt.Sprintf("res-%s.sock", u.String()[:8]))
+	socketPath := filepath.Join(os.TempDir(), fmt.Sprintf("rig-res-%s.sock", u.String()[:8]))
+	defer os.Remove(socketPath)
 
 	lis, err := net.Listen("unix", socketPath)
 	if err != nil {

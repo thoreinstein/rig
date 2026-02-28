@@ -14,12 +14,6 @@ type NodeCapabilities struct {
 	SecretsMapping map[string]string `json:"secrets_mapping"`
 }
 
-// ConfigWrapper is used to unmarshal the top-level structure of a Node's config.
-type ConfigWrapper struct {
-	Capabilities *NodeCapabilities `json:"capabilities"`
-	PluginConfig json.RawMessage   `json:"plugin"`
-}
-
 // ParseNodeCapabilities extracts the capabilities and the opaque plugin configuration
 // from the raw JSON config of a Node. If no capabilities are defined, it returns
 // a deny-all default.
