@@ -1,0 +1,86 @@
+syntax = "proto3";
+
+package rig.v1;
+
+option go_package = "thoreinstein.com/rig/pkg/api/v1;apiv1";
+
+// NodeExecutionService is implemented by plugins that can execute workflow nodes.
+service NodeExecutionService {
+  // ExecuteNode runs a single node in a workflow.
+  rpc ExecuteNode(ExecuteNodeRequest) returns (ExecuteNodeResponse);
+}
+
+// ResourceService is implemented by the host to provide sandboxed access to resources.
+// Plugins call back to this service over the established UDS connection.
+service ResourceService {
+  // ReadFile reads the contents of a file within the allowed workspace.
+  rpc ReadFile(ReadFileRequest) returns (ReadFileResponse);
+  // WriteFile writes data to a file within the allowed workspace.
+  rpc WriteFile(WriteFileRequest) returns (WriteFileResponse);
+  // ListDir lists the contents of a directory within the allowed workspace.
+  rpc ListDir(ListDirRequest) returns (ListDirResponse);
+  // HttpRequest proxies an HTTP request if the node has network access.
+  rpc HttpRequest(HttpRequestRequest) returns (HttpRequestResponse);
+}
+
+message ExecuteNodeRequest {
+  string node_id = 1;
+  string node_type = 2;
+  // config_json is the plugin-specific configuration for this node.
+  bytes config_json = 3;
+  // inputs is a map of input names to JSON-serialized values from upstream nodes.
+  map<string, bytes> inputs = 4;
+  // secrets is a map of explicitly granted secrets (Key -> Value).
+  map<string, string> secrets = 5;
+  // workspace is the absolute path to the node's isolated working directory.
+  string workspace = 6;
+}
+
+message ExecuteNodeResponse {
+  // output is the JSON-serialized result of the node's execution.
+  bytes output = 1;
+  // error_message is populated if the execution failed.
+  string error_message = 2;
+}
+
+message ReadFileRequest {
+  string path = 1;
+}
+
+message ReadFileResponse {
+  bytes content = 1;
+}
+
+message WriteFileRequest {
+  string path = 1;
+  bytes content = 2;
+  uint32 mode = 3; // File mode/permissions
+}
+
+message WriteFileResponse {}
+
+message ListDirRequest {
+  string path = 1;
+}
+
+message ListDirResponse {
+  message FileInfo {
+    string name = 1;
+    bool is_dir = 2;
+    int64 size = 3;
+  }
+  repeated FileInfo entries = 1;
+}
+
+message HttpRequestRequest {
+  string method = 1;
+  string url = 2;
+  map<string, string> headers = 3;
+  bytes body = 4;
+}
+
+message HttpRequestResponse {
+  int32 status_code = 1;
+  map<string, string> headers = 2;
+  bytes body = 3;
+}

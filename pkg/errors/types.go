@@ -282,6 +282,38 @@ func NewWorkflowErrorWithCause(step, message string, cause error) *WorkflowError
 	}
 }
 
+// CapabilityError represents capability/permission denial errors.
+type CapabilityError struct {
+	NodeID     string
+	Capability string // e.g., "network", "filesystem", "secret"
+	Message    string
+	Cause      error
+}
+
+// Error implements the error interface.
+func (e *CapabilityError) Error() string {
+	if e.NodeID != "" {
+		return fmt.Sprintf("capability %s denied for node %s: %s", e.Capability, e.NodeID, e.Message)
+	}
+	return fmt.Sprintf("capability %s denied: %s", e.Capability, e.Message)
+}
+
+// Unwrap returns the underlying cause for error chain traversal.
+func (e *CapabilityError) Unwrap() error {
+	return e.Cause
+}
+
+// NewCapabilityError creates a new CapabilityError.
+func NewCapabilityError(nodeID, capability, message string) *CapabilityError {
+	return &CapabilityError{NodeID: nodeID, Capability: capability, Message: message}
+}
+
+// WithCause adds an underlying cause to the CapabilityError.
+func (e *CapabilityError) WithCause(cause error) *CapabilityError {
+	e.Cause = cause
+	return e
+}
+
 // PluginError represents errors related to plugin execution and communication.
 type PluginError struct {
 	Plugin    string
@@ -421,6 +453,12 @@ func IsBeadsError(err error) bool {
 func IsWorkflowError(err error) bool {
 	var wfErr *WorkflowError
 	return errors.As(err, &wfErr)
+}
+
+// IsCapabilityError checks if an error or any error in its chain is a CapabilityError.
+func IsCapabilityError(err error) bool {
+	var capErr *CapabilityError
+	return errors.As(err, &capErr)
 }
 
 // IsPluginError checks if an error or any error in its chain is a PluginError.

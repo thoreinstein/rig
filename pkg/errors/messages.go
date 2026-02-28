@@ -42,6 +42,12 @@ func FormatUserError(err error) string {
 		return formatWorkflowError(wfErr)
 	}
 
+	// Check for CapabilityError
+	var capErr *CapabilityError
+	if As(err, &capErr) {
+		return formatCapabilityError(capErr)
+	}
+
 	// Check for PluginError
 	var pluginErr *PluginError
 	if As(err, &pluginErr) {
@@ -286,6 +292,35 @@ func formatWorkflowError(err *WorkflowError) string {
 
 	if err.Retryable {
 		b.WriteString("\nThis error may be temporary. You can try running the command again.\n")
+	}
+
+	if err.Cause != nil {
+		fmt.Fprintf(&b, "\nUnderlying error: %v", err.Cause)
+	}
+
+	return b.String()
+}
+
+// formatCapabilityError formats a CapabilityError with actionable guidance.
+func formatCapabilityError(err *CapabilityError) string {
+	var b strings.Builder
+
+	if err.NodeID != "" {
+		fmt.Fprintf(&b, "Capability %s denied for node '%s': %s\n", err.Capability, err.NodeID, err.Message)
+	} else {
+		fmt.Fprintf(&b, "Capability %s denied: %s\n", err.Capability, err.Message)
+	}
+
+	b.WriteString("\nTo fix this:\n")
+	switch err.Capability {
+	case "network":
+		b.WriteString("  • Ensure the node has 'network_access: true' in its capabilities configuration\n")
+	case "filesystem":
+		b.WriteString("  • Ensure the path is within the allowed 'workspace' or 'allowed_paths'\n")
+	case "secret":
+		b.WriteString("  • Ensure the secret is explicitly mapped in 'secrets_mapping'\n")
+	default:
+		b.WriteString("  • Review the node's capabilities configuration\n")
 	}
 
 	if err.Cause != nil {
