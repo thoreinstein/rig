@@ -141,7 +141,7 @@ func TestParseNodeConfig(t *testing.T) {
 				}
 			}
 
-			if string(pluginCfg) != tt.expectPlugin && len(pluginCfg) > 0 && len(tt.expectPlugin) > 0 {
+			if string(pluginCfg) != tt.expectPlugin {
 				t.Errorf("expected plugin config %q, got %q", tt.expectPlugin, string(pluginCfg))
 			}
 		})
@@ -296,7 +296,7 @@ func TestParseNodeCapabilities(t *testing.T) {
 				t.Errorf("expected network_access %v, got %v", tt.expectCaps.NetworkAccess, caps.NetworkAccess)
 			}
 
-			if string(pluginCfg) != tt.expectPlugin && len(pluginCfg) > 0 && len(tt.expectPlugin) > 0 {
+			if string(pluginCfg) != tt.expectPlugin {
 				t.Errorf("expected plugin config %q, got %q", tt.expectPlugin, string(pluginCfg))
 			}
 		})

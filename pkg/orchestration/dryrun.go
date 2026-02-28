@@ -55,6 +55,7 @@ type ScannerPluginChecker struct {
 	scanner *plugin.Scanner
 	once    sync.Once
 	names   map[string]bool
+	scanErr error
 }
 
 // NewScannerPluginChecker creates a new ScannerPluginChecker.
@@ -68,6 +69,7 @@ func (s *ScannerPluginChecker) HasNodePlugin(name string) bool {
 		s.names = make(map[string]bool)
 		res, err := s.scanner.Scan()
 		if err != nil {
+			s.scanErr = err
 			return
 		}
 		for _, p := range res.Plugins {
@@ -75,6 +77,11 @@ func (s *ScannerPluginChecker) HasNodePlugin(name string) bool {
 		}
 	})
 	return s.names[name]
+}
+
+// Err returns any error encountered during the plugin scan.
+func (s *ScannerPluginChecker) Err() error {
+	return s.scanErr
 }
 
 // DryRunOptions configures the behavior of DryRunValidate.
