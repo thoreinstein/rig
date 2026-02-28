@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -88,6 +89,7 @@ func TestBridgeIntegration(t *testing.T) {
 		},
 	}
 
+	// Subtests run sequentially (no t.Parallel) because they share a single plugin process.
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			pluginCfg := json.RawMessage(`{"action": "` + tt.action + `"}`)
@@ -97,7 +99,7 @@ func TestBridgeIntegration(t *testing.T) {
 				if err == nil {
 					t.Fatalf("expected error, got nil")
 				}
-				if tt.expectFailure != "" && !contains(err.Error(), tt.expectFailure) {
+				if tt.expectFailure != "" && !strings.Contains(err.Error(), tt.expectFailure) {
 					t.Errorf("expected error containing %q, got: %v", tt.expectFailure, err)
 				}
 				return
@@ -118,14 +120,4 @@ func TestBridgeIntegration(t *testing.T) {
 			}
 		})
 	}
-}
-
-func contains(s, substr string) bool {
-	// simple string contains for tests to avoid importing strings just for this
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }

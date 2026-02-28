@@ -2,6 +2,7 @@ package orchestration
 
 import (
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
@@ -173,5 +174,47 @@ func TestIsPathAllowed(t *testing.T) {
 				t.Errorf("IsPathAllowed(%q) = %v, expected %v", tt.path, allowed, tt.allowed)
 			}
 		})
+	}
+}
+
+func TestIsPathAllowed_SymlinkEscape(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink test requires unix")
+	}
+
+	// Setup: workspace with a symlink pointing outside
+	tmpDir := t.TempDir()
+	workspace := filepath.Join(tmpDir, "workspace")
+	outside := filepath.Join(tmpDir, "outside")
+	if err := os.MkdirAll(workspace, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(outside, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(outside, "secret.txt"), []byte("data"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a symlink inside workspace that points outside
+	symlink := filepath.Join(workspace, "escape")
+	if err := os.Symlink(outside, symlink); err != nil {
+		t.Fatal(err)
+	}
+
+	caps := &NodeCapabilities{Workspace: workspace}
+
+	// The symlink path looks like it's inside workspace, but resolves outside
+	if caps.IsPathAllowed(filepath.Join(symlink, "secret.txt")) {
+		t.Error("symlink escape should be denied, but was allowed")
+	}
+
+	// A real file inside workspace should still be allowed
+	realFile := filepath.Join(workspace, "real.txt")
+	if err := os.WriteFile(realFile, []byte("ok"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if !caps.IsPathAllowed(realFile) {
+		t.Error("real file inside workspace should be allowed")
 	}
 }

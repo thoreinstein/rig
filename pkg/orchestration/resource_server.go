@@ -42,7 +42,7 @@ func (s *resourceServer) checkPath(requested string) (string, error) {
 		return "", status.Errorf(codes.InvalidArgument, "invalid path: %v", err)
 	}
 	if !s.caps.IsPathAllowed(absPath) {
-		return "", status.Errorf(codes.PermissionDenied, "access to %s denied for node %s", absPath, s.nodeID)
+		return "", status.Errorf(codes.PermissionDenied, "access denied for node %s", s.nodeID)
 	}
 	return absPath, nil
 }
@@ -52,11 +52,18 @@ func (s *resourceServer) ReadFile(ctx context.Context, req *apiv1.ReadFileReques
 	if err != nil {
 		return nil, err
 	}
-	content, err := os.ReadFile(path)
+	// Cap file reads to 10MB to prevent OOM on very large files.
+	const maxFileSize = 10 << 20
+	f, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, status.Errorf(codes.NotFound, "file not found: %v", err)
 		}
+		return nil, status.Errorf(codes.Internal, "failed to open file: %v", err)
+	}
+	defer f.Close()
+	content, err := io.ReadAll(io.LimitReader(f, maxFileSize))
+	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to read file: %v", err)
 	}
 	return &apiv1.ReadFileResponse{Content: content}, nil
@@ -131,7 +138,9 @@ func (s *resourceServer) HttpRequest(ctx context.Context, req *apiv1.HttpRequest
 	}
 	defer resp.Body.Close()
 
-	respBody, err := io.ReadAll(resp.Body)
+	// Cap response body to 10MB to prevent OOM from a misbehaving upstream.
+	const maxResponseSize = 10 << 20
+	respBody, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseSize))
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to read response body: %v", err)
 	}

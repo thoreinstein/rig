@@ -48,7 +48,8 @@ func ParseNodeCapabilities(raw json.RawMessage) (*NodeCapabilities, json.RawMess
 }
 
 // IsPathAllowed checks if the requested path is within the workspace or any of the allowed paths.
-// It uses filepath.Clean to prevent directory traversal attacks (e.g., ../../etc/passwd).
+// It uses filepath.Clean and filepath.EvalSymlinks to prevent directory traversal attacks
+// (e.g., ../../etc/passwd) and symlink escapes.
 func (c *NodeCapabilities) IsPathAllowed(requestedPath string) bool {
 	// Must be an absolute path to prevent ambiguity
 	if !filepath.IsAbs(requestedPath) {
@@ -57,9 +58,19 @@ func (c *NodeCapabilities) IsPathAllowed(requestedPath string) bool {
 
 	cleanRequested := filepath.Clean(requestedPath)
 
+	// Resolve symlinks so that a symlink inside the workspace pointing outside
+	// cannot bypass the prefix check. If the path doesn't exist yet (e.g. a new
+	// file being written), we fall through with the cleaned path.
+	if resolved, err := filepath.EvalSymlinks(cleanRequested); err == nil {
+		cleanRequested = resolved
+	}
+
 	// Check workspace
 	if c.Workspace != "" {
 		cleanWorkspace := filepath.Clean(c.Workspace)
+		if resolved, err := filepath.EvalSymlinks(cleanWorkspace); err == nil {
+			cleanWorkspace = resolved
+		}
 		if cleanRequested == cleanWorkspace || strings.HasPrefix(cleanRequested, cleanWorkspace+string(filepath.Separator)) {
 			return true
 		}
@@ -68,6 +79,9 @@ func (c *NodeCapabilities) IsPathAllowed(requestedPath string) bool {
 	// Check allowed paths
 	for _, allowed := range c.AllowedPaths {
 		cleanAllowed := filepath.Clean(allowed)
+		if resolved, err := filepath.EvalSymlinks(cleanAllowed); err == nil {
+			cleanAllowed = resolved
+		}
 		if cleanRequested == cleanAllowed || strings.HasPrefix(cleanRequested, cleanAllowed+string(filepath.Separator)) {
 			return true
 		}

@@ -3,6 +3,7 @@ package orchestration
 import (
 	"context"
 	"encoding/json"
+	"sync"
 	"testing"
 	"time"
 
@@ -118,6 +119,7 @@ func TestOrchestrator_Execute_WithBridge(t *testing.T) {
 
 // MemoryStore is a simple implementation of WorkflowStore for testing.
 type MemoryStore struct {
+	mu         sync.Mutex
 	workflows  map[string]*Workflow
 	executions map[string]*Execution
 	nodes      map[string][]*Node
@@ -136,6 +138,8 @@ func NewMemoryStore() *MemoryStore {
 }
 
 func (s *MemoryStore) GetWorkflow(ctx context.Context, id string) (*Workflow, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if wf, ok := s.workflows[id]; ok {
 		return wf, nil
 	}
@@ -143,6 +147,8 @@ func (s *MemoryStore) GetWorkflow(ctx context.Context, id string) (*Workflow, er
 }
 
 func (s *MemoryStore) GetExecution(ctx context.Context, id string) (*Execution, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if ex, ok := s.executions[id]; ok {
 		return ex, nil
 	}
@@ -150,20 +156,28 @@ func (s *MemoryStore) GetExecution(ctx context.Context, id string) (*Execution, 
 }
 
 func (s *MemoryStore) GetNodesByWorkflow(ctx context.Context, workflowID string, version int) ([]*Node, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	key := workflowID + ":" + string(rune(version+'0'))
 	return s.nodes[key], nil
 }
 
 func (s *MemoryStore) GetEdgesByWorkflow(ctx context.Context, workflowID string, version int) ([]*Edge, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	key := workflowID + ":" + string(rune(version+'0'))
 	return s.edges[key], nil
 }
 
 func (s *MemoryStore) GetNodeStatesByExecution(ctx context.Context, executionID string) ([]*NodeState, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	return s.nodeStates[executionID], nil
 }
 
 func (s *MemoryStore) UpdateExecutionStatus(ctx context.Context, id string, status ExecutionStatus, errMsg string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if ex, ok := s.executions[id]; ok {
 		ex.Status = status
 		ex.Error = errMsg
@@ -180,6 +194,8 @@ func (s *MemoryStore) UpdateExecutionStatus(ctx context.Context, id string, stat
 }
 
 func (s *MemoryStore) UpdateNodeStatus(ctx context.Context, id string, status NodeStatus, result []byte, errMsg string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	for _, states := range s.nodeStates {
 		for _, state := range states {
 			if state.ID == id {
