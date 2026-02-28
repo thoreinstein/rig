@@ -25,7 +25,7 @@ type ConfigWrapper struct {
 // a deny-all default.
 func ParseNodeCapabilities(raw json.RawMessage) (*NodeCapabilities, json.RawMessage, error) {
 	if len(raw) == 0 {
-		return &NodeCapabilities{}, nil, nil
+		return &NodeCapabilities{}, json.RawMessage(`{}`), nil
 	}
 
 	var wrapper ConfigWrapper

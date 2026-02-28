@@ -25,7 +25,7 @@ func TestParseNodeCapabilities(t *testing.T) {
 				NetworkAccess:  false,
 				SecretsMapping: nil,
 			},
-			expectPlugin: ``,
+			expectPlugin: `{}`,
 			expectErr:    false,
 		},
 		{
