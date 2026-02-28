@@ -187,23 +187,58 @@ func (o *Orchestrator) Execute(ctx context.Context, executionID string) error {
 		}
 	}
 
-	// All preflight checks passed — transition to RUNNING.
-	if err := o.store.UpdateExecutionStatus(ctx, executionID, ExecutionStatusRunning, ""); err != nil {
-		return errors.Wrap(err, "failed to start execution")
-	}
-
 	var mu sync.Mutex
 	results := make(map[string]json.RawMessage)
 	launched := make(map[string]bool)
 	failed := false
 	var failErrs []error
+
+	// Recovery Logic: Restore context from SUCCESS nodes and detect pre-existing failures
+	for _, s := range states {
+		switch s.Status {
+		case NodeStatusSuccess:
+			results[s.NodeID] = s.Result
+			launched[s.NodeID] = true
+			// Decrement in-degree of downstream nodes
+			for _, v := range adj[s.NodeID] {
+				inDegree[v]--
+			}
+		case NodeStatusFailed:
+			failed = true
+			failErrs = append(failErrs, errors.Errorf("node %s previously failed: %s", s.NodeID, s.Error))
+			launched[s.NodeID] = true
+		case NodeStatusSkipped:
+			launched[s.NodeID] = true
+		}
+	}
+
+	// Short-circuit if a failure was detected during state recovery
+	if failed {
+		// Even if failed, we must transition execution state if it was PENDING
+		if execution.Status == ExecutionStatusPending {
+			_ = o.store.UpdateExecutionStatus(ctx, executionID, ExecutionStatusRunning, "")
+		}
+		// Use detached context for cleanup
+		cleanupCtx := context.WithoutCancel(ctx)
+		_ = o.skipUnprocessed(cleanupCtx, launched, stateMap)
+		failErr := errors.Join(failErrs...)
+		_ = o.store.UpdateExecutionStatus(cleanupCtx, executionID, ExecutionStatusFailed, failErr.Error())
+		return failErr
+	}
+
+	// All preflight checks passed — transition to RUNNING.
+	// This is now idempotent due to database-level changes.
+	if err := o.store.UpdateExecutionStatus(ctx, executionID, ExecutionStatusRunning, ""); err != nil {
+		return errors.Wrap(err, "failed to start execution")
+	}
+
 	activeNodes := 0
 	cond := sync.NewCond(&mu)
 
-	// topological queue
+	// topological queue: nodes with zero in-degree that haven't been launched
 	ready := []string{}
 	for nodeID, degree := range inDegree {
-		if degree == 0 {
+		if degree == 0 && !launched[nodeID] {
 			ready = append(ready, nodeID)
 		}
 	}
