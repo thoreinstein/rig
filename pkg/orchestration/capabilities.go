@@ -28,20 +28,36 @@ func ParseNodeCapabilities(raw json.RawMessage) (*NodeCapabilities, json.RawMess
 		return &NodeCapabilities{}, json.RawMessage(`{}`), nil
 	}
 
-	var wrapper ConfigWrapper
-	if err := json.Unmarshal(raw, &wrapper); err != nil {
+	var rawMap map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &rawMap); err != nil {
 		return nil, nil, err
 	}
 
-	caps := wrapper.Capabilities
-	if caps == nil {
-		// Deny-all by default
-		caps = &NodeCapabilities{}
+	caps := &NodeCapabilities{}
+	if capRaw, ok := rawMap["capabilities"]; ok && len(capRaw) > 0 && string(capRaw) != "null" {
+		if err := json.Unmarshal(capRaw, caps); err != nil {
+			return nil, nil, err
+		}
 	}
 
-	pluginConfig := wrapper.PluginConfig
-	if len(pluginConfig) == 0 {
-		pluginConfig = json.RawMessage(`{}`)
+	var pluginConfig json.RawMessage
+	if pluginRaw, ok := rawMap["plugin"]; ok && string(pluginRaw) != "null" {
+		pluginConfig = pluginRaw
+		if len(pluginConfig) == 0 {
+			pluginConfig = json.RawMessage(`{}`)
+		}
+	} else {
+		// Treat top-level JSON as plugin config when "plugin" is absent.
+		delete(rawMap, "capabilities")
+		if len(rawMap) == 0 {
+			pluginConfig = json.RawMessage(`{}`)
+		} else {
+			repacked, err := json.Marshal(rawMap)
+			if err != nil {
+				return nil, nil, err
+			}
+			pluginConfig = repacked
+		}
 	}
 
 	return caps, pluginConfig, nil
