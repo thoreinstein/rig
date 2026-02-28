@@ -47,8 +47,12 @@ func WithLogger(logger *slog.Logger) OrchestratorOption {
 }
 
 // WithSecretResolver sets the secret resolver for mapping node secrets.
+// A nil resolver is ignored to keep the default configured in NewOrchestrator.
 func WithSecretResolver(resolver SecretResolver) OrchestratorOption {
 	return func(o *Orchestrator) {
+		if resolver == nil {
+			return
+		}
 		o.secretResolver = resolver
 	}
 }
@@ -157,6 +161,7 @@ func (o *Orchestrator) Execute(ctx context.Context, executionID string) error {
 	// Build graph
 	adj := make(map[string][]string)
 	inDegree := make(map[string]int)
+	incoming := make(map[string][]string) // target → list of source node IDs
 	nodeMap := make(map[string]*Node)
 	for _, node := range nodes {
 		nodeMap[node.ID] = node
@@ -165,6 +170,7 @@ func (o *Orchestrator) Execute(ctx context.Context, executionID string) error {
 	for _, edge := range edges {
 		adj[edge.SourceNodeID] = append(adj[edge.SourceNodeID], edge.TargetNodeID)
 		inDegree[edge.TargetNodeID]++
+		incoming[edge.TargetNodeID] = append(incoming[edge.TargetNodeID], edge.SourceNodeID)
 	}
 
 	states, err := o.store.GetNodeStatesByExecution(ctx, executionID)
@@ -257,14 +263,12 @@ func (o *Orchestrator) Execute(ctx context.Context, executionID string) error {
 					}
 				}()
 
-				// Snapshot inputs for this node
+				// Snapshot inputs for this node using the pre-built incoming-edges map
 				mu.Lock()
 				inputs := make(map[string]json.RawMessage)
-				for _, edge := range edges {
-					if edge.TargetNodeID == id {
-						if res, ok := results[edge.SourceNodeID]; ok {
-							inputs[edge.SourceNodeID] = res
-						}
+				for _, srcID := range incoming[id] {
+					if res, ok := results[srcID]; ok {
+						inputs[srcID] = res
 					}
 				}
 				mu.Unlock()

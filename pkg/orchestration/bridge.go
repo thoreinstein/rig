@@ -56,6 +56,11 @@ func (b *PluginNodeBridge) ExecuteNode(
 	inputs map[string]json.RawMessage,
 	secrets map[string]string,
 ) (json.RawMessage, error) {
+	// Default to deny-all if no capabilities were provided.
+	if caps == nil {
+		caps = &NodeCapabilities{}
+	}
+
 	// 1. Get the Node client for the specific plugin type
 	client, err := b.pluginMgr.GetNodeClient(ctx, node.Type)
 	if err != nil {
@@ -74,6 +79,11 @@ func (b *PluginNodeBridge) ExecuteNode(
 	}
 	socketPath := filepath.Join(os.TempDir(), fmt.Sprintf("rig-res-%s.sock", u.String()[:8]))
 	defer os.Remove(socketPath)
+
+	// Remove stale socket from a previous run before binding.
+	if err := os.Remove(socketPath); err != nil && !os.IsNotExist(err) {
+		return nil, errors.Wrap(err, "failed to remove stale resource socket")
+	}
 
 	lis, err := net.Listen("unix", socketPath)
 	if err != nil {
