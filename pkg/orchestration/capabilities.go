@@ -48,7 +48,8 @@ func ParseNodeCapabilities(raw json.RawMessage) (*NodeCapabilities, json.RawMess
 		}
 	} else {
 		// Treat top-level JSON as plugin config when "plugin" is absent.
-		delete(rawMap, "capabilities")
+		// We do NOT delete "capabilities" here to prevent mutating legacy configs
+		// that might legitimately use that key for plugin-specific settings.
 		if len(rawMap) == 0 {
 			pluginConfig = json.RawMessage(`{}`)
 		} else {
@@ -63,9 +64,41 @@ func ParseNodeCapabilities(raw json.RawMessage) (*NodeCapabilities, json.RawMess
 	return caps, pluginConfig, nil
 }
 
+// resolveSymlinks safely evaluates symlinks for the longest existing prefix of the path.
+// This is necessary because filepath.EvalSymlinks fails if the target file doesn't exist yet
+// (e.g. during a WriteFile operation), which could allow a symlinked parent directory to escape.
+func resolveSymlinks(p string) string {
+	original := p
+	var suffix string
+
+	for {
+		resolved, err := filepath.EvalSymlinks(p)
+		if err == nil {
+			if suffix != "" {
+				return filepath.Join(resolved, suffix)
+			}
+			return resolved
+		}
+
+		parent := filepath.Dir(p)
+		if parent == p {
+			break
+		}
+
+		if suffix == "" {
+			suffix = filepath.Base(p)
+		} else {
+			suffix = filepath.Join(filepath.Base(p), suffix)
+		}
+		p = parent
+	}
+
+	return original
+}
+
 // IsPathAllowed checks if the requested path is within the workspace or any of the allowed paths.
-// It uses filepath.Clean and filepath.EvalSymlinks to prevent directory traversal attacks
-// (e.g., ../../etc/passwd) and symlink escapes.
+// It uses filepath.Clean and resolveSymlinks to prevent directory traversal attacks
+// (e.g., ../../etc/passwd) and symlink escapes, even for files that do not exist yet.
 func (c *NodeCapabilities) IsPathAllowed(requestedPath string) bool {
 	// Must be an absolute path to prevent ambiguity
 	if !filepath.IsAbs(requestedPath) {
@@ -76,17 +109,13 @@ func (c *NodeCapabilities) IsPathAllowed(requestedPath string) bool {
 
 	// Resolve symlinks so that a symlink inside the workspace pointing outside
 	// cannot bypass the prefix check. If the path doesn't exist yet (e.g. a new
-	// file being written), we fall through with the cleaned path.
-	if resolved, err := filepath.EvalSymlinks(cleanRequested); err == nil {
-		cleanRequested = resolved
-	}
+	// file being written), we evaluate symlinks of the longest existing parent directory.
+	cleanRequested = resolveSymlinks(cleanRequested)
 
 	// Check workspace
 	if c.Workspace != "" {
 		cleanWorkspace := filepath.Clean(c.Workspace)
-		if resolved, err := filepath.EvalSymlinks(cleanWorkspace); err == nil {
-			cleanWorkspace = resolved
-		}
+		cleanWorkspace = resolveSymlinks(cleanWorkspace)
 		if cleanRequested == cleanWorkspace || strings.HasPrefix(cleanRequested, cleanWorkspace+string(filepath.Separator)) {
 			return true
 		}
@@ -95,9 +124,7 @@ func (c *NodeCapabilities) IsPathAllowed(requestedPath string) bool {
 	// Check allowed paths
 	for _, allowed := range c.AllowedPaths {
 		cleanAllowed := filepath.Clean(allowed)
-		if resolved, err := filepath.EvalSymlinks(cleanAllowed); err == nil {
-			cleanAllowed = resolved
-		}
+		cleanAllowed = resolveSymlinks(cleanAllowed)
 		if cleanRequested == cleanAllowed || strings.HasPrefix(cleanRequested, cleanAllowed+string(filepath.Separator)) {
 			return true
 		}

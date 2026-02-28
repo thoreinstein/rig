@@ -233,3 +233,36 @@ func TestIsPathAllowed_SymlinkEscape(t *testing.T) {
 		t.Error("real file inside workspace should be allowed")
 	}
 }
+
+func TestIsPathAllowed_SymlinkEscape_NewFile(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink test requires unix")
+	}
+
+	// Setup: workspace with a symlink pointing outside
+	tmpDir := t.TempDir()
+	workspace := filepath.Join(tmpDir, "workspace")
+	outside := filepath.Join(tmpDir, "outside")
+	if err := os.MkdirAll(workspace, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(outside, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a symlink inside workspace that points outside
+	symlink := filepath.Join(workspace, "escape")
+	if err := os.Symlink(outside, symlink); err != nil {
+		t.Fatal(err)
+	}
+
+	caps := &NodeCapabilities{Workspace: workspace}
+
+	// The target file does NOT exist.
+	// IsPathAllowed must resolve the parent directory 'escape' to 'outside'
+	// and recognize that it falls outside the workspace.
+	newFile := filepath.Join(symlink, "new.txt")
+	if caps.IsPathAllowed(newFile) {
+		t.Error("symlink escape for new file should be denied, but was allowed")
+	}
+}
