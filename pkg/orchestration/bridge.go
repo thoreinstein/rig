@@ -19,7 +19,13 @@ import (
 )
 
 // NodeBridge is the interface for executing a workflow node in an isolated context.
+// Implementations of NodeBridge must ensure that ExecuteNode is idempotent.
+// If the orchestrator is interrupted and resumed, it may call ExecuteNode
+// multiple times for the same node in the same execution.
 type NodeBridge interface {
+	// ExecuteNode runs the logic for a given node.
+	// It must be idempotent — if called multiple times with the same inputs,
+	// it should produce the same results without harmful side effects.
 	ExecuteNode(
 		ctx context.Context,
 		node *Node,
