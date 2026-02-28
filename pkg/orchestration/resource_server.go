@@ -37,14 +37,14 @@ func (s *resourceServer) checkPath(requested string) (string, error) {
 	if s.caps == nil {
 		return "", status.Errorf(codes.PermissionDenied, "node %s has no capabilities", s.nodeID)
 	}
-	absPath, err := filepath.Abs(requested)
-	if err != nil {
-		return "", status.Errorf(codes.InvalidArgument, "invalid path: %v", err)
+	if !filepath.IsAbs(requested) {
+		return "", status.Errorf(codes.InvalidArgument, "path must be absolute")
 	}
-	if !s.caps.IsPathAllowed(absPath) {
+	cleaned := filepath.Clean(requested)
+	if !s.caps.IsPathAllowed(cleaned) {
 		return "", status.Errorf(codes.PermissionDenied, "access denied for node %s", s.nodeID)
 	}
-	return absPath, nil
+	return cleaned, nil
 }
 
 func (s *resourceServer) ReadFile(ctx context.Context, req *apiv1.ReadFileRequest) (*apiv1.ReadFileResponse, error) {
