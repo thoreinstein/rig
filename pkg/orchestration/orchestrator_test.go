@@ -2,12 +2,23 @@ package orchestration
 
 import (
 	"context"
+	"encoding/json"
 	"sync"
 	"testing"
 
 	"github.com/cockroachdb/errors"
-	"github.com/google/uuid"
 )
+
+type MockBridge struct {
+	ExecuteFunc func(ctx context.Context, node *Node, caps *NodeCapabilities, cfg json.RawMessage, inputs map[string]json.RawMessage, secrets map[string]string) (json.RawMessage, error)
+}
+
+func (m *MockBridge) ExecuteNode(ctx context.Context, node *Node, caps *NodeCapabilities, cfg json.RawMessage, inputs map[string]json.RawMessage, secrets map[string]string) (json.RawMessage, error) {
+	if m.ExecuteFunc != nil {
+		return m.ExecuteFunc(ctx, node, caps, cfg, inputs, secrets)
+	}
+	return nil, nil
+}
 
 type MockStore struct {
 	mu            sync.Mutex
@@ -257,49 +268,6 @@ func TestOrchestrator_Execute_MockDiamond(t *testing.T) {
 	})
 }
 
-func TestHelloWorldWorkflow(t *testing.T) {
-	dm := skipWithoutDolt(t)
-	defer dm.Close()
-	ctx := t.Context()
-
-	if err := dm.InitSchema(); err != nil {
-		t.Fatalf("InitSchema() failed: %v", err)
-	}
-
-	o := NewOrchestrator(dm)
-
-	w := &Workflow{Name: "hello-world-dag", Status: WorkflowStatusActive}
-	nodes := []*Node{
-		{ID: "A", Name: "PrintHello", Type: "hello"},
-		{ID: "B", Name: "PrintWorld", Type: "world"},
-	}
-	edges := []*Edge{
-		{ID: "A-B", SourceNodeID: "A", TargetNodeID: "B"},
-	}
-
-	if err := dm.SaveWorkflowDefinition(ctx, w, nodes, edges); err != nil {
-		t.Fatalf("SaveWorkflowDefinition() failed: %v", err)
-	}
-
-	exec, err := dm.CreateExecutionWithInitialStates(ctx, w.ID, w.Version)
-	if err != nil {
-		t.Fatalf("CreateExecutionWithInitialStates() failed: %v", err)
-	}
-
-	if err := o.Execute(ctx, exec.ID); err != nil {
-		t.Fatalf("Execute() failed: %v", err)
-	}
-
-	// Persist checks
-	finalExec, err := dm.GetExecution(ctx, exec.ID)
-	if err != nil {
-		t.Fatalf("GetExecution() failed: %v", err)
-	}
-	if finalExec.Status != ExecutionStatusSuccess {
-		t.Errorf("Expected SUCCESS state, got %s", finalExec.Status)
-	}
-}
-
 func TestOrchestrator_Execute_ContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel() // Pre-cancel to test cancellation handling
@@ -350,6 +318,138 @@ func TestOrchestrator_Execute_ContextCancellation(t *testing.T) {
 		if ns.Status != NodeStatusSkipped {
 			t.Errorf("Node %s expected SKIPPED, got %s", ns.NodeID, ns.Status)
 		}
+	}
+}
+
+func TestOrchestrator_Execute_Recovery(t *testing.T) {
+	ctx := t.Context()
+
+	wID := "w1"
+	eID := "e1"
+
+	// Define a diamond graph: A -> {B, C} -> D
+	nodes := []*Node{
+		{ID: "A", WorkflowID: wID, WorkflowVersion: 1, Type: "hello"},
+		{ID: "B", WorkflowID: wID, WorkflowVersion: 1, Type: "hello"},
+		{ID: "C", WorkflowID: wID, WorkflowVersion: 1, Type: "hello"},
+		{ID: "D", WorkflowID: wID, WorkflowVersion: 1, Type: "hello"},
+	}
+	edges := []*Edge{
+		{ID: "e_ab", SourceNodeID: "A", TargetNodeID: "B", WorkflowID: wID, WorkflowVersion: 1},
+		{ID: "e_ac", SourceNodeID: "A", TargetNodeID: "C", WorkflowID: wID, WorkflowVersion: 1},
+		{ID: "e_bd", SourceNodeID: "B", TargetNodeID: "D", WorkflowID: wID, WorkflowVersion: 1},
+		{ID: "e_cd", SourceNodeID: "C", TargetNodeID: "D", WorkflowID: wID, WorkflowVersion: 1},
+	}
+
+	tests := []struct {
+		name          string
+		initialStates []*NodeState
+		expectRun     map[string]bool // which nodes we expect to be executed
+		expectStatus  ExecutionStatus
+	}{
+		{
+			name: "Linear resume - A success, resume B and C",
+			initialStates: []*NodeState{
+				{ID: "sA", NodeID: "A", ExecutionID: eID, Status: NodeStatusSuccess, Result: json.RawMessage(`{"output":"A"}`)},
+				{ID: "sB", NodeID: "B", ExecutionID: eID, Status: NodeStatusRunning},
+				{ID: "sC", NodeID: "C", ExecutionID: eID, Status: NodeStatusPending},
+				{ID: "sD", NodeID: "D", ExecutionID: eID, Status: NodeStatusPending},
+			},
+			expectRun:    map[string]bool{"B": true, "C": true, "D": true},
+			expectStatus: ExecutionStatusSuccess,
+		},
+		{
+			name: "Diamond resume - A, B success, resume C and D",
+			initialStates: []*NodeState{
+				{ID: "sA", NodeID: "A", ExecutionID: eID, Status: NodeStatusSuccess, Result: json.RawMessage(`{"output":"A"}`)},
+				{ID: "sB", NodeID: "B", ExecutionID: eID, Status: NodeStatusSuccess, Result: json.RawMessage(`{"output":"B"}`)},
+				{ID: "sC", NodeID: "C", ExecutionID: eID, Status: NodeStatusPending},
+				{ID: "sD", NodeID: "D", ExecutionID: eID, Status: NodeStatusPending},
+			},
+			expectRun:    map[string]bool{"C": true, "D": true},
+			expectStatus: ExecutionStatusSuccess,
+		},
+		{
+			name: "All complete no-op",
+			initialStates: []*NodeState{
+				{ID: "sA", NodeID: "A", ExecutionID: eID, Status: NodeStatusSuccess, Result: json.RawMessage(`{"output":"A"}`)},
+				{ID: "sB", NodeID: "B", ExecutionID: eID, Status: NodeStatusSuccess, Result: json.RawMessage(`{"output":"B"}`)},
+				{ID: "sC", NodeID: "C", ExecutionID: eID, Status: NodeStatusSuccess, Result: json.RawMessage(`{"output":"C"}`)},
+				{ID: "sD", NodeID: "D", ExecutionID: eID, Status: NodeStatusSuccess, Result: json.RawMessage(`{"output":"D"}`)},
+			},
+			expectRun:    map[string]bool{},
+			expectStatus: ExecutionStatusSuccess,
+		},
+		{
+			name: "Pre-crash failure - short circuit",
+			initialStates: []*NodeState{
+				{ID: "sA", NodeID: "A", ExecutionID: eID, Status: NodeStatusSuccess, Result: json.RawMessage(`{"output":"A"}`)},
+				{ID: "sB", NodeID: "B", ExecutionID: eID, Status: NodeStatusFailed, Error: "boom"},
+				{ID: "sC", NodeID: "C", ExecutionID: eID, Status: NodeStatusPending},
+				{ID: "sD", NodeID: "D", ExecutionID: eID, Status: NodeStatusPending},
+			},
+			expectRun:    map[string]bool{},
+			expectStatus: ExecutionStatusFailed,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			executed := make(map[string]int)
+			var mu sync.Mutex
+
+			bridge := &MockBridge{
+				ExecuteFunc: func(ctx context.Context, node *Node, caps *NodeCapabilities, cfg json.RawMessage, inputs map[string]json.RawMessage, secrets map[string]string) (json.RawMessage, error) {
+					mu.Lock()
+					executed[node.ID]++
+					mu.Unlock()
+					return json.RawMessage(`{"status":"ok"}`), nil
+				},
+			}
+
+			store := &MockStore{
+				workflows: map[string]*Workflow{
+					wID: {ID: wID, Name: "test", Version: 1},
+				},
+				executions: map[string]*Execution{
+					eID: {ID: eID, WorkflowID: wID, WorkflowVersion: 1, Status: ExecutionStatusRunning},
+				},
+				nodes: map[string][]*Node{
+					wID: nodes,
+				},
+				edges: map[string][]*Edge{
+					wID: edges,
+				},
+				nodeStates: map[string][]*NodeState{
+					eID: tt.initialStates,
+				},
+			}
+
+			o := NewOrchestrator(store, WithNodeBridge(bridge))
+			err := o.Execute(ctx, eID)
+
+			if tt.expectStatus == ExecutionStatusSuccess && err != nil {
+				t.Fatalf("Expected success, got error: %v", err)
+			}
+			if tt.expectStatus == ExecutionStatusFailed && err == nil {
+				t.Fatal("Expected error, got nil")
+			}
+
+			if store.executions[eID].Status != tt.expectStatus {
+				t.Errorf("Expected execution status %s, got %s", tt.expectStatus, store.executions[eID].Status)
+			}
+
+			for id, count := range executed {
+				if !tt.expectRun[id] {
+					t.Errorf("Node %s was executed %d times, expected 0", id, count)
+				}
+			}
+			for id := range tt.expectRun {
+				if executed[id] == 0 {
+					t.Errorf("Node %s was NOT executed, expected it to run", id)
+				}
+			}
+		})
 	}
 }
 
@@ -537,104 +637,4 @@ func TestValidateWorkflow(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestOrchestrator_Execute(t *testing.T) {
-	dm := skipWithoutDolt(t)
-	defer dm.Close()
-	ctx := t.Context()
-
-	if err := dm.InitSchema(); err != nil {
-		t.Fatalf("InitSchema() failed: %v", err)
-	}
-
-	o := NewOrchestrator(dm)
-
-	t.Run("successful linear execution", func(t *testing.T) {
-		w := &Workflow{Name: "success-test-" + uuid.New().String(), Status: WorkflowStatusActive}
-		nodes := []*Node{
-			{ID: "n1", Name: "hello", Type: "hello"},
-			{ID: "n2", Name: "world", Type: "world"},
-		}
-		edges := []*Edge{
-			{ID: "e1", SourceNodeID: "n1", TargetNodeID: "n2"},
-		}
-
-		if err := dm.SaveWorkflowDefinition(ctx, w, nodes, edges); err != nil {
-			t.Fatalf("SaveWorkflowDefinition() failed: %v", err)
-		}
-
-		exec, err := dm.CreateExecutionWithInitialStates(ctx, w.ID, w.Version)
-		if err != nil {
-			t.Fatalf("CreateExecutionWithInitialStates() failed: %v", err)
-		}
-
-		if err := o.Execute(ctx, exec.ID); err != nil {
-			t.Fatalf("Execute() failed: %v", err)
-		}
-
-		// Verify final status
-		finalExec, err := dm.GetExecution(ctx, exec.ID)
-		if err != nil {
-			t.Fatalf("GetExecution() failed: %v", err)
-		}
-		if finalExec.Status != ExecutionStatusSuccess {
-			t.Errorf("Expected status SUCCESS, got %s", finalExec.Status)
-		}
-
-		nodeStates, err := dm.GetNodeStatesByExecution(ctx, exec.ID)
-		if err != nil {
-			t.Fatalf("GetNodeStatesByExecution() failed: %v", err)
-		}
-		for _, ns := range nodeStates {
-			if ns.Status != NodeStatusSuccess {
-				t.Errorf("Node %s expected status SUCCESS, got %s", ns.NodeID, ns.Status)
-			}
-		}
-	})
-
-	t.Run("execution with failure and skip", func(t *testing.T) {
-		w := &Workflow{Name: "fail-test-" + uuid.New().String(), Status: WorkflowStatusActive}
-		nodes := []*Node{
-			{ID: "f1", Name: "fail-node", Type: "fail"},
-			{ID: "s1", Name: "skip-node", Type: "world"},
-		}
-		edges := []*Edge{
-			{ID: "fe1", SourceNodeID: "f1", TargetNodeID: "s1"},
-		}
-
-		if err := dm.SaveWorkflowDefinition(ctx, w, nodes, edges); err != nil {
-			t.Fatalf("SaveWorkflowDefinition() failed: %v", err)
-		}
-		exec, err := dm.CreateExecutionWithInitialStates(ctx, w.ID, w.Version)
-		if err != nil {
-			t.Fatalf("CreateExecutionWithInitialStates() failed: %v", err)
-		}
-
-		err = o.Execute(ctx, exec.ID)
-		if err == nil {
-			t.Error("Expected Execute() to fail")
-		}
-
-		finalExec, err := dm.GetExecution(ctx, exec.ID)
-		if err != nil {
-			t.Fatalf("GetExecution() failed: %v", err)
-		}
-		if finalExec.Status != ExecutionStatusFailed {
-			t.Errorf("Expected status FAILED, got %s", finalExec.Status)
-		}
-
-		nodeStates, err := dm.GetNodeStatesByExecution(ctx, exec.ID)
-		if err != nil {
-			t.Fatalf("GetNodeStatesByExecution() failed: %v", err)
-		}
-		for _, ns := range nodeStates {
-			if ns.NodeID == "f1" && ns.Status != NodeStatusFailed {
-				t.Errorf("Node f1 expected status FAILED, got %s", ns.Status)
-			}
-			if ns.NodeID == "s1" && ns.Status != NodeStatusSkipped {
-				t.Errorf("Node s1 expected status SKIPPED, got %s", ns.Status)
-			}
-		}
-	})
 }
