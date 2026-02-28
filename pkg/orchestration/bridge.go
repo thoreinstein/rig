@@ -110,7 +110,7 @@ func (b *PluginNodeBridge) ExecuteNode(
 	select {
 	case err := <-errChan:
 		if err != nil {
-			return nil, fmt.Errorf("resource server failed to start: %w", err)
+			return nil, errors.Wrapf(err, "resource server failed to start")
 		}
 	default:
 		// Server started successfully, continue
