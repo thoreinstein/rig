@@ -333,7 +333,8 @@ func TestOrchestrator_Execute_Recovery(t *testing.T) {
 	tests := []struct {
 		name             string
 		initialStates    []*NodeState
-		expectRun        map[string]bool // which nodes we expect the bridge to execute
+		expectRun        map[string]bool                       // which nodes we expect the bridge to execute
+		expectInputs     map[string]map[string]json.RawMessage // nodeID -> expected inputs map (keyed by source nodeID)
 		expectStatus     ExecutionStatus
 		expectNodeStatus map[string]NodeStatus // expected final status of every node
 	}{
@@ -348,7 +349,11 @@ func TestOrchestrator_Execute_Recovery(t *testing.T) {
 				{ID: "sC", NodeID: "C", ExecutionID: eID, Status: NodeStatusPending},
 				{ID: "sD", NodeID: "D", ExecutionID: eID, Status: NodeStatusPending},
 			},
-			expectRun:    map[string]bool{"B": true, "C": true, "D": true},
+			expectRun: map[string]bool{"B": true, "C": true, "D": true},
+			expectInputs: map[string]map[string]json.RawMessage{
+				"B": {"A": json.RawMessage(`{"output":"A"}`)}, // B receives restored A result
+				"C": {"A": json.RawMessage(`{"output":"A"}`)}, // C receives restored A result
+			},
 			expectStatus: ExecutionStatusSuccess,
 			expectNodeStatus: map[string]NodeStatus{
 				"A": NodeStatusSuccess,
@@ -365,7 +370,11 @@ func TestOrchestrator_Execute_Recovery(t *testing.T) {
 				{ID: "sC", NodeID: "C", ExecutionID: eID, Status: NodeStatusPending},
 				{ID: "sD", NodeID: "D", ExecutionID: eID, Status: NodeStatusPending},
 			},
-			expectRun:    map[string]bool{"C": true, "D": true},
+			expectRun: map[string]bool{"C": true, "D": true},
+			expectInputs: map[string]map[string]json.RawMessage{
+				"C": {"A": json.RawMessage(`{"output":"A"}`)},                                          // C receives restored A result
+				"D": {"B": json.RawMessage(`{"output":"B"}`), "C": json.RawMessage(`{"status":"ok"}`)}, // D receives restored B + fresh C
+			},
 			expectStatus: ExecutionStatusSuccess,
 			expectNodeStatus: map[string]NodeStatus{
 				"A": NodeStatusSuccess,
@@ -446,12 +455,18 @@ func TestOrchestrator_Execute_Recovery(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			executed := make(map[string]int)
+			capturedInputs := make(map[string]map[string]json.RawMessage)
 			var mu sync.Mutex
 
 			bridge := &MockNodeBridge{
 				ExecuteNodeFunc: func(ctx context.Context, node *Node, caps *NodeCapabilities, pluginConfig json.RawMessage, inputs map[string]json.RawMessage, secrets map[string]string) (json.RawMessage, error) {
 					mu.Lock()
 					executed[node.ID]++
+					inputsCopy := make(map[string]json.RawMessage, len(inputs))
+					for k, v := range inputs {
+						inputsCopy[k] = v
+					}
+					capturedInputs[node.ID] = inputsCopy
 					mu.Unlock()
 					return json.RawMessage(`{"status":"ok"}`), nil
 				},
@@ -495,8 +510,24 @@ func TestOrchestrator_Execute_Recovery(t *testing.T) {
 				}
 			}
 			for id := range tt.expectRun {
-				if executed[id] == 0 {
-					t.Errorf("Node %s was NOT executed, expected it to run", id)
+				count := executed[id]
+				if count == 0 {
+					t.Errorf("Node %s was NOT executed, expected it to run exactly once", id)
+				} else if count > 1 {
+					t.Errorf("Node %s was executed %d times, expected exactly once", id, count)
+				}
+			}
+
+			// Verify that resumed nodes received the expected inputs from restored predecessors.
+			for nodeID, wantInputs := range tt.expectInputs {
+				gotInputs := capturedInputs[nodeID]
+				for srcID, wantVal := range wantInputs {
+					gotVal, ok := gotInputs[srcID]
+					if !ok {
+						t.Errorf("Node %s expected input from %s, but it was not present", nodeID, srcID)
+					} else if string(gotVal) != string(wantVal) {
+						t.Errorf("Node %s input from %s: got %s, want %s", nodeID, srcID, gotVal, wantVal)
+					}
 				}
 			}
 
@@ -571,6 +602,37 @@ func TestOrchestrator_Execute_PanicRecovery(t *testing.T) {
 				t.Errorf("Node n2 expected SKIPPED, got %s", ns.Status)
 			}
 		}
+	}
+}
+
+func TestOrchestrator_Execute_TerminalStateGuard(t *testing.T) {
+	ctx := t.Context()
+
+	terminalStatuses := []ExecutionStatus{
+		ExecutionStatusSuccess,
+		ExecutionStatusFailed,
+		ExecutionStatusCancelled,
+	}
+
+	for _, status := range terminalStatuses {
+		t.Run(string(status), func(t *testing.T) {
+			store := &MockStore{
+				workflows: map[string]*Workflow{
+					"w1": {ID: "w1", Name: "test", Version: 1},
+				},
+				executions: map[string]*Execution{
+					"e1": {ID: "e1", WorkflowID: "w1", WorkflowVersion: 1, Status: status},
+				},
+			}
+			o := NewOrchestrator(store)
+			err := o.Execute(ctx, "e1")
+			if err == nil {
+				t.Fatalf("Expected error for terminal status %s, got nil", status)
+			}
+			if !errors.Is(err, err) { // ensure it's a real error, not nil
+				t.Fatalf("Unexpected error type: %v", err)
+			}
+		})
 	}
 }
 

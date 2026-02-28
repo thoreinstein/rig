@@ -468,6 +468,9 @@ func TestIdempotentRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetNodeStatesByExecution failed: %v", err)
 	}
+	if nsInitial[0].StartedAt == nil {
+		t.Fatal("Expected StartedAt to be set after first RUNNING transition, got nil")
+	}
 	nsFirstStart := *nsInitial[0].StartedAt
 
 	if err := dm.UpdateNodeStatus(ctx, ns.ID, NodeStatusRunning, nil, ""); err != nil {
