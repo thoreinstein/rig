@@ -450,11 +450,11 @@ func TestIdempotentRecovery(t *testing.T) {
 		t.Fatalf("CreateNode failed: %v", err)
 	}
 
-	nodes, err := dm.CreateExecutionWithInitialStates(ctx, w.ID, w.Version)
+	execWithStates, err := dm.CreateExecutionWithInitialStates(ctx, w.ID, w.Version)
 	if err != nil {
 		t.Fatalf("CreateExecutionWithInitialStates failed: %v", err)
 	}
-	states, err := dm.GetNodeStatesByExecution(ctx, nodes.ID)
+	states, err := dm.GetNodeStatesByExecution(ctx, execWithStates.ID)
 	if err != nil {
 		t.Fatalf("GetNodeStatesByExecution failed: %v", err)
 	}
@@ -464,7 +464,7 @@ func TestIdempotentRecovery(t *testing.T) {
 		t.Fatalf("First UpdateNodeStatus(RUNNING) failed: %v", err)
 	}
 
-	nsInitial, err := dm.GetNodeStatesByExecution(ctx, nodes.ID)
+	nsInitial, err := dm.GetNodeStatesByExecution(ctx, execWithStates.ID)
 	if err != nil {
 		t.Fatalf("GetNodeStatesByExecution failed: %v", err)
 	}
@@ -474,7 +474,7 @@ func TestIdempotentRecovery(t *testing.T) {
 		t.Fatalf("Second UpdateNodeStatus(RUNNING) failed: %v", err)
 	}
 
-	nsRecovered, err := dm.GetNodeStatesByExecution(ctx, nodes.ID)
+	nsRecovered, err := dm.GetNodeStatesByExecution(ctx, execWithStates.ID)
 	if err != nil {
 		t.Fatalf("GetNodeStatesByExecution failed: %v", err)
 	}

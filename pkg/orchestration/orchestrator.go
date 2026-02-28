@@ -215,23 +215,29 @@ func (o *Orchestrator) Execute(ctx context.Context, executionID string) error {
 			launched[s.NodeID] = true
 		case NodeStatusSkipped:
 			failed = true
-			failErrs = append(failErrs, errors.Errorf("node %s was previously skipped", s.NodeID))
+			failErrs = append(failErrs, errors.Errorf("node %s was previously skipped: %s", s.NodeID, s.Error))
 			launched[s.NodeID] = true
 		}
 	}
 
 	// Short-circuit if a failure was detected during state recovery
 	if failed {
+		// Use detached context for cleanup and status transitions — the original ctx may be cancelled.
+		cleanupCtx := context.WithoutCancel(ctx)
+
+		var transitionErr error
 		// Even if failed, we must transition execution state if it was PENDING
 		if execution.Status == ExecutionStatusPending {
-			_ = o.store.UpdateExecutionStatus(ctx, executionID, ExecutionStatusRunning, "")
+			if err := o.store.UpdateExecutionStatus(cleanupCtx, executionID, ExecutionStatusRunning, ""); err != nil {
+				transitionErr = errors.Wrap(err, "failed to update execution status to running during recovery")
+			}
 		}
-		// Use detached context for cleanup — the original ctx may be cancelled.
-		cleanupCtx := context.WithoutCancel(ctx)
+
 		skipErr := o.skipUnprocessed(cleanupCtx, launched, stateMap)
 
 		failErr := errors.Join(failErrs...)
 		failErr = errors.CombineErrors(failErr, skipErr)
+		failErr = errors.CombineErrors(failErr, transitionErr)
 
 		errMsg := "execution failed"
 		if failErr != nil {
