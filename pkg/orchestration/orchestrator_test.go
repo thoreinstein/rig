@@ -9,17 +9,6 @@ import (
 	"github.com/cockroachdb/errors"
 )
 
-type MockBridge struct {
-	ExecuteFunc func(ctx context.Context, node *Node, caps *NodeCapabilities, cfg json.RawMessage, inputs map[string]json.RawMessage, secrets map[string]string) (json.RawMessage, error)
-}
-
-func (m *MockBridge) ExecuteNode(ctx context.Context, node *Node, caps *NodeCapabilities, cfg json.RawMessage, inputs map[string]json.RawMessage, secrets map[string]string) (json.RawMessage, error) {
-	if m.ExecuteFunc != nil {
-		return m.ExecuteFunc(ctx, node, caps, cfg, inputs, secrets)
-	}
-	return nil, nil
-}
-
 type MockStore struct {
 	mu            sync.Mutex
 	workflows     map[string]*Workflow
@@ -349,7 +338,7 @@ func TestOrchestrator_Execute_Recovery(t *testing.T) {
 		expectNodeStatus map[string]NodeStatus // expected final status of every node
 	}{
 		{
-			name: "Linear resume - A success, resume B and C",
+			name: "Diamond partial resume - A success, resume B and C",
 			initialStates: []*NodeState{
 				{ID: "sA", NodeID: "A", ExecutionID: eID, Status: NodeStatusSuccess, Result: json.RawMessage(`{"output":"A"}`)},
 				// B was RUNNING when the process crashed. Recovery does not mark
@@ -459,8 +448,8 @@ func TestOrchestrator_Execute_Recovery(t *testing.T) {
 			executed := make(map[string]int)
 			var mu sync.Mutex
 
-			bridge := &MockBridge{
-				ExecuteFunc: func(ctx context.Context, node *Node, caps *NodeCapabilities, cfg json.RawMessage, inputs map[string]json.RawMessage, secrets map[string]string) (json.RawMessage, error) {
+			bridge := &MockNodeBridge{
+				ExecuteNodeFunc: func(ctx context.Context, node *Node, caps *NodeCapabilities, pluginConfig json.RawMessage, inputs map[string]json.RawMessage, secrets map[string]string) (json.RawMessage, error) {
 					mu.Lock()
 					executed[node.ID]++
 					mu.Unlock()
