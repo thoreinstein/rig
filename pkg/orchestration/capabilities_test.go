@@ -76,6 +76,22 @@ func TestParseNodeCapabilities(t *testing.T) {
 			expectErr:    false,
 		},
 		{
+			name: "capabilities-only wrapper",
+			rawJSON: `{
+				"capabilities": {
+					"network_access": true
+				}
+			}`,
+			expectCaps: &NodeCapabilities{
+				Workspace:      "",
+				AllowedPaths:   nil,
+				NetworkAccess:  true,
+				SecretsMapping: nil,
+			},
+			expectPlugin: `{}`,
+			expectErr:    false,
+		},
+		{
 			name: "legacy top-level config containing 'capabilities' key",
 			rawJSON: `{
 				"capabilities": {"internal_feature": true},

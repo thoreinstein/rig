@@ -36,11 +36,26 @@ func ParseNodeCapabilities(raw json.RawMessage) (*NodeCapabilities, json.RawMess
 	caps := &NodeCapabilities{}
 	var pluginConfig json.RawMessage
 
-	// We only interpret the "capabilities" key as host capabilities if the explicit
-	// "plugin" wrapper is present. This prevents a legacy plugin config that happens
-	// to use a "capabilities" key for its own internal purposes from accidentally
-	// granting itself elevated host permissions.
-	if pluginRaw, ok := rawMap["plugin"]; ok && string(pluginRaw) != "null" {
+	// We determine if this is the explicit wrapper format. It is a wrapper if:
+	// 1. The "plugin" key is explicitly present.
+	// 2. ONLY the "capabilities" key is present (to support capabilities-only configs).
+	isWrapper := false
+	if _, hasPlugin := rawMap["plugin"]; hasPlugin {
+		isWrapper = true
+	} else if _, hasCaps := rawMap["capabilities"]; hasCaps {
+		hasOtherKeys := false
+		for k := range rawMap {
+			if k != "capabilities" {
+				hasOtherKeys = true
+				break
+			}
+		}
+		if !hasOtherKeys {
+			isWrapper = true
+		}
+	}
+
+	if isWrapper {
 		// Wrapper format detected
 		if capRaw, ok := rawMap["capabilities"]; ok && len(capRaw) > 0 && string(capRaw) != "null" {
 			if err := json.Unmarshal(capRaw, caps); err != nil {
@@ -48,8 +63,10 @@ func ParseNodeCapabilities(raw json.RawMessage) (*NodeCapabilities, json.RawMess
 			}
 		}
 
-		pluginConfig = pluginRaw
-		if len(pluginConfig) == 0 {
+		pluginRaw, ok := rawMap["plugin"]
+		if ok && string(pluginRaw) != "null" && len(pluginRaw) > 0 {
+			pluginConfig = pluginRaw
+		} else {
 			pluginConfig = json.RawMessage(`{}`)
 		}
 	} else {
