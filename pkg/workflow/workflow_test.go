@@ -520,6 +520,20 @@ func TestWithEventLogger_NilFallsBackToNoop(t *testing.T) {
 	}
 }
 
+func TestWithEventLogger_TypedNilFallsBackToNoop(t *testing.T) {
+	gh := &mockGitHubClient{}
+	cfg := &config.Config{}
+
+	// A typed-nil pointer should also keep the NoopEventLogger default
+	var typedNil *mockEventLogger
+	engine := NewEngine(gh, nil, nil, cfg, "", false, WithEventLogger(typedNil))
+
+	_, isNoop := engine.eventLogger.(events.NoopEventLogger)
+	if !isNoop {
+		t.Errorf("expected NoopEventLogger when typed-nil passed, got %T", engine.eventLogger)
+	}
+}
+
 func TestPreflight(t *testing.T) {
 	tests := []struct {
 		name        string

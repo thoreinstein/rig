@@ -12,8 +12,9 @@ import (
 
 // DatabaseManager handles embedded Dolt database operations for event tracking.
 type DatabaseManager struct {
-	db      *sql.DB
-	Verbose bool
+	db       *sql.DB
+	dataPath string
+	Verbose  bool
 }
 
 // NewDatabaseManager creates a new DatabaseManager using the embedded Dolt driver.
@@ -41,8 +42,9 @@ func NewDatabaseManager(dataPath, commitName, commitEmail string, verbose bool) 
 	}
 
 	return &DatabaseManager{
-		db:      db,
-		Verbose: verbose,
+		db:       db,
+		dataPath: absPath,
+		Verbose:  verbose,
 	}, nil
 }
 
@@ -55,9 +57,9 @@ func (dm *DatabaseManager) Close() error {
 }
 
 // InitDatabase initializes the database and creates tables.
-func (dm *DatabaseManager) InitDatabase(dataPath string) error {
+func (dm *DatabaseManager) InitDatabase() error {
 	// Ensure directory exists
-	if err := os.MkdirAll(dataPath, 0700); err != nil {
+	if err := os.MkdirAll(dm.dataPath, 0700); err != nil {
 		return errors.Wrap(err, "failed to create data path")
 	}
 

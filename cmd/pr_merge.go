@@ -203,7 +203,7 @@ func runPRMerge(cmd *cobra.Command, opts PRMergeOptions, ghClient github.Client,
 		if err != nil {
 			fmt.Printf("Warning: Could not initialize event database: %v\n", err)
 		} else {
-			if err := dm.InitDatabase(cfg.Events.DataPath); err != nil {
+			if err := dm.InitDatabase(); err != nil {
 				fmt.Printf("Warning: Could not initialize event schema: %v\n", err)
 				dm.Close()
 			} else {

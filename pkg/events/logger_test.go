@@ -19,7 +19,7 @@ func TestDoltEventLogger(t *testing.T) {
 	}
 	defer dm.Close()
 
-	if err := dm.InitDatabase(dataPath); err != nil {
+	if err := dm.InitDatabase(); err != nil {
 		t.Fatalf("failed to init db: %v", err)
 	}
 

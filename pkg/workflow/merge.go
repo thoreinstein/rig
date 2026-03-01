@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"reflect"
 	"time"
 
 	"github.com/google/uuid"
@@ -34,11 +35,17 @@ type Engine struct {
 type EngineOption func(*Engine)
 
 // WithEventLogger sets the event logger for the engine.
+// Passing nil (including typed-nil pointers) retains the default NoopEventLogger.
 func WithEventLogger(el events.EventLogger) EngineOption {
 	return func(e *Engine) {
-		if el != nil {
-			e.eventLogger = el
+		if el == nil {
+			return
 		}
+		v := reflect.ValueOf(el)
+		if v.Kind() == reflect.Ptr && v.IsNil() {
+			return
+		}
+		e.eventLogger = el
 	}
 }
 

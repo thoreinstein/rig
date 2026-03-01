@@ -6,6 +6,10 @@ import (
 )
 
 func TestDatabaseManager(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
 	tmpDir := t.TempDir()
 
 	dataPath := filepath.Join(tmpDir, "data")
@@ -15,7 +19,7 @@ func TestDatabaseManager(t *testing.T) {
 	}
 	defer dm.Close()
 
-	if err := dm.InitDatabase(dataPath); err != nil {
+	if err := dm.InitDatabase(); err != nil {
 		t.Fatalf("InitDatabase failed: %v", err)
 	}
 
