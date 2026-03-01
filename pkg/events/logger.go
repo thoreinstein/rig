@@ -14,6 +14,7 @@ type EventLogger interface {
 	LogStepCompleted(ctx context.Context, correlationID, step string) error
 	LogStepFailed(ctx context.Context, correlationID, step, errMsg string) error
 	LogWorkflowCompleted(ctx context.Context, correlationID string) error
+	LogWorkflowFailed(ctx context.Context, correlationID, errMsg string) error
 	Close() error
 }
 
@@ -40,22 +41,27 @@ func (l *DoltEventLogger) LogStepFailed(ctx context.Context, correlationID, step
 }
 
 func (l *DoltEventLogger) LogWorkflowCompleted(ctx context.Context, correlationID string) error {
-	// 1. Log the final completion event
 	if err := l.log(ctx, correlationID, "workflow", "COMPLETED", ""); err != nil {
 		return err
 	}
+	return l.commitEvents(ctx, fmt.Sprintf("Workflow %s completed", correlationID))
+}
 
-	// 2. Perform a Dolt commit for the workflow completion
-	// Use standard Dolt procedures via the embedded driver
+func (l *DoltEventLogger) LogWorkflowFailed(ctx context.Context, correlationID, errMsg string) error {
+	if err := l.log(ctx, correlationID, "workflow", "FAILED", errMsg); err != nil {
+		return err
+	}
+	return l.commitEvents(ctx, fmt.Sprintf("Workflow %s failed", correlationID))
+}
+
+// commitEvents stages all changes and creates a Dolt commit.
+func (l *DoltEventLogger) commitEvents(ctx context.Context, msg string) error {
 	if _, err := l.dm.db.ExecContext(ctx, "CALL DOLT_ADD('-A')"); err != nil {
 		return errors.Wrap(err, "failed to CALL DOLT_ADD")
 	}
-
-	commitMsg := fmt.Sprintf("Workflow %s completed", correlationID)
-	if _, err := l.dm.db.ExecContext(ctx, "CALL DOLT_COMMIT('-m', ?)", commitMsg); err != nil {
+	if _, err := l.dm.db.ExecContext(ctx, "CALL DOLT_COMMIT('-m', ?)", msg); err != nil {
 		return errors.Wrap(err, "failed to CALL DOLT_COMMIT")
 	}
-
 	return nil
 }
 
@@ -89,6 +95,10 @@ func (l NoopEventLogger) LogStepFailed(ctx context.Context, correlationID, step,
 }
 
 func (l NoopEventLogger) LogWorkflowCompleted(ctx context.Context, correlationID string) error {
+	return nil
+}
+
+func (l NoopEventLogger) LogWorkflowFailed(ctx context.Context, correlationID, errMsg string) error {
 	return nil
 }
 

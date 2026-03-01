@@ -451,6 +451,11 @@ func (m *mockEventLogger) LogWorkflowCompleted(_ context.Context, correlationID 
 	return nil
 }
 
+func (m *mockEventLogger) LogWorkflowFailed(_ context.Context, correlationID, errMsg string) error {
+	m.calls = append(m.calls, eventLoggerCall{method: "LogWorkflowFailed", correlationID: correlationID, errMsg: errMsg})
+	return nil
+}
+
 func (m *mockEventLogger) Close() error { return nil }
 
 func TestNewEngine(t *testing.T) {

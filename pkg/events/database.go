@@ -1,6 +1,7 @@
 package events
 
 import (
+	"context"
 	"database/sql"
 	"net/url"
 	"os"
@@ -57,25 +58,34 @@ func (dm *DatabaseManager) Close() error {
 }
 
 // InitDatabase initializes the database and creates tables.
+// All DDL runs on a single connection to ensure USE session state persists
+// across statements in the connection pool.
 func (dm *DatabaseManager) InitDatabase() error {
 	// Ensure directory exists
 	if err := os.MkdirAll(dm.dataPath, 0700); err != nil {
 		return errors.Wrap(err, "failed to create data path")
 	}
 
+	ctx := context.Background()
+	conn, err := dm.db.Conn(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to acquire database connection")
+	}
+	defer conn.Close()
+
 	// Create database if not exists
-	if _, err := dm.db.Exec("CREATE DATABASE IF NOT EXISTS rig_events"); err != nil {
+	if _, err := conn.ExecContext(ctx, "CREATE DATABASE IF NOT EXISTS rig_events"); err != nil {
 		return errors.Wrap(err, "failed to create rig_events database")
 	}
 
-	// Use database
-	if _, err := dm.db.Exec("USE rig_events"); err != nil {
+	// Use database (session state persists on this single connection)
+	if _, err := conn.ExecContext(ctx, "USE rig_events"); err != nil {
 		return errors.Wrap(err, "failed to use rig_events database")
 	}
 
 	// Run table DDLs
 	for _, ddl := range AllTableDDLs() {
-		if _, err := dm.db.Exec(ddl); err != nil {
+		if _, err := conn.ExecContext(ctx, ddl); err != nil {
 			return errors.Wrap(err, "failed to execute table DDL")
 		}
 	}

@@ -134,6 +134,10 @@ func (e *Engine) Run(ctx context.Context, prNumber int, opts MergeOptions) error
 				e.logger.Warn("failed to log step failed", "step", s.step, "correlationID", correlationID, "error", logErr)
 			}
 
+			if logErr := e.eventLogger.LogWorkflowFailed(ctx, correlationID, err.Error()); logErr != nil {
+				e.logger.Warn("failed to log workflow failure", "correlationID", correlationID, "error", logErr)
+			}
+
 			// Save checkpoint before returning error
 			if wf.Worktree != "" {
 				if saveErr := SaveCheckpoint(wf.Worktree, e.workflowToCheckpoint(wf)); saveErr != nil {
@@ -241,6 +245,10 @@ func (e *Engine) Resume(ctx context.Context, checkpoint *Checkpoint) error {
 		if err := s.fn(ctx, wf, opts); err != nil {
 			if logErr := e.eventLogger.LogStepFailed(ctx, correlationID, string(s.step), err.Error()); logErr != nil {
 				e.logger.Warn("failed to log step failed", "step", s.step, "correlationID", correlationID, "error", logErr)
+			}
+
+			if logErr := e.eventLogger.LogWorkflowFailed(ctx, correlationID, err.Error()); logErr != nil {
+				e.logger.Warn("failed to log workflow failure", "correlationID", correlationID, "error", logErr)
 			}
 
 			// Save checkpoint before returning error
