@@ -270,11 +270,13 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 - **Idempotent State Re-entry**: Allow transitions from a state to itself (e.g., `RUNNING -> RUNNING`) in the persistence layer to support crash recovery. Use SQL `COALESCE(started_at, ?)` to ensure the original start time is preserved during re-entry.
 - **Node-Bridge Idempotency Contract**: All `NodeBridge` implementations MUST be idempotent. The orchestrator may re-invoke a node if it was interrupted mid-execution during a previous run.
 - **Recovery Short-Circuit Pattern**: Detect pre-existing terminal failure states (including `SKIPPED` nodes) during recovery to prevent re-executing branches of a DAG that should have stayed dead.
+- **Functional Dry-Run Validation Pattern**: Implement dry-run validation as a standalone, functional component (e.g., `DryRunValidate`) rather than a mode within the primary executor. Use environment-check interfaces (`PluginChecker`, `SecretResolver`) to keep the logic side-effect-free and portable. This enables rigorous static analysis of DAG structures, I/O schemas, and environment readiness without instantiating full orchestration dependencies.
 
 ### Persistence Traps (Orchestration)
 - **Stale Memory Store State**: In-memory test stores (`MemoryStore`) must use strict `sync.Mutex` locking across all methods to prevent race conditions during concurrent workflow execution.
 - **Key Construction Fragility**: Use `fmt.Sprintf("%s:%d", id, version)` for cache or map keys involving versions to ensure multi-digit support and prevent separator collisions.
 - **Skipped Node Recovery Misclassification**: Recovery logic MUST treat pre-existing `SKIPPED` nodes as a failure indicator for the execution. If the process crashes after skipping nodes but before persisting the `FAILED` execution status, a recovery run might incorrectly declare `SUCCESS` if it only looks for explicit `FAILED` node rows.
+- **Heuristic Wrapper Detection Trap**: When detecting "wrapped" vs "flat" JSON configurations, do not rely on the presence of a new metadata key (like `io`) as the sole signal. Heuristic detection must require an unambiguous signal (e.g., an explicit `plugin` key) or a strong quorum of reserved keys (e.g., `capabilities` + `io` with no other top-level keys). Failure to do so can lead to backward-incompatible changes where valid legacy configs are misidentified and their payloads are stripped.
 
 ### Development & CI Traps
 - **Linter Version Parity**: Discrepancies between local and CI `golangci-lint` versions can cause CI-only failures (like `prealloc`). Always align CI environment variables with the local development standard.
