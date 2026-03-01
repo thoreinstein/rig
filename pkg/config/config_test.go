@@ -77,6 +77,17 @@ func TestLoad_WithDefaults(t *testing.T) {
 		t.Errorf("Expected notes.daily_dir to default to 'daily', got %q", config.Notes.DailyDir)
 	}
 
+	// Verify events defaults
+	if config.Events.Enabled != false {
+		t.Error("Expected events.enabled to default to false")
+	}
+	if config.Events.CommitName != "rig" {
+		t.Errorf("Expected events.commit_name to default to 'rig', got %q", config.Events.CommitName)
+	}
+	if config.Events.CommitEmail != "rig@localhost" {
+		t.Errorf("Expected events.commit_email to default to 'rig@localhost', got %q", config.Events.CommitEmail)
+	}
+
 	// Verify default tmux windows are properly loaded (regression test for type mismatch bug)
 	if len(config.Tmux.Windows) != 3 {
 		t.Errorf("Expected 3 default tmux windows, got %d", len(config.Tmux.Windows))
@@ -195,6 +206,9 @@ func TestExpandPaths(t *testing.T) {
 		History: HistoryConfig{
 			DatabasePath: "~/.histdb/history.db",
 		},
+		Events: EventsConfig{
+			DataPath: "~/.local/share/rig/dolt",
+		},
 	}
 
 	err := expandPaths(config)
@@ -215,6 +229,11 @@ func TestExpandPaths(t *testing.T) {
 	expectedHistoryPath := filepath.Join(homeDir, ".histdb/history.db")
 	if config.History.DatabasePath != expectedHistoryPath {
 		t.Errorf("History.DatabasePath = %q, want %q", config.History.DatabasePath, expectedHistoryPath)
+	}
+
+	expectedEventsPath := filepath.Join(homeDir, ".local/share/rig/dolt")
+	if config.Events.DataPath != expectedEventsPath {
+		t.Errorf("Events.DataPath = %q, want %q", config.Events.DataPath, expectedEventsPath)
 	}
 }
 
@@ -473,6 +492,36 @@ func TestConfig_Validate(t *testing.T) {
 				},
 			},
 			wantErr: true,
+		},
+		{
+			name: "events enabled with data_path",
+			config: &Config{
+				Events: EventsConfig{
+					Enabled:  true,
+					DataPath: "/tmp/events",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "events enabled without data_path",
+			config: &Config{
+				Events: EventsConfig{
+					Enabled:  true,
+					DataPath: "",
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "events disabled without data_path",
+			config: &Config{
+				Events: EventsConfig{
+					Enabled:  false,
+					DataPath: "",
+				},
+			},
+			wantErr: false,
 		},
 	}
 

@@ -11,6 +11,7 @@ import (
 	"thoreinstein.com/rig/pkg/ai"
 	"thoreinstein.com/rig/pkg/config"
 	"thoreinstein.com/rig/pkg/debrief"
+	"thoreinstein.com/rig/pkg/events"
 	"thoreinstein.com/rig/pkg/github"
 	"thoreinstein.com/rig/pkg/jira"
 )
@@ -418,6 +419,40 @@ func TestAllSteps(t *testing.T) {
 	}
 }
 
+// mockEventLogger records EventLogger calls for verification.
+type mockEventLogger struct {
+	calls []eventLoggerCall
+}
+
+type eventLoggerCall struct {
+	method        string
+	correlationID string
+	step          string
+	errMsg        string
+}
+
+func (m *mockEventLogger) LogStepStarted(_ context.Context, correlationID, step string) error {
+	m.calls = append(m.calls, eventLoggerCall{method: "LogStepStarted", correlationID: correlationID, step: step})
+	return nil
+}
+
+func (m *mockEventLogger) LogStepCompleted(_ context.Context, correlationID, step string) error {
+	m.calls = append(m.calls, eventLoggerCall{method: "LogStepCompleted", correlationID: correlationID, step: step})
+	return nil
+}
+
+func (m *mockEventLogger) LogStepFailed(_ context.Context, correlationID, step, errMsg string) error {
+	m.calls = append(m.calls, eventLoggerCall{method: "LogStepFailed", correlationID: correlationID, step: step, errMsg: errMsg})
+	return nil
+}
+
+func (m *mockEventLogger) LogWorkflowCompleted(_ context.Context, correlationID string) error {
+	m.calls = append(m.calls, eventLoggerCall{method: "LogWorkflowCompleted", correlationID: correlationID})
+	return nil
+}
+
+func (m *mockEventLogger) Close() error { return nil }
+
 func TestNewEngine(t *testing.T) {
 	gh := &mockGitHubClient{}
 	jiraClient := &mockJiraClient{}
@@ -444,6 +479,44 @@ func TestNewEngine(t *testing.T) {
 	}
 	if engineWithAI.ai == nil {
 		t.Error("Engine AI provider should not be nil")
+	}
+}
+
+func TestNewEngine_DefaultNoopEventLogger(t *testing.T) {
+	gh := &mockGitHubClient{}
+	cfg := &config.Config{}
+
+	engine := NewEngine(gh, nil, nil, cfg, "", false)
+
+	// Without WithEventLogger, the engine should use NoopEventLogger
+	_, isNoop := engine.eventLogger.(events.NoopEventLogger)
+	if !isNoop {
+		t.Errorf("expected NoopEventLogger by default, got %T", engine.eventLogger)
+	}
+}
+
+func TestNewEngine_WithEventLogger(t *testing.T) {
+	gh := &mockGitHubClient{}
+	cfg := &config.Config{}
+	mock := &mockEventLogger{}
+
+	engine := NewEngine(gh, nil, nil, cfg, "", false, WithEventLogger(mock))
+
+	if engine.eventLogger != mock {
+		t.Errorf("expected mockEventLogger, got %T", engine.eventLogger)
+	}
+}
+
+func TestWithEventLogger_NilFallsBackToNoop(t *testing.T) {
+	gh := &mockGitHubClient{}
+	cfg := &config.Config{}
+
+	// Passing nil should keep the NoopEventLogger default
+	engine := NewEngine(gh, nil, nil, cfg, "", false, WithEventLogger(nil))
+
+	_, isNoop := engine.eventLogger.(events.NoopEventLogger)
+	if !isNoop {
+		t.Errorf("expected NoopEventLogger when nil passed, got %T", engine.eventLogger)
 	}
 }
 
