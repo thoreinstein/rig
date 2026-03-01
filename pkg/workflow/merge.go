@@ -118,12 +118,14 @@ func (e *Engine) Run(ctx context.Context, prNumber int, opts MergeOptions) error
 		wf.CurrentStep = s.step
 		e.log("Executing step: %s", s.step)
 
-		// Log step started
-		_ = e.eventLogger.LogStepStarted(ctx, correlationID, string(s.step))
+		if err := e.eventLogger.LogStepStarted(ctx, correlationID, string(s.step)); err != nil {
+			e.logger.Warn("failed to log step started", "step", s.step, "correlationID", correlationID, "error", err)
+		}
 
 		if err := s.fn(ctx, wf, opts); err != nil {
-			// Log step failed
-			_ = e.eventLogger.LogStepFailed(ctx, correlationID, string(s.step), err.Error())
+			if logErr := e.eventLogger.LogStepFailed(ctx, correlationID, string(s.step), err.Error()); logErr != nil {
+				e.logger.Warn("failed to log step failed", "step", s.step, "correlationID", correlationID, "error", logErr)
+			}
 
 			// Save checkpoint before returning error
 			if wf.Worktree != "" {
@@ -137,8 +139,9 @@ func (e *Engine) Run(ctx context.Context, prNumber int, opts MergeOptions) error
 			return rigerrors.NewWorkflowErrorWithCause(string(s.step), err.Error(), err)
 		}
 
-		// Log step completed
-		_ = e.eventLogger.LogStepCompleted(ctx, correlationID, string(s.step))
+		if err := e.eventLogger.LogStepCompleted(ctx, correlationID, string(s.step)); err != nil {
+			e.logger.Warn("failed to log step completed", "step", s.step, "correlationID", correlationID, "error", err)
+		}
 
 		wf.CompletedSteps = append(wf.CompletedSteps, s.step)
 		e.log("Completed step: %s", s.step)
@@ -158,8 +161,9 @@ func (e *Engine) Run(ctx context.Context, prNumber int, opts MergeOptions) error
 		}
 	}
 
-	// Log workflow completion (performs Dolt commit)
-	_ = e.eventLogger.LogWorkflowCompleted(ctx, correlationID)
+	if err := e.eventLogger.LogWorkflowCompleted(ctx, correlationID); err != nil {
+		e.logger.Warn("failed to log workflow completion", "correlationID", correlationID, "error", err)
+	}
 
 	e.log("Merge workflow completed successfully for PR #%d", prNumber)
 	return nil
@@ -223,12 +227,14 @@ func (e *Engine) Resume(ctx context.Context, checkpoint *Checkpoint) error {
 		wf.CurrentStep = s.step
 		e.log("Executing step: %s", s.step)
 
-		// Log step started
-		_ = e.eventLogger.LogStepStarted(ctx, correlationID, string(s.step))
+		if err := e.eventLogger.LogStepStarted(ctx, correlationID, string(s.step)); err != nil {
+			e.logger.Warn("failed to log step started", "step", s.step, "correlationID", correlationID, "error", err)
+		}
 
 		if err := s.fn(ctx, wf, opts); err != nil {
-			// Log step failed
-			_ = e.eventLogger.LogStepFailed(ctx, correlationID, string(s.step), err.Error())
+			if logErr := e.eventLogger.LogStepFailed(ctx, correlationID, string(s.step), err.Error()); logErr != nil {
+				e.logger.Warn("failed to log step failed", "step", s.step, "correlationID", correlationID, "error", logErr)
+			}
 
 			// Save checkpoint before returning error
 			if wf.Worktree != "" {
@@ -242,8 +248,9 @@ func (e *Engine) Resume(ctx context.Context, checkpoint *Checkpoint) error {
 			return rigerrors.NewWorkflowErrorWithCause(string(s.step), err.Error(), err)
 		}
 
-		// Log step completed
-		_ = e.eventLogger.LogStepCompleted(ctx, correlationID, string(s.step))
+		if err := e.eventLogger.LogStepCompleted(ctx, correlationID, string(s.step)); err != nil {
+			e.logger.Warn("failed to log step completed", "step", s.step, "correlationID", correlationID, "error", err)
+		}
 
 		wf.CompletedSteps = append(wf.CompletedSteps, s.step)
 		e.log("Completed step: %s", s.step)
@@ -263,8 +270,9 @@ func (e *Engine) Resume(ctx context.Context, checkpoint *Checkpoint) error {
 		}
 	}
 
-	// Log workflow completion (performs Dolt commit)
-	_ = e.eventLogger.LogWorkflowCompleted(ctx, correlationID)
+	if err := e.eventLogger.LogWorkflowCompleted(ctx, correlationID); err != nil {
+		e.logger.Warn("failed to log workflow completion", "correlationID", correlationID, "error", err)
+	}
 
 	e.log("Resumed workflow completed successfully for PR #%d", wf.PRNumber)
 	return nil

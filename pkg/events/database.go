@@ -2,9 +2,9 @@ package events
 
 import (
 	"database/sql"
-	"fmt"
 	"net/url"
 	"os"
+	"path/filepath"
 
 	"github.com/cockroachdb/errors"
 	_ "github.com/dolthub/driver"
@@ -18,11 +18,22 @@ type DatabaseManager struct {
 
 // NewDatabaseManager creates a new DatabaseManager using the embedded Dolt driver.
 func NewDatabaseManager(dataPath, commitName, commitEmail string, verbose bool) (*DatabaseManager, error) {
-	// Build file-based DSN: file:///path/to/dbs?commitname=...&commitemail=...&database=...
-	dsn := fmt.Sprintf("file://%s?commitname=%s&commitemail=%s&database=rig_events",
-		dataPath,
-		url.QueryEscape(commitName),
-		url.QueryEscape(commitEmail))
+	// Ensure absolute path for a well-formed file URL
+	absPath, err := filepath.Abs(dataPath)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to resolve absolute data path")
+	}
+
+	u := &url.URL{
+		Scheme: "file",
+		Path:   absPath,
+		RawQuery: url.Values{
+			"commitname":  {commitName},
+			"commitemail": {commitEmail},
+			"database":    {"rig_events"},
+		}.Encode(),
+	}
+	dsn := u.String()
 
 	db, err := sql.Open("dolt", dsn)
 	if err != nil {
@@ -46,7 +57,7 @@ func (dm *DatabaseManager) Close() error {
 // InitDatabase initializes the database and creates tables.
 func (dm *DatabaseManager) InitDatabase(dataPath string) error {
 	// Ensure directory exists
-	if err := os.MkdirAll(dataPath, 0755); err != nil {
+	if err := os.MkdirAll(dataPath, 0700); err != nil {
 		return errors.Wrap(err, "failed to create data path")
 	}
 

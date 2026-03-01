@@ -55,7 +55,7 @@ func TestDoltEventLogger(t *testing.T) {
 
 	// Verify commit exists in dolt_log
 	var commitMsg string
-	err = dm.db.QueryRow("SELECT message FROM dolt_log LIMIT 1").Scan(&commitMsg)
+	err = dm.db.QueryRow("SELECT message FROM dolt_log ORDER BY date DESC LIMIT 1").Scan(&commitMsg)
 	if err != nil {
 		t.Fatalf("failed to query dolt_log: %v", err)
 	}

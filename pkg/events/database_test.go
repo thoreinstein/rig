@@ -21,7 +21,7 @@ func TestDatabaseManager(t *testing.T) {
 
 	// Verify table exists
 	var tableName string
-	err = dm.db.QueryRow("SELECT table_name FROM information_schema.tables WHERE table_name = 'workflow_events'").Scan(&tableName)
+	err = dm.db.QueryRow("SELECT table_name FROM information_schema.tables WHERE table_schema = 'rig_events' AND table_name = 'workflow_events'").Scan(&tableName)
 	if err != nil {
 		t.Fatalf("failed to find table workflow_events: %v", err)
 	}
