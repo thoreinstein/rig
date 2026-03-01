@@ -12,6 +12,7 @@ import (
 	"thoreinstein.com/rig/pkg/config"
 	"thoreinstein.com/rig/pkg/debrief"
 	rigerrors "thoreinstein.com/rig/pkg/errors"
+	"thoreinstein.com/rig/pkg/events"
 	"thoreinstein.com/rig/pkg/github"
 	"thoreinstein.com/rig/pkg/jira"
 	"thoreinstein.com/rig/pkg/workflow"
@@ -192,9 +193,29 @@ func runPRMerge(cmd *cobra.Command, opts PRMergeOptions, ghClient github.Client,
 		return rigerrors.NewWorkflowErrorWithCause("PRMerge", "failed to get current directory", err)
 	}
 
+	// Create event logger if enabled
+	var eventLogger events.EventLogger = events.NoopEventLogger{}
+	if cfg.Events.Enabled {
+		if verbose {
+			fmt.Println("Initializing embedded Dolt event database...")
+		}
+		dm, err := events.NewDatabaseManager(cfg.Events.DataPath, cfg.Events.CommitName, cfg.Events.CommitEmail, verbose)
+		if err != nil {
+			fmt.Printf("Warning: Could not initialize event database: %v\n", err)
+		} else {
+			if err := dm.InitDatabase(cfg.Events.DataPath); err != nil {
+				fmt.Printf("Warning: Could not initialize event schema: %v\n", err)
+				dm.Close()
+			} else {
+				eventLogger = events.NewDoltEventLogger(dm)
+				defer eventLogger.Close()
+			}
+		}
+	}
+
 	// Create and run workflow engine
 	fmt.Printf("Starting merge workflow for PR #%d...\n", prNumber)
-	engine := workflow.NewEngine(ghClient, jiraClient, aiProvider, cfg, cwd, verbose)
+	engine := workflow.NewEngine(ghClient, jiraClient, aiProvider, cfg, cwd, verbose, workflow.WithEventLogger(eventLogger))
 
 	if err := engine.Run(ctx, prNumber, wfOpts); err != nil {
 		fmt.Println(rigerrors.FormatUserError(err))

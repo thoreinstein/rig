@@ -20,6 +20,7 @@ import (
 // MergeWorkflow represents the state of a merge operation.
 type MergeWorkflow struct {
 	PRNumber       int
+	CorrelationID  string
 	Ticket         string
 	Worktree       string
 	StartedAt      time.Time

@@ -18,6 +18,7 @@ type Config struct {
 	Git       GitConfig                         `mapstructure:"git"`
 	Clone     CloneConfig                       `mapstructure:"clone"`
 	History   HistoryConfig                     `mapstructure:"history"`
+	Events    EventsConfig                      `mapstructure:"events"`
 	Jira      JiraConfig                        `mapstructure:"jira"`
 	Beads     BeadsConfig                       `mapstructure:"beads"`
 	Tmux      TmuxConfig                        `mapstructure:"tmux"`
@@ -27,6 +28,14 @@ type Config struct {
 	Discovery DiscoveryConfig                   `mapstructure:"discovery"`
 	Daemon    DaemonConfig                      `mapstructure:"daemon"`
 	Plugins   map[string]map[string]interface{} `mapstructure:"plugins"`
+}
+
+// EventsConfig holds the configuration for the embedded Dolt event store
+type EventsConfig struct {
+	Enabled     bool   `mapstructure:"enabled"`
+	DataPath    string `mapstructure:"data_path"`
+	CommitName  string `mapstructure:"commit_name"`
+	CommitEmail string `mapstructure:"commit_email"`
 }
 
 // DaemonConfig holds background daemon configuration
@@ -233,6 +242,10 @@ func (c *Config) Validate() error {
 		return errors.Wrap(err, "github.default_merge_method")
 	}
 
+	if c.Events.Enabled && c.Events.DataPath == "" {
+		return errors.New("events.data_path must not be empty when events are enabled")
+	}
+
 	if c.Daemon.PluginIdleTimeout != "" {
 		if _, err := time.ParseDuration(c.Daemon.PluginIdleTimeout); err != nil {
 			return errors.Wrapf(err, "invalid daemon.plugin_idle_timeout: %q", c.Daemon.PluginIdleTimeout)
@@ -284,6 +297,12 @@ func SetDefaults(v *viper.Viper) {
 	// History defaults
 	v.SetDefault("history.database_path", filepath.Join(homeDir, ".histdb", "zsh-history.db"))
 	v.SetDefault("history.ignore_patterns", []string{"ls", "cd", "pwd", "clear"})
+
+	// Events defaults
+	v.SetDefault("events.enabled", false)
+	v.SetDefault("events.data_path", filepath.Join(homeDir, ".local", "share", "rig", "dolt"))
+	v.SetDefault("events.commit_name", "rig")
+	v.SetDefault("events.commit_email", "rig@localhost")
 
 	// JIRA defaults
 	v.SetDefault("jira.enabled", true)
@@ -369,6 +388,11 @@ func expandPaths(config *Config) error {
 	}
 
 	config.History.DatabasePath, err = expandPath(config.History.DatabasePath)
+	if err != nil {
+		return err
+	}
+
+	config.Events.DataPath, err = expandPath(config.Events.DataPath)
 	if err != nil {
 		return err
 	}

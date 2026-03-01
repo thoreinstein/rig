@@ -7,9 +7,12 @@ import (
 	"os"
 	"time"
 
+	"github.com/google/uuid"
+
 	"thoreinstein.com/rig/pkg/ai"
 	"thoreinstein.com/rig/pkg/config"
 	rigerrors "thoreinstein.com/rig/pkg/errors"
+	"thoreinstein.com/rig/pkg/events"
 	"thoreinstein.com/rig/pkg/github"
 	"thoreinstein.com/rig/pkg/jira"
 )
@@ -24,6 +27,19 @@ type Engine struct {
 	projectPath string
 	verbose     bool
 	logger      *slog.Logger
+	eventLogger events.EventLogger
+}
+
+// EngineOption configures an Engine.
+type EngineOption func(*Engine)
+
+// WithEventLogger sets the event logger for the engine.
+func WithEventLogger(el events.EventLogger) EngineOption {
+	return func(e *Engine) {
+		if el != nil {
+			e.eventLogger = el
+		}
+	}
 }
 
 // NewEngine creates a workflow engine.
@@ -35,7 +51,8 @@ type Engine struct {
 //   - cfg: Configuration (required)
 //   - projectPath: Path to the project directory for ticket routing
 //   - verbose: Enable verbose logging
-func NewEngine(gh github.Client, jiraClient jira.JiraClient, aiProvider ai.Provider, cfg *config.Config, projectPath string, verbose bool) *Engine {
+//   - opts: Optional EngineOptions
+func NewEngine(gh github.Client, jiraClient jira.JiraClient, aiProvider ai.Provider, cfg *config.Config, projectPath string, verbose bool, opts ...EngineOption) *Engine {
 	var logger *slog.Logger
 	if verbose {
 		logger = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
@@ -43,7 +60,7 @@ func NewEngine(gh github.Client, jiraClient jira.JiraClient, aiProvider ai.Provi
 		logger = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	}
 
-	return &Engine{
+	e := &Engine{
 		github:      gh,
 		jira:        jiraClient,
 		ai:          aiProvider,
@@ -52,7 +69,14 @@ func NewEngine(gh github.Client, jiraClient jira.JiraClient, aiProvider ai.Provi
 		projectPath: projectPath,
 		verbose:     verbose,
 		logger:      logger,
+		eventLogger: events.NoopEventLogger{},
 	}
+
+	for _, opt := range opts {
+		opt(e)
+	}
+
+	return e
 }
 
 // Run executes the full merge workflow.
@@ -67,14 +91,16 @@ func NewEngine(gh github.Client, jiraClient jira.JiraClient, aiProvider ai.Provi
 // If any step fails, the workflow saves a checkpoint and returns an error.
 // Use Resume() to continue from the last successful step.
 func (e *Engine) Run(ctx context.Context, prNumber int, opts MergeOptions) error {
+	correlationID := uuid.New().String()
 	wf := &MergeWorkflow{
 		PRNumber:       prNumber,
+		CorrelationID:  correlationID,
 		StartedAt:      time.Now(),
 		CompletedSteps: make([]Step, 0),
 		Context:        &WorkflowContext{},
 	}
 
-	e.log("Starting merge workflow for PR #%d", prNumber)
+	e.log("Starting merge workflow for PR #%d (correlation: %s)", prNumber, correlationID)
 
 	// Execute each step in order
 	steps := []struct {
@@ -92,7 +118,13 @@ func (e *Engine) Run(ctx context.Context, prNumber int, opts MergeOptions) error
 		wf.CurrentStep = s.step
 		e.log("Executing step: %s", s.step)
 
+		// Log step started
+		_ = e.eventLogger.LogStepStarted(ctx, correlationID, string(s.step))
+
 		if err := s.fn(ctx, wf, opts); err != nil {
+			// Log step failed
+			_ = e.eventLogger.LogStepFailed(ctx, correlationID, string(s.step), err.Error())
+
 			// Save checkpoint before returning error
 			if wf.Worktree != "" {
 				if saveErr := SaveCheckpoint(wf.Worktree, e.workflowToCheckpoint(wf)); saveErr != nil {
@@ -104,6 +136,9 @@ func (e *Engine) Run(ctx context.Context, prNumber int, opts MergeOptions) error
 			}
 			return rigerrors.NewWorkflowErrorWithCause(string(s.step), err.Error(), err)
 		}
+
+		// Log step completed
+		_ = e.eventLogger.LogStepCompleted(ctx, correlationID, string(s.step))
 
 		wf.CompletedSteps = append(wf.CompletedSteps, s.step)
 		e.log("Completed step: %s", s.step)
@@ -123,6 +158,9 @@ func (e *Engine) Run(ctx context.Context, prNumber int, opts MergeOptions) error
 		}
 	}
 
+	// Log workflow completion (performs Dolt commit)
+	_ = e.eventLogger.LogWorkflowCompleted(ctx, correlationID)
+
 	e.log("Merge workflow completed successfully for PR #%d", prNumber)
 	return nil
 }
@@ -136,8 +174,14 @@ func (e *Engine) Resume(ctx context.Context, checkpoint *Checkpoint) error {
 		return rigerrors.NewWorkflowError("resume", "checkpoint is nil")
 	}
 
+	correlationID := checkpoint.CorrelationID
+	if correlationID == "" {
+		correlationID = uuid.New().String()
+	}
+
 	wf := &MergeWorkflow{
 		PRNumber:       checkpoint.PRNumber,
+		CorrelationID:  correlationID,
 		Ticket:         checkpoint.Ticket,
 		Worktree:       checkpoint.Worktree,
 		StartedAt:      checkpoint.CreatedAt,
@@ -152,7 +196,7 @@ func (e *Engine) Resume(ctx context.Context, checkpoint *Checkpoint) error {
 		completedSet[s] = true
 	}
 
-	e.log("Resuming merge workflow for PR #%d from step %s", wf.PRNumber, wf.CurrentStep)
+	e.log("Resuming merge workflow for PR #%d from step %s (correlation: %s)", wf.PRNumber, wf.CurrentStep, correlationID)
 
 	// Create default options for resume (could be enhanced to store in checkpoint)
 	opts := MergeOptions{}
@@ -179,7 +223,13 @@ func (e *Engine) Resume(ctx context.Context, checkpoint *Checkpoint) error {
 		wf.CurrentStep = s.step
 		e.log("Executing step: %s", s.step)
 
+		// Log step started
+		_ = e.eventLogger.LogStepStarted(ctx, correlationID, string(s.step))
+
 		if err := s.fn(ctx, wf, opts); err != nil {
+			// Log step failed
+			_ = e.eventLogger.LogStepFailed(ctx, correlationID, string(s.step), err.Error())
+
 			// Save checkpoint before returning error
 			if wf.Worktree != "" {
 				if saveErr := SaveCheckpoint(wf.Worktree, e.workflowToCheckpoint(wf)); saveErr != nil {
@@ -191,6 +241,9 @@ func (e *Engine) Resume(ctx context.Context, checkpoint *Checkpoint) error {
 			}
 			return rigerrors.NewWorkflowErrorWithCause(string(s.step), err.Error(), err)
 		}
+
+		// Log step completed
+		_ = e.eventLogger.LogStepCompleted(ctx, correlationID, string(s.step))
 
 		wf.CompletedSteps = append(wf.CompletedSteps, s.step)
 		e.log("Completed step: %s", s.step)
@@ -210,6 +263,9 @@ func (e *Engine) Resume(ctx context.Context, checkpoint *Checkpoint) error {
 		}
 	}
 
+	// Log workflow completion (performs Dolt commit)
+	_ = e.eventLogger.LogWorkflowCompleted(ctx, correlationID)
+
 	e.log("Resumed workflow completed successfully for PR #%d", wf.PRNumber)
 	return nil
 }
@@ -218,6 +274,7 @@ func (e *Engine) Resume(ctx context.Context, checkpoint *Checkpoint) error {
 func (e *Engine) workflowToCheckpoint(wf *MergeWorkflow) *Checkpoint {
 	return &Checkpoint{
 		PRNumber:       wf.PRNumber,
+		CorrelationID:  wf.CorrelationID,
 		Ticket:         wf.Ticket,
 		Worktree:       wf.Worktree,
 		CompletedSteps: wf.CompletedSteps,

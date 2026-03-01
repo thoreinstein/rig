@@ -12,6 +12,7 @@ import (
 // Checkpoint stores workflow state for resuming interrupted workflows.
 type Checkpoint struct {
 	PRNumber       int              `json:"pr_number"`
+	CorrelationID  string           `json:"correlation_id,omitempty"`
 	Ticket         string           `json:"ticket,omitempty"`
 	Worktree       string           `json:"worktree,omitempty"`
 	CompletedSteps []Step           `json:"completed_steps"`
