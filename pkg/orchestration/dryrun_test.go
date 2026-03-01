@@ -7,10 +7,15 @@ import (
 
 type mockPluginChecker struct {
 	plugins map[string]bool
+	err     error
 }
 
 func (m *mockPluginChecker) HasNodePlugin(name string) bool {
 	return m.plugins[name]
+}
+
+func (m *mockPluginChecker) Err() error {
+	return m.err
 }
 
 func TestDryRunValidate(t *testing.T) {
@@ -272,6 +277,9 @@ func TestDryRunValidate(t *testing.T) {
 				if step.NodeID != exp.NodeID {
 					t.Errorf("step %d: expected NodeID=%q, got %q", i, exp.NodeID, step.NodeID)
 				}
+				if step.NodeName != exp.NodeName {
+					t.Errorf("step %d: expected NodeName=%q, got %q", i, exp.NodeName, step.NodeName)
+				}
 				if step.NodeType != exp.NodeType {
 					t.Errorf("step %d: expected NodeType=%q, got %q", i, exp.NodeType, step.NodeType)
 				}
@@ -279,6 +287,8 @@ func TestDryRunValidate(t *testing.T) {
 					t.Errorf("step %d: expected Tier=%d, got %d", i, exp.Tier, step.Tier)
 				}
 				assertStringSlice(t, i, "Sources", exp.Sources, step.Sources)
+				assertIOMap(t, i, "Inputs", exp.Inputs, step.Inputs)
+				assertIOMap(t, i, "Outputs", exp.Outputs, step.Outputs)
 			}
 
 			if len(res.Diagnostics) != len(tt.expectDiag) {
@@ -336,6 +346,20 @@ func assertStringSlice(t *testing.T, stepIdx int, field string, expected, actual
 	for j, v := range expected {
 		if actual[j] != v {
 			t.Errorf("step %d %s[%d]: expected %q, got %q", stepIdx, field, j, v, actual[j])
+		}
+	}
+}
+
+func assertIOMap(t *testing.T, stepIdx int, field string, expected, actual map[string]IOType) {
+	t.Helper()
+	if len(expected) != len(actual) {
+		t.Errorf("step %d %s: expected %d entries, got %d (%v vs %v)",
+			stepIdx, field, len(expected), len(actual), expected, actual)
+		return
+	}
+	for k, v := range expected {
+		if actual[k] != v {
+			t.Errorf("step %d %s[%q]: expected %q, got %q", stepIdx, field, k, v, actual[k])
 		}
 	}
 }

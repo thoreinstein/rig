@@ -47,6 +47,7 @@ type DryRunResult struct {
 // NodeCapability (which requires handshake — a side effect).
 type PluginChecker interface {
 	HasNodePlugin(name string) bool
+	Err() error
 }
 
 // ScannerPluginChecker implements PluginChecker using a plugin.Scanner.
@@ -67,6 +68,10 @@ func NewScannerPluginChecker(scanner *plugin.Scanner) *ScannerPluginChecker {
 func (s *ScannerPluginChecker) HasNodePlugin(name string) bool {
 	s.once.Do(func() {
 		s.names = make(map[string]bool)
+		if s.scanner == nil {
+			s.scanErr = errors.New("plugin scanner is nil")
+			return
+		}
 		res, err := s.scanner.Scan()
 		if err != nil {
 			s.scanErr = err
@@ -226,7 +231,9 @@ func DryRunValidate(ctx context.Context, nodes []*Node, edges []*Edge, opts ...D
 			continue
 		}
 
-		upstreams := revAdj[node.ID]
+		upstreams := make([]string, len(revAdj[node.ID]))
+		copy(upstreams, revAdj[node.ID])
+		sort.Strings(upstreams)
 
 		// Sort input keys for deterministic diagnostics.
 		inputKeys := sortedKeys(io.Inputs)
@@ -291,10 +298,17 @@ func DryRunValidate(ctx context.Context, nodes []*Node, edges []*Edge, opts ...D
 
 	// 6. Plugin availability (AC #3).
 	if options.PluginChecker != nil {
-		for _, node := range nodes {
-			if !options.PluginChecker.HasNodePlugin(node.Type) {
-				addDiag(result, "error", node.ID, "",
-					fmt.Sprintf("plugin %q not found", node.Type))
+		// Prime the scanner to trigger lazy initialization.
+		_ = options.PluginChecker.HasNodePlugin("")
+		if scanErr := options.PluginChecker.Err(); scanErr != nil {
+			addDiag(result, "warning", "", "",
+				fmt.Sprintf("plugin scan failed: %v", scanErr))
+		} else {
+			for _, node := range nodes {
+				if !options.PluginChecker.HasNodePlugin(node.Type) {
+					addDiag(result, "error", node.ID, "",
+						fmt.Sprintf("plugin %q not found", node.Type))
+				}
 			}
 		}
 	}
