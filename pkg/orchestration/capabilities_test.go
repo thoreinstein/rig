@@ -125,6 +125,8 @@ func TestParseNodeConfig(t *testing.T) {
 			if caps.NetworkAccess != tt.expectCaps.NetworkAccess {
 				t.Errorf("expected network_access %v, got %v", tt.expectCaps.NetworkAccess, caps.NetworkAccess)
 			}
+			assertStringSliceCaps(t, "AllowedPaths", tt.expectCaps.AllowedPaths, caps.AllowedPaths)
+			assertStringMap(t, "SecretsMapping", tt.expectCaps.SecretsMapping, caps.SecretsMapping)
 
 			if tt.expectIO == nil {
 				if io != nil {
@@ -306,6 +308,8 @@ func TestParseNodeCapabilities(t *testing.T) {
 			if caps.NetworkAccess != tt.expectCaps.NetworkAccess {
 				t.Errorf("expected network_access %v, got %v", tt.expectCaps.NetworkAccess, caps.NetworkAccess)
 			}
+			assertStringSliceCaps(t, "AllowedPaths", tt.expectCaps.AllowedPaths, caps.AllowedPaths)
+			assertStringMap(t, "SecretsMapping", tt.expectCaps.SecretsMapping, caps.SecretsMapping)
 
 			if string(pluginCfg) != tt.expectPlugin {
 				t.Errorf("expected plugin config %q, got %q", tt.expectPlugin, string(pluginCfg))
@@ -465,5 +469,32 @@ func TestIsPathAllowed_SymlinkEscape_NewFile(t *testing.T) {
 	newFile := filepath.Join(symlink, "new.txt")
 	if caps.IsPathAllowed(newFile) {
 		t.Error("symlink escape for new file should be denied, but was allowed")
+	}
+}
+
+func assertStringSliceCaps(t *testing.T, field string, expected, actual []string) {
+	t.Helper()
+	if len(expected) != len(actual) {
+		t.Errorf("%s: expected %v, got %v", field, expected, actual)
+		return
+	}
+	for i, v := range expected {
+		if actual[i] != v {
+			t.Errorf("%s[%d]: expected %q, got %q", field, i, v, actual[i])
+		}
+	}
+}
+
+func assertStringMap(t *testing.T, field string, expected, actual map[string]string) {
+	t.Helper()
+	if len(expected) != len(actual) {
+		t.Errorf("%s: expected %d entries, got %d (%v vs %v)",
+			field, len(expected), len(actual), expected, actual)
+		return
+	}
+	for k, v := range expected {
+		if actual[k] != v {
+			t.Errorf("%s[%q]: expected %q, got %q", field, k, v, actual[k])
+		}
 	}
 }
