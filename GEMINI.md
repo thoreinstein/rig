@@ -134,6 +134,9 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 
 ### Architectural Decisions
 - **SDK-First:** Prefer official Go SDKs (like Genkit for Google AI) over CLI wrappers for stability and robust streaming support.
+- **Embedded Dolt Architecture:** For truly standalone, in-process versioned state (e.g., event tracking), use the `github.com/dolthub/driver` library. This allows Rig to act as its own SQL engine without requiring an external `dolt` binary or `sql-server` process. Access via the `dolt` driver name and `file://` DSN scheme.
+- **Optional Telemetry Pattern:** Decouple telemetry (e.g., event logging) from core logic using an interface (e.g., `EventLogger`) and functional options (`WithEventLogger`). Always provide a `Noop` implementation as the default to ensure the system remains resilient if the telemetry store is unavailable or disabled.
+- **Milestone Versioning Cadence:** To balance performance and auditability, log individual events via standard SQL `INSERT` and perform a `DOLT_COMMIT` only at significant milestones (e.g., workflow completion).
 - **Safe Deprecation:** Use non-blocking configuration warnings (via `CheckSecurityWarnings`) instead of silent removal when deprecating keys to ensure a smooth user migration.
 - **Bootstrap Package:** All early CLI orchestration (flag pre-parsing, configuration initialization, dynamic registration) belongs in `pkg/bootstrap` to keep `Execute()` paths delegative and testable.
 - **Convention-Over-Collision:** Use uppercase shorthands for global host flags (e.g., `-C` for config) to minimize collisions with subcommand-specific shorthands.
@@ -151,6 +154,7 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 - **Fail-Fast Plugin Initialization Pattern**: Establish a mandatory validation gate during the initial handshake. The `Manager` MUST call `ValidateCompatibility` immediately after the handshake and reject (Stop) any plugin returning `StatusIncompatible` or `StatusError` before it enters the active pool.
 
 ### Workflow Traps
+- **Embedded Database Ambiguity:** Distinguish between "embedded data" (local files accessed via protocol) and "embedded engine" (in-process executor). Conflating the two can lead to incorrect driver selection and unnecessary dependency on external processes. Truly embedded logic uses library-backed drivers like `github.com/dolthub/driver`.
 - **Sparse-Checkout Staging:** In a `git sparse-checkout` environment, new files must be staged using `git add --sparse <path>` if they fall outside the current sparse index definition.
 - **Surfacing Metadata Errors:** If a plugin's manifest file exists but is malformed, report an error rather than silently ignoring it. This prevents bypassing version checks due to configuration errors. Ensure consistent error reporting across all discovery paths (e.g., both single-binary and directory-based plugins).
 - **Automated Reviewer Naming Conflicts**: Conflicting bot suggestions (e.g., snake_case vs. camelCase) should be resolved by prioritizing Go idioms and established codebase patterns over generic bot rules.
