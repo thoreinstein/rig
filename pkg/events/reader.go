@@ -11,7 +11,7 @@ import (
 )
 
 // likeEscaper escapes SQL LIKE metacharacters to prevent wildcard injection.
-var likeEscaper = strings.NewReplacer("%", "\\%", "_", "\\_")
+var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 
 // QueryEventsByTicket retrieves workflow events tagged with a specific ticket ID.
 func (dm *DatabaseManager) QueryEventsByTicket(ctx context.Context, ticket string) ([]WorkflowEvent, error) {
@@ -26,14 +26,14 @@ func (dm *DatabaseManager) QueryEventsByTicket(ctx context.Context, ticket strin
 		// Only fall back to LIKE for JSON_EXTRACT-related errors (function not supported).
 		// Propagate all other errors (connection, context cancellation, missing table).
 		errMsg := err.Error()
-		if !strings.Contains(errMsg, "JSON_EXTRACT") && !strings.Contains(errMsg, "function") {
+		if !(strings.Contains(errMsg, "JSON_EXTRACT") && strings.Contains(errMsg, "no such function")) {
 			return nil, errors.Wrap(err, "failed to query events by ticket")
 		}
 
 		fallbackQuery := `
 			SELECT id, correlation_id, step, status, message, metadata, created_at
 			FROM workflow_events
-			WHERE metadata LIKE ?
+			WHERE metadata LIKE ? ESCAPE '\'
 			ORDER BY created_at ASC
 		`
 		escaped := likeEscaper.Replace(ticket)

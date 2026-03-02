@@ -127,7 +127,7 @@ func FormatUnifiedTimeline(entries []UnifiedEntry, ticket string) string {
 	// Sort a copy so callers are not surprised by in-place mutation.
 	sorted := make([]UnifiedEntry, len(entries))
 	copy(sorted, entries)
-	sort.Slice(sorted, func(i, j int) bool {
+	sort.SliceStable(sorted, func(i, j int) bool {
 		return sorted[i].Timestamp.Before(sorted[j].Timestamp)
 	})
 
