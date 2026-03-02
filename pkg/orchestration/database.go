@@ -129,38 +129,46 @@ func (dm *DatabaseManager) migrateWithConn(ctx context.Context, conn *sql.Conn) 
 			if dm.Verbose {
 				log.Printf("Applying migration v%d: %s", m.Version, m.Description)
 			}
-
-			// Transactions in Dolt/MySQL also need to be on the same connection
-			// We can't use dm.db.BeginTx here, we must use SQL commands on conn
-			if _, err := conn.ExecContext(ctx, "START TRANSACTION"); err != nil {
-				return errors.Wrapf(err, "failed to start transaction for migration v%d", m.Version)
+			if err := dm.applyMigration(ctx, conn, m); err != nil {
+				return err
 			}
-
-			success := false
-			defer func() {
-				if !success {
-					conn.ExecContext(ctx, "ROLLBACK") //nolint:errcheck
-				}
-			}()
-
-			for _, ddl := range m.DDLs {
-				if _, err := conn.ExecContext(ctx, ddl); err != nil {
-					return errors.Wrapf(err, "failed to execute DDL in migration v%d", m.Version)
-				}
-			}
-
-			insertQuery := "INSERT INTO schema_migrations (version, description) VALUES (?, ?)"
-			if _, err := conn.ExecContext(ctx, insertQuery, m.Version, m.Description); err != nil {
-				return errors.Wrapf(err, "failed to record migration v%d", m.Version)
-			}
-
-			if _, err := conn.ExecContext(ctx, "COMMIT"); err != nil {
-				return errors.Wrapf(err, "failed to commit migration v%d", m.Version)
-			}
-			success = true
 		}
 	}
 
+	return nil
+}
+
+// applyMigration runs a single migration inside a manual transaction on conn.
+// Extracting this from the loop ensures the deferred rollback is scoped to one
+// migration instead of stacking N defers.
+func (dm *DatabaseManager) applyMigration(ctx context.Context, conn *sql.Conn, m Migration) error {
+	if _, err := conn.ExecContext(ctx, "START TRANSACTION"); err != nil {
+		return errors.Wrapf(err, "failed to start transaction for migration v%d", m.Version)
+	}
+
+	committed := false
+	defer func() {
+		if !committed {
+			// Use Background so rollback succeeds even if parent ctx is cancelled.
+			conn.ExecContext(context.Background(), "ROLLBACK") //nolint:errcheck
+		}
+	}()
+
+	for _, ddl := range m.DDLs {
+		if _, err := conn.ExecContext(ctx, ddl); err != nil {
+			return errors.Wrapf(err, "failed to execute DDL in migration v%d", m.Version)
+		}
+	}
+
+	insertQuery := "INSERT INTO schema_migrations (version, description) VALUES (?, ?)"
+	if _, err := conn.ExecContext(ctx, insertQuery, m.Version, m.Description); err != nil {
+		return errors.Wrapf(err, "failed to record migration v%d", m.Version)
+	}
+
+	if _, err := conn.ExecContext(ctx, "COMMIT"); err != nil {
+		return errors.Wrapf(err, "failed to commit migration v%d", m.Version)
+	}
+	committed = true
 	return nil
 }
 
@@ -358,7 +366,7 @@ func (dm *DatabaseManager) CreateEdge(ctx context.Context, e *Edge) error {
 		e.ID = uuid.New().String()
 	}
 
-	query := `INSERT INTO edges (id, workflow_id, workflow_version, source_node_id, target_node_id, condition) VALUES (?, ?, ?, ?, ?, ?)`
+	query := "INSERT INTO edges (id, workflow_id, workflow_version, source_node_id, target_node_id, `condition`) VALUES (?, ?, ?, ?, ?, ?)"
 	_, err := dm.db.ExecContext(ctx, query, e.ID, e.WorkflowID, e.WorkflowVersion, e.SourceNodeID, e.TargetNodeID, e.Condition)
 	if err != nil {
 		return errors.Wrap(err, "failed to insert edge")
@@ -368,7 +376,7 @@ func (dm *DatabaseManager) CreateEdge(ctx context.Context, e *Edge) error {
 
 // GetEdgesByWorkflow retrieves all edges for a given workflow version.
 func (dm *DatabaseManager) GetEdgesByWorkflow(ctx context.Context, workflowID string, version int) ([]*Edge, error) {
-	query := `SELECT id, workflow_id, workflow_version, source_node_id, target_node_id, condition FROM edges WHERE workflow_id = ? AND workflow_version = ?`
+	query := "SELECT id, workflow_id, workflow_version, source_node_id, target_node_id, `condition` FROM edges WHERE workflow_id = ? AND workflow_version = ?"
 	rows, err := dm.db.QueryContext(ctx, query, workflowID, version)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get edges")

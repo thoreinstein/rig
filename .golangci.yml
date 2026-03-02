@@ -21,10 +21,9 @@ linters:
     - prealloc
     - staticcheck
     - unused
+    - gosec
     - usetesting
     - whitespace
-  disable:
-    - gosec
   settings:
     gomodguard:
       blocked:
@@ -91,6 +90,12 @@ linters:
         - appendAssign
         - ifElseChain
         - valSwap
+    gosec:
+      # G115 (integer overflow) analyzer panics on Go 1.26 due to upstream
+      # gosec bug in GetConstantInt64. Exclude at the analyzer level so the
+      # analyzer is never invoked. Remove once gosec ≥ 2.24 ships with a fix.
+      excludes:
+        - G115
     usetesting:
       os-create-temp: true
       os-mkdir-temp: true
@@ -106,17 +111,12 @@ linters:
       - legacy
       - std-error-handling
     rules:
-      - path: cmd/.*
-        linters:
-          - gosec
       # URLs can't all be constants...
       - path: (.+)\.go$
         text: G107 # Potential HTTP request made with variable url
       ## FIXMEs below
       - path: (.+)\.go$
         text: G102 # Bind to all network interfaces
-      - path: (.+)\.go$
-        text: G115 # integer overflow conversion uint64 -> int
       # G204 removed - use targeted //nolint:gosec comments instead
       - path: (.+)\.go$
         text: G306 # Expect WriteFile permissions to be 0600 or less
@@ -124,6 +124,16 @@ linters:
         text: G402 # TLS InsecureSkipVerify set true
       - path: (.+)\.go$
         text: G404 # Insecure Random Number Source
+      # Taint analysis rules (gosec ≥ 2.23) — all current hits are false positives:
+      # editor from EDITOR env, configured API endpoints, trust-store atomic rename.
+      - path: (.+)\.go$
+        text: G702 # Command injection via taint — editor comes from user config
+      - path: (.+)\.go$
+        text: G703 # Path traversal via taint — trust store uses internally-derived paths
+      - path: (.+)\.go$
+        text: G704 # SSRF via taint — HTTP clients call configured API base URLs
+      - path: (.+)\.go$
+        text: G117 # Struct field name matches secret pattern — config/cache struct fields
 issues:
   max-same-issues: 0
   max-issues-per-linter: 0

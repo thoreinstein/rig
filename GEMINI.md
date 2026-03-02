@@ -15,7 +15,7 @@
 - **Language:** Go (1.25+)
 - **CLI Framework:** [Cobra](https://github.com/spf13/cobra)
 - **Configuration:** [Viper](https://github.com/spf13/viper)
-- **Database:** SQLite (modernc.org/sqlite) and Dolt (MySQL protocol)
+- **Database:** SQLite (modernc.org/sqlite) and Dolt (embedded driver)
 - **Integrations:** Git, Tmux, JIRA, Beads, Obsidian, GitHub
 - **Error Handling:** [cockroachdb/errors](https://github.com/cockroachdb/errors)
 
