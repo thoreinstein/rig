@@ -49,3 +49,40 @@ func TestFormatTimeline(t *testing.T) {
 		t.Error("Output missing duration")
 	}
 }
+
+func TestFormatUnifiedTimeline(t *testing.T) {
+	now := time.Date(2026, 3, 2, 10, 0, 0, 0, time.UTC)
+	entries := []UnifiedEntry{
+		UnifiedEntryFromCommand(Command{
+			Command:   "ls -la",
+			Timestamp: now.Add(1 * time.Minute),
+			ExitCode:  0,
+		}),
+		UnifiedEntryFromEvent(now, "preflight", "STARTED", "Starting checks", "wf123"),
+		UnifiedEntryFromEvent(now.Add(2*time.Minute), "preflight", "COMPLETED", "", "wf123"),
+	}
+
+	output := FormatUnifiedTimeline(entries, "PROJ-456")
+
+	if !strings.Contains(output, "## Workflow Timeline - PROJ-456") {
+		t.Error("Output missing header")
+	}
+	if !strings.Contains(output, "⚙️") || !strings.Contains(output, "[preflight]") {
+		t.Error("Output missing event started")
+	}
+	if !strings.Contains(output, "🏁") {
+		t.Error("Output missing event completed")
+	}
+	if !strings.Contains(output, "✅") || !strings.Contains(output, "ls -la") {
+		t.Error("Output missing command")
+	}
+
+	// Verify sorting (Event @ 10:00, Cmd @ 10:01, Event @ 10:02)
+	idxEventStart := strings.Index(output, "⚙️")
+	idxCmd := strings.Index(output, "ls -la")
+	idxEventEnd := strings.Index(output, "🏁")
+
+	if idxEventStart > idxCmd || idxCmd > idxEventEnd {
+		t.Error("Output entries not chronologically sorted")
+	}
+}

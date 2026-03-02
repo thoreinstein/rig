@@ -96,6 +96,117 @@ func FormatTimeline(commands []Command, ticket string) string {
 	return timeline.String()
 }
 
+// FormatUnifiedTimeline generates a markdown timeline from interleaved commands and events.
+func FormatUnifiedTimeline(entries []UnifiedEntry, ticket string) string {
+	var timeline strings.Builder
+
+	// Sort entries by timestamp just in case
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].Timestamp.Before(entries[j].Timestamp)
+	})
+
+	// Group by day
+	dayGroups := make(map[string][]UnifiedEntry)
+	var commandCount, eventCount int
+	var totalDuration int64
+
+	for _, entry := range entries {
+		day := entry.Timestamp.Format("2006-01-02")
+		dayGroups[day] = append(dayGroups[day], entry)
+
+		if entry.Kind == EntryKindCommand {
+			commandCount++
+			totalDuration += entry.Command.Duration
+		} else {
+			eventCount++
+		}
+	}
+
+	// Header and Summary
+	timeline.WriteString(fmt.Sprintf("## Workflow Timeline - %s\n\n", ticket))
+	timeline.WriteString(fmt.Sprintf("Generated: %s\n\n", time.Now().Format("2006-01-02 15:04:05")))
+
+	timeline.WriteString("### Summary\n")
+	timeline.WriteString(fmt.Sprintf("- **Manual Commands:** %d\n", commandCount))
+	timeline.WriteString(fmt.Sprintf("- **System Events:** %d\n", eventCount))
+	if commandCount > 0 {
+		timeline.WriteString(fmt.Sprintf("- **Command Duration:** %s\n", formatDuration(totalDuration)))
+	}
+	timeline.WriteString("\n")
+
+	// Sort days
+	days := make([]string, 0, len(dayGroups))
+	for day := range dayGroups {
+		days = append(days, day)
+	}
+	sort.Strings(days)
+
+	for _, day := range days {
+		dayEntries := dayGroups[day]
+		timeline.WriteString(fmt.Sprintf("### %s\n\n", day))
+
+		for _, entry := range dayEntries {
+			timeStr := entry.Timestamp.Format("15:04:05")
+
+			if entry.Kind == EntryKindCommand {
+				cmd := entry.Command
+				var statusIcon string
+				if cmd.ExitCode == 0 {
+					statusIcon = "✅"
+				} else {
+					statusIcon = "❌"
+				}
+
+				var durationStr string
+				if cmd.Duration > 0 {
+					durationStr = fmt.Sprintf(" (%s)", formatDuration(cmd.Duration))
+				}
+
+				var exitStr string
+				if cmd.ExitCode != 0 {
+					exitStr = fmt.Sprintf(" [Exit: %d]", cmd.ExitCode)
+				}
+
+				var dirStr string
+				if cmd.Directory != "" {
+					if len(cmd.Directory) > 50 {
+						dirStr = fmt.Sprintf(" `.../%s`", cmd.Directory[len(cmd.Directory)-30:])
+					} else {
+						dirStr = fmt.Sprintf(" `%s`", cmd.Directory)
+					}
+				}
+
+				timeline.WriteString(fmt.Sprintf("- %s **%s**%s%s%s: `%s`\n",
+					statusIcon, timeStr, durationStr, exitStr, dirStr, cmd.Command))
+			} else {
+				ev := entry.Event
+				var statusIcon string
+				switch ev.Status {
+				case "STARTED":
+					statusIcon = "⚙️"
+				case "COMPLETED":
+					statusIcon = "🏁"
+				case "FAILED":
+					statusIcon = "⚠️"
+				default:
+					statusIcon = "🔹"
+				}
+
+				msg := ev.Message
+				if msg == "" {
+					msg = ev.Status
+				}
+
+				timeline.WriteString(fmt.Sprintf("- %s **%s** `[%s]` %s\n",
+					statusIcon, timeStr, ev.Step, msg))
+			}
+		}
+		timeline.WriteString("\n")
+	}
+
+	return timeline.String()
+}
+
 func formatDuration(ms int64) string {
 	if ms < 1000 {
 		return fmt.Sprintf("%dms", ms)
