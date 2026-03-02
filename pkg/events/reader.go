@@ -19,7 +19,7 @@ func (dm *DatabaseManager) QueryEventsByTicket(ctx context.Context, ticket strin
 		SELECT id, correlation_id, step, status, message, metadata, created_at
 		FROM workflow_events
 		WHERE JSON_EXTRACT(metadata, '$.ticket') = ?
-		ORDER BY created_at ASC
+		ORDER BY created_at ASC, id ASC
 	`
 	rows, err := dm.db.QueryContext(ctx, query, ticket)
 	if err != nil {
@@ -34,7 +34,7 @@ func (dm *DatabaseManager) QueryEventsByTicket(ctx context.Context, ticket strin
 			SELECT id, correlation_id, step, status, message, metadata, created_at
 			FROM workflow_events
 			WHERE metadata LIKE ? ESCAPE '\'
-			ORDER BY created_at ASC
+			ORDER BY created_at ASC, id ASC
 		`
 		escaped := likeEscaper.Replace(ticket)
 		pattern := fmt.Sprintf(`%%"ticket":"%s"%%`, escaped)

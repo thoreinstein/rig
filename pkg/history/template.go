@@ -128,7 +128,11 @@ func FormatUnifiedTimeline(entries []UnifiedEntry, ticket string) string {
 	sorted := make([]UnifiedEntry, len(entries))
 	copy(sorted, entries)
 	sort.SliceStable(sorted, func(i, j int) bool {
-		return sorted[i].Timestamp.Before(sorted[j].Timestamp)
+		if !sorted[i].Timestamp.Equal(sorted[j].Timestamp) {
+			return sorted[i].Timestamp.Before(sorted[j].Timestamp)
+		}
+		// Tie-breaker: events before commands at the same timestamp.
+		return sorted[i].Kind > sorted[j].Kind
 	})
 
 	// Group by day
