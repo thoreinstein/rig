@@ -284,3 +284,11 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 
 ### Development & CI Traps
 - **Linter Version Parity**: Discrepancies between local and CI `golangci-lint` versions can cause CI-only failures (like `prealloc`). Always align CI environment variables with the local development standard.
+- **Go Zero-Value SQL Default Bypass**: Explicit zero-values in Go structs (e.g., `""`) bypass SQL `DEFAULT` clauses. Use `any(nil)` or `sql.Null*` types for optional columns (especially `JSON`) to trigger database defaults and avoid validation errors (e.g., `Invalid JSON text`).
+
+## Architectural Patterns
+
+### Metadata & Observability
+- **Decoupled Metadata Tagging**: Use narrow interfaces (e.g., `TicketMetadataSetter`) and retroactive backfilling to decorate data with context resolved after creation. This prevents import cycles and maintains business logic isolation from data storage.
+- **Unified Presentation Model**: For CLI commands aggregating data from heterogeneous sources, use a flattened "Presentation Model" in a shared package. Map source-specific structs to this model using Go primitives to avoid circular dependencies and simplify sorting/formatting logic.
+- **Deterministic Sort Ordering**: Always use a unique tie-breaker (e.g., `id ASC`) in SQL queries and `sort.SliceStable` in Go when rendering chronological lists. This prevents nondeterministic output churn in persistent artifacts like Markdown notes.
