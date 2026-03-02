@@ -3,6 +3,7 @@ package events
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -88,6 +89,23 @@ func (dm *DatabaseManager) InitDatabase() error {
 		if _, err := conn.ExecContext(ctx, ddl); err != nil {
 			return errors.Wrap(err, "failed to execute table DDL")
 		}
+	}
+
+	return nil
+}
+
+// BackfillTicket retroactively tags events with a ticket ID in the metadata column.
+func (dm *DatabaseManager) BackfillTicket(ctx context.Context, correlationID, ticket string) error {
+	m := map[string]string{"ticket": ticket}
+	metadata, err := json.Marshal(m)
+	if err != nil {
+		return errors.Wrap(err, "failed to marshal metadata")
+	}
+
+	query := `UPDATE workflow_events SET metadata = ? WHERE correlation_id = ? AND metadata IS NULL`
+	_, err = dm.db.ExecContext(ctx, query, metadata, correlationID)
+	if err != nil {
+		return errors.Wrap(err, "failed to backfill ticket metadata")
 	}
 
 	return nil

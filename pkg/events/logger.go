@@ -2,7 +2,9 @@ package events
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"sync"
 
 	"github.com/cockroachdb/errors"
 	"github.com/google/uuid"
@@ -20,12 +22,26 @@ type EventLogger interface {
 
 // DoltEventLogger is a Dolt-backed implementation of EventLogger.
 type DoltEventLogger struct {
-	dm *DatabaseManager
+	dm     *DatabaseManager
+	ticket string
+	mu     sync.RWMutex
 }
 
 // NewDoltEventLogger creates a new DoltEventLogger.
 func NewDoltEventLogger(dm *DatabaseManager) *DoltEventLogger {
 	return &DoltEventLogger{dm: dm}
+}
+
+// SetTicket sets the ticket ID for metadata tagging.
+func (l *DoltEventLogger) SetTicket(ticket string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.ticket = ticket
+}
+
+// BackfillTicket retroactively tags events with a ticket ID.
+func (l *DoltEventLogger) BackfillTicket(ctx context.Context, correlationID, ticket string) error {
+	return l.dm.BackfillTicket(ctx, correlationID, ticket)
 }
 
 func (l *DoltEventLogger) LogStepStarted(ctx context.Context, correlationID, step string) error {
@@ -70,9 +86,23 @@ func (l *DoltEventLogger) Close() error {
 }
 
 func (l *DoltEventLogger) log(ctx context.Context, correlationID, step, status, msg string) error {
+	l.mu.RLock()
+	ticket := l.ticket
+	l.mu.RUnlock()
+
+	var metadata any
+	if ticket != "" {
+		m := map[string]string{"ticket": ticket}
+		b, err := json.Marshal(m)
+		if err != nil {
+			return errors.Wrap(err, "failed to marshal metadata")
+		}
+		metadata = string(b)
+	}
+
 	id := uuid.New().String()
-	query := `INSERT INTO workflow_events (id, correlation_id, step, status, message) VALUES (?, ?, ?, ?, ?)`
-	_, err := l.dm.db.ExecContext(ctx, query, id, correlationID, step, status, msg)
+	query := `INSERT INTO workflow_events (id, correlation_id, step, status, message, metadata) VALUES (?, ?, ?, ?, ?, ?)`
+	_, err := l.dm.db.ExecContext(ctx, query, id, correlationID, step, status, msg, metadata)
 	if err != nil {
 		return errors.Wrapf(err, "failed to log event %s:%s", step, status)
 	}

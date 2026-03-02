@@ -1,6 +1,7 @@
 package events
 
 import (
+	"encoding/json"
 	"path/filepath"
 	"testing"
 )
@@ -62,6 +63,51 @@ func TestDoltEventLogger(t *testing.T) {
 	expectedMsg := "Workflow " + correlationID + " completed"
 	if commitMsg != expectedMsg {
 		t.Errorf("expected commit message %q, got %q", expectedMsg, commitMsg)
+	}
+}
+
+func TestDoltEventLogger_MetadataTicket(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
+	tmpDir := t.TempDir()
+	dataPath := filepath.Join(tmpDir, "data")
+	dm, err := NewDatabaseManager(dataPath, "Rig Bot", "rig@localhost", true)
+	if err != nil {
+		t.Fatalf("failed to create db manager: %v", err)
+	}
+	defer dm.Close()
+
+	if err := dm.InitDatabase(); err != nil {
+		t.Fatalf("failed to init db: %v", err)
+	}
+
+	logger := NewDoltEventLogger(dm)
+	ctx := t.Context()
+	correlationID := "test-metadata-123"
+	ticketID := "PROJ-123"
+
+	// Set ticket and log
+	logger.SetTicket(ticketID)
+	if err := logger.LogStepStarted(ctx, correlationID, "preflight"); err != nil {
+		t.Fatalf("LogStepStarted failed: %v", err)
+	}
+
+	// Verify metadata in database
+	var metadataStr string
+	err = dm.db.QueryRow("SELECT metadata FROM workflow_events WHERE correlation_id = ?", correlationID).Scan(&metadataStr)
+	if err != nil {
+		t.Fatalf("failed to query metadata: %v", err)
+	}
+
+	var metadata map[string]string
+	if err := json.Unmarshal([]byte(metadataStr), &metadata); err != nil {
+		t.Fatalf("failed to unmarshal metadata: %v", err)
+	}
+
+	if metadata["ticket"] != ticketID {
+		t.Errorf("expected ticket %q, got %q", ticketID, metadata["ticket"])
 	}
 }
 
