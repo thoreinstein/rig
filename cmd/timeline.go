@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -432,18 +433,21 @@ func removeExistingTimeline(content string) string {
 // It reuses the provided DatabaseManager rather than opening a second connection.
 func generateDiffSummary(ctx context.Context, edm *events.DatabaseManager, workflowEvents []events.WorkflowEvent, verbose bool) (string, error) {
 	// Find unique correlation IDs
+	var uniqueCIDs []string
 	cids := make(map[string]bool)
 	for _, e := range workflowEvents {
-		if e.CorrelationID != "" {
+		if e.CorrelationID != "" && !cids[e.CorrelationID] {
 			cids[e.CorrelationID] = true
+			uniqueCIDs = append(uniqueCIDs, e.CorrelationID)
 		}
 	}
+	slices.Sort(uniqueCIDs)
 
 	var sb strings.Builder
 	sb.WriteString("## Workflow Checkpoint Diffs\n\n")
 
 	foundAny := false
-	for cid := range cids {
+	for _, cid := range uniqueCIDs {
 		diffs, err := edm.QueryDiffForCorrelation(ctx, cid)
 		if err != nil {
 			if verbose {

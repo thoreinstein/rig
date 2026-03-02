@@ -223,6 +223,13 @@ func (e *Engine) Resume(ctx context.Context, checkpoint *Checkpoint) error {
 
 	e.log("Resuming merge workflow for PR #%d from step %s (correlation: %s)", wf.PRNumber, wf.CurrentStep, correlationID)
 
+	// Initialize event logger ticket if already gathered
+	if wf.Ticket != "" {
+		if dl, ok := e.eventLogger.(*events.DoltEventLogger); ok {
+			dl.SetTicket(wf.Ticket)
+		}
+	}
+
 	// Create default options for resume (could be enhanced to store in checkpoint)
 	opts := MergeOptions{}
 
