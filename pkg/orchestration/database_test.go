@@ -403,13 +403,19 @@ func TestMigrationIdempotency(t *testing.T) {
 		t.Fatalf("Migrate() failed on second run: %v", err)
 	}
 
-	// Verify current version is still 1
+	// Derive expected version from defined migrations
+	migrations := AllMigrations()
+	if len(migrations) == 0 {
+		t.Fatal("No migrations defined; cannot determine expected schema version")
+	}
+	expectedVersion := migrations[len(migrations)-1].Version
+
 	var currentVersion int
 	err := dm.db.QueryRowContext(ctx, "SELECT MAX(version) FROM schema_migrations").Scan(&currentVersion)
 	if err != nil {
 		t.Fatalf("Failed to query migration version: %v", err)
 	}
-	if currentVersion != 1 {
-		t.Errorf("Expected migration version 1, got %d", currentVersion)
+	if currentVersion != expectedVersion {
+		t.Errorf("Expected migration version %d, got %d", expectedVersion, currentVersion)
 	}
 }

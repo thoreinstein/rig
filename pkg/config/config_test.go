@@ -54,7 +54,10 @@ func TestExpandPath(t *testing.T) {
 }
 
 func TestLoad_WithDefaults(t *testing.T) {
-	homeDir, _ := UserHomeDir()
+	homeDir, err := UserHomeDir()
+	if err != nil {
+		homeDir = "."
+	}
 
 	// Reset viper to clean state
 	viper.Reset()
