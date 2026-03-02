@@ -71,18 +71,22 @@ func (l *DoltEventLogger) LogWorkflowCompleted(ctx context.Context, correlationI
 	if err := l.log(ctx, correlationID, "workflow", "COMPLETED", ""); err != nil {
 		return err
 	}
-	return l.commitEvents(ctx, fmt.Sprintf("Workflow %s completed", correlationID))
+	return l.commitEvents(ctx, commitMessage("Workflow %s completed", correlationID))
 }
 
 func (l *DoltEventLogger) LogWorkflowFailed(ctx context.Context, correlationID, errMsg string) error {
 	if err := l.log(ctx, correlationID, "workflow", "FAILED", errMsg); err != nil {
 		return err
 	}
-	return l.commitEvents(ctx, fmt.Sprintf("Workflow %s failed", correlationID))
+	return l.commitEvents(ctx, commitMessage("Workflow %s failed", correlationID))
 }
 
 func (l *DoltEventLogger) CommitMilestone(ctx context.Context, msg string) error {
-	return l.commitEvents(ctx, msg)
+	return l.commitEvents(ctx, commitMessage("%s", msg))
+}
+
+func commitMessage(format string, args ...any) string {
+	return "events: " + fmt.Sprintf(format, args...)
 }
 
 // commitEvents stages all changes and creates a Dolt commit.

@@ -60,7 +60,7 @@ func TestDoltEventLogger(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to query dolt_log: %v", err)
 	}
-	expectedMsg := "Workflow " + correlationID + " completed"
+	expectedMsg := "events: Workflow " + correlationID + " completed"
 	if commitMsg != expectedMsg {
 		t.Errorf("expected commit message %q, got %q", expectedMsg, commitMsg)
 	}

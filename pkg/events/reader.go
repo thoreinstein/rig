@@ -73,7 +73,7 @@ type DoltDiffEntry struct {
 
 // QueryDiffForCorrelation retrieves the diffs associated with a workflow completion commit.
 func (dm *DatabaseManager) QueryDiffForCorrelation(ctx context.Context, correlationID string) ([]DoltDiffEntry, error) {
-	commitMsg := fmt.Sprintf("Workflow %s completed", correlationID)
+	commitMsg := "events: Workflow " + correlationID + " completed"
 	var commitHash string
 	err := dm.db.QueryRowContext(ctx, "SELECT commit_hash FROM dolt_log WHERE message = ? ORDER BY date DESC LIMIT 1", commitMsg).Scan(&commitHash)
 	if err != nil {
