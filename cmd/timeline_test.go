@@ -234,6 +234,35 @@ Some summary here.
 Some notes here.`,
 		},
 		{
+			name: "content with timeline and diff section",
+			content: `# Ticket Note
+
+## Summary
+
+Some summary here.
+
+## Workflow Timeline - PROJ-123
+
+Events: 5
+
+## Workflow Checkpoint Diffs
+
+Diffs: 2
+
+## Notes
+
+Some notes here.`,
+			expected: `# Ticket Note
+
+## Summary
+
+Some summary here.
+
+## Notes
+
+Some notes here.`,
+		},
+		{
 			name: "content without timeline",
 			content: `# Ticket Note
 

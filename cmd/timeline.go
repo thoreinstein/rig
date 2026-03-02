@@ -404,8 +404,10 @@ func removeExistingTimeline(content string) string {
 	inTimelineSection := false
 
 	for _, line := range lines {
-		// Check if this is a timeline section header
-		if strings.HasPrefix(line, "## Command Timeline") || strings.HasPrefix(line, "## Workflow Timeline") {
+		// Check if this is a timeline or diff section header
+		if strings.HasPrefix(line, "## Command Timeline") ||
+			strings.HasPrefix(line, "## Workflow Timeline") ||
+			strings.HasPrefix(line, "## Workflow Checkpoint Diffs") {
 			inTimelineSection = true
 			continue
 		}
