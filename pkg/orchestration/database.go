@@ -5,36 +5,51 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"net/url"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/cockroachdb/errors"
-	_ "github.com/go-sql-driver/mysql"
+	_ "github.com/dolthub/driver"
 	"github.com/google/uuid"
 )
 
 // DatabaseManager handles Dolt database operations for the orchestration engine.
 type DatabaseManager struct {
-	db      *sql.DB
-	Verbose bool
+	db       *sql.DB
+	dataPath string
+	Verbose  bool
 }
 
-// NewDatabaseManager creates a new DatabaseManager and establishes a connection.
-// DSN example: "user:password@tcp(127.0.0.1:3306)/database?parseTime=true"
-func NewDatabaseManager(dsn string, verbose bool) (*DatabaseManager, error) {
-	db, err := sql.Open("mysql", dsn)
+// NewDatabaseManager creates a new DatabaseManager using the embedded Dolt driver.
+func NewDatabaseManager(dataPath, commitName, commitEmail string, verbose bool) (*DatabaseManager, error) {
+	// Ensure absolute path for a well-formed file URL
+	absPath, err := filepath.Abs(dataPath)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to open dolt database")
+		return nil, errors.Wrap(err, "failed to resolve absolute data path")
 	}
 
-	// Verify connection
-	if err := db.Ping(); err != nil {
-		db.Close()
-		return nil, errors.Wrap(err, "failed to ping dolt database")
+	u := &url.URL{
+		Scheme: "file",
+		Path:   absPath,
+		RawQuery: url.Values{
+			"commitname":  {commitName},
+			"commitemail": {commitEmail},
+			"database":    {"rig_orchestration"},
+		}.Encode(),
+	}
+	dsn := u.String()
+
+	db, err := sql.Open("dolt", dsn)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to open embedded dolt database")
 	}
 
 	return &DatabaseManager{
-		db:      db,
-		Verbose: verbose,
+		db:       db,
+		dataPath: absPath,
+		Verbose:  verbose,
 	}, nil
 }
 
@@ -46,32 +61,103 @@ func (dm *DatabaseManager) Close() error {
 	return nil
 }
 
-// IsAvailable checks if the database is accessible.
-func (dm *DatabaseManager) IsAvailable() bool {
-	if dm.db == nil {
-		return false
+// InitDatabase initializes the database and creates tables.
+// All DDL runs on a single connection to ensure USE session state persists
+// across statements in the connection pool.
+func (dm *DatabaseManager) InitDatabase() error {
+	// Ensure directory exists
+	if err := os.MkdirAll(dm.dataPath, 0700); err != nil {
+		return errors.Wrap(err, "failed to create data path")
 	}
-	if err := dm.db.Ping(); err != nil {
-		if dm.Verbose {
-			log.Printf("Dolt database not available: %v", err)
-		}
-		return false
+
+	ctx := context.Background()
+	conn, err := dm.db.Conn(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to acquire database connection")
 	}
-	return true
+	defer conn.Close()
+
+	// Create database if not exists
+	if _, err := conn.ExecContext(ctx, "CREATE DATABASE IF NOT EXISTS rig_orchestration"); err != nil {
+		return errors.Wrap(err, "failed to create rig_orchestration database")
+	}
+
+	// Use database (session state persists on this single connection)
+	if _, err := conn.ExecContext(ctx, "USE rig_orchestration"); err != nil {
+		return errors.Wrap(err, "failed to use rig_orchestration database")
+	}
+
+	// Initialize migration framework
+	if _, err := conn.ExecContext(ctx, SchemaMigrationsTableDDL); err != nil {
+		return errors.Wrap(err, "failed to create schema_migrations table")
+	}
+
+	return dm.migrateWithConn(ctx, conn)
 }
 
-// InitSchema initializes the database tables if they don't exist.
-func (dm *DatabaseManager) InitSchema() error {
-	if !dm.IsAvailable() {
-		return errors.New("database not available")
+// Migrate applies any pending schema migrations.
+func (dm *DatabaseManager) Migrate(ctx context.Context) error {
+	conn, err := dm.db.Conn(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to acquire database connection for migration")
+	}
+	defer conn.Close()
+
+	// Ensure we are using the correct database if it wasn't already set in DSN
+	if _, err := conn.ExecContext(ctx, "USE rig_orchestration"); err != nil {
+		return errors.Wrap(err, "failed to use rig_orchestration database")
 	}
 
-	for _, ddl := range AllTableDDLs() {
-		if dm.Verbose {
-			log.Printf("Executing DDL:\n%s", ddl)
-		}
-		if _, err := dm.db.Exec(ddl); err != nil {
-			return errors.Wrapf(err, "failed to execute DDL: %s", ddl)
+	return dm.migrateWithConn(ctx, conn)
+}
+
+func (dm *DatabaseManager) migrateWithConn(ctx context.Context, conn *sql.Conn) error {
+	// 1. Get current version
+	var currentVersion int
+	query := "SELECT COALESCE(MAX(version), 0) FROM schema_migrations"
+	// Use conn.QueryRowContext instead of dm.db.QueryRowContext to stay on the same session
+	err := conn.QueryRowContext(ctx, query).Scan(&currentVersion)
+	if err != nil {
+		// If the table doesn't exist yet, we are at version 0
+		// (though InitDatabase ensures it exists)
+		currentVersion = 0
+	}
+
+	// 2. Apply pending migrations
+	for _, m := range AllMigrations() {
+		if m.Version > currentVersion {
+			if dm.Verbose {
+				log.Printf("Applying migration v%d: %s", m.Version, m.Description)
+			}
+
+			// Transactions in Dolt/MySQL also need to be on the same connection
+			// We can't use dm.db.BeginTx here, we must use SQL commands on conn
+			if _, err := conn.ExecContext(ctx, "START TRANSACTION"); err != nil {
+				return errors.Wrapf(err, "failed to start transaction for migration v%d", m.Version)
+			}
+
+			success := false
+			defer func() {
+				if !success {
+					conn.ExecContext(ctx, "ROLLBACK") //nolint:errcheck
+				}
+			}()
+
+			for _, ddl := range m.DDLs {
+				if _, err := conn.ExecContext(ctx, ddl); err != nil {
+					return errors.Wrapf(err, "failed to execute DDL in migration v%d", m.Version)
+				}
+			}
+
+			insertQuery := "INSERT INTO schema_migrations (version, description) VALUES (?, ?)"
+			if _, err := conn.ExecContext(ctx, insertQuery, m.Version, m.Description); err != nil {
+				return errors.Wrapf(err, "failed to record migration v%d", m.Version)
+			}
+
+			if _, err := conn.ExecContext(ctx, "COMMIT"); err != nil {
+				return errors.Wrapf(err, "failed to commit migration v%d", m.Version)
+			}
+			success = true
 		}
 	}
 
@@ -228,6 +314,10 @@ func (dm *DatabaseManager) CreateNode(ctx context.Context, n *Node) error {
 	if n.CreatedAt.IsZero() {
 		n.CreatedAt = time.Now()
 	}
+	// Ensure valid JSON for Dolt
+	if len(n.Config) == 0 {
+		n.Config = []byte("{}")
+	}
 
 	query := `INSERT INTO nodes (id, workflow_id, workflow_version, name, type, config, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`
 	_, err := dm.db.ExecContext(ctx, query, n.ID, n.WorkflowID, n.WorkflowVersion, n.Name, n.Type, n.Config, n.CreatedAt)
@@ -249,9 +339,11 @@ func (dm *DatabaseManager) GetNodesByWorkflow(ctx context.Context, workflowID st
 	var nodes []*Node
 	for rows.Next() {
 		n := &Node{}
-		if err := rows.Scan(&n.ID, &n.WorkflowID, &n.WorkflowVersion, &n.Name, &n.Type, &n.Config, &n.CreatedAt); err != nil {
+		var config []byte
+		if err := rows.Scan(&n.ID, &n.WorkflowID, &n.WorkflowVersion, &n.Name, &n.Type, &config, &n.CreatedAt); err != nil {
 			return nil, errors.Wrap(err, "failed to scan node")
 		}
+		n.Config = config
 		nodes = append(nodes, n)
 	}
 	if err := rows.Err(); err != nil {
@@ -397,6 +489,10 @@ func (dm *DatabaseManager) SaveWorkflowDefinition(ctx context.Context, w *Workfl
 		if n.CreatedAt.IsZero() {
 			n.CreatedAt = time.Now()
 		}
+		// Ensure valid JSON for Dolt
+		if len(n.Config) == 0 {
+			n.Config = []byte("{}")
+		}
 		query := `INSERT INTO nodes (id, workflow_id, workflow_version, name, type, config, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`
 		if _, err := tx.ExecContext(ctx, query, n.ID, n.WorkflowID, n.WorkflowVersion, n.Name, n.Type, n.Config, n.CreatedAt); err != nil {
 			return errors.Wrap(err, "failed to insert node in tx")
@@ -407,7 +503,7 @@ func (dm *DatabaseManager) SaveWorkflowDefinition(ctx context.Context, w *Workfl
 	for _, e := range edges {
 		e.WorkflowID = deferredID
 		e.WorkflowVersion = deferredVersion
-		query := `INSERT INTO edges (id, workflow_id, workflow_version, source_node_id, target_node_id, condition) VALUES (?, ?, ?, ?, ?, ?)`
+		query := `INSERT INTO edges (id, workflow_id, workflow_version, source_node_id, target_node_id, ` + "`condition`" + `) VALUES (?, ?, ?, ?, ?, ?)`
 		if _, err := tx.ExecContext(ctx, query, e.ID, e.WorkflowID, e.WorkflowVersion, e.SourceNodeID, e.TargetNodeID, e.Condition); err != nil {
 			return errors.Wrap(err, "failed to insert edge in tx")
 		}
@@ -484,10 +580,10 @@ func (dm *DatabaseManager) CreateExecutionWithInitialStates(ctx context.Context,
 		return nil, errors.Wrap(err, "failed to insert execution")
 	}
 
-	nodeStateQuery := `INSERT INTO node_states (id, execution_id, node_id, status, created_at) VALUES (?, ?, ?, ?, ?)`
+	nodeStateQuery := `INSERT INTO node_states (id, execution_id, node_id, status, result, created_at) VALUES (?, ?, ?, ?, ?, ?)`
 	for _, node := range nodes {
 		nsID := uuid.New().String()
-		if _, err := tx.ExecContext(ctx, nodeStateQuery, nsID, e.ID, node.ID, NodeStatusPending, e.CreatedAt); err != nil {
+		if _, err := tx.ExecContext(ctx, nodeStateQuery, nsID, e.ID, node.ID, NodeStatusPending, []byte("{}"), e.CreatedAt); err != nil {
 			return nil, errors.Wrap(err, "failed to insert node state")
 		}
 	}
@@ -501,7 +597,7 @@ func (dm *DatabaseManager) CreateExecutionWithInitialStates(ctx context.Context,
 
 // GetExecution retrieves an execution by ID.
 func (dm *DatabaseManager) GetExecution(ctx context.Context, id string) (*Execution, error) {
-	query := `SELECT id, workflow_id, workflow_version, status, started_at, completed_at, error, created_at FROM executions WHERE id = ?`
+	query := `SELECT id, workflow_id, workflow_version, status, started_at, completed_at, COALESCE(error, ''), created_at FROM executions WHERE id = ?`
 	e := &Execution{}
 	err := dm.db.QueryRowContext(ctx, query, id).Scan(
 		&e.ID, &e.WorkflowID, &e.WorkflowVersion, &e.Status, &e.StartedAt, &e.CompletedAt, &e.Error, &e.CreatedAt,
@@ -579,17 +675,44 @@ func (dm *DatabaseManager) CreateNodeState(ctx context.Context, ns *NodeState) e
 	if ns.CreatedAt.IsZero() {
 		ns.CreatedAt = time.Now()
 	}
+	// Ensure valid JSON for Dolt
+	if len(ns.Result) == 0 {
+		ns.Result = []byte("{}")
+	}
 
-	query := `INSERT INTO node_states (id, execution_id, node_id, status, created_at) VALUES (?, ?, ?, ?, ?)`
-	_, err := dm.db.ExecContext(ctx, query, ns.ID, ns.ExecutionID, ns.NodeID, ns.Status, ns.CreatedAt)
+	query := `INSERT INTO node_states (id, execution_id, node_id, status, result, created_at) VALUES (?, ?, ?, ?, ?, ?)`
+	_, err := dm.db.ExecContext(ctx, query, ns.ID, ns.ExecutionID, ns.NodeID, ns.Status, ns.Result, ns.CreatedAt)
 	if err != nil {
 		return errors.Wrap(err, "failed to insert node state")
 	}
 	return nil
 }
 
+// GetNodeState retrieves a specific node state by ID.
+func (dm *DatabaseManager) GetNodeState(ctx context.Context, id string) (*NodeState, error) {
+	query := `SELECT id, execution_id, node_id, status, started_at, completed_at, result, COALESCE(error, ''), created_at FROM node_states WHERE id = ?`
+	ns := &NodeState{}
+	var result []byte
+	err := dm.db.QueryRowContext(ctx, query, id).Scan(
+		&ns.ID, &ns.ExecutionID, &ns.NodeID, &ns.Status, &ns.StartedAt, &ns.CompletedAt, &result, &ns.Error, &ns.CreatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, errors.New("node state not found")
+		}
+		return nil, errors.Wrap(err, "failed to get node state")
+	}
+	ns.Result = result
+	return ns, nil
+}
+
 // UpdateNodeStatus updates the status and result of a node in an execution.
 func (dm *DatabaseManager) UpdateNodeStatus(ctx context.Context, id string, status NodeStatus, result []byte, errMsg string) error {
+	// Ensure valid JSON for Dolt
+	if len(result) == 0 {
+		result = []byte("{}")
+	}
+
 	tx, err := dm.db.BeginTx(ctx, nil)
 	if err != nil {
 		return errors.Wrap(err, "failed to begin transaction")
@@ -638,7 +761,7 @@ func (dm *DatabaseManager) UpdateNodeStatus(ctx context.Context, id string, stat
 
 // GetNodeStatesByExecution retrieves all node states for a given execution.
 func (dm *DatabaseManager) GetNodeStatesByExecution(ctx context.Context, executionID string) ([]*NodeState, error) {
-	query := `SELECT id, execution_id, node_id, status, started_at, completed_at, result, error, created_at FROM node_states WHERE execution_id = ?`
+	query := `SELECT id, execution_id, node_id, status, started_at, completed_at, result, COALESCE(error, ''), created_at FROM node_states WHERE execution_id = ?`
 	rows, err := dm.db.QueryContext(ctx, query, executionID)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get node states")
@@ -648,9 +771,11 @@ func (dm *DatabaseManager) GetNodeStatesByExecution(ctx context.Context, executi
 	var states []*NodeState
 	for rows.Next() {
 		ns := &NodeState{}
-		if err := rows.Scan(&ns.ID, &ns.ExecutionID, &ns.NodeID, &ns.Status, &ns.StartedAt, &ns.CompletedAt, &ns.Result, &ns.Error, &ns.CreatedAt); err != nil {
+		var result []byte
+		if err := rows.Scan(&ns.ID, &ns.ExecutionID, &ns.NodeID, &ns.Status, &ns.StartedAt, &ns.CompletedAt, &result, &ns.Error, &ns.CreatedAt); err != nil {
 			return nil, errors.Wrap(err, "failed to scan node state")
 		}
+		ns.Result = result
 		states = append(states, ns)
 	}
 	if err := rows.Err(); err != nil {

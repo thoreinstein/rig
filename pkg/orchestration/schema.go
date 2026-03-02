@@ -4,6 +4,14 @@ package orchestration
 // We use MySQL-compatible SQL for Dolt.
 
 const (
+	// SchemaMigrationsTableDDL defines the schema_migrations table.
+	SchemaMigrationsTableDDL = `
+CREATE TABLE IF NOT EXISTS schema_migrations (
+    version INT PRIMARY KEY,
+    description VARCHAR(255) NOT NULL,
+    applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);`
+
 	// WorkflowsTableDDL defines the workflows table.
 	WorkflowsTableDDL = `
 CREATE TABLE IF NOT EXISTS workflows (
@@ -38,7 +46,7 @@ CREATE TABLE IF NOT EXISTS edges (
     workflow_version INT NOT NULL,
     source_node_id VARCHAR(36) NOT NULL,
     target_node_id VARCHAR(36) NOT NULL,
-    condition TEXT,
+    ` + "`condition`" + ` TEXT,
     CONSTRAINT fk_edge_workflow FOREIGN KEY (workflow_id) REFERENCES workflows(id) ON DELETE CASCADE,
     CONSTRAINT fk_edge_source FOREIGN KEY (source_node_id) REFERENCES nodes(id) ON DELETE CASCADE,
     CONSTRAINT fk_edge_target FOREIGN KEY (target_node_id) REFERENCES nodes(id) ON DELETE CASCADE,
@@ -78,7 +86,33 @@ CREATE TABLE IF NOT EXISTS node_states (
 );`
 )
 
+// Migration represents a versioned schema change.
+type Migration struct {
+	Version     int
+	Description string
+	DDLs        []string
+}
+
+// AllMigrations returns the ordered list of all schema migrations.
+func AllMigrations() []Migration {
+	return []Migration{
+		{
+			Version:     1,
+			Description: "Initial orchestration schema",
+			DDLs: []string{
+				WorkflowsTableDDL,
+				NodesTableDDL,
+				EdgesTableDDL,
+				ExecutionsTableDDL,
+				NodeStatesTableDDL,
+			},
+		},
+	}
+}
+
 // AllTableDDLs returns all DDL statements in order of creation to satisfy dependencies.
+//
+// Deprecated: use AllMigrations instead.
 func AllTableDDLs() []string {
 	return []string{
 		WorkflowsTableDDL,

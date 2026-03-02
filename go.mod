@@ -9,7 +9,6 @@ require (
 	github.com/creativeprojects/go-selfupdate v1.5.2
 	github.com/dolthub/driver v0.2.0
 	github.com/firebase/genkit/go v1.4.0
-	github.com/go-sql-driver/mysql v1.9.3
 	github.com/google/go-github/v68 v68.0.0
 	github.com/google/uuid v1.6.0
 	github.com/spf13/cobra v1.9.1
@@ -82,6 +81,7 @@ require (
 	github.com/go-kit/kit v0.13.0 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
+	github.com/go-sql-driver/mysql v1.9.3 // indirect
 	github.com/go-viper/mapstructure/v2 v2.4.0 // indirect
 	github.com/goccy/go-json v0.10.4 // indirect
 	github.com/goccy/go-yaml v1.17.1 // indirect
