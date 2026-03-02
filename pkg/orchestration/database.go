@@ -118,8 +118,10 @@ func (dm *DatabaseManager) migrateWithConn(ctx context.Context, conn *sql.Conn) 
 	// Use conn.QueryRowContext instead of dm.db.QueryRowContext to stay on the same session
 	err := conn.QueryRowContext(ctx, query).Scan(&currentVersion)
 	if err != nil {
-		// If the table doesn't exist yet, we are at version 0
-		// (though InitDatabase ensures it exists)
+		// Dolt returns sql.ErrNoRows for aggregates on an empty table
+		if !errors.Is(err, sql.ErrNoRows) {
+			return errors.Wrap(err, "failed to read current migration version from schema_migrations")
+		}
 		currentVersion = 0
 	}
 
