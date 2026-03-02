@@ -460,10 +460,10 @@ func generateDiffSummary(ctx context.Context, edm *events.DatabaseManager, workf
 
 		if len(diffs) > 0 {
 			foundAny = true
-			sb.WriteString(fmt.Sprintf("### Correlation: %s\n\n", cid))
+			fmt.Fprintf(&sb, "### Correlation: %s\n\n", cid)
 			for _, d := range diffs {
-				sb.WriteString(fmt.Sprintf("- `%s` **[%s]** %s: %s\n",
-					d.DiffType, d.Step, d.Status, d.Message))
+				fmt.Fprintf(&sb, "- `%s` **[%s]** %s: %s\n",
+					d.DiffType, d.Step, d.Status, d.Message)
 			}
 			sb.WriteString("\n")
 		}

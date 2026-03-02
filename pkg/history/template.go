@@ -91,13 +91,13 @@ func FormatTimeline(commands []Command, ticket string) string {
 	}
 
 	// Header and Summary
-	timeline.WriteString(fmt.Sprintf("## Command Timeline - %s\n\n", ticket))
-	timeline.WriteString(fmt.Sprintf("Generated: %s\n\n", time.Now().Format("2006-01-02 15:04:05")))
+	fmt.Fprintf(&timeline, "## Command Timeline - %s\n\n", ticket)
+	fmt.Fprintf(&timeline, "Generated: %s\n\n", time.Now().Format("2006-01-02 15:04:05"))
 
 	timeline.WriteString("### Summary\n")
-	timeline.WriteString(fmt.Sprintf("- **Total Commands:** %d\n", totalCommands))
-	timeline.WriteString(fmt.Sprintf("- **Success Rate:** %.1f%%\n", successRate))
-	timeline.WriteString(fmt.Sprintf("- **Total Duration:** %s\n\n", formatDuration(totalDuration)))
+	fmt.Fprintf(&timeline, "- **Total Commands:** %d\n", totalCommands)
+	fmt.Fprintf(&timeline, "- **Success Rate:** %.1f%%\n", successRate)
+	fmt.Fprintf(&timeline, "- **Total Duration:** %s\n\n", formatDuration(totalDuration))
 
 	// Sort days
 	days := make([]string, 0, len(dayGroups))
@@ -108,7 +108,7 @@ func FormatTimeline(commands []Command, ticket string) string {
 
 	for _, day := range days {
 		dayCommands := dayGroups[day]
-		timeline.WriteString(fmt.Sprintf("### %s\n\n", day))
+		fmt.Fprintf(&timeline, "### %s\n\n", day)
 
 		for i := range dayCommands {
 			timeline.WriteString(formatCommandLine(&dayCommands[i]))

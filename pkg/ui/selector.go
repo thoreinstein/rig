@@ -36,7 +36,7 @@ func SelectProject(projects []discovery.Project) (*discovery.Project, error) {
 		// Format: Name <tab> Path
 		// We use tab as delimiter so fzf can potentially handle fields if needed,
 		// and it provides a nice visual separation.
-		input.WriteString(fmt.Sprintf("%s\t%s\n", p.Name, p.Path))
+		fmt.Fprintf(&input, "%s\t%s\n", p.Name, p.Path)
 	}
 
 	// Run fzf

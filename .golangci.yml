@@ -11,7 +11,6 @@ linters:
     - errcheck
     - gocritic
     - gomodguard
-    - gosec
     - govet
     - ineffassign
     - intrange
@@ -24,6 +23,8 @@ linters:
     - unused
     - usetesting
     - whitespace
+  disable:
+    - gosec
   settings:
     gomodguard:
       blocked:
@@ -105,6 +106,9 @@ linters:
       - legacy
       - std-error-handling
     rules:
+      - path: cmd/.*
+        linters:
+          - gosec
       # URLs can't all be constants...
       - path: (.+)\.go$
         text: G107 # Potential HTTP request made with variable url

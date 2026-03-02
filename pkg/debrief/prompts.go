@@ -69,9 +69,9 @@ func BuildQuestionPrompt(ctx *Context) string {
 	// PR context
 	if ctx.PRTitle != "" {
 		sb.WriteString("## Pull Request\n")
-		sb.WriteString(fmt.Sprintf("**Title:** %s\n", ctx.PRTitle))
+		fmt.Fprintf(&sb, "**Title:** %s\n", ctx.PRTitle)
 		if ctx.PRBody != "" {
-			sb.WriteString(fmt.Sprintf("**Description:**\n%s\n", truncate(ctx.PRBody, 500)))
+			fmt.Fprintf(&sb, "**Description:**\n%s\n", truncate(ctx.PRBody, 500))
 		}
 		sb.WriteString("\n")
 	}
@@ -79,11 +79,11 @@ func BuildQuestionPrompt(ctx *Context) string {
 	// Ticket context
 	if ctx.TicketID != "" {
 		sb.WriteString("## Ticket\n")
-		sb.WriteString(fmt.Sprintf("**ID:** %s\n", ctx.TicketID))
-		sb.WriteString(fmt.Sprintf("**Type:** %s\n", ctx.TicketType))
-		sb.WriteString(fmt.Sprintf("**Summary:** %s\n", ctx.TicketSummary))
+		fmt.Fprintf(&sb, "**ID:** %s\n", ctx.TicketID)
+		fmt.Fprintf(&sb, "**Type:** %s\n", ctx.TicketType)
+		fmt.Fprintf(&sb, "**Summary:** %s\n", ctx.TicketSummary)
 		if ctx.TicketDescription != "" {
-			sb.WriteString(fmt.Sprintf("**Description:**\n%s\n", truncate(ctx.TicketDescription, 300)))
+			fmt.Fprintf(&sb, "**Description:**\n%s\n", truncate(ctx.TicketDescription, 300))
 		}
 		sb.WriteString("\n")
 	}
@@ -92,7 +92,7 @@ func BuildQuestionPrompt(ctx *Context) string {
 	if len(ctx.Commits) > 0 {
 		sb.WriteString("## Commits\n")
 		for _, commit := range ctx.Commits {
-			sb.WriteString(fmt.Sprintf("- %s: %s\n", commit.SHA, commit.Message))
+			fmt.Fprintf(&sb, "- %s: %s\n", commit.SHA, commit.Message)
 		}
 		sb.WriteString("\n")
 	}
@@ -104,10 +104,10 @@ func BuildQuestionPrompt(ctx *Context) string {
 		files := ctx.FilesChanged
 		if len(files) > 20 {
 			files = files[:20]
-			sb.WriteString(fmt.Sprintf("(showing first 20 of %d files)\n", len(ctx.FilesChanged)))
+			fmt.Fprintf(&sb, "(showing first 20 of %d files)\n", len(ctx.FilesChanged))
 		}
 		for _, f := range files {
-			sb.WriteString(fmt.Sprintf("- %s\n", f))
+			fmt.Fprintf(&sb, "- %s\n", f)
 		}
 		sb.WriteString("\n")
 	}
@@ -115,9 +115,9 @@ func BuildQuestionPrompt(ctx *Context) string {
 	// Diff stats
 	if ctx.DiffStats.FilesChanged > 0 {
 		sb.WriteString("## Change Statistics\n")
-		sb.WriteString(fmt.Sprintf("- Files changed: %d\n", ctx.DiffStats.FilesChanged))
-		sb.WriteString(fmt.Sprintf("- Lines added: %d\n", ctx.DiffStats.Insertions))
-		sb.WriteString(fmt.Sprintf("- Lines removed: %d\n", ctx.DiffStats.Deletions))
+		fmt.Fprintf(&sb, "- Files changed: %d\n", ctx.DiffStats.FilesChanged)
+		fmt.Fprintf(&sb, "- Lines added: %d\n", ctx.DiffStats.Insertions)
+		fmt.Fprintf(&sb, "- Lines removed: %d\n", ctx.DiffStats.Deletions)
 		sb.WriteString("\n")
 	}
 
@@ -129,7 +129,7 @@ func BuildQuestionPrompt(ctx *Context) string {
 			commands = commands[len(commands)-10:]
 		}
 		for _, cmd := range commands {
-			sb.WriteString(fmt.Sprintf("- %s\n", truncate(cmd, 100)))
+			fmt.Fprintf(&sb, "- %s\n", truncate(cmd, 100))
 		}
 		sb.WriteString("\n")
 	}
@@ -137,7 +137,7 @@ func BuildQuestionPrompt(ctx *Context) string {
 	// Duration
 	if ctx.Duration > 0 {
 		sb.WriteString("## Duration\n")
-		sb.WriteString(fmt.Sprintf("Work duration: approximately %s\n\n", formatDuration(ctx.Duration)))
+		fmt.Fprintf(&sb, "Work duration: approximately %s\n\n", formatDuration(ctx.Duration))
 	}
 
 	sb.WriteString("Generate 3-5 targeted questions that will help document the decisions, challenges, and learnings from this work.")
@@ -154,25 +154,25 @@ func BuildSummaryPrompt(ctx *Context, answers map[string]string) string {
 	// Include context summary
 	sb.WriteString("## Work Context\n")
 	if ctx.PRTitle != "" {
-		sb.WriteString(fmt.Sprintf("**PR:** %s\n", ctx.PRTitle))
+		fmt.Fprintf(&sb, "**PR:** %s\n", ctx.PRTitle)
 	}
 	if ctx.TicketID != "" {
-		sb.WriteString(fmt.Sprintf("**Ticket:** %s - %s\n", ctx.TicketID, ctx.TicketSummary))
+		fmt.Fprintf(&sb, "**Ticket:** %s - %s\n", ctx.TicketID, ctx.TicketSummary)
 	}
-	sb.WriteString(fmt.Sprintf("**Branch:** %s\n", ctx.BranchName))
+	fmt.Fprintf(&sb, "**Branch:** %s\n", ctx.BranchName)
 	if ctx.DiffStats.FilesChanged > 0 {
-		sb.WriteString(fmt.Sprintf("**Changes:** %d files, +%d/-%d lines\n",
-			ctx.DiffStats.FilesChanged, ctx.DiffStats.Insertions, ctx.DiffStats.Deletions))
+		fmt.Fprintf(&sb, "**Changes:** %d files, +%d/-%d lines\n",
+			ctx.DiffStats.FilesChanged, ctx.DiffStats.Insertions, ctx.DiffStats.Deletions)
 	}
 	if len(ctx.Commits) > 0 {
-		sb.WriteString(fmt.Sprintf("**Commits:** %d\n", len(ctx.Commits)))
+		fmt.Fprintf(&sb, "**Commits:** %d\n", len(ctx.Commits))
 	}
 	sb.WriteString("\n")
 
 	// Include Q&A
 	sb.WriteString("## Q&A Session\n")
 	for id, answer := range answers {
-		sb.WriteString(fmt.Sprintf("**%s:**\n%s\n\n", id, answer))
+		fmt.Fprintf(&sb, "**%s:**\n%s\n\n", id, answer)
 	}
 
 	sb.WriteString("Generate a structured summary capturing the key decisions, challenges, lessons learned, and follow-ups.")

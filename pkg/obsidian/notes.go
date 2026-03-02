@@ -177,15 +177,15 @@ func (nm *NoteManager) buildJiraSection(jiraInfo *JiraInfo) string {
 	section.WriteString("## JIRA Details\n\n")
 
 	if jiraInfo.Type != "" {
-		section.WriteString(fmt.Sprintf("**Type:** %s\n", jiraInfo.Type))
+		fmt.Fprintf(&section, "**Type:** %s\n", jiraInfo.Type)
 	}
 
 	if jiraInfo.Status != "" {
-		section.WriteString(fmt.Sprintf("**Status:** %s\n", jiraInfo.Status))
+		fmt.Fprintf(&section, "**Status:** %s\n", jiraInfo.Status)
 	}
 
 	if jiraInfo.Description != "" {
-		section.WriteString(fmt.Sprintf("\n**Description:**\n%s\n", jiraInfo.Description))
+		fmt.Fprintf(&section, "\n**Description:**\n%s\n", jiraInfo.Description)
 	}
 
 	section.WriteString("\n")
@@ -241,7 +241,7 @@ func (nm *NoteManager) createDefaultJiraNote(ticket string, jiraInfo *JiraInfo) 
 		title = jiraInfo.Summary
 	}
 
-	content.WriteString(fmt.Sprintf("# %s\n\n", title))
+	fmt.Fprintf(&content, "# %s\n\n", title)
 	content.WriteString("## Summary\n\n")
 
 	if jiraInfo != nil {
@@ -249,7 +249,7 @@ func (nm *NoteManager) createDefaultJiraNote(ticket string, jiraInfo *JiraInfo) 
 	}
 
 	content.WriteString("## Notes\n\n")
-	content.WriteString(fmt.Sprintf("- Created: %s\n\n", today))
+	fmt.Fprintf(&content, "- Created: %s\n\n", today)
 	content.WriteString("## Log\n\n")
 
 	return content.String()

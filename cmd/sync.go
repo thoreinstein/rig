@@ -307,22 +307,22 @@ func buildJiraDetailsSection(jiraInfo *jira.TicketInfo) string {
 	var section strings.Builder
 
 	if jiraInfo.Type != "" {
-		section.WriteString(fmt.Sprintf("**Type:** %s\n", jiraInfo.Type))
+		fmt.Fprintf(&section, "**Type:** %s\n", jiraInfo.Type)
 	}
 
 	if jiraInfo.Status != "" {
-		section.WriteString(fmt.Sprintf("**Status:** %s\n", jiraInfo.Status))
+		fmt.Fprintf(&section, "**Status:** %s\n", jiraInfo.Status)
 	}
 
 	if jiraInfo.Priority != "" {
-		section.WriteString(fmt.Sprintf("**Priority:** %s\n", jiraInfo.Priority))
+		fmt.Fprintf(&section, "**Priority:** %s\n", jiraInfo.Priority)
 	}
 
 	// Display custom fields if present
 	if len(jiraInfo.CustomFields) > 0 {
 		for fieldName, fieldValue := range jiraInfo.CustomFields {
 			if fieldValue != "" {
-				section.WriteString(fmt.Sprintf("**%s:** %s\n", fieldName, fieldValue))
+				fmt.Fprintf(&section, "**%s:** %s\n", fieldName, fieldValue)
 			}
 		}
 	}

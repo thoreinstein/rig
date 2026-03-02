@@ -54,6 +54,8 @@ func TestExpandPath(t *testing.T) {
 }
 
 func TestLoad_WithDefaults(t *testing.T) {
+	homeDir, _ := UserHomeDir()
+
 	// Reset viper to clean state
 	viper.Reset()
 
@@ -100,6 +102,15 @@ func TestLoad_WithDefaults(t *testing.T) {
 	}
 	if len(config.Tmux.Windows) >= 3 && config.Tmux.Windows[2].Name != "term" {
 		t.Errorf("Expected third window name to be 'term', got %q", config.Tmux.Windows[2].Name)
+	}
+
+	// Verify orchestration defaults
+	if config.Orchestration.Enabled != false {
+		t.Error("Orchestration.Enabled should default to false")
+	}
+	expectedOrchestrationPath := filepath.Join(homeDir, ".config", "rig", "data")
+	if config.Orchestration.DataPath != expectedOrchestrationPath {
+		t.Errorf("Orchestration.DataPath = %q, want %q", config.Orchestration.DataPath, expectedOrchestrationPath)
 	}
 }
 
@@ -209,6 +220,9 @@ func TestExpandPaths(t *testing.T) {
 		Events: EventsConfig{
 			DataPath: "~/.local/share/rig/dolt",
 		},
+		Orchestration: OrchestrationConfig{
+			DataPath: "~/.config/rig/data",
+		},
 	}
 
 	err := expandPaths(config)
@@ -234,6 +248,11 @@ func TestExpandPaths(t *testing.T) {
 	expectedEventsPath := filepath.Join(homeDir, ".local/share/rig/dolt")
 	if config.Events.DataPath != expectedEventsPath {
 		t.Errorf("Events.DataPath = %q, want %q", config.Events.DataPath, expectedEventsPath)
+	}
+
+	expectedOrchestrationPath := filepath.Join(homeDir, ".config/rig/data")
+	if config.Orchestration.DataPath != expectedOrchestrationPath {
+		t.Errorf("Orchestration.DataPath = %q, want %q", config.Orchestration.DataPath, expectedOrchestrationPath)
 	}
 }
 
@@ -517,6 +536,36 @@ func TestConfig_Validate(t *testing.T) {
 			name: "events disabled without data_path",
 			config: &Config{
 				Events: EventsConfig{
+					Enabled:  false,
+					DataPath: "",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "orchestration enabled with data_path",
+			config: &Config{
+				Orchestration: OrchestrationConfig{
+					Enabled:  true,
+					DataPath: "/tmp/orchestration",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "orchestration enabled without data_path",
+			config: &Config{
+				Orchestration: OrchestrationConfig{
+					Enabled:  true,
+					DataPath: "",
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "orchestration disabled without data_path",
+			config: &Config{
+				Orchestration: OrchestrationConfig{
 					Enabled:  false,
 					DataPath: "",
 				},

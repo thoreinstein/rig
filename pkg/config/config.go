@@ -14,24 +14,33 @@ import (
 // Config represents the application configuration
 // Repository information is derived from git, not configuration
 type Config struct {
-	Notes     NotesConfig                       `mapstructure:"notes"`
-	Git       GitConfig                         `mapstructure:"git"`
-	Clone     CloneConfig                       `mapstructure:"clone"`
-	History   HistoryConfig                     `mapstructure:"history"`
-	Events    EventsConfig                      `mapstructure:"events"`
-	Jira      JiraConfig                        `mapstructure:"jira"`
-	Beads     BeadsConfig                       `mapstructure:"beads"`
-	Tmux      TmuxConfig                        `mapstructure:"tmux"`
-	GitHub    GitHubConfig                      `mapstructure:"github"`
-	AI        AIConfig                          `mapstructure:"ai"`
-	Workflow  WorkflowConfig                    `mapstructure:"workflow"`
-	Discovery DiscoveryConfig                   `mapstructure:"discovery"`
-	Daemon    DaemonConfig                      `mapstructure:"daemon"`
-	Plugins   map[string]map[string]interface{} `mapstructure:"plugins"`
+	Notes         NotesConfig                       `mapstructure:"notes"`
+	Git           GitConfig                         `mapstructure:"git"`
+	Clone         CloneConfig                       `mapstructure:"clone"`
+	History       HistoryConfig                     `mapstructure:"history"`
+	Events        EventsConfig                      `mapstructure:"events"`
+	Jira          JiraConfig                        `mapstructure:"jira"`
+	Beads         BeadsConfig                       `mapstructure:"beads"`
+	Tmux          TmuxConfig                        `mapstructure:"tmux"`
+	GitHub        GitHubConfig                      `mapstructure:"github"`
+	AI            AIConfig                          `mapstructure:"ai"`
+	Workflow      WorkflowConfig                    `mapstructure:"workflow"`
+	Orchestration OrchestrationConfig               `mapstructure:"orchestration"`
+	Discovery     DiscoveryConfig                   `mapstructure:"discovery"`
+	Daemon        DaemonConfig                      `mapstructure:"daemon"`
+	Plugins       map[string]map[string]interface{} `mapstructure:"plugins"`
 }
 
 // EventsConfig holds the configuration for the embedded Dolt event store
 type EventsConfig struct {
+	Enabled     bool   `mapstructure:"enabled"`
+	DataPath    string `mapstructure:"data_path"`
+	CommitName  string `mapstructure:"commit_name"`
+	CommitEmail string `mapstructure:"commit_email"`
+}
+
+// OrchestrationConfig holds the configuration for the orchestration engine
+type OrchestrationConfig struct {
 	Enabled     bool   `mapstructure:"enabled"`
 	DataPath    string `mapstructure:"data_path"`
 	CommitName  string `mapstructure:"commit_name"`
@@ -246,6 +255,10 @@ func (c *Config) Validate() error {
 		return errors.New("events.data_path must not be empty when events are enabled")
 	}
 
+	if c.Orchestration.Enabled && c.Orchestration.DataPath == "" {
+		return errors.New("orchestration.data_path must not be empty when orchestration is enabled")
+	}
+
 	if c.Daemon.PluginIdleTimeout != "" {
 		if _, err := time.ParseDuration(c.Daemon.PluginIdleTimeout); err != nil {
 			return errors.Wrapf(err, "invalid daemon.plugin_idle_timeout: %q", c.Daemon.PluginIdleTimeout)
@@ -303,6 +316,12 @@ func SetDefaults(v *viper.Viper) {
 	v.SetDefault("events.data_path", filepath.Join(homeDir, ".local", "share", "rig", "dolt"))
 	v.SetDefault("events.commit_name", "rig")
 	v.SetDefault("events.commit_email", "rig@localhost")
+
+	// Orchestration defaults
+	v.SetDefault("orchestration.enabled", false)
+	v.SetDefault("orchestration.data_path", filepath.Join(homeDir, ".config", "rig", "data"))
+	v.SetDefault("orchestration.commit_name", "rig")
+	v.SetDefault("orchestration.commit_email", "rig@localhost")
 
 	// JIRA defaults
 	v.SetDefault("jira.enabled", true)
@@ -393,6 +412,11 @@ func expandPaths(config *Config) error {
 	}
 
 	config.Events.DataPath, err = expandPath(config.Events.DataPath)
+	if err != nil {
+		return err
+	}
+
+	config.Orchestration.DataPath, err = expandPath(config.Orchestration.DataPath)
 	if err != nil {
 		return err
 	}
