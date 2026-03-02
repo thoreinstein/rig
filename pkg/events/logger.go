@@ -17,6 +17,7 @@ type EventLogger interface {
 	LogStepFailed(ctx context.Context, correlationID, step, errMsg string) error
 	LogWorkflowCompleted(ctx context.Context, correlationID string) error
 	LogWorkflowFailed(ctx context.Context, correlationID, errMsg string) error
+	CommitMilestone(ctx context.Context, msg string) error
 	Close() error
 }
 
@@ -80,6 +81,10 @@ func (l *DoltEventLogger) LogWorkflowFailed(ctx context.Context, correlationID, 
 	return l.commitEvents(ctx, fmt.Sprintf("Workflow %s failed", correlationID))
 }
 
+func (l *DoltEventLogger) CommitMilestone(ctx context.Context, msg string) error {
+	return l.commitEvents(ctx, msg)
+}
+
 // commitEvents stages all changes and creates a Dolt commit.
 func (l *DoltEventLogger) commitEvents(ctx context.Context, msg string) error {
 	if _, err := l.dm.db.ExecContext(ctx, "CALL DOLT_ADD('-A')"); err != nil {
@@ -141,6 +146,10 @@ func (l NoopEventLogger) LogWorkflowCompleted(ctx context.Context, correlationID
 }
 
 func (l NoopEventLogger) LogWorkflowFailed(ctx context.Context, correlationID, errMsg string) error {
+	return nil
+}
+
+func (l NoopEventLogger) CommitMilestone(ctx context.Context, msg string) error {
 	return nil
 }
 

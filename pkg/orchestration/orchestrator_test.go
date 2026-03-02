@@ -53,6 +53,13 @@ func (m *MockEventLogger) LogWorkflowFailed(ctx context.Context, correlationID, 
 	return nil
 }
 
+func (m *MockEventLogger) CommitMilestone(ctx context.Context, msg string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.logged = append(m.logged, "MILESTONE:"+msg)
+	return nil
+}
+
 type MockStore struct {
 	mu            sync.Mutex
 	workflows     map[string]*Workflow
@@ -159,7 +166,14 @@ func TestOrchestrator_Execute_EventLogging(t *testing.T) {
 			t.Fatalf("Execute failed: %v", err)
 		}
 
-		expected := []string{"STARTED:execution", "STARTED:node1", "COMPLETED:node1", "COMPLETED:workflow"}
+		expected := []string{
+			"STARTED:execution",
+			"MILESTONE:Workflow e1 started",
+			"STARTED:node1",
+			"COMPLETED:node1",
+			"MILESTONE:Node node1 completed",
+			"COMPLETED:workflow",
+		}
 		if len(el.logged) != len(expected) {
 			t.Fatalf("Expected %d events, got %d: %v", len(expected), len(el.logged), el.logged)
 		}
@@ -187,7 +201,14 @@ func TestOrchestrator_Execute_EventLogging(t *testing.T) {
 			t.Fatal("Expected Execute to fail")
 		}
 
-		expected := []string{"STARTED:execution", "STARTED:node1", "FAILED:node1", "FAILED:workflow"}
+		expected := []string{
+			"STARTED:execution",
+			"MILESTONE:Workflow e2 started",
+			"STARTED:node1",
+			"FAILED:node1",
+			"MILESTONE:Node node1 failed",
+			"FAILED:workflow",
+		}
 		if len(el.logged) != len(expected) {
 			t.Fatalf("Expected %d events, got %d: %v", len(expected), len(el.logged), el.logged)
 		}

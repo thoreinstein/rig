@@ -272,6 +272,9 @@ func (o *Orchestrator) Execute(ctx context.Context, executionID string) error {
 	if err := o.eventLogger.LogStepStarted(ctx, executionID, "execution"); err != nil {
 		o.logger.Warn("failed to log execution start event", "execution_id", executionID, "error", err)
 	}
+	if err := o.eventLogger.CommitMilestone(ctx, fmt.Sprintf("Workflow %s started", executionID)); err != nil {
+		o.logger.Warn("failed to commit execution start milestone", "execution_id", executionID, "error", err)
+	}
 
 	activeNodes := 0
 	cond := sync.NewCond(&mu)
@@ -474,9 +477,15 @@ func (o *Orchestrator) runNode(ctx context.Context, executionID string, node *No
 		if err := o.eventLogger.LogStepFailed(ctx, executionID, node.Name, errMsg); err != nil {
 			o.logger.Warn("failed to log node failure event", "execution_id", executionID, "node", node.Name, "error", err)
 		}
+		if err := o.eventLogger.CommitMilestone(ctx, fmt.Sprintf("Node %s failed", node.Name)); err != nil {
+			o.logger.Warn("failed to commit node failure milestone", "execution_id", executionID, "node", node.Name, "error", err)
+		}
 	} else {
 		if err := o.eventLogger.LogStepCompleted(ctx, executionID, node.Name); err != nil {
 			o.logger.Warn("failed to log node completion event", "execution_id", executionID, "node", node.Name, "error", err)
+		}
+		if err := o.eventLogger.CommitMilestone(ctx, fmt.Sprintf("Node %s completed", node.Name)); err != nil {
+			o.logger.Warn("failed to commit node completion milestone", "execution_id", executionID, "node", node.Name, "error", err)
 		}
 	}
 
