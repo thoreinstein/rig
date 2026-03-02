@@ -156,14 +156,7 @@ func (e *Engine) Run(ctx context.Context, prNumber int, opts MergeOptions) error
 
 		// After StepGather, we have the ticket ID. Tag future events and backfill prior ones.
 		if s.step == StepGather && wf.Ticket != "" {
-			if ts, ok := e.eventLogger.(events.TicketMetadataSetter); ok {
-				ts.SetTicket(wf.Ticket)
-			}
-			if bf, ok := e.eventLogger.(events.TicketBackfiller); ok {
-				if err := bf.BackfillTicket(ctx, correlationID, wf.Ticket); err != nil {
-					e.logger.Warn("failed to backfill ticket metadata", "ticket", wf.Ticket, "correlationID", correlationID, "error", err)
-				}
-			}
+			e.tagTicketMetadata(ctx, correlationID, wf.Ticket)
 		}
 
 		wf.CompletedSteps = append(wf.CompletedSteps, s.step)
@@ -288,14 +281,7 @@ func (e *Engine) Resume(ctx context.Context, checkpoint *Checkpoint) error {
 
 		// After StepGather, we have the ticket ID. Tag future events and backfill prior ones.
 		if s.step == StepGather && wf.Ticket != "" {
-			if ts, ok := e.eventLogger.(events.TicketMetadataSetter); ok {
-				ts.SetTicket(wf.Ticket)
-			}
-			if bf, ok := e.eventLogger.(events.TicketBackfiller); ok {
-				if err := bf.BackfillTicket(ctx, correlationID, wf.Ticket); err != nil {
-					e.logger.Warn("failed to backfill ticket metadata", "ticket", wf.Ticket, "correlationID", correlationID, "error", err)
-				}
-			}
+			e.tagTicketMetadata(ctx, correlationID, wf.Ticket)
 		}
 
 		wf.CompletedSteps = append(wf.CompletedSteps, s.step)
@@ -336,6 +322,18 @@ func (e *Engine) workflowToCheckpoint(wf *MergeWorkflow) *Checkpoint {
 		Context:        wf.Context,
 		CreatedAt:      wf.StartedAt,
 		UpdatedAt:      time.Now(),
+	}
+}
+
+// tagTicketMetadata sets the ticket on the event logger and backfills prior events.
+func (e *Engine) tagTicketMetadata(ctx context.Context, correlationID, ticket string) {
+	if ts, ok := e.eventLogger.(events.TicketMetadataSetter); ok {
+		ts.SetTicket(ticket)
+	}
+	if bf, ok := e.eventLogger.(events.TicketBackfiller); ok {
+		if err := bf.BackfillTicket(ctx, correlationID, ticket); err != nil {
+			e.logger.Warn("failed to backfill ticket metadata", "ticket", ticket, "correlationID", correlationID, "error", err)
+		}
 	}
 }
 

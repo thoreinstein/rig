@@ -26,7 +26,7 @@ func (dm *DatabaseManager) QueryEventsByTicket(ctx context.Context, ticket strin
 		// Only fall back to LIKE for JSON_EXTRACT-related errors (function not supported).
 		// Propagate all other errors (connection, context cancellation, missing table).
 		errMsg := err.Error()
-		if !(strings.Contains(errMsg, "JSON_EXTRACT") && strings.Contains(errMsg, "no such function")) {
+		if !strings.Contains(errMsg, "JSON_EXTRACT") || !strings.Contains(errMsg, "no such function") {
 			return nil, errors.Wrap(err, "failed to query events by ticket")
 		}
 
@@ -75,7 +75,7 @@ type DoltDiffEntry struct {
 func (dm *DatabaseManager) QueryDiffForCorrelation(ctx context.Context, correlationID string) ([]DoltDiffEntry, error) {
 	commitMsg := fmt.Sprintf("Workflow %s completed", correlationID)
 	var commitHash string
-	err := dm.db.QueryRowContext(ctx, "SELECT commit_hash FROM dolt_log WHERE message = ? LIMIT 1", commitMsg).Scan(&commitHash)
+	err := dm.db.QueryRowContext(ctx, "SELECT commit_hash FROM dolt_log WHERE message = ? ORDER BY date DESC LIMIT 1", commitMsg).Scan(&commitHash)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
@@ -86,10 +86,10 @@ func (dm *DatabaseManager) QueryDiffForCorrelation(ctx context.Context, correlat
 	query := `
 		SELECT diff_type, to_step, to_status, to_message, to_created_at
 		FROM dolt_diff_workflow_events
-		WHERE to_commit = ?
+		WHERE to_commit = ? AND to_correlation_id = ?
 		ORDER BY to_created_at ASC
 	`
-	rows, err := dm.db.QueryContext(ctx, query, commitHash)
+	rows, err := dm.db.QueryContext(ctx, query, commitHash, correlationID)
 	if err != nil {
 		// The dolt_diff_* system table may not exist on fresh databases with no commits.
 		// Treat table-not-found as a graceful no-op; propagate all other errors.

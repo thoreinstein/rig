@@ -149,14 +149,14 @@ func FormatUnifiedTimeline(entries []UnifiedEntry, ticket string) string {
 	}
 
 	// Header and Summary
-	timeline.WriteString(fmt.Sprintf("## Workflow Timeline - %s\n\n", ticket))
-	timeline.WriteString(fmt.Sprintf("Generated: %s\n\n", time.Now().Format("2006-01-02 15:04:05")))
+	fmt.Fprintf(&timeline, "## Workflow Timeline - %s\n\n", ticket)
+	fmt.Fprintf(&timeline, "Generated: %s\n\n", time.Now().Format("2006-01-02 15:04:05"))
 
 	timeline.WriteString("### Summary\n")
-	timeline.WriteString(fmt.Sprintf("- **Manual Commands:** %d\n", commandCount))
-	timeline.WriteString(fmt.Sprintf("- **System Events:** %d\n", eventCount))
+	fmt.Fprintf(&timeline, "- **Manual Commands:** %d\n", commandCount)
+	fmt.Fprintf(&timeline, "- **System Events:** %d\n", eventCount)
 	if commandCount > 0 {
-		timeline.WriteString(fmt.Sprintf("- **Command Duration:** %s\n", formatDuration(totalDuration)))
+		fmt.Fprintf(&timeline, "- **Command Duration:** %s\n", formatDuration(totalDuration))
 	}
 	timeline.WriteString("\n")
 
@@ -169,7 +169,7 @@ func FormatUnifiedTimeline(entries []UnifiedEntry, ticket string) string {
 
 	for _, day := range days {
 		dayEntries := dayGroups[day]
-		timeline.WriteString(fmt.Sprintf("### %s\n\n", day))
+		fmt.Fprintf(&timeline, "### %s\n\n", day)
 
 		for _, entry := range dayEntries {
 			if entry.Kind == EntryKindCommand {
