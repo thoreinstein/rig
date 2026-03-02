@@ -54,6 +54,7 @@ func TestTimelineCommandFlags(t *testing.T) {
 		{"limit", "1000"},
 		{"output", ""},
 		{"no-update", "false"},
+		{"show-diffs", "false"},
 	}
 
 	for _, expected := range expectedFlags {
@@ -178,7 +179,7 @@ func TestRemoveExistingTimeline(t *testing.T) {
 		expected string
 	}{
 		{
-			name: "content with timeline section",
+			name: "content with command timeline section",
 			content: `# Ticket Note
 
 ## Summary
@@ -191,6 +192,33 @@ Commands: 10
 ### 2025-08-10
 - command1
 - command2
+
+## Notes
+
+Some notes here.`,
+			expected: `# Ticket Note
+
+## Summary
+
+Some summary here.
+
+## Notes
+
+Some notes here.`,
+		},
+		{
+			name: "content with workflow timeline section",
+			content: `# Ticket Note
+
+## Summary
+
+Some summary here.
+
+## Workflow Timeline - PROJ-123
+
+Events: 5
+### 2026-03-02
+- event1
 
 ## Notes
 

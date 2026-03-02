@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"thoreinstein.com/rig/pkg/config"
+	"thoreinstein.com/rig/pkg/events"
 	"thoreinstein.com/rig/pkg/git"
 	"thoreinstein.com/rig/pkg/history"
 	"thoreinstein.com/rig/pkg/notes"
@@ -50,6 +52,7 @@ var (
 	timelineLimit       int
 	timelineOutput      string
 	timelineNoUpdate    bool
+	timelineShowDiffs   bool
 )
 
 func init() {
@@ -65,6 +68,7 @@ func init() {
 	timelineCmd.Flags().IntVar(&timelineLimit, "limit", 1000, "Maximum number of commands to retrieve")
 	timelineCmd.Flags().StringVar(&timelineOutput, "output", "", "Output file path (default: update ticket note)")
 	timelineCmd.Flags().BoolVar(&timelineNoUpdate, "no-update", false, "Don't update the ticket note, only output to console")
+	timelineCmd.Flags().BoolVar(&timelineShowDiffs, "show-diffs", false, "Show Dolt diffs between workflow checkpoints")
 }
 
 func runTimelineCommand(ticket string) error {
@@ -158,17 +162,67 @@ func runTimelineCommand(ticket string) error {
 		return errors.Wrap(err, "failed to query commands")
 	}
 
-	if len(commands) == 0 {
-		fmt.Printf("No commands found for ticket: %s\n", ticketInfo.Full)
+	// Prepare unified entries
+	var unifiedEntries []history.UnifiedEntry
+	for _, cmd := range commands {
+		unifiedEntries = append(unifiedEntries, history.UnifiedEntryFromCommand(cmd))
+	}
+
+	// Fetch workflow events if enabled
+	var workflowEvents []events.WorkflowEvent
+	if cfg.Events.Enabled {
+		if verbose {
+			fmt.Println("Querying workflow events from Dolt...")
+		}
+		edm, err := events.NewDatabaseManager(cfg.Events.DataPath, cfg.Events.CommitName, cfg.Events.CommitEmail, verbose)
+		if err != nil {
+			if verbose {
+				fmt.Printf("Warning: failed to initialize events database: %v\n", err)
+			}
+		} else {
+			defer edm.Close()
+			evs, err := edm.QueryEventsByTicket(context.Background(), ticketInfo.Full)
+			if err != nil {
+				if verbose {
+					fmt.Printf("Warning: failed to query workflow events: %v\n", err)
+				}
+			} else {
+				workflowEvents = evs
+				for _, e := range evs {
+					unifiedEntries = append(unifiedEntries, history.UnifiedEntryFromEvent(e.CreatedAt, e.Step, e.Status, e.Message, e.CorrelationID))
+				}
+			}
+		}
+	}
+
+	if len(unifiedEntries) == 0 {
+		fmt.Printf("No history found for ticket: %s\n", ticketInfo.Full)
 		return nil
 	}
 
 	if verbose {
-		fmt.Printf("Found %d commands\n", len(commands))
+		fmt.Printf("Found %d total entries (%d commands, %d events)\n", len(unifiedEntries), len(commands), len(workflowEvents))
 	}
 
-	// Generate timeline markdown using the new formatter
-	timeline := history.FormatTimeline(commands, ticketInfo.Full)
+	// Generate timeline markdown
+	var timeline string
+	if len(workflowEvents) > 0 {
+		timeline = history.FormatUnifiedTimeline(unifiedEntries, ticketInfo.Full)
+	} else {
+		timeline = history.FormatTimeline(commands, ticketInfo.Full)
+	}
+
+	// Append diffs if requested
+	if timelineShowDiffs && len(workflowEvents) > 0 {
+		diffSummary, err := generateDiffSummary(cfg, workflowEvents, verbose)
+		if err != nil {
+			if verbose {
+				fmt.Printf("Warning: failed to generate diff summary: %v\n", err)
+			}
+		} else if diffSummary != "" {
+			timeline += "\n" + diffSummary
+		}
+	}
 
 	// Output timeline
 	if timelineNoUpdate {
@@ -338,7 +392,7 @@ func removeExistingTimeline(content string) string {
 
 	for _, line := range lines {
 		// Check if this is a timeline section header
-		if strings.HasPrefix(line, "## Command Timeline") {
+		if strings.HasPrefix(line, "## Command Timeline") || strings.HasPrefix(line, "## Workflow Timeline") {
 			inTimelineSection = true
 			continue
 		}
@@ -360,4 +414,51 @@ func removeExistingTimeline(content string) string {
 	// but that's the expected behavior - it was part of the timeline section.
 
 	return strings.Join(result, "\n")
+}
+
+// generateDiffSummary queries Dolt diffs for all unique correlation IDs.
+func generateDiffSummary(cfg *config.Config, workflowEvents []events.WorkflowEvent, verbose bool) (string, error) {
+	edm, err := events.NewDatabaseManager(cfg.Events.DataPath, cfg.Events.CommitName, cfg.Events.CommitEmail, verbose)
+	if err != nil {
+		return "", err
+	}
+	defer edm.Close()
+
+	// Find unique correlation IDs
+	cids := make(map[string]bool)
+	for _, e := range workflowEvents {
+		if e.CorrelationID != "" {
+			cids[e.CorrelationID] = true
+		}
+	}
+
+	var sb strings.Builder
+	sb.WriteString("## Workflow Checkpoint Diffs\n\n")
+
+	foundAny := false
+	for cid := range cids {
+		diffs, err := edm.QueryDiffForCorrelation(context.Background(), cid)
+		if err != nil {
+			if verbose {
+				fmt.Printf("Warning: failed to query diff for %s: %v\n", cid, err)
+			}
+			continue
+		}
+
+		if len(diffs) > 0 {
+			foundAny = true
+			sb.WriteString(fmt.Sprintf("### Correlation: %s\n\n", cid))
+			for _, d := range diffs {
+				sb.WriteString(fmt.Sprintf("- `%s` **[%s]** %s: %s\n",
+					d.DiffType, d.Step, d.Status, d.Message))
+			}
+			sb.WriteString("\n")
+		}
+	}
+
+	if !foundAny {
+		return "", nil
+	}
+
+	return sb.String(), nil
 }
