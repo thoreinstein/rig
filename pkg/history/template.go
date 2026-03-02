@@ -124,9 +124,11 @@ func FormatTimeline(commands []Command, ticket string) string {
 func FormatUnifiedTimeline(entries []UnifiedEntry, ticket string) string {
 	var timeline strings.Builder
 
-	// Sort entries by timestamp
-	sort.Slice(entries, func(i, j int) bool {
-		return entries[i].Timestamp.Before(entries[j].Timestamp)
+	// Sort a copy so callers are not surprised by in-place mutation.
+	sorted := make([]UnifiedEntry, len(entries))
+	copy(sorted, entries)
+	sort.Slice(sorted, func(i, j int) bool {
+		return sorted[i].Timestamp.Before(sorted[j].Timestamp)
 	})
 
 	// Group by day
@@ -134,14 +136,14 @@ func FormatUnifiedTimeline(entries []UnifiedEntry, ticket string) string {
 	var commandCount, eventCount int
 	var totalDuration int64
 
-	for _, entry := range entries {
+	for _, entry := range sorted {
 		day := entry.Timestamp.Format("2006-01-02")
 		dayGroups[day] = append(dayGroups[day], entry)
 
 		if entry.Kind == EntryKindCommand && entry.Command != nil {
 			commandCount++
 			totalDuration += entry.Command.Duration
-		} else if entry.Kind == EntryKindEvent {
+		} else if entry.Kind == EntryKindEvent && entry.Event != nil {
 			eventCount++
 		}
 	}

@@ -40,3 +40,7 @@ roadmap.json
 .bv/
 discovery.db
 /rig-assistant-plugin
+
+# Dolt internal database state
+.dolt/
+tmpdolt/

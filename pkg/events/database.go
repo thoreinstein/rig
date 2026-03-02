@@ -105,14 +105,14 @@ func (dm *DatabaseManager) BackfillTicket(ctx context.Context, correlationID, ti
 	}
 
 	query := `UPDATE workflow_events SET metadata = ? WHERE correlation_id = ? AND metadata IS NULL`
-	result, err := dm.db.ExecContext(ctx, query, metadata, correlationID)
+	result, err := dm.db.ExecContext(ctx, query, string(metadata), correlationID)
 	if err != nil {
 		return errors.Wrap(err, "failed to backfill ticket metadata")
 	}
 
 	if dm.Verbose {
 		if n, rowErr := result.RowsAffected(); rowErr == nil {
-			fmt.Printf("[events] backfilled %d event(s) with ticket %s\n", n, ticket)
+			fmt.Fprintf(os.Stderr, "[events] backfilled %d event(s) with ticket %s\n", n, ticket)
 		}
 	}
 

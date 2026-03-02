@@ -158,10 +158,10 @@ func (e *Engine) Run(ctx context.Context, prNumber int, opts MergeOptions) error
 		if s.step == StepGather && wf.Ticket != "" {
 			if ts, ok := e.eventLogger.(events.TicketMetadataSetter); ok {
 				ts.SetTicket(wf.Ticket)
-				if dl, ok := e.eventLogger.(*events.DoltEventLogger); ok {
-					if err := dl.BackfillTicket(ctx, correlationID, wf.Ticket); err != nil {
-						e.logger.Warn("failed to backfill ticket metadata", "ticket", wf.Ticket, "correlationID", correlationID, "error", err)
-					}
+			}
+			if bf, ok := e.eventLogger.(events.TicketBackfiller); ok {
+				if err := bf.BackfillTicket(ctx, correlationID, wf.Ticket); err != nil {
+					e.logger.Warn("failed to backfill ticket metadata", "ticket", wf.Ticket, "correlationID", correlationID, "error", err)
 				}
 			}
 		}
@@ -290,10 +290,10 @@ func (e *Engine) Resume(ctx context.Context, checkpoint *Checkpoint) error {
 		if s.step == StepGather && wf.Ticket != "" {
 			if ts, ok := e.eventLogger.(events.TicketMetadataSetter); ok {
 				ts.SetTicket(wf.Ticket)
-				if dl, ok := e.eventLogger.(*events.DoltEventLogger); ok {
-					if err := dl.BackfillTicket(ctx, correlationID, wf.Ticket); err != nil {
-						e.logger.Warn("failed to backfill ticket metadata", "ticket", wf.Ticket, "correlationID", correlationID, "error", err)
-					}
+			}
+			if bf, ok := e.eventLogger.(events.TicketBackfiller); ok {
+				if err := bf.BackfillTicket(ctx, correlationID, wf.Ticket); err != nil {
+					e.logger.Warn("failed to backfill ticket metadata", "ticket", wf.Ticket, "correlationID", correlationID, "error", err)
 				}
 			}
 		}

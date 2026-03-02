@@ -25,6 +25,11 @@ type TicketMetadataSetter interface {
 	SetTicket(ticket string)
 }
 
+// TicketBackfiller defines the interface for retroactively tagging events with a ticket ID.
+type TicketBackfiller interface {
+	BackfillTicket(ctx context.Context, correlationID, ticket string) error
+}
+
 // DoltEventLogger is a Dolt-backed implementation of EventLogger.
 type DoltEventLogger struct {
 	dm     *DatabaseManager
