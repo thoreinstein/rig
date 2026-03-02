@@ -20,6 +20,11 @@ type EventLogger interface {
 	Close() error
 }
 
+// TicketMetadataSetter defines the interface for tagging events with a ticket ID.
+type TicketMetadataSetter interface {
+	SetTicket(ticket string)
+}
+
 // DoltEventLogger is a Dolt-backed implementation of EventLogger.
 type DoltEventLogger struct {
 	dm     *DatabaseManager

@@ -263,6 +263,31 @@ Some summary here.
 Some notes here.`,
 		},
 		{
+			name: "content with only diff section",
+			content: `# Ticket Note
+
+## Summary
+
+Some summary.
+
+## Workflow Checkpoint Diffs
+
+Diffs: 2
+
+## Notes
+
+Some notes here.`,
+			expected: `# Ticket Note
+
+## Summary
+
+Some summary.
+
+## Notes
+
+Some notes here.`,
+		},
+		{
 			name: "content without timeline",
 			content: `# Ticket Note
 

@@ -3,6 +3,7 @@ package workflow
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"testing"
@@ -637,6 +638,53 @@ func TestPreflight(t *testing.T) {
 				t.Errorf("FailureReason = %q, want %q", result.FailureReason, tt.wantFailure)
 			}
 		})
+	}
+}
+
+// mockDoltEventLogger allows us to test SetTicket calls.
+type mockDoltEventLogger struct {
+	events.NoopEventLogger
+	ticket string
+}
+
+func (m *mockDoltEventLogger) SetTicket(ticket string) {
+	m.ticket = ticket
+}
+
+func TestResume_DoltTicketTagging(t *testing.T) {
+	gh := &mockGitHubClient{pr: &github.PRInfo{Number: 123}}
+	cfg := &config.Config{
+		Jira: config.JiraConfig{Enabled: false},
+	}
+	mockLogger := &mockDoltEventLogger{}
+
+	// Initialize with a real router to avoid nil dereference in RouteTicket
+	router := NewTicketRouter(cfg, "main", false)
+	engine := &Engine{
+		github:      gh,
+		jira:        nil,
+		cfg:         cfg,
+		router:      router,
+		eventLogger: mockLogger,
+		verbose:     false,
+		logger:      slog.Default(),
+	}
+
+	checkpoint := &Checkpoint{
+		PRNumber:       123,
+		Ticket:         "RESUME-1",
+		CompletedSteps: []Step{StepPreflight, StepGather, StepDebrief, StepMerge}, // Only closeout remains
+		CurrentStep:    StepCloseout,
+		Context:        &WorkflowContext{},
+	}
+
+	// Since Engine.Resume will call runCloseout, which might still fail due to
+	// other missing dependencies (like tmux), we just want to ensure SetTicket
+	// is called before the step loop starts.
+	_ = engine.Resume(t.Context(), checkpoint)
+
+	if mockLogger.ticket != "RESUME-1" {
+		t.Errorf("expected ticket 'RESUME-1' to be set on logger, got %q", mockLogger.ticket)
 	}
 }
 
