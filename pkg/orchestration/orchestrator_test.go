@@ -8,7 +8,50 @@ import (
 	"testing"
 
 	"github.com/cockroachdb/errors"
+
+	"thoreinstein.com/rig/pkg/events"
 )
+
+type MockEventLogger struct {
+	events.NoopEventLogger
+	mu     sync.Mutex
+	logged []string
+}
+
+func (m *MockEventLogger) LogStepStarted(ctx context.Context, correlationID, step string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.logged = append(m.logged, "STARTED:"+step)
+	return nil
+}
+
+func (m *MockEventLogger) LogStepCompleted(ctx context.Context, correlationID, step string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.logged = append(m.logged, "COMPLETED:"+step)
+	return nil
+}
+
+func (m *MockEventLogger) LogStepFailed(ctx context.Context, correlationID, step, errMsg string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.logged = append(m.logged, "FAILED:"+step)
+	return nil
+}
+
+func (m *MockEventLogger) LogWorkflowCompleted(ctx context.Context, correlationID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.logged = append(m.logged, "COMPLETED:workflow")
+	return nil
+}
+
+func (m *MockEventLogger) LogWorkflowFailed(ctx context.Context, correlationID, errMsg string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.logged = append(m.logged, "FAILED:workflow")
+	return nil
+}
 
 type MockStore struct {
 	mu            sync.Mutex
@@ -94,6 +137,66 @@ func (m *MockStore) UpdateNodeStatus(ctx context.Context, id string, status Node
 		}
 	}
 	return errors.New("not found")
+}
+
+func TestOrchestrator_Execute_EventLogging(t *testing.T) {
+	ctx := t.Context()
+
+	t.Run("successful logging sequence", func(t *testing.T) {
+		wID := "w1"
+		eID := "e1"
+		nodes := []*Node{{ID: "n1", Name: "node1", Type: "hello"}}
+		store := &MockStore{
+			workflows:  map[string]*Workflow{wID: {ID: wID, Version: 1}},
+			executions: map[string]*Execution{eID: {ID: eID, WorkflowID: wID, WorkflowVersion: 1, Status: ExecutionStatusPending}},
+			nodes:      map[string][]*Node{wID: nodes},
+			nodeStates: map[string][]*NodeState{eID: {{ID: "s1", NodeID: "n1", ExecutionID: eID, Status: NodeStatusPending}}},
+		}
+		el := &MockEventLogger{}
+		o := NewOrchestrator(store, WithEventLogger(el))
+
+		if err := o.Execute(ctx, eID); err != nil {
+			t.Fatalf("Execute failed: %v", err)
+		}
+
+		expected := []string{"STARTED:execution", "STARTED:node1", "COMPLETED:node1", "COMPLETED:workflow"}
+		if len(el.logged) != len(expected) {
+			t.Fatalf("Expected %d events, got %d: %v", len(expected), len(el.logged), el.logged)
+		}
+		for i, v := range expected {
+			if el.logged[i] != v {
+				t.Errorf("Event %d: expected %q, got %q", i, v, el.logged[i])
+			}
+		}
+	})
+
+	t.Run("failure logging sequence", func(t *testing.T) {
+		wID := "w2"
+		eID := "e2"
+		nodes := []*Node{{ID: "n1", Name: "node1", Type: "fail"}}
+		store := &MockStore{
+			workflows:  map[string]*Workflow{wID: {ID: wID, Version: 1}},
+			executions: map[string]*Execution{eID: {ID: eID, WorkflowID: wID, WorkflowVersion: 1, Status: ExecutionStatusPending}},
+			nodes:      map[string][]*Node{wID: nodes},
+			nodeStates: map[string][]*NodeState{eID: {{ID: "s1", NodeID: "n1", ExecutionID: eID, Status: NodeStatusPending}}},
+		}
+		el := &MockEventLogger{}
+		o := NewOrchestrator(store, WithEventLogger(el))
+
+		if err := o.Execute(ctx, eID); err == nil {
+			t.Fatal("Expected Execute to fail")
+		}
+
+		expected := []string{"STARTED:execution", "STARTED:node1", "FAILED:node1", "FAILED:workflow"}
+		if len(el.logged) != len(expected) {
+			t.Fatalf("Expected %d events, got %d: %v", len(expected), len(el.logged), el.logged)
+		}
+		for i, v := range expected {
+			if el.logged[i] != v {
+				t.Errorf("Event %d: expected %q, got %q", i, v, el.logged[i])
+			}
+		}
+	})
 }
 
 func TestOrchestrator_Execute_Mock(t *testing.T) {

@@ -8,6 +8,8 @@ import (
 	"sync"
 
 	"github.com/cockroachdb/errors"
+
+	"thoreinstein.com/rig/pkg/events"
 )
 
 // WorkflowStore defines the database operations required by the Orchestrator.
@@ -26,6 +28,7 @@ type Orchestrator struct {
 	store          WorkflowStore
 	bridge         NodeBridge
 	logger         *slog.Logger
+	eventLogger    events.EventLogger
 	secretResolver SecretResolver
 }
 
@@ -46,6 +49,13 @@ func WithLogger(logger *slog.Logger) OrchestratorOption {
 	}
 }
 
+// WithEventLogger sets the event logger for the orchestrator.
+func WithEventLogger(logger events.EventLogger) OrchestratorOption {
+	return func(o *Orchestrator) {
+		o.eventLogger = logger
+	}
+}
+
 // WithSecretResolver sets the secret resolver for mapping node secrets.
 // A nil resolver is ignored to keep the default configured in NewOrchestrator.
 func WithSecretResolver(resolver SecretResolver) OrchestratorOption {
@@ -60,8 +70,9 @@ func WithSecretResolver(resolver SecretResolver) OrchestratorOption {
 // NewOrchestrator creates a new Orchestrator with the given WorkflowStore.
 func NewOrchestrator(store WorkflowStore, opts ...OrchestratorOption) *Orchestrator {
 	o := &Orchestrator{
-		store:  store,
-		logger: slog.Default(),
+		store:       store,
+		logger:      slog.Default(),
+		eventLogger: events.NoopEventLogger{},
 	}
 	for _, opt := range opts {
 		opt(o)
@@ -243,6 +254,9 @@ func (o *Orchestrator) Execute(ctx context.Context, executionID string) error {
 		if failErr != nil {
 			errMsg = failErr.Error()
 		}
+		if err := o.eventLogger.LogWorkflowFailed(cleanupCtx, executionID, errMsg); err != nil {
+			o.logger.Warn("failed to log workflow failure event", "execution_id", executionID, "error", err)
+		}
 		if updateErr := o.store.UpdateExecutionStatus(cleanupCtx, executionID, ExecutionStatusFailed, errMsg); updateErr != nil {
 			return errors.CombineErrors(failErr, errors.Wrap(updateErr, "failed to update execution status to failed"))
 		}
@@ -253,6 +267,10 @@ func (o *Orchestrator) Execute(ctx context.Context, executionID string) error {
 	// This is now idempotent due to database-level changes.
 	if err := o.store.UpdateExecutionStatus(ctx, executionID, ExecutionStatusRunning, ""); err != nil {
 		return errors.Wrap(err, "failed to start execution")
+	}
+
+	if err := o.eventLogger.LogStepStarted(ctx, executionID, "execution"); err != nil {
+		o.logger.Warn("failed to log execution start event", "execution_id", executionID, "error", err)
 	}
 
 	activeNodes := 0
@@ -331,7 +349,7 @@ func (o *Orchestrator) Execute(ctx context.Context, executionID string) error {
 				}
 				mu.Unlock()
 
-				res, err := o.runNode(ctx, nodeMap[id], stateMap[id], inputs)
+				res, err := o.runNode(ctx, executionID, nodeMap[id], stateMap[id], inputs)
 
 				mu.Lock()
 				defer mu.Unlock()
@@ -370,12 +388,18 @@ func (o *Orchestrator) Execute(ctx context.Context, executionID string) error {
 		if failErr != nil {
 			errMsg = failErr.Error()
 		}
+		if err := o.eventLogger.LogWorkflowFailed(cleanupCtx, executionID, errMsg); err != nil {
+			o.logger.Warn("failed to log workflow failure event", "execution_id", executionID, "error", err)
+		}
 		if updateErr := o.store.UpdateExecutionStatus(cleanupCtx, executionID, ExecutionStatusFailed, errMsg); updateErr != nil {
 			return errors.CombineErrors(failErr, errors.Wrap(updateErr, "failed to update execution status to failed"))
 		}
 		return failErr
 	}
 
+	if err := o.eventLogger.LogWorkflowCompleted(ctx, executionID); err != nil {
+		o.logger.Warn("failed to log workflow completion event", "execution_id", executionID, "error", err)
+	}
 	return o.store.UpdateExecutionStatus(ctx, executionID, ExecutionStatusSuccess, "")
 }
 
@@ -395,9 +419,13 @@ func (o *Orchestrator) skipUnprocessed(ctx context.Context, launched map[string]
 	return errors.Join(errs...)
 }
 
-func (o *Orchestrator) runNode(ctx context.Context, node *Node, stateID string, inputs map[string]json.RawMessage) (json.RawMessage, error) {
+func (o *Orchestrator) runNode(ctx context.Context, executionID string, node *Node, stateID string, inputs map[string]json.RawMessage) (json.RawMessage, error) {
 	if err := o.store.UpdateNodeStatus(ctx, stateID, NodeStatusRunning, nil, ""); err != nil {
 		return nil, errors.Wrap(err, "failed to update node status to running")
+	}
+
+	if err := o.eventLogger.LogStepStarted(ctx, executionID, node.Name); err != nil {
+		o.logger.Warn("failed to log node start event", "execution_id", executionID, "node", node.Name, "error", err)
 	}
 
 	var result json.RawMessage
@@ -443,6 +471,13 @@ func (o *Orchestrator) runNode(ctx context.Context, node *Node, stateID string, 
 	if execErr != nil {
 		status = NodeStatusFailed
 		errMsg = execErr.Error()
+		if err := o.eventLogger.LogStepFailed(ctx, executionID, node.Name, errMsg); err != nil {
+			o.logger.Warn("failed to log node failure event", "execution_id", executionID, "node", node.Name, "error", err)
+		}
+	} else {
+		if err := o.eventLogger.LogStepCompleted(ctx, executionID, node.Name); err != nil {
+			o.logger.Warn("failed to log node completion event", "execution_id", executionID, "node", node.Name, "error", err)
+		}
 	}
 
 	if err := o.store.UpdateNodeStatus(ctx, stateID, status, result, errMsg); err != nil {
