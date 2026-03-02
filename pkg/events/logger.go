@@ -100,6 +100,8 @@ func (l *DoltEventLogger) log(ctx context.Context, correlationID, step, status, 
 	ticket := l.ticket
 	l.mu.RUnlock()
 
+	msg = RedactMessage(msg)
+
 	var metadata any
 	if ticket != "" {
 		m := map[string]string{"ticket": ticket}
@@ -107,7 +109,7 @@ func (l *DoltEventLogger) log(ctx context.Context, correlationID, step, status, 
 		if err != nil {
 			return errors.Wrap(err, "failed to marshal metadata")
 		}
-		metadata = string(b)
+		metadata = RedactMetadata(string(b))
 	}
 
 	id := uuid.New().String()
