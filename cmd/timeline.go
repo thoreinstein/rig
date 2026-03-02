@@ -37,7 +37,7 @@ Examples:
   rig timeline proj-123 --min-duration 5s`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return runTimelineCommand(args[0])
+		return runTimelineCommand(cmd.Context(), args[0])
 	},
 }
 
@@ -71,7 +71,7 @@ func init() {
 	timelineCmd.Flags().BoolVar(&timelineShowDiffs, "show-diffs", false, "Show Dolt diffs between workflow checkpoints")
 }
 
-func runTimelineCommand(ticket string) error {
+func runTimelineCommand(ctx context.Context, ticket string) error {
 	// Load configuration
 	cfg, err := loadConfig()
 	if err != nil {
@@ -170,26 +170,38 @@ func runTimelineCommand(ticket string) error {
 
 	// Fetch workflow events if enabled
 	var workflowEvents []events.WorkflowEvent
+	var edm *events.DatabaseManager
 	if cfg.Events.Enabled {
 		if verbose {
 			fmt.Println("Querying workflow events from Dolt...")
 		}
-		edm, err := events.NewDatabaseManager(cfg.Events.DataPath, cfg.Events.CommitName, cfg.Events.CommitEmail, verbose)
-		if err != nil {
+		var edmErr error
+		edm, edmErr = events.NewDatabaseManager(cfg.Events.DataPath, cfg.Events.CommitName, cfg.Events.CommitEmail, verbose)
+		if edmErr != nil {
+			fmt.Fprintf(os.Stderr, "Note: workflow events unavailable (use --verbose for details)\n")
 			if verbose {
-				fmt.Printf("Warning: failed to initialize events database: %v\n", err)
+				fmt.Fprintf(os.Stderr, "Warning: failed to initialize events database: %v\n", edmErr)
 			}
 		} else {
 			defer edm.Close()
-			evs, err := edm.QueryEventsByTicket(context.Background(), ticketInfo.Full)
-			if err != nil {
+			if initErr := edm.InitDatabase(); initErr != nil {
+				fmt.Fprintf(os.Stderr, "Note: workflow events unavailable (use --verbose for details)\n")
 				if verbose {
-					fmt.Printf("Warning: failed to query workflow events: %v\n", err)
+					fmt.Fprintf(os.Stderr, "Warning: failed to initialize events database: %v\n", initErr)
 				}
+				edm = nil // Prevent use of uninitialized database
 			} else {
-				workflowEvents = evs
-				for _, e := range evs {
-					unifiedEntries = append(unifiedEntries, history.UnifiedEntryFromEvent(e.CreatedAt, e.Step, e.Status, e.Message, e.CorrelationID))
+				evs, queryErr := edm.QueryEventsByTicket(ctx, ticketInfo.Full)
+				if queryErr != nil {
+					fmt.Fprintf(os.Stderr, "Note: workflow events unavailable (use --verbose for details)\n")
+					if verbose {
+						fmt.Fprintf(os.Stderr, "Warning: failed to query workflow events: %v\n", queryErr)
+					}
+				} else {
+					workflowEvents = evs
+					for _, e := range evs {
+						unifiedEntries = append(unifiedEntries, history.UnifiedEntryFromEvent(e.CreatedAt, e.Step, e.Status, e.Message, e.CorrelationID))
+					}
 				}
 			}
 		}
@@ -213,11 +225,11 @@ func runTimelineCommand(ticket string) error {
 	}
 
 	// Append diffs if requested
-	if timelineShowDiffs && len(workflowEvents) > 0 {
-		diffSummary, err := generateDiffSummary(cfg, workflowEvents, verbose)
+	if timelineShowDiffs && len(workflowEvents) > 0 && edm != nil {
+		diffSummary, err := generateDiffSummary(ctx, edm, workflowEvents, verbose)
 		if err != nil {
 			if verbose {
-				fmt.Printf("Warning: failed to generate diff summary: %v\n", err)
+				fmt.Fprintf(os.Stderr, "Warning: failed to generate diff summary: %v\n", err)
 			}
 		} else if diffSummary != "" {
 			timeline += "\n" + diffSummary
@@ -417,13 +429,8 @@ func removeExistingTimeline(content string) string {
 }
 
 // generateDiffSummary queries Dolt diffs for all unique correlation IDs.
-func generateDiffSummary(cfg *config.Config, workflowEvents []events.WorkflowEvent, verbose bool) (string, error) {
-	edm, err := events.NewDatabaseManager(cfg.Events.DataPath, cfg.Events.CommitName, cfg.Events.CommitEmail, verbose)
-	if err != nil {
-		return "", err
-	}
-	defer edm.Close()
-
+// It reuses the provided DatabaseManager rather than opening a second connection.
+func generateDiffSummary(ctx context.Context, edm *events.DatabaseManager, workflowEvents []events.WorkflowEvent, verbose bool) (string, error) {
 	// Find unique correlation IDs
 	cids := make(map[string]bool)
 	for _, e := range workflowEvents {
@@ -437,10 +444,10 @@ func generateDiffSummary(cfg *config.Config, workflowEvents []events.WorkflowEve
 
 	foundAny := false
 	for cid := range cids {
-		diffs, err := edm.QueryDiffForCorrelation(context.Background(), cid)
+		diffs, err := edm.QueryDiffForCorrelation(ctx, cid)
 		if err != nil {
 			if verbose {
-				fmt.Printf("Warning: failed to query diff for %s: %v\n", cid, err)
+				fmt.Fprintf(os.Stderr, "Warning: failed to query diff for %s: %v\n", cid, err)
 			}
 			continue
 		}

@@ -111,6 +111,43 @@ func TestDoltEventLogger_MetadataTicket(t *testing.T) {
 	}
 }
 
+func TestDoltEventLogger_NoTicketNullMetadata(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
+	tmpDir := t.TempDir()
+	dataPath := filepath.Join(tmpDir, "data")
+	dm, err := NewDatabaseManager(dataPath, "Rig Bot", "rig@localhost", true)
+	if err != nil {
+		t.Fatalf("failed to create db manager: %v", err)
+	}
+	defer dm.Close()
+
+	if err := dm.InitDatabase(); err != nil {
+		t.Fatalf("failed to init db: %v", err)
+	}
+
+	logger := NewDoltEventLogger(dm)
+	ctx := t.Context()
+	correlationID := "test-no-ticket-123"
+
+	// Log without calling SetTicket — metadata should be NULL
+	if err := logger.LogStepStarted(ctx, correlationID, "preflight"); err != nil {
+		t.Fatalf("LogStepStarted failed: %v", err)
+	}
+
+	var metadata *string
+	err = dm.db.QueryRow("SELECT metadata FROM workflow_events WHERE correlation_id = ?", correlationID).Scan(&metadata)
+	if err != nil {
+		t.Fatalf("failed to query metadata: %v", err)
+	}
+
+	if metadata != nil {
+		t.Errorf("expected NULL metadata when no ticket set, got %q", *metadata)
+	}
+}
+
 func TestNoopEventLogger(t *testing.T) {
 	logger := NoopEventLogger{}
 	ctx := t.Context()

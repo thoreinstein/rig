@@ -51,6 +51,151 @@ func TestFormatTimeline(t *testing.T) {
 }
 
 func TestFormatUnifiedTimeline(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 3, 2, 10, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		name     string
+		entries  []UnifiedEntry
+		ticket   string
+		contains []string
+		absent   []string
+	}{
+		{
+			name:    "empty entries",
+			entries: nil,
+			ticket:  "EMPTY-1",
+			contains: []string{
+				"## Workflow Timeline - EMPTY-1",
+				"**Manual Commands:** 0",
+				"**System Events:** 0",
+			},
+		},
+		{
+			name: "commands only",
+			entries: []UnifiedEntry{
+				UnifiedEntryFromCommand(Command{
+					Command:   "git status",
+					Timestamp: now,
+					ExitCode:  0,
+					Duration:  200,
+				}),
+			},
+			ticket: "CMD-1",
+			contains: []string{
+				"## Workflow Timeline - CMD-1",
+				"**Manual Commands:** 1",
+				"**System Events:** 0",
+				"✅",
+				"git status",
+			},
+		},
+		{
+			name: "events only",
+			entries: []UnifiedEntry{
+				UnifiedEntryFromEvent(now, "preflight", "STARTED", "Starting checks", "wf1"),
+				UnifiedEntryFromEvent(now.Add(time.Minute), "preflight", "COMPLETED", "", "wf1"),
+			},
+			ticket: "EVT-1",
+			contains: []string{
+				"## Workflow Timeline - EVT-1",
+				"**Manual Commands:** 0",
+				"**System Events:** 2",
+				"⚙️",
+				"🏁",
+				"[preflight]",
+			},
+			absent: []string{
+				"Command Duration:",
+			},
+		},
+		{
+			name: "failed event rendering",
+			entries: []UnifiedEntry{
+				UnifiedEntryFromEvent(now, "merge", "FAILED", "conflict detected", "wf2"),
+			},
+			ticket: "FAIL-1",
+			contains: []string{
+				"⚠️",
+				"[merge]",
+				"conflict detected",
+			},
+		},
+		{
+			name: "mixed entries sorted chronologically",
+			entries: []UnifiedEntry{
+				UnifiedEntryFromCommand(Command{
+					Command:   "ls -la",
+					Timestamp: now.Add(1 * time.Minute),
+					ExitCode:  0,
+				}),
+				UnifiedEntryFromEvent(now, "preflight", "STARTED", "Starting checks", "wf123"),
+				UnifiedEntryFromEvent(now.Add(2*time.Minute), "preflight", "COMPLETED", "", "wf123"),
+			},
+			ticket: "MIX-1",
+			contains: []string{
+				"## Workflow Timeline - MIX-1",
+				"**Manual Commands:** 1",
+				"**System Events:** 2",
+				"⚙️",
+				"🏁",
+				"✅",
+				"ls -la",
+			},
+		},
+		{
+			name: "nil command pointer skipped",
+			entries: []UnifiedEntry{
+				{Kind: EntryKindCommand, Timestamp: now, Command: nil},
+				UnifiedEntryFromEvent(now, "preflight", "STARTED", "ok", "wf3"),
+			},
+			ticket: "NIL-1",
+			contains: []string{
+				"⚙️",
+				"[preflight]",
+			},
+		},
+		{
+			name: "nil event pointer skipped",
+			entries: []UnifiedEntry{
+				{Kind: EntryKindEvent, Timestamp: now, Event: nil},
+				UnifiedEntryFromCommand(Command{
+					Command:   "echo hello",
+					Timestamp: now,
+					ExitCode:  0,
+				}),
+			},
+			ticket: "NIL-2",
+			contains: []string{
+				"echo hello",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			output := FormatUnifiedTimeline(tt.entries, tt.ticket)
+
+			for _, want := range tt.contains {
+				if !strings.Contains(output, want) {
+					t.Errorf("output missing %q", want)
+				}
+			}
+			for _, absent := range tt.absent {
+				if strings.Contains(output, absent) {
+					t.Errorf("output should not contain %q", absent)
+				}
+			}
+		})
+	}
+}
+
+func TestFormatUnifiedTimeline_ChronologicalOrder(t *testing.T) {
+	t.Parallel()
+
 	now := time.Date(2026, 3, 2, 10, 0, 0, 0, time.UTC)
 	entries := []UnifiedEntry{
 		UnifiedEntryFromCommand(Command{
@@ -63,19 +208,6 @@ func TestFormatUnifiedTimeline(t *testing.T) {
 	}
 
 	output := FormatUnifiedTimeline(entries, "PROJ-456")
-
-	if !strings.Contains(output, "## Workflow Timeline - PROJ-456") {
-		t.Error("Output missing header")
-	}
-	if !strings.Contains(output, "⚙️") || !strings.Contains(output, "[preflight]") {
-		t.Error("Output missing event started")
-	}
-	if !strings.Contains(output, "🏁") {
-		t.Error("Output missing event completed")
-	}
-	if !strings.Contains(output, "✅") || !strings.Contains(output, "ls -la") {
-		t.Error("Output missing command")
-	}
 
 	// Verify sorting (Event @ 10:00, Cmd @ 10:01, Event @ 10:02)
 	idxEventStart := strings.Index(output, "⚙️")

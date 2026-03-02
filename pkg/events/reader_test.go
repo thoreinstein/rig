@@ -96,13 +96,10 @@ func TestReader_QueryDiffForCorrelation(t *testing.T) {
 		t.Fatalf("QueryDiffForCorrelation failed: %v", err)
 	}
 
-	// Note: On a fresh DB, the completion commit should show the rows added during the workflow.
-	// Since LogWorkflowCompleted adds its own event before committing, we expect at least that one.
+	// The completion commit includes all uncommitted rows (preflight + workflow completion).
+	// On Dolt's first commit, dolt_diff compares against an empty base, so all inserts appear.
 	if len(diffs) == 0 {
-		// Depending on how dolt_diff handles the first commit, this might be empty if it only shows changes between commits.
-		// However, LogWorkflowCompleted calls DOLT_COMMIT after inserting the workflow completion event.
-		// If there were uncommitted changes (like preflight started), they are committed too.
-		t.Log("Warning: no diffs found (expected on some Dolt versions if no previous commit existed)")
+		t.Error("expected at least one diff entry from the workflow completion commit")
 	} else {
 		foundCompletion := false
 		for _, d := range diffs {
@@ -113,5 +110,34 @@ func TestReader_QueryDiffForCorrelation(t *testing.T) {
 		if !foundCompletion {
 			t.Errorf("expected workflow completion event in diffs")
 		}
+	}
+}
+
+func TestReader_QueryDiffForCorrelation_NoCommit(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
+	tmpDir := t.TempDir()
+	dataPath := filepath.Join(tmpDir, "data")
+	dm, err := NewDatabaseManager(dataPath, "Rig Bot", "rig@localhost", true)
+	if err != nil {
+		t.Fatalf("failed to create db manager: %v", err)
+	}
+	defer dm.Close()
+
+	if err := dm.InitDatabase(); err != nil {
+		t.Fatalf("failed to init db: %v", err)
+	}
+
+	ctx := t.Context()
+
+	// Query with a correlation ID that has no matching commit
+	diffs, err := dm.QueryDiffForCorrelation(ctx, "nonexistent-correlation")
+	if err != nil {
+		t.Fatalf("QueryDiffForCorrelation should return nil error for missing commit, got: %v", err)
+	}
+	if diffs != nil {
+		t.Errorf("expected nil diffs for missing commit, got %d entries", len(diffs))
 	}
 }
