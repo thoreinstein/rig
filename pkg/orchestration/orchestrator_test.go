@@ -245,9 +245,8 @@ func TestOrchestrator_Execute_EventLogging(t *testing.T) {
 			t.Fatal("Expected Execute to fail due to persistence failure")
 		}
 
-		// Currently (BUGGY): el.logged contains "COMPLETED:node1" and "MILESTONE:Node node1 completed"
-		// Desired (FIXED): el.logged should NOT contain node terminal events if persistence fails.
-		// It should only have: STARTED:execution, MILESTONE:Workflow...started, STARTED:node1, FAILED:workflow
+		// State-first ordering ensures terminal events are NOT logged if persistence fails.
+		// Expected: STARTED:execution, MILESTONE:Workflow...started, STARTED:node1, FAILED:workflow
 
 		for _, e := range el.logged {
 			if strings.Contains(e, "COMPLETED:node1") || strings.Contains(e, "MILESTONE:Node node1") {

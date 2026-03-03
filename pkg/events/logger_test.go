@@ -168,6 +168,9 @@ func TestNoopEventLogger(t *testing.T) {
 	if err := logger.LogWorkflowFailed(ctx, cid, "error"); err != nil {
 		t.Errorf("LogWorkflowFailed failed: %v", err)
 	}
+	if err := logger.CommitMilestone(ctx, "milestone message"); err != nil {
+		t.Errorf("CommitMilestone failed: %v", err)
+	}
 	if err := logger.Close(); err != nil {
 		t.Errorf("Close failed: %v", err)
 	}

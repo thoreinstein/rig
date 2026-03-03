@@ -458,7 +458,7 @@ func (m *mockEventLogger) LogWorkflowFailed(_ context.Context, correlationID, er
 }
 
 func (m *mockEventLogger) CommitMilestone(_ context.Context, msg string) error {
-	m.calls = append(m.calls, eventLoggerCall{method: "CommitMilestone", errMsg: msg})
+	m.calls = append(m.calls, eventLoggerCall{method: "CommitMilestone", step: msg})
 	return nil
 }
 

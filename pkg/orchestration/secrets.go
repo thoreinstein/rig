@@ -30,7 +30,7 @@ func NewEnvSecretResolver() *EnvSecretResolver {
 func (e *EnvSecretResolver) Resolve(ctx context.Context, key string) (string, error) {
 	val, ok := os.LookupEnv(key)
 	if !ok {
-		return "", errors.New("secret key not found in environment")
+		return "", errors.Newf("secret key %q not found in environment", key)
 	}
 	return val, nil
 }
