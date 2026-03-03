@@ -250,17 +250,16 @@ func (o *Orchestrator) Execute(ctx context.Context, executionID string) error {
 		failErr = errors.CombineErrors(failErr, skipErr)
 		failErr = errors.CombineErrors(failErr, transitionErr)
 
-		// Emit a STARTED event so every execution path is bookended.
-		if err := o.eventLogger.LogStepStarted(cleanupCtx, executionID, "execution"); err != nil {
-			o.logger.Warn("failed to log execution start event during recovery", "execution_id", executionID, "error", err)
-		}
-
 		errMsg := "execution failed"
 		if failErr != nil {
 			errMsg = failErr.Error()
 		}
 		if updateErr := o.store.UpdateExecutionStatus(cleanupCtx, executionID, ExecutionStatusFailed, errMsg); updateErr != nil {
 			return errors.CombineErrors(failErr, errors.Wrap(updateErr, "failed to update execution status to failed"))
+		}
+		// State-first: only emit events after persistence succeeds.
+		if err := o.eventLogger.LogStepStarted(cleanupCtx, executionID, "execution"); err != nil {
+			o.logger.Warn("failed to log execution start event during recovery", "execution_id", executionID, "error", err)
 		}
 		if err := o.eventLogger.LogWorkflowFailed(cleanupCtx, executionID, errMsg); err != nil {
 			o.logger.Warn("failed to log workflow failure event", "execution_id", executionID, "error", err)
