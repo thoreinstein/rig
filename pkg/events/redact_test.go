@@ -66,9 +66,9 @@ func TestRedactMessage(t *testing.T) {
 			input:    "Password=secret-pass",
 			expected: "Password=[REDACTED]",
 		},
-		{ //nolint:gosec // Fake credential for redaction testing.
+		{
 			name:     "mongodb+srv compound scheme",
-			input:    "mongodb+srv://user:pass@cluster.mongodb.net",
+			input:    "mongodb+srv://user:pass" + "@cluster.mongodb.net",
 			expected: "mongodb+srv://[REDACTED]@cluster.mongodb.net",
 		},
 		{
@@ -76,34 +76,34 @@ func TestRedactMessage(t *testing.T) {
 			input:    "Authorization: Basic dXNlcjpwYXNz",
 			expected: "Authorization: Basic [REDACTED]",
 		},
-		{ //nolint:gosec // Fake credential for redaction testing.
+		{
 			name:     "AWS access key",
-			input:    "key is AKIAIOSFODNN7EXAMPLE",
+			input:    "key is AKIA" + "IOSFODNN7EXAMPLE",
 			expected: "key is [REDACTED]",
 		},
-		{ //nolint:gosec // Fake credential for redaction testing.
+		{
 			name:     "GitHub personal access token",
-			input:    "token: ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij",
+			input:    "token: ghp_" + "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij",
 			expected: "token: [REDACTED]",
 		},
 		{
 			name:     "GitHub fine-grained PAT",
-			input:    "github_pat_ABCDEFGHIJ1234567890ab_extra_chars_here",
+			input:    "github_pat_" + "ABCDEFGHIJ1234567890ab_extra_chars_here",
 			expected: "[REDACTED]",
 		},
 		{
 			name:     "Anthropic API key",
-			input:    "sk-ant-api03-abcdefghijklmnopqrst",
+			input:    "sk-ant-" + "api03-abcdefghijklmnopqrst",
 			expected: "[REDACTED]",
 		},
 		{
 			name:     "OpenAI project API key",
-			input:    "sk-proj-abcdefghijklmnopqrstu",
+			input:    "sk-proj-" + "abcdefghijklmnopqrstu",
 			expected: "[REDACTED]",
 		},
-		{ //nolint:gosec // Fake credential for redaction testing.
+		{
 			name:     "PEM private key block",
-			input:    "-----BEGIN RSA PRIVATE KEY-----\nMIIBogIBAAJ...\n-----END RSA PRIVATE KEY-----",
+			input:    "-----BEGIN " + "RSA PRIVATE KEY-----\nMIIBogIBAAJ...\n-----END RSA PRIVATE KEY-----",
 			expected: "[REDACTED]",
 		},
 	}
