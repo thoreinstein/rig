@@ -1015,6 +1015,9 @@ func (dm *DatabaseManager) ExportExecutionsBeforeCutoff(ctx context.Context, cut
 			NodeStates: states,
 		})
 	}
+	if err := rows.Err(); err != nil {
+		return 0, "", errors.Wrap(err, "error iterating execution rows for export")
+	}
 
 	if len(archives) == 0 {
 		return 0, "", nil

@@ -69,12 +69,12 @@ func runGCCommand() error {
 	}
 
 	// 1. Determine Cutoff
-	cutoff, err := determineCutoff(cfg, gcAge)
+	cutoff, resolvedAge, err := determineCutoff(cfg, gcAge)
 	if err != nil {
 		return err
 	}
 
-	fmt.Printf("Pruning data older than %s (%s)\n", gcAge, cutoff.Format(time.RFC3339))
+	fmt.Printf("Pruning data older than %s (%s)\n", resolvedAge, cutoff.Format(time.RFC3339))
 	if gcDryRun {
 		fmt.Println("Running in DRY-RUN mode. No data will be deleted.")
 	}
@@ -120,7 +120,7 @@ func runGCCommand() error {
 	return nil
 }
 
-func determineCutoff(cfg *config.Config, ageStr string) (time.Time, error) {
+func determineCutoff(cfg *config.Config, ageStr string) (time.Time, string, error) {
 	if ageStr == "" {
 		// Fallback to config
 		if gcTarget == "events" && cfg.Events.RetentionDays > 0 {
@@ -149,15 +149,15 @@ func determineCutoff(cfg *config.Config, ageStr string) (time.Time, error) {
 	}
 
 	if ageStr == "" {
-		return time.Time{}, errors.New("age must be specified via --age flag or retention_days config")
+		return time.Time{}, "", errors.New("age must be specified via --age flag or retention_days config")
 	}
 
 	days, err := parseAge(ageStr)
 	if err != nil {
-		return time.Time{}, err
+		return time.Time{}, "", err
 	}
 
-	return time.Now().AddDate(0, 0, -days), nil
+	return time.Now().AddDate(0, 0, -days), ageStr, nil
 }
 
 func parseAge(age string) (int, error) {

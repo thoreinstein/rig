@@ -98,7 +98,7 @@ func TestDetermineCutoff(t *testing.T) {
 			// Mock global flag
 			gcTarget = tt.target
 
-			got, err := determineCutoff(c, tt.ageFlag)
+			got, resolvedAge, err := determineCutoff(c, tt.ageFlag)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("determineCutoff() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -113,6 +113,11 @@ func TestDetermineCutoff(t *testing.T) {
 				}
 				if diff > time.Minute {
 					t.Errorf("determineCutoff() = %v, want approx %v (diff %v)", got, wantTime, diff)
+				}
+
+				// Verify resolved age is never empty
+				if resolvedAge == "" {
+					t.Error("determineCutoff() returned empty resolvedAge on success")
 				}
 			}
 		})
