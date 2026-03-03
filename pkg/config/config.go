@@ -33,18 +33,20 @@ type Config struct {
 
 // EventsConfig holds the configuration for the embedded Dolt event store
 type EventsConfig struct {
-	Enabled     bool   `mapstructure:"enabled"`
-	DataPath    string `mapstructure:"data_path"`
-	CommitName  string `mapstructure:"commit_name"`
-	CommitEmail string `mapstructure:"commit_email"`
+	Enabled       bool   `mapstructure:"enabled"`
+	DataPath      string `mapstructure:"data_path"`
+	CommitName    string `mapstructure:"commit_name"`
+	CommitEmail   string `mapstructure:"commit_email"`
+	RetentionDays int    `mapstructure:"retention_days"`
 }
 
 // OrchestrationConfig holds the configuration for the orchestration engine
 type OrchestrationConfig struct {
-	Enabled     bool   `mapstructure:"enabled"`
-	DataPath    string `mapstructure:"data_path"`
-	CommitName  string `mapstructure:"commit_name"`
-	CommitEmail string `mapstructure:"commit_email"`
+	Enabled       bool   `mapstructure:"enabled"`
+	DataPath      string `mapstructure:"data_path"`
+	CommitName    string `mapstructure:"commit_name"`
+	CommitEmail   string `mapstructure:"commit_email"`
+	RetentionDays int    `mapstructure:"retention_days"`
 }
 
 // DaemonConfig holds background daemon configuration
@@ -251,12 +253,22 @@ func (c *Config) Validate() error {
 		return errors.Wrap(err, "github.default_merge_method")
 	}
 
-	if c.Events.Enabled && c.Events.DataPath == "" {
-		return errors.New("events.data_path must not be empty when events are enabled")
+	if c.Events.Enabled {
+		if c.Events.DataPath == "" {
+			return errors.New("events.data_path must not be empty when events are enabled")
+		}
+		if c.Events.RetentionDays < 0 {
+			return errors.New("events.retention_days must be >= 0")
+		}
 	}
 
-	if c.Orchestration.Enabled && c.Orchestration.DataPath == "" {
-		return errors.New("orchestration.data_path must not be empty when orchestration is enabled")
+	if c.Orchestration.Enabled {
+		if c.Orchestration.DataPath == "" {
+			return errors.New("orchestration.data_path must not be empty when orchestration is enabled")
+		}
+		if c.Orchestration.RetentionDays < 0 {
+			return errors.New("orchestration.retention_days must be >= 0")
+		}
 	}
 
 	if c.Daemon.PluginIdleTimeout != "" {
@@ -316,12 +328,14 @@ func SetDefaults(v *viper.Viper) {
 	v.SetDefault("events.data_path", filepath.Join(homeDir, ".local", "share", "rig", "dolt"))
 	v.SetDefault("events.commit_name", "rig")
 	v.SetDefault("events.commit_email", "rig@localhost")
+	v.SetDefault("events.retention_days", 0)
 
 	// Orchestration defaults
 	v.SetDefault("orchestration.enabled", false)
 	v.SetDefault("orchestration.data_path", filepath.Join(homeDir, ".config", "rig", "data"))
 	v.SetDefault("orchestration.commit_name", "rig")
 	v.SetDefault("orchestration.commit_email", "rig@localhost")
+	v.SetDefault("orchestration.retention_days", 0)
 
 	// JIRA defaults
 	v.SetDefault("jira.enabled", true)

@@ -92,6 +92,14 @@ func TestLoad_WithDefaults(t *testing.T) {
 	if config.Events.CommitEmail != "rig@localhost" {
 		t.Errorf("Expected events.commit_email to default to 'rig@localhost', got %q", config.Events.CommitEmail)
 	}
+	if config.Events.RetentionDays != 0 {
+		t.Errorf("Expected events.retention_days to default to 0, got %d", config.Events.RetentionDays)
+	}
+
+	// Verify orchestration defaults
+	if config.Orchestration.RetentionDays != 0 {
+		t.Errorf("Expected orchestration.retention_days to default to 0, got %d", config.Orchestration.RetentionDays)
+	}
 
 	// Verify default tmux windows are properly loaded (regression test for type mismatch bug)
 	if len(config.Tmux.Windows) != 3 {
@@ -637,6 +645,53 @@ func TestPluginConfig(t *testing.T) {
 
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("PluginConfig() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestValidate_Retention(t *testing.T) {
+	tests := []struct {
+		name    string
+		config  Config
+		wantErr bool
+	}{
+		{
+			name: "valid retention",
+			config: Config{
+				Events:        EventsConfig{Enabled: true, DataPath: "/tmp", RetentionDays: 30},
+				Orchestration: OrchestrationConfig{Enabled: true, DataPath: "/tmp", RetentionDays: 0},
+			},
+			wantErr: false,
+		},
+		{
+			name: "invalid events retention",
+			config: Config{
+				Events: EventsConfig{Enabled: true, DataPath: "/tmp", RetentionDays: -1},
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid orchestration retention",
+			config: Config{
+				Orchestration: OrchestrationConfig{Enabled: true, DataPath: "/tmp", RetentionDays: -5},
+			},
+			wantErr: true,
+		},
+		{
+			name: "disabled events bypass validation",
+			config: Config{
+				Events: EventsConfig{Enabled: false, RetentionDays: -1},
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.config.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
