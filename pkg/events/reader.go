@@ -108,7 +108,7 @@ func (dm *DatabaseManager) QueryEventsByTimeRange(ctx context.Context, since, un
 	}
 
 	if len(conditions) > 0 {
-		query += " WHERE " + strings.Join(conditions, " AND ") //nolint:gosec // G202: conditions are hardcoded constants, not user input
+		query = fmt.Sprintf("%s WHERE %s", query, strings.Join(conditions, " AND "))
 	}
 
 	query += " ORDER BY created_at ASC, id ASC"
