@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"context"
 	"os"
+	"time"
 
 	"github.com/cockroachdb/errors"
 
@@ -54,4 +56,9 @@ func resolveProjectContext(cfg *config.Config, flagValue string, nameOverride st
 	}
 
 	return selected.Path, nil
+}
+
+// contextWithTimeout returns a context that will be cancelled after the given duration.
+func contextWithTimeout(timeout time.Duration) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.Background(), timeout)
 }
