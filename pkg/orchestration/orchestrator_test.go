@@ -70,6 +70,7 @@ type MockStore struct {
 	updateExecErr      error
 	updateNodeErr      error
 	failUpdateNodeOnID string
+	failUpdateExec     bool
 }
 
 func (m *MockStore) GetWorkflow(ctx context.Context, id string) (*Workflow, error) {
@@ -113,6 +114,9 @@ func (m *MockStore) UpdateExecutionStatus(ctx context.Context, id string, status
 	defer m.mu.Unlock()
 	if m.updateExecErr != nil {
 		return m.updateExecErr
+	}
+	if m.failUpdateExec && (status == ExecutionStatusSuccess || status == ExecutionStatusFailed) {
+		return errors.New("execution persistence failure")
 	}
 	if e, ok := m.executions[id]; ok {
 		if !isValidExecutionTransition(e.Status, status) {
@@ -248,6 +252,31 @@ func TestOrchestrator_Execute_EventLogging(t *testing.T) {
 		for _, e := range el.logged {
 			if strings.Contains(e, "COMPLETED:node1") || strings.Contains(e, "MILESTONE:Node node1") {
 				t.Errorf("Found terminal event %q despite persistence failure (BUG!)", e)
+			}
+		}
+	})
+
+	t.Run("workflow terminal events not logged if execution persistence fails", func(t *testing.T) {
+		wID := "w-fail-exec-persist"
+		eID := "e-fail-exec-persist"
+		nodes := []*Node{{ID: "n1", Name: "node1", Type: "hello"}}
+		store := &MockStore{
+			workflows:      map[string]*Workflow{wID: {ID: wID, Version: 1}},
+			executions:     map[string]*Execution{eID: {ID: eID, WorkflowID: wID, WorkflowVersion: 1, Status: ExecutionStatusPending}},
+			nodes:          map[string][]*Node{wID: nodes},
+			nodeStates:     map[string][]*NodeState{eID: {{ID: "s1", NodeID: "n1", ExecutionID: eID, Status: NodeStatusPending}}},
+			failUpdateExec: true, // Fail when completing workflow
+		}
+		el := &MockEventLogger{}
+		o := NewOrchestrator(store, WithEventLogger(el))
+
+		if err := o.Execute(ctx, eID); err == nil {
+			t.Fatal("Expected Execute to fail due to execution persistence failure")
+		}
+
+		for _, e := range el.logged {
+			if strings.Contains(e, "COMPLETED:workflow") || strings.Contains(e, "FAILED:workflow") {
+				t.Errorf("Found terminal workflow event %q despite execution persistence failure (BUG!)", e)
 			}
 		}
 	})

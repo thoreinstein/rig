@@ -259,11 +259,11 @@ func (o *Orchestrator) Execute(ctx context.Context, executionID string) error {
 		if failErr != nil {
 			errMsg = failErr.Error()
 		}
-		if err := o.eventLogger.LogWorkflowFailed(cleanupCtx, executionID, errMsg); err != nil {
-			o.logger.Warn("failed to log workflow failure event", "execution_id", executionID, "error", err)
-		}
 		if updateErr := o.store.UpdateExecutionStatus(cleanupCtx, executionID, ExecutionStatusFailed, errMsg); updateErr != nil {
 			return errors.CombineErrors(failErr, errors.Wrap(updateErr, "failed to update execution status to failed"))
+		}
+		if err := o.eventLogger.LogWorkflowFailed(cleanupCtx, executionID, errMsg); err != nil {
+			o.logger.Warn("failed to log workflow failure event", "execution_id", executionID, "error", err)
 		}
 		return failErr
 	}
@@ -396,13 +396,17 @@ func (o *Orchestrator) Execute(ctx context.Context, executionID string) error {
 		if failErr != nil {
 			errMsg = failErr.Error()
 		}
-		if err := o.eventLogger.LogWorkflowFailed(cleanupCtx, executionID, errMsg); err != nil {
-			o.logger.Warn("failed to log workflow failure event", "execution_id", executionID, "error", err)
-		}
 		if updateErr := o.store.UpdateExecutionStatus(cleanupCtx, executionID, ExecutionStatusFailed, errMsg); updateErr != nil {
 			return errors.CombineErrors(failErr, errors.Wrap(updateErr, "failed to update execution status to failed"))
 		}
+		if err := o.eventLogger.LogWorkflowFailed(cleanupCtx, executionID, errMsg); err != nil {
+			o.logger.Warn("failed to log workflow failure event", "execution_id", executionID, "error", err)
+		}
 		return failErr
+	}
+
+	if err := o.store.UpdateExecutionStatus(ctx, executionID, ExecutionStatusSuccess, ""); err != nil {
+		return errors.Wrap(err, "failed to update execution status to success")
 	}
 
 	// LogWorkflowCompleted internally calls commitEvents, so no separate
@@ -410,7 +414,7 @@ func (o *Orchestrator) Execute(ctx context.Context, executionID string) error {
 	if err := o.eventLogger.LogWorkflowCompleted(ctx, executionID); err != nil {
 		o.logger.Warn("failed to log workflow completion event", "execution_id", executionID, "error", err)
 	}
-	return o.store.UpdateExecutionStatus(ctx, executionID, ExecutionStatusSuccess, "")
+	return nil
 }
 
 // skipUnprocessed marks all nodes that were never launched as SKIPPED.
