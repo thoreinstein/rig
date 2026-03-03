@@ -85,9 +85,29 @@ func TestHistoryQueryCommand_WithIncludeEvents(t *testing.T) {
 
 	// Reset global flags
 	oldHistoryIncludeEvents := historyIncludeEvents
+	oldHistorySince := historySince
+	oldHistoryUntil := historyUntil
+	oldHistoryDirectory := historyDirectory
+	oldHistorySession := historySession
+	oldHistoryFailedOnly := historyFailedOnly
+	oldHistoryLimit := historyLimit
+
 	historyIncludeEvents = true
+	historySince = ""
+	historyUntil = ""
+	historyDirectory = ""
+	historySession = ""
+	historyFailedOnly = false
+	historyLimit = 50
+
 	defer func() {
 		historyIncludeEvents = oldHistoryIncludeEvents
+		historySince = oldHistorySince
+		historyUntil = oldHistoryUntil
+		historyDirectory = oldHistoryDirectory
+		historySession = oldHistorySession
+		historyFailedOnly = oldHistoryFailedOnly
+		historyLimit = oldHistoryLimit
 	}()
 
 	// Query with include-events=true.
@@ -116,7 +136,7 @@ func TestRunHistoryQueryCommand_UnifiedHistoricalUntil(t *testing.T) {
 	oldHistoryIncludeEvents := historyIncludeEvents
 	oldHistoryUntil := historyUntil
 	historyIncludeEvents = true
-	historyUntil = "2023-12-31" // After the test data, but before "now - 30d" (assuming current date is 2026)
+	historyUntil = "2023-12-31" // After the test data (2023-11-14) and within the historical range
 	defer func() {
 		historyIncludeEvents = oldHistoryIncludeEvents
 		historyUntil = oldHistoryUntil

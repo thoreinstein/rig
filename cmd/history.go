@@ -202,7 +202,7 @@ func runHistoryQueryCommand(ctx context.Context, pattern string) error {
 					}
 				}
 			}
-		} else if historyIncludeEvents {
+		} else {
 			fmt.Fprintf(os.Stderr, "Note: events not enabled in configuration\n")
 		}
 

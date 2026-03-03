@@ -94,10 +94,26 @@ func (dm *DatabaseManager) QueryEventsByTimeRange(ctx context.Context, since, un
 	query := `
 		SELECT id, correlation_id, step, status, message, metadata, created_at
 		FROM workflow_events
-		WHERE created_at BETWEEN ? AND ?
-		ORDER BY created_at ASC, id ASC
 	`
-	rows, err := dm.db.QueryContext(ctx, query, since, until)
+	var conditions []string
+	var args []interface{}
+
+	if !since.IsZero() {
+		conditions = append(conditions, "created_at >= ?")
+		args = append(args, since)
+	}
+	if !until.IsZero() {
+		conditions = append(conditions, "created_at <= ?")
+		args = append(args, until)
+	}
+
+	if len(conditions) > 0 {
+		query += " WHERE " + strings.Join(conditions, " AND ") //nolint:gosec // G202: conditions are hardcoded constants, not user input
+	}
+
+	query += " ORDER BY created_at ASC, id ASC"
+
+	rows, err := dm.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to query events by time range")
 	}
