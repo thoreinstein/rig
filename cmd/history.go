@@ -1,12 +1,15 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/cockroachdb/errors"
 	"github.com/spf13/cobra"
 
+	"thoreinstein.com/rig/pkg/events"
 	"thoreinstein.com/rig/pkg/history"
 )
 
@@ -41,7 +44,7 @@ Examples:
 		if len(args) > 0 {
 			pattern = args[0]
 		}
-		return runHistoryQueryCommand(pattern)
+		return runHistoryQueryCommand(cmd.Context(), pattern)
 	},
 }
 
@@ -56,16 +59,17 @@ var historyInfoCmd = &cobra.Command{
 }
 
 var (
-	historySince       string
-	historyUntil       string
-	historyDirectory   string
-	historySession     string
-	historySessionID   string
-	historyTicket      string
-	historyFailedOnly  bool
-	historyExitCode    int
-	historyMinDuration time.Duration
-	historyLimit       int
+	historySince         string
+	historyUntil         string
+	historyDirectory     string
+	historySession       string
+	historySessionID     string
+	historyTicket        string
+	historyFailedOnly    bool
+	historyExitCode      int
+	historyMinDuration   time.Duration
+	historyLimit         int
+	historyIncludeEvents bool
 )
 
 func init() {
@@ -83,9 +87,10 @@ func init() {
 	historyQueryCmd.Flags().IntVar(&historyExitCode, "exit-code", -1, "Filter by exact exit code")
 	historyQueryCmd.Flags().DurationVar(&historyMinDuration, "min-duration", 0, "Filter by minimum duration (e.g. 5s, 1m)")
 	historyQueryCmd.Flags().IntVar(&historyLimit, "limit", 50, "Maximum number of commands to show")
+	historyQueryCmd.Flags().BoolVar(&historyIncludeEvents, "include-events", false, "Include workflow events from Dolt in the output")
 }
 
-func runHistoryQueryCommand(pattern string) error {
+func runHistoryQueryCommand(ctx context.Context, pattern string) error {
 	// Load configuration
 	cfg, err := loadConfig()
 	if err != nil {
@@ -142,6 +147,61 @@ func runHistoryQueryCommand(pattern string) error {
 	commands, err := dbManager.QueryCommands(options)
 	if err != nil {
 		return errors.Wrap(err, "failed to query commands")
+	}
+
+	// Handle unified view if requested
+	if historyIncludeEvents {
+		var unifiedEntries []history.UnifiedEntry
+		for _, cmd := range commands {
+			unifiedEntries = append(unifiedEntries, history.UnifiedEntryFromCommand(cmd))
+		}
+
+		if cfg.Events.Enabled {
+			edm, edmErr := events.NewDatabaseManager(cfg.Events.DataPath, cfg.Events.CommitName, cfg.Events.CommitEmail, verbose)
+			if edmErr == nil {
+				defer edm.Close()
+				if edm.InitDatabase() == nil {
+					var evs []events.WorkflowEvent
+					var qErr error
+					if historyTicket != "" {
+						evs, qErr = edm.QueryEventsByTicket(ctx, historyTicket)
+					} else {
+						// Time-range query
+						startTime := time.Time{}
+						if since != nil {
+							startTime = *since
+						}
+						endTime := time.Now()
+						if until != nil {
+							endTime = *until
+						}
+						evs, qErr = edm.QueryEventsByTimeRange(ctx, startTime, endTime)
+					}
+
+					if qErr == nil {
+						for _, e := range evs {
+							unifiedEntries = append(unifiedEntries, history.UnifiedEntryFromEvent(e.CreatedAt, e.Step, e.Status, e.Message, e.CorrelationID))
+						}
+					} else if verbose {
+						fmt.Fprintf(os.Stderr, "Warning: failed to query workflow events: %v\n", qErr)
+					}
+				}
+			}
+		}
+
+		if len(unifiedEntries) == 0 {
+			fmt.Println("No history found matching the criteria.")
+			return nil
+		}
+
+		// Use ticket as summary if provided, otherwise generic
+		summary := historyTicket
+		if summary == "" {
+			summary = "History Query"
+		}
+
+		fmt.Print(history.FormatUnifiedTimeline(unifiedEntries, summary))
+		return nil
 	}
 
 	if len(commands) == 0 {

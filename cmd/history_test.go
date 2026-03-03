@@ -65,6 +65,40 @@ func TestHistoryQueryCommandFlags(t *testing.T) {
 	}
 }
 
+func TestHistoryQueryCommand_WithIncludeEvents(t *testing.T) {
+	// Not parallel - accesses global historyQueryCmd
+	cmd := historyQueryCmd
+	flag := cmd.Flags().Lookup("include-events")
+	if flag == nil {
+		t.Fatal("history query command should have --include-events flag")
+	}
+	if flag.DefValue != "false" {
+		t.Errorf("--include-events default = %q, want \"false\"", flag.DefValue)
+	}
+
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "history.db")
+
+	createTestHistoryDatabaseWithData(t, dbPath)
+	setupHistoryTestConfig(t, dbPath)
+	defer viper.Reset()
+
+	// Reset global flags
+	oldHistoryIncludeEvents := historyIncludeEvents
+	historyIncludeEvents = true
+	defer func() {
+		historyIncludeEvents = oldHistoryIncludeEvents
+	}()
+
+	// Query with include-events=true.
+	// Since cfg.Events.Enabled is false in setupHistoryTestConfig,
+	// it should only show commands but in the unified timeline format.
+	err := runHistoryQueryCommand(t.Context(), "")
+	if err != nil {
+		t.Errorf("runHistoryQueryCommand() with --include-events error = %v, want nil", err)
+	}
+}
+
 func TestHistoryQueryCommandDescription(t *testing.T) {
 	// Not parallel - accesses global historyQueryCmd
 	cmd := historyQueryCmd
@@ -517,7 +551,7 @@ func TestRunHistoryQueryCommand_DatabaseNotAvailable(t *testing.T) {
 		historyLimit = oldHistoryLimit
 	}()
 
-	err := runHistoryQueryCommand("")
+	err := runHistoryQueryCommand(t.Context(), "")
 	if err == nil {
 		t.Error("runHistoryQueryCommand() expected error for non-existent database")
 	}
@@ -542,7 +576,7 @@ func TestRunHistoryQueryCommand_InvalidSinceTime(t *testing.T) {
 		historySince = oldHistorySince
 	}()
 
-	err := runHistoryQueryCommand("")
+	err := runHistoryQueryCommand(t.Context(), "")
 	if err == nil {
 		t.Error("runHistoryQueryCommand() expected error for invalid --since time")
 	}
@@ -570,7 +604,7 @@ func TestRunHistoryQueryCommand_InvalidUntilTime(t *testing.T) {
 		historyUntil = oldHistoryUntil
 	}()
 
-	err := runHistoryQueryCommand("")
+	err := runHistoryQueryCommand(t.Context(), "")
 	if err == nil {
 		t.Error("runHistoryQueryCommand() expected error for invalid --until time")
 	}
@@ -612,7 +646,7 @@ func TestRunHistoryQueryCommand_SuccessNoResults(t *testing.T) {
 	}()
 
 	// Should not error, just return no results
-	err := runHistoryQueryCommand("")
+	err := runHistoryQueryCommand(t.Context(), "")
 	if err != nil {
 		t.Errorf("runHistoryQueryCommand() error = %v, want nil", err)
 	}
@@ -650,7 +684,7 @@ func TestRunHistoryQueryCommand_SuccessWithResults(t *testing.T) {
 		historyLimit = oldHistoryLimit
 	}()
 
-	err := runHistoryQueryCommand("")
+	err := runHistoryQueryCommand(t.Context(), "")
 	if err != nil {
 		t.Errorf("runHistoryQueryCommand() error = %v, want nil", err)
 	}
@@ -689,7 +723,7 @@ func TestRunHistoryQueryCommand_WithPattern(t *testing.T) {
 	}()
 
 	// Query with pattern "git"
-	err := runHistoryQueryCommand("git")
+	err := runHistoryQueryCommand(t.Context(), "git")
 	if err != nil {
 		t.Errorf("runHistoryQueryCommand(\"git\") error = %v, want nil", err)
 	}
@@ -727,7 +761,7 @@ func TestRunHistoryQueryCommand_WithFailedOnly(t *testing.T) {
 		historyLimit = oldHistoryLimit
 	}()
 
-	err := runHistoryQueryCommand("")
+	err := runHistoryQueryCommand(t.Context(), "")
 	if err != nil {
 		t.Errorf("runHistoryQueryCommand() with --failed-only error = %v, want nil", err)
 	}
@@ -765,7 +799,7 @@ func TestRunHistoryQueryCommand_WithValidTimeFilter(t *testing.T) {
 		historyLimit = oldHistoryLimit
 	}()
 
-	err := runHistoryQueryCommand("")
+	err := runHistoryQueryCommand(t.Context(), "")
 	if err != nil {
 		t.Errorf("runHistoryQueryCommand() with time filters error = %v, want nil", err)
 	}
@@ -803,7 +837,7 @@ func TestRunHistoryQueryCommand_WithDirectoryFilter(t *testing.T) {
 		historyLimit = oldHistoryLimit
 	}()
 
-	err := runHistoryQueryCommand("")
+	err := runHistoryQueryCommand(t.Context(), "")
 	if err != nil {
 		t.Errorf("runHistoryQueryCommand() with --directory error = %v, want nil", err)
 	}
@@ -841,7 +875,7 @@ func TestRunHistoryQueryCommand_WithSessionFilter(t *testing.T) {
 		historyLimit = oldHistoryLimit
 	}()
 
-	err := runHistoryQueryCommand("")
+	err := runHistoryQueryCommand(t.Context(), "")
 	if err != nil {
 		t.Errorf("runHistoryQueryCommand() with --session error = %v, want nil", err)
 	}
@@ -879,7 +913,7 @@ func TestRunHistoryQueryCommand_WithLimit(t *testing.T) {
 		historyLimit = oldHistoryLimit
 	}()
 
-	err := runHistoryQueryCommand("")
+	err := runHistoryQueryCommand(t.Context(), "")
 	if err != nil {
 		t.Errorf("runHistoryQueryCommand() with --limit error = %v, want nil", err)
 	}
@@ -1013,7 +1047,7 @@ func TestRunHistoryQueryCommand_AtuinDatabase(t *testing.T) {
 		historyLimit = oldHistoryLimit
 	}()
 
-	err := runHistoryQueryCommand("")
+	err := runHistoryQueryCommand(t.Context(), "")
 	if err != nil {
 		t.Errorf("runHistoryQueryCommand() with atuin database error = %v, want nil", err)
 	}
@@ -1052,7 +1086,7 @@ func TestRunHistoryQueryCommand_AllFiltersComposed(t *testing.T) {
 		historyLimit = oldHistoryLimit
 	}()
 
-	err := runHistoryQueryCommand("make")
+	err := runHistoryQueryCommand(t.Context(), "make")
 	if err != nil {
 		t.Errorf("runHistoryQueryCommand() with all filters error = %v, want nil", err)
 	}

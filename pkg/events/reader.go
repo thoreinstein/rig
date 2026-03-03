@@ -62,6 +62,37 @@ func (dm *DatabaseManager) QueryEventsByTicket(ctx context.Context, ticket strin
 	return events, nil
 }
 
+// QueryEventsByTimeRange retrieves workflow events within the specified time range.
+func (dm *DatabaseManager) QueryEventsByTimeRange(ctx context.Context, since, until time.Time) ([]WorkflowEvent, error) {
+	query := `
+		SELECT id, correlation_id, step, status, message, metadata, created_at
+		FROM workflow_events
+		WHERE created_at BETWEEN ? AND ?
+		ORDER BY created_at ASC, id ASC
+	`
+	rows, err := dm.db.QueryContext(ctx, query, since, until)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to query events by time range")
+	}
+	defer rows.Close()
+
+	var events []WorkflowEvent
+	for rows.Next() {
+		var e WorkflowEvent
+		var metadata []byte
+		if err := rows.Scan(&e.ID, &e.CorrelationID, &e.Step, &e.Status, &e.Message, &metadata, &e.CreatedAt); err != nil {
+			return nil, errors.Wrap(err, "failed to scan workflow event")
+		}
+		e.Metadata = metadata
+		events = append(events, e)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, errors.Wrap(err, "error iterating workflow events")
+	}
+
+	return events, nil
+}
+
 // DoltDiffEntry represents a change in the workflow_events table as reported by dolt_diff.
 type DoltDiffEntry struct {
 	DiffType  string    `json:"diff_type"`

@@ -3,6 +3,7 @@ package events
 import (
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestReader_QueryEventsByTicket(t *testing.T) {
@@ -55,6 +56,77 @@ func TestReader_QueryEventsByTicket(t *testing.T) {
 	events, err = dm.QueryEventsByTicket(ctx, "NON-EXISTENT")
 	if err != nil {
 		t.Fatalf("QueryEventsByTicket failed: %v", err)
+	}
+	if len(events) != 0 {
+		t.Errorf("expected 0 events, got %d", len(events))
+	}
+}
+
+func TestReader_QueryEventsByTimeRange(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
+	tmpDir := t.TempDir()
+	dataPath := filepath.Join(tmpDir, "data")
+	dm, err := NewDatabaseManager(dataPath, "Rig Bot", "rig@localhost", true)
+	if err != nil {
+		t.Fatalf("failed to create db manager: %v", err)
+	}
+	defer dm.Close()
+
+	if err := dm.InitDatabase(); err != nil {
+		t.Fatalf("failed to init db: %v", err)
+	}
+
+	ctx := t.Context()
+
+	// Log events across a time window
+	t1 := time.Now().Add(-10 * time.Minute)
+	t2 := time.Now().Add(-5 * time.Minute)
+	t3 := time.Now()
+
+	// Use internal DB connection directly to inject specific timestamps
+	_, err = dm.db.ExecContext(ctx, "INSERT INTO workflow_events (id, correlation_id, step, status, message, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+		"ev1", "corr1", "step1", "STARTED", "msg1", t1)
+	if err != nil {
+		t.Fatalf("failed to insert t1 event: %v", err)
+	}
+	_, err = dm.db.ExecContext(ctx, "INSERT INTO workflow_events (id, correlation_id, step, status, message, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+		"ev2", "corr1", "step1", "COMPLETED", "msg2", t2)
+	if err != nil {
+		t.Fatalf("failed to insert t2 event: %v", err)
+	}
+	_, err = dm.db.ExecContext(ctx, "INSERT INTO workflow_events (id, correlation_id, step, status, message, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+		"ev3", "corr1", "step2", "STARTED", "msg3", t3)
+	if err != nil {
+		t.Fatalf("failed to insert t3 event: %v", err)
+	}
+
+	// 1. Query range covering all
+	events, err := dm.QueryEventsByTimeRange(ctx, t1.Add(-1*time.Minute), t3.Add(1*time.Minute))
+	if err != nil {
+		t.Fatalf("QueryEventsByTimeRange failed: %v", err)
+	}
+	if len(events) != 3 {
+		t.Errorf("expected 3 events, got %d", len(events))
+	}
+
+	// 2. Query range covering middle only
+	events, err = dm.QueryEventsByTimeRange(ctx, t2.Add(-1*time.Minute), t2.Add(1*time.Minute))
+	if err != nil {
+		t.Fatalf("QueryEventsByTimeRange failed: %v", err)
+	}
+	if len(events) != 1 {
+		t.Errorf("expected 1 event, got %d", len(events))
+	} else if events[0].ID != "ev2" {
+		t.Errorf("expected ev2, got %s", events[0].ID)
+	}
+
+	// 3. Query range covering none
+	events, err = dm.QueryEventsByTimeRange(ctx, t1.Add(-10*time.Minute), t1.Add(-5*time.Minute))
+	if err != nil {
+		t.Fatalf("QueryEventsByTimeRange failed: %v", err)
 	}
 	if len(events) != 0 {
 		t.Errorf("expected 0 events, got %d", len(events))
