@@ -61,14 +61,15 @@ func (m *MockEventLogger) CommitMilestone(ctx context.Context, msg string) error
 }
 
 type MockStore struct {
-	mu            sync.Mutex
-	workflows     map[string]*Workflow
-	executions    map[string]*Execution
-	nodes         map[string][]*Node
-	edges         map[string][]*Edge
-	nodeStates    map[string][]*NodeState
-	updateExecErr error
-	updateNodeErr error
+	mu                 sync.Mutex
+	workflows          map[string]*Workflow
+	executions         map[string]*Execution
+	nodes              map[string][]*Node
+	edges              map[string][]*Edge
+	nodeStates         map[string][]*NodeState
+	updateExecErr      error
+	updateNodeErr      error
+	failUpdateNodeOnID string
 }
 
 func (m *MockStore) GetWorkflow(ctx context.Context, id string) (*Workflow, error) {
@@ -129,6 +130,9 @@ func (m *MockStore) UpdateNodeStatus(ctx context.Context, id string, status Node
 	defer m.mu.Unlock()
 	if m.updateNodeErr != nil {
 		return m.updateNodeErr
+	}
+	if m.failUpdateNodeOnID != "" && id == m.failUpdateNodeOnID && (status == NodeStatusSuccess || status == NodeStatusFailed) {
+		return errors.New("persistence failure")
 	}
 	for _, states := range m.nodeStates {
 		for _, s := range states {
@@ -215,6 +219,35 @@ func TestOrchestrator_Execute_EventLogging(t *testing.T) {
 		for i, v := range expected {
 			if el.logged[i] != v {
 				t.Errorf("Event %d: expected %q, got %q", i, v, el.logged[i])
+			}
+		}
+	})
+
+	t.Run("terminal events not logged if status persistence fails", func(t *testing.T) {
+		wID := "w-fail-persist"
+		eID := "e-fail-persist"
+		nodes := []*Node{{ID: "n1", Name: "node1", Type: "hello"}}
+		store := &MockStore{
+			workflows:          map[string]*Workflow{wID: {ID: wID, Version: 1}},
+			executions:         map[string]*Execution{eID: {ID: eID, WorkflowID: wID, WorkflowVersion: 1, Status: ExecutionStatusPending}},
+			nodes:              map[string][]*Node{wID: nodes},
+			nodeStates:         map[string][]*NodeState{eID: {{ID: "s1", NodeID: "n1", ExecutionID: eID, Status: NodeStatusPending}}},
+			failUpdateNodeOnID: "s1", // Fail when completing n1
+		}
+		el := &MockEventLogger{}
+		o := NewOrchestrator(store, WithEventLogger(el))
+
+		if err := o.Execute(ctx, eID); err == nil {
+			t.Fatal("Expected Execute to fail due to persistence failure")
+		}
+
+		// Currently (BUGGY): el.logged contains "COMPLETED:node1" and "MILESTONE:Node node1 completed"
+		// Desired (FIXED): el.logged should NOT contain node terminal events if persistence fails.
+		// It should only have: STARTED:execution, MILESTONE:Workflow...started, STARTED:node1, FAILED:workflow
+
+		for _, e := range el.logged {
+			if strings.Contains(e, "COMPLETED:node1") || strings.Contains(e, "MILESTONE:Node node1") {
+				t.Errorf("Found terminal event %q despite persistence failure (BUG!)", e)
 			}
 		}
 	})

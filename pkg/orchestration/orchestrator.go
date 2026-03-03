@@ -481,6 +481,14 @@ func (o *Orchestrator) runNode(ctx context.Context, executionID string, node *No
 	if execErr != nil {
 		status = NodeStatusFailed
 		errMsg = execErr.Error()
+	}
+
+	if err := o.store.UpdateNodeStatus(ctx, stateID, status, result, errMsg); err != nil {
+		return nil, errors.Wrap(err, "failed to update node status to final")
+	}
+
+	// Only log terminal events if the authoritative status update succeeded.
+	if status == NodeStatusFailed {
 		if err := o.eventLogger.LogStepFailed(ctx, executionID, node.Name, errMsg); err != nil {
 			o.logger.Warn("failed to log node failure event", "execution_id", executionID, "node", node.Name, "error", err)
 		}
@@ -494,10 +502,6 @@ func (o *Orchestrator) runNode(ctx context.Context, executionID string, node *No
 		if err := o.eventLogger.CommitMilestone(ctx, fmt.Sprintf("Node %s completed", node.Name)); err != nil {
 			o.logger.Warn("failed to commit node completion milestone", "execution_id", executionID, "node", node.Name, "error", err)
 		}
-	}
-
-	if err := o.store.UpdateNodeStatus(ctx, stateID, status, result, errMsg); err != nil {
-		return nil, errors.Wrap(err, "failed to update node status to final")
 	}
 
 	return result, execErr
