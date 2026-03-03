@@ -36,7 +36,7 @@ func TestParseAge(t *testing.T) {
 	}
 }
 
-func TestDetermineCutoff(t *testing.T) {
+func TestDetermineCutoffs(t *testing.T) {
 	cfg := &config.Config{
 		Events: config.EventsConfig{
 			RetentionDays: 30,
@@ -46,80 +46,66 @@ func TestDetermineCutoff(t *testing.T) {
 		},
 	}
 
-	tests := []struct {
-		name    string
-		ageFlag string
-		target  string
-		wantMin int // minimum days old (approx)
-		wantErr bool
-	}{
-		{
-			name:    "explicit flag",
-			ageFlag: "10d",
-			target:  "all",
-			wantMin: 10,
-		},
-		{
-			name:    "events config",
-			ageFlag: "",
-			target:  "events",
-			wantMin: 30,
-		},
-		{
-			name:    "orchestration config",
-			ageFlag: "",
-			target:  "orchestration",
-			wantMin: 60,
-		},
-		{
-			name:    "all targets (uses minimum)",
-			ageFlag: "",
-			target:  "all",
-			wantMin: 30,
-		},
-		{
-			name:    "no age specified",
-			ageFlag: "",
-			target:  "events",
-			wantErr: true,
-		},
+	t.Run("events cutoff from flag", func(t *testing.T) {
+		got, age, err := determineEventsCutoff(cfg, "10d")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if age != "10d" {
+			t.Errorf("expected 10d, got %s", age)
+		}
+		assertRecent(t, got, 10)
+	})
+
+	t.Run("events cutoff from config", func(t *testing.T) {
+		got, age, err := determineEventsCutoff(cfg, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if age != "30d" {
+			t.Errorf("expected 30d, got %s", age)
+		}
+		assertRecent(t, got, 30)
+	})
+
+	t.Run("orch cutoff from flag", func(t *testing.T) {
+		got, age, err := determineOrchCutoff(cfg, "10d")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if age != "10d" {
+			t.Errorf("expected 10d, got %s", age)
+		}
+		assertRecent(t, got, 10)
+	})
+
+	t.Run("orch cutoff from config", func(t *testing.T) {
+		got, age, err := determineOrchCutoff(cfg, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if age != "60d" {
+			t.Errorf("expected 60d, got %s", age)
+		}
+		assertRecent(t, got, 60)
+	})
+
+	t.Run("events missing age", func(t *testing.T) {
+		_, _, err := determineEventsCutoff(&config.Config{}, "")
+		if err == nil {
+			t.Error("expected error when age not specified anywhere")
+		}
+	})
+}
+
+func assertRecent(t *testing.T, got time.Time, days int) {
+	t.Helper()
+	wantTime := time.Now().AddDate(0, 0, -days)
+	diff := wantTime.Sub(got)
+	if diff < 0 {
+		diff = -diff
 	}
-
-	// For "no age specified" test, we need a config with 0 retention
-	emptyCfg := &config.Config{}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			c := cfg
-			if tt.wantErr && tt.ageFlag == "" {
-				c = emptyCfg
-			}
-
-			// Mock global flag
-			gcTarget = tt.target
-
-			got, resolvedAge, err := determineCutoff(c, tt.ageFlag)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("determineCutoff() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-
-			if !tt.wantErr {
-				// Check if cutoff is roughly correct (within 1 minute)
-				wantTime := time.Now().AddDate(0, 0, -tt.wantMin)
-				diff := wantTime.Sub(got)
-				if diff < 0 {
-					diff = -diff
-				}
-				if diff > time.Minute {
-					t.Errorf("determineCutoff() = %v, want approx %v (diff %v)", got, wantTime, diff)
-				}
-
-				// Verify resolved age is never empty
-				if resolvedAge == "" {
-					t.Error("determineCutoff() returned empty resolvedAge on success")
-				}
-			}
-		})
+	if diff > time.Minute {
+		t.Errorf("cutoff = %v, want approx %v (diff %v)", got, wantTime, diff)
 	}
 }

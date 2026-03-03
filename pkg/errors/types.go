@@ -511,4 +511,7 @@ var (
 
 	// Cause returns the root cause of an error.
 	Cause = errors.Cause
+
+	// CombineErrors combines two errors into one.
+	CombineErrors = errors.CombineErrors
 )

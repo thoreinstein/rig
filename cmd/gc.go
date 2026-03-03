@@ -68,13 +68,37 @@ func runGCCommand() error {
 		return errors.Errorf("invalid target: %s. Must be events, orchestration, or all", gcTarget)
 	}
 
-	// 1. Determine Cutoff
-	cutoff, resolvedAge, err := determineCutoff(cfg, gcAge)
-	if err != nil {
-		return err
+	// 1. Determine Cutoffs
+	var eventsCutoff, orchCutoff time.Time
+	var eventsAge, orchAge string
+
+	if targetEvents {
+		eventsCutoff, eventsAge, err = determineEventsCutoff(cfg, gcAge)
+		if err != nil {
+			return errors.Wrap(err, "failed to determine events cutoff")
+		}
 	}
 
-	fmt.Printf("Pruning data older than %s (%s)\n", resolvedAge, cutoff.Format(time.RFC3339))
+	if targetOrch {
+		orchCutoff, orchAge, err = determineOrchCutoff(cfg, gcAge)
+		if err != nil {
+			return errors.Wrap(err, "failed to determine orchestration cutoff")
+		}
+	}
+
+	// Summarize intent
+	if targetEvents && targetOrch {
+		if eventsAge == orchAge {
+			fmt.Printf("Pruning all data older than %s (%s)\n", eventsAge, eventsCutoff.Format(time.RFC3339))
+		} else {
+			fmt.Printf("Pruning events older than %s and orchestration older than %s\n", eventsAge, orchAge)
+		}
+	} else if targetEvents {
+		fmt.Printf("Pruning events older than %s (%s)\n", eventsAge, eventsCutoff.Format(time.RFC3339))
+	} else {
+		fmt.Printf("Pruning orchestration older than %s (%s)\n", orchAge, orchCutoff.Format(time.RFC3339))
+	}
+
 	if gcDryRun {
 		fmt.Println("Running in DRY-RUN mode. No data will be deleted.")
 	}
@@ -106,60 +130,60 @@ func runGCCommand() error {
 	ctx, cancel := contextWithTimeout(30 * time.Minute) // GC can be slow
 	defer cancel()
 
+	var errs []error
+
 	// 3. Process Events
 	if targetEvents {
-		if err := processEventsGC(ctx, cfg, cutoff, archiveDir); err != nil {
+		if err := processEventsGC(ctx, cfg, eventsCutoff, archiveDir); err != nil {
 			fmt.Printf("Error during events GC: %v\n", err)
+			errs = append(errs, errors.Wrap(err, "events GC failed"))
 		}
 	}
 
 	// 4. Process Orchestration
 	if targetOrch {
-		if err := processOrchGC(ctx, cfg, cutoff, archiveDir); err != nil {
+		if err := processOrchGC(ctx, cfg, orchCutoff, archiveDir); err != nil {
 			fmt.Printf("Error during orchestration GC: %v\n", err)
+			errs = append(errs, errors.Wrap(err, "orchestration GC failed"))
 		}
+	}
+
+	if len(errs) > 0 {
+		var combined error
+		for _, e := range errs {
+			combined = errors.CombineErrors(combined, e)
+		}
+		return combined
 	}
 
 	return nil
 }
 
-func determineCutoff(cfg *config.Config, ageStr string) (time.Time, string, error) {
-	if ageStr == "" {
-		// Fallback to config
-		if gcTarget == "events" && cfg.Events.RetentionDays > 0 {
-			ageStr = fmt.Sprintf("%dd", cfg.Events.RetentionDays)
-		} else if gcTarget == "orchestration" && cfg.Orchestration.RetentionDays > 0 {
-			ageStr = fmt.Sprintf("%dd", cfg.Orchestration.RetentionDays)
-		} else if gcTarget == "all" {
-			// Use the smaller of the two if both set, or whichever is set
-			days := 0
-			if cfg.Events.RetentionDays > 0 && cfg.Orchestration.RetentionDays > 0 {
-				if cfg.Events.RetentionDays < cfg.Orchestration.RetentionDays {
-					days = cfg.Events.RetentionDays
-				} else {
-					days = cfg.Orchestration.RetentionDays
-				}
-			} else if cfg.Events.RetentionDays > 0 {
-				days = cfg.Events.RetentionDays
-			} else if cfg.Orchestration.RetentionDays > 0 {
-				days = cfg.Orchestration.RetentionDays
-			}
-
-			if days > 0 {
-				ageStr = fmt.Sprintf("%dd", days)
-			}
-		}
+func determineEventsCutoff(cfg *config.Config, ageStr string) (time.Time, string, error) {
+	if ageStr == "" && cfg.Events.RetentionDays > 0 {
+		ageStr = fmt.Sprintf("%dd", cfg.Events.RetentionDays)
 	}
-
 	if ageStr == "" {
-		return time.Time{}, "", errors.New("age must be specified via --age flag or retention_days config")
+		return time.Time{}, "", errors.New("events age must be specified via --age flag or events.retention_days config")
 	}
-
 	days, err := parseAge(ageStr)
 	if err != nil {
 		return time.Time{}, "", err
 	}
+	return time.Now().AddDate(0, 0, -days), ageStr, nil
+}
 
+func determineOrchCutoff(cfg *config.Config, ageStr string) (time.Time, string, error) {
+	if ageStr == "" && cfg.Orchestration.RetentionDays > 0 {
+		ageStr = fmt.Sprintf("%dd", cfg.Orchestration.RetentionDays)
+	}
+	if ageStr == "" {
+		return time.Time{}, "", errors.New("orchestration age must be specified via --age flag or orchestration.retention_days config")
+	}
+	days, err := parseAge(ageStr)
+	if err != nil {
+		return time.Time{}, "", err
+	}
 	return time.Now().AddDate(0, 0, -days), ageStr, nil
 }
 
