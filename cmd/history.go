@@ -176,8 +176,8 @@ func runHistoryQueryCommand(ctx context.Context, pattern string) error {
 					if historyTicket != "" {
 						evs, qErr = edm.QueryEventsByTicket(ctx, historyTicket)
 					} else {
-						// Time-range query: default to last 30 days when no --since specified
-						startTime := time.Now().Add(-30 * 24 * time.Hour)
+						// Time-range query
+						var startTime time.Time
 						if since != nil {
 							startTime = *since
 						}

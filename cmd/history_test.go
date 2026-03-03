@@ -99,6 +99,38 @@ func TestHistoryQueryCommand_WithIncludeEvents(t *testing.T) {
 	}
 }
 
+func TestRunHistoryQueryCommand_UnifiedHistoricalUntil(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "history.db")
+
+	createTestHistoryDatabaseWithData(t, dbPath) // Data is from 2023-11-14
+	setupHistoryTestConfig(t, dbPath)
+
+	// Enable events and set a valid data path
+	viper.Set("events.enabled", true)
+	viper.Set("events.data_path", filepath.Join(tmpDir, "events"))
+
+	defer viper.Reset()
+
+	// Reset global flags
+	oldHistoryIncludeEvents := historyIncludeEvents
+	oldHistoryUntil := historyUntil
+	historyIncludeEvents = true
+	historyUntil = "2023-12-31" // After the test data, but before "now - 30d" (assuming current date is 2026)
+	defer func() {
+		historyIncludeEvents = oldHistoryIncludeEvents
+		historyUntil = oldHistoryUntil
+	}()
+
+	// Query with include-events=true and only --until.
+	// This ensures that omitting --since doesn't default to a recent 30-day window
+	// which would exclude the 2023 data.
+	err := runHistoryQueryCommand(t.Context(), "")
+	if err != nil {
+		t.Errorf("runHistoryQueryCommand() with historical --until error = %v, want nil", err)
+	}
+}
+
 func TestHistoryQueryCommandDescription(t *testing.T) {
 	// Not parallel - accesses global historyQueryCmd
 	cmd := historyQueryCmd
