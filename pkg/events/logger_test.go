@@ -148,6 +148,62 @@ func TestDoltEventLogger_NoTicketNullMetadata(t *testing.T) {
 	}
 }
 
+func TestDoltEventLogger_CommitMilestone(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
+	tmpDir := t.TempDir()
+	dataPath := filepath.Join(tmpDir, "data")
+	dm, err := NewDatabaseManager(dataPath, "Rig Bot", "rig@localhost", true)
+	if err != nil {
+		t.Fatalf("failed to create db manager: %v", err)
+	}
+	defer dm.Close()
+
+	if err := dm.InitDatabase(); err != nil {
+		t.Fatalf("failed to init db: %v", err)
+	}
+
+	logger := NewDoltEventLogger(dm)
+	ctx := t.Context()
+	correlationID := "test-milestone-123"
+
+	// Log an event so there is data to commit
+	if err := logger.LogStepStarted(ctx, correlationID, "preflight"); err != nil {
+		t.Fatalf("LogStepStarted failed: %v", err)
+	}
+
+	// Commit milestone
+	if err := logger.CommitMilestone(ctx, "Node preflight started"); err != nil {
+		t.Fatalf("CommitMilestone failed: %v", err)
+	}
+
+	// Verify commit message in dolt_log
+	var commitMsg string
+	err = dm.db.QueryRow("SELECT message FROM dolt_log ORDER BY date DESC LIMIT 1").Scan(&commitMsg)
+	if err != nil {
+		t.Fatalf("failed to query dolt_log: %v", err)
+	}
+	expected := "events: Node preflight started"
+	if commitMsg != expected {
+		t.Errorf("expected commit message %q, got %q", expected, commitMsg)
+	}
+
+	// Verify --allow-empty: a second CommitMilestone with no new events should succeed
+	if err := logger.CommitMilestone(ctx, "Empty milestone"); err != nil {
+		t.Fatalf("CommitMilestone on empty staging should succeed with --allow-empty, got: %v", err)
+	}
+
+	err = dm.db.QueryRow("SELECT message FROM dolt_log ORDER BY date DESC LIMIT 1").Scan(&commitMsg)
+	if err != nil {
+		t.Fatalf("failed to query dolt_log: %v", err)
+	}
+	if commitMsg != "events: Empty milestone" {
+		t.Errorf("expected empty milestone commit message, got %q", commitMsg)
+	}
+}
+
 func TestNoopEventLogger(t *testing.T) {
 	logger := NoopEventLogger{}
 	ctx := t.Context()

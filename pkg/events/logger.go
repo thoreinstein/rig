@@ -107,7 +107,7 @@ func (l *DoltEventLogger) commitEvents(ctx context.Context, msg string) error {
 	if _, err := conn.ExecContext(ctx, "CALL DOLT_ADD('-A')"); err != nil {
 		return errors.Wrap(err, "failed to CALL DOLT_ADD")
 	}
-	if _, err := conn.ExecContext(ctx, "CALL DOLT_COMMIT('-m', ?)", msg); err != nil {
+	if _, err := conn.ExecContext(ctx, "CALL DOLT_COMMIT('--allow-empty', '-m', ?)", msg); err != nil {
 		return errors.Wrap(err, "failed to CALL DOLT_COMMIT")
 	}
 	return nil
