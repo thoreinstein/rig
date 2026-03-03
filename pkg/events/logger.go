@@ -33,9 +33,10 @@ type TicketBackfiller interface {
 
 // DoltEventLogger is a Dolt-backed implementation of EventLogger.
 type DoltEventLogger struct {
-	dm     *DatabaseManager
-	ticket string
-	mu     sync.RWMutex
+	dm       *DatabaseManager
+	ticket   string
+	mu       sync.RWMutex
+	commitMu sync.Mutex
 }
 
 // NewDoltEventLogger creates a new DoltEventLogger.
@@ -90,11 +91,23 @@ func commitMessage(format string, args ...any) string {
 }
 
 // commitEvents stages all changes and creates a Dolt commit.
+// It serializes concurrent callers with commitMu and pins both statements
+// to a single database connection so DOLT_ADD and DOLT_COMMIT share the
+// same Dolt session.
 func (l *DoltEventLogger) commitEvents(ctx context.Context, msg string) error {
-	if _, err := l.dm.db.ExecContext(ctx, "CALL DOLT_ADD('-A')"); err != nil {
+	l.commitMu.Lock()
+	defer l.commitMu.Unlock()
+
+	conn, err := l.dm.db.Conn(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to acquire database connection")
+	}
+	defer conn.Close()
+
+	if _, err := conn.ExecContext(ctx, "CALL DOLT_ADD('-A')"); err != nil {
 		return errors.Wrap(err, "failed to CALL DOLT_ADD")
 	}
-	if _, err := l.dm.db.ExecContext(ctx, "CALL DOLT_COMMIT('-m', ?)", msg); err != nil {
+	if _, err := conn.ExecContext(ctx, "CALL DOLT_COMMIT('-m', ?)", msg); err != nil {
 		return errors.Wrap(err, "failed to CALL DOLT_COMMIT")
 	}
 	return nil

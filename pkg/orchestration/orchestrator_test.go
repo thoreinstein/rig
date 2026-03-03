@@ -382,6 +382,101 @@ func TestOrchestrator_Execute_MockDiamond(t *testing.T) {
 	})
 }
 
+func TestOrchestrator_Execute_DiamondEventOrdering(t *testing.T) {
+	ctx := t.Context()
+
+	wID := "w-eo"
+	eID := "e-eo"
+
+	// Diamond: A -> {B, C} -> D  (B and C run concurrently)
+	nodes := []*Node{
+		{ID: "A", Name: "root", Type: "hello"},
+		{ID: "B", Name: "left", Type: "hello"},
+		{ID: "C", Name: "right", Type: "world"},
+		{ID: "D", Name: "join", Type: "hello"},
+	}
+	edges := []*Edge{
+		{SourceNodeID: "A", TargetNodeID: "B"},
+		{SourceNodeID: "A", TargetNodeID: "C"},
+		{SourceNodeID: "B", TargetNodeID: "D"},
+		{SourceNodeID: "C", TargetNodeID: "D"},
+	}
+
+	store := &MockStore{
+		workflows: map[string]*Workflow{
+			wID: {ID: wID, Version: 1},
+		},
+		executions: map[string]*Execution{
+			eID: {ID: eID, WorkflowID: wID, WorkflowVersion: 1, Status: ExecutionStatusPending},
+		},
+		nodes: map[string][]*Node{wID: nodes},
+		edges: map[string][]*Edge{wID: edges},
+		nodeStates: map[string][]*NodeState{
+			eID: {
+				{ID: "sA", NodeID: "A", ExecutionID: eID, Status: NodeStatusPending},
+				{ID: "sB", NodeID: "B", ExecutionID: eID, Status: NodeStatusPending},
+				{ID: "sC", NodeID: "C", ExecutionID: eID, Status: NodeStatusPending},
+				{ID: "sD", NodeID: "D", ExecutionID: eID, Status: NodeStatusPending},
+			},
+		},
+	}
+
+	el := &MockEventLogger{}
+	o := NewOrchestrator(store, WithEventLogger(el))
+
+	if err := o.Execute(ctx, eID); err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+
+	el.mu.Lock()
+	logged := append([]string(nil), el.logged...)
+	el.mu.Unlock()
+
+	// Build an index: event string → position in the log
+	idx := make(map[string]int)
+	for i, e := range logged {
+		// For events that may appear once, store the first occurrence.
+		if _, ok := idx[e]; !ok {
+			idx[e] = i
+		}
+	}
+
+	// Helper: assert a appears before b in the log
+	before := func(a, b string) {
+		t.Helper()
+		ai, aOK := idx[a]
+		bi, bOK := idx[b]
+		if !aOK {
+			t.Errorf("expected event %q not found in log: %v", a, logged)
+			return
+		}
+		if !bOK {
+			t.Errorf("expected event %q not found in log: %v", b, logged)
+			return
+		}
+		if ai >= bi {
+			t.Errorf("expected %q (pos %d) before %q (pos %d), log: %v", a, ai, b, bi, logged)
+		}
+	}
+
+	// Partial ordering: STARTED before COMPLETED for each node
+	for _, name := range []string{"root", "left", "right", "join"} {
+		before("STARTED:"+name, "COMPLETED:"+name)
+	}
+
+	// execution STARTED is first, workflow COMPLETED is last
+	before("STARTED:execution", "STARTED:root")
+	before("COMPLETED:join", "COMPLETED:workflow")
+
+	// root completes before left and right start (DAG dependency)
+	before("COMPLETED:root", "STARTED:left")
+	before("COMPLETED:root", "STARTED:right")
+
+	// left and right both complete before join starts
+	before("COMPLETED:left", "STARTED:join")
+	before("COMPLETED:right", "STARTED:join")
+}
+
 func TestOrchestrator_Execute_ContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel() // Pre-cancel to test cancellation handling

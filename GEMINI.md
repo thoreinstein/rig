@@ -155,6 +155,7 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 
 ### Workflow Traps
 - **Embedded Database Ambiguity:** Distinguish between "embedded data" (local files accessed via protocol) and "embedded engine" (in-process executor). Conflating the two can lead to incorrect driver selection and unnecessary dependency on external processes. Truly embedded logic uses library-backed drivers like `github.com/dolthub/driver`.
+- **Dolt Driver JSON Scan Error**: The embedded Dolt driver returns JSON columns as `string`. Standard `Scan` into `json.RawMessage` (a `[]byte` slice) fails. **Mitigation**: Scan into a temporary `[]byte` variable first, then assign to the struct field.
 - **Sparse-Checkout Staging:** In a `git sparse-checkout` environment, new files must be staged using `git add --sparse <path>` if they fall outside the current sparse index definition.
 - **Surfacing Metadata Errors:** If a plugin's manifest file exists but is malformed, report an error rather than silently ignoring it. This prevents bypassing version checks due to configuration errors. Ensure consistent error reporting across all discovery paths (e.g., both single-binary and directory-based plugins).
 - **Automated Reviewer Naming Conflicts**: Conflicting bot suggestions (e.g., snake_case vs. camelCase) should be resolved by prioritizing Go idioms and established codebase patterns over generic bot rules.
@@ -275,16 +276,19 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 - **Node-Bridge Idempotency Contract**: All `NodeBridge` implementations MUST be idempotent. The orchestrator may re-invoke a node if it was interrupted mid-execution during a previous run.
 - **Recovery Short-Circuit Pattern**: Detect pre-existing terminal failure states (including `SKIPPED` nodes) during recovery to prevent re-executing branches of a DAG that should have stayed dead.
 - **Functional Dry-Run Validation Pattern**: Implement dry-run validation as a standalone, functional component (e.g., `DryRunValidate`) rather than a mode within the primary executor. Use environment-check interfaces (`PluginChecker`, `SecretResolver`) to keep the logic side-effect-free and portable. This enables rigorous static analysis of DAG structures, I/O schemas, and environment readiness without instantiating full orchestration dependencies.
+- **Connection-Pinned Manual Transactions**: For operations requiring session state (e.g., `USE database` in migrations), acquire a single `*sql.Conn` and execute the entire sequence (including manual `START TRANSACTION/COMMIT`) on that specific connection to avoid losing state in the pool.
 
 ### Persistence Traps (Orchestration)
 - **Stale Memory Store State**: In-memory test stores (`MemoryStore`) must use strict `sync.Mutex` locking across all methods to prevent race conditions during concurrent workflow execution.
 - **Key Construction Fragility**: Use `fmt.Sprintf("%s:%d", id, version)` for cache or map keys involving versions to ensure multi-digit support and prevent separator collisions.
 - **Skipped Node Recovery Misclassification**: Recovery logic MUST treat pre-existing `SKIPPED` nodes as a failure indicator for the execution. If the process crashes after skipping nodes but before persisting the `FAILED` execution status, a recovery run might incorrectly declare `SUCCESS` if it only looks for explicit `FAILED` node rows.
 - **Heuristic Wrapper Detection Trap**: When detecting "wrapped" vs "flat" JSON configurations, do not rely on the presence of a new metadata key (like `io`) as the sole signal. Heuristic detection must require an unambiguous signal (e.g., an explicit `plugin` key) or a strong quorum of reserved keys (e.g., `capabilities` + `io` with no other top-level keys). Failure to do so can lead to backward-incompatible changes where valid legacy configs are misidentified and their payloads are stripped.
+- **Stacked Transaction Defers**: When executing a series of transactional operations (like migrations), extract the transaction logic into a helper function (e.g., `applyMigration`). This ensures `ROLLBACK` defers are executed immediately after each step rather than stacking up and potentially leaking resources or causing logic errors.
 
 ### Development & CI Traps
 - **Linter Version Parity**: Discrepancies between local and CI `golangci-lint` versions can cause CI-only failures (like `prealloc`). Always align CI environment variables with the local development standard.
 - **Go Zero-Value SQL Default Bypass**: Explicit zero-values in Go structs (e.g., `""`) bypass SQL `DEFAULT` clauses. Use `any(nil)` or `sql.Null*` types for optional columns (especially `JSON`) to trigger database defaults and avoid validation errors (e.g., `Invalid JSON text`).
+- **Gosec G115 Panic (Go 1.26)**: The `gosec` G115 analyzer (integer overflow) triggers a catastrophic panic in `golangci-lint` when running on Go 1.26.0 with certain integer literals (e.g., `1000`). **Mitigation**: Exclude G115 at the analyzer level in `.golangci.yml` until `gosec` ≥ 2.24 is released.
 
 ## Architectural Patterns
 

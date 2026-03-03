@@ -250,6 +250,11 @@ func (o *Orchestrator) Execute(ctx context.Context, executionID string) error {
 		failErr = errors.CombineErrors(failErr, skipErr)
 		failErr = errors.CombineErrors(failErr, transitionErr)
 
+		// Emit a STARTED event so every execution path is bookended.
+		if err := o.eventLogger.LogStepStarted(cleanupCtx, executionID, "execution"); err != nil {
+			o.logger.Warn("failed to log execution start event during recovery", "execution_id", executionID, "error", err)
+		}
+
 		errMsg := "execution failed"
 		if failErr != nil {
 			errMsg = failErr.Error()
@@ -400,6 +405,8 @@ func (o *Orchestrator) Execute(ctx context.Context, executionID string) error {
 		return failErr
 	}
 
+	// LogWorkflowCompleted internally calls commitEvents, so no separate
+	// CommitMilestone is needed here (unlike the per-node path).
 	if err := o.eventLogger.LogWorkflowCompleted(ctx, executionID); err != nil {
 		o.logger.Warn("failed to log workflow completion event", "execution_id", executionID, "error", err)
 	}
@@ -443,7 +450,7 @@ func (o *Orchestrator) runNode(ctx context.Context, executionID string, node *No
 			for destKey, srcKey := range caps.SecretsMapping {
 				val, err := o.secretResolver.Resolve(ctx, srcKey)
 				if err != nil {
-					execErr = errors.Wrapf(err, "failed to resolve secret %q for node", srcKey)
+					execErr = errors.Wrap(err, "failed to resolve secret for node")
 					break
 				}
 				secrets[destKey] = val
