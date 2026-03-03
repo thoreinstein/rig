@@ -96,7 +96,10 @@ func runGCCommand() error {
 
 	archiveDir := ""
 	if gcArchive {
-		home, _ := config.UserHomeDir()
+		home, err := config.UserHomeDir()
+		if err != nil {
+			return errors.Wrap(err, "failed to determine home directory for archive")
+		}
 		archiveDir = filepath.Join(home, ".local", "share", "rig", "archives")
 	}
 

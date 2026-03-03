@@ -520,7 +520,10 @@ func TestPruneExecutions(t *testing.T) {
 	}
 
 	// Verify correct executions remain
-	rows, _ := dm.db.Query("SELECT id FROM executions")
+	rows, err := dm.db.Query("SELECT id FROM executions")
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer rows.Close()
 	remaining := make(map[string]bool)
 	for rows.Next() {
