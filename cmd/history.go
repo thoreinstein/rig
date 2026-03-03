@@ -158,16 +158,26 @@ func runHistoryQueryCommand(ctx context.Context, pattern string) error {
 
 		if cfg.Events.Enabled {
 			edm, edmErr := events.NewDatabaseManager(cfg.Events.DataPath, cfg.Events.CommitName, cfg.Events.CommitEmail, verbose)
-			if edmErr == nil {
+			if edmErr != nil {
+				fmt.Fprintf(os.Stderr, "Note: workflow events unavailable (use --verbose for details)\n")
+				if verbose {
+					fmt.Fprintf(os.Stderr, "Warning: failed to initialize events database: %v\n", edmErr)
+				}
+			} else {
 				defer edm.Close()
-				if edm.InitDatabase() == nil {
+				if initErr := edm.InitDatabase(); initErr != nil {
+					fmt.Fprintf(os.Stderr, "Note: workflow events unavailable (use --verbose for details)\n")
+					if verbose {
+						fmt.Fprintf(os.Stderr, "Warning: failed to initialize events database: %v\n", initErr)
+					}
+				} else {
 					var evs []events.WorkflowEvent
 					var qErr error
 					if historyTicket != "" {
 						evs, qErr = edm.QueryEventsByTicket(ctx, historyTicket)
 					} else {
-						// Time-range query
-						startTime := time.Time{}
+						// Time-range query: default to last 30 days when no --since specified
+						startTime := time.Now().Add(-30 * 24 * time.Hour)
 						if since != nil {
 							startTime = *since
 						}
@@ -178,15 +188,20 @@ func runHistoryQueryCommand(ctx context.Context, pattern string) error {
 						evs, qErr = edm.QueryEventsByTimeRange(ctx, startTime, endTime)
 					}
 
-					if qErr == nil {
+					if qErr != nil {
+						fmt.Fprintf(os.Stderr, "Note: workflow events unavailable (use --verbose for details)\n")
+						if verbose {
+							fmt.Fprintf(os.Stderr, "Warning: failed to query workflow events: %v\n", qErr)
+						}
+					} else {
 						for _, e := range evs {
 							unifiedEntries = append(unifiedEntries, history.UnifiedEntryFromEvent(e.CreatedAt, e.Step, e.Status, e.Message, e.CorrelationID))
 						}
-					} else if verbose {
-						fmt.Fprintf(os.Stderr, "Warning: failed to query workflow events: %v\n", qErr)
 					}
 				}
 			}
+		} else if historyIncludeEvents {
+			fmt.Fprintf(os.Stderr, "Note: events not enabled in configuration\n")
 		}
 
 		if len(unifiedEntries) == 0 {

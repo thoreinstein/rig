@@ -132,8 +132,11 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 - **Isolated Secret Resolution:** Use isolated resolution functions for each provider to prevent "cross-provider contamination" (e.g., using an Anthropic key for Gemini).
 - **Security Warning Accuracy:** When implementing security warnings for config-stored secrets, ensure all valid environment variable sources (e.g., `RIG_AI_*`) are checked to avoid false positives.
 
-### Architectural Decisions
+### Development Strategy
 - **SDK-First:** Prefer official Go SDKs (like Genkit for Google AI) over CLI wrappers for stability and robust streaming support.
+
+### Persistence & State
+- **Transient State vs. Immutable Audit Trail:** Separate high-churn execution state (`rig_orchestration`) from versioned observability events (`rig_events`). Transient state is for logic; versioned events are for auditing. This prevents performance degradation from constant Dolt commits on high-churn data.
 - **Embedded Dolt Architecture:** For truly standalone, in-process versioned state (e.g., event tracking), use the `github.com/dolthub/driver` library. This allows Rig to act as its own SQL engine without requiring an external `dolt` binary or `sql-server` process. Access via the `dolt` driver name and `file://` DSN scheme.
 - **Optional Telemetry Pattern:** Decouple telemetry (e.g., event logging) from core logic using an interface (e.g., `EventLogger`) and functional options (`WithEventLogger`). Always provide a `Noop` implementation as the default to ensure the system remains resilient if the telemetry store is unavailable or disabled.
 - **Milestone Versioning Cadence:** To balance performance and auditability, log individual events via standard SQL `INSERT` and perform a `DOLT_COMMIT` only at significant milestones (e.g., workflow completion).
@@ -155,6 +158,7 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 
 ### Workflow Traps
 - **Embedded Database Ambiguity:** Distinguish between "embedded data" (local files accessed via protocol) and "embedded engine" (in-process executor). Conflating the two can lead to incorrect driver selection and unnecessary dependency on external processes. Truly embedded logic uses library-backed drivers like `github.com/dolthub/driver`.
+- **Ghost Event Ordering Trap:** Emitting observability events before authoritative state persistence creates a durable mismatch if the state update fails. **Mitigation:** Strictly follow the **State-First Persistence** pattern.
 - **Dolt Driver JSON Scan Error**: The embedded Dolt driver returns JSON columns as `string`. Standard `Scan` into `json.RawMessage` (a `[]byte` slice) fails. **Mitigation**: Scan into a temporary `[]byte` variable first, then assign to the struct field.
 - **Sparse-Checkout Staging:** In a `git sparse-checkout` environment, new files must be staged using `git add --sparse <path>` if they fall outside the current sparse index definition.
 - **Surfacing Metadata Errors:** If a plugin's manifest file exists but is malformed, report an error rather than silently ignoring it. This prevents bypassing version checks due to configuration errors. Ensure consistent error reporting across all discovery paths (e.g., both single-binary and directory-based plugins).
@@ -276,7 +280,7 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 - **Node-Bridge Idempotency Contract**: All `NodeBridge` implementations MUST be idempotent. The orchestrator may re-invoke a node if it was interrupted mid-execution during a previous run.
 - **Recovery Short-Circuit Pattern**: Detect pre-existing terminal failure states (including `SKIPPED` nodes) during recovery to prevent re-executing branches of a DAG that should have stayed dead.
 - **Functional Dry-Run Validation Pattern**: Implement dry-run validation as a standalone, functional component (e.g., `DryRunValidate`) rather than a mode within the primary executor. Use environment-check interfaces (`PluginChecker`, `SecretResolver`) to keep the logic side-effect-free and portable. This enables rigorous static analysis of DAG structures, I/O schemas, and environment readiness without instantiating full orchestration dependencies.
-- **Connection-Pinned Manual Transactions**: For operations requiring session state (e.g., `USE database` in migrations), acquire a single `*sql.Conn` and execute the entire sequence (including manual `START TRANSACTION/COMMIT`) on that specific connection to avoid losing state in the pool.
+- **Connection-Pinned Manual Transactions:** For operations requiring session state (e.g., `USE database` in migrations or sequential `DOLT_ADD/COMMIT`), acquire a single `*sql.Conn` and execute the entire sequence on that specific connection to avoid losing state in the pool.
 
 ### Persistence Traps (Orchestration)
 - **Stale Memory Store State**: In-memory test stores (`MemoryStore`) must use strict `sync.Mutex` locking across all methods to prevent race conditions during concurrent workflow execution.
@@ -293,6 +297,9 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 ## Architectural Patterns
 
 ### Metadata & Observability
+- **State-First Persistence Pattern:** Always update the authoritative state store (e.g., orchestration DB) before emitting observability events or creating versioned history snapshots. This ensures the event history remains a truthful reflection of the system state.
+- **Recursive Redaction Pattern:** Protect versioned history by implementing a centralized redaction layer that handles both unstructured strings (regex scrubbing) and structured JSON (recursive walking and key-based redaction) before data is persisted.
+- **Milestone-Based Versioning Pattern:** In long-running workflows, trigger intermediate Dolt commits at significant milestones (e.g., node completion) to provide a "time-travel" audit trail and protect against data loss during process failure.
 - **Decoupled Metadata Tagging**: Use narrow interfaces (e.g., `TicketMetadataSetter`) and retroactive backfilling to decorate data with context resolved after creation. This prevents import cycles and maintains business logic isolation from data storage.
 - **Unified Presentation Model**: For CLI commands aggregating data from heterogeneous sources, use a flattened "Presentation Model" in a shared package. Map source-specific structs to this model using Go primitives to avoid circular dependencies and simplify sorting/formatting logic.
 - **Deterministic Sort Ordering**: Always use a unique tie-breaker (e.g., `id ASC`) in SQL queries and `sort.SliceStable` in Go when rendering chronological lists. This prevents nondeterministic output churn in persistent artifacts like Markdown notes.
