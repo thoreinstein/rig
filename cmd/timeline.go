@@ -196,7 +196,7 @@ func runTimelineCommand(ctx context.Context, ticket string) error {
 				if since != nil {
 					startTime = *since
 				}
-				endTime := time.Now()
+				var endTime time.Time
 				if until != nil {
 					endTime = *until
 				}

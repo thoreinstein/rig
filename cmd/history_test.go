@@ -142,9 +142,8 @@ func TestRunHistoryQueryCommand_UnifiedHistoricalUntil(t *testing.T) {
 		historyUntil = oldHistoryUntil
 	}()
 
-	// Query with include-events=true and only --until.
-	// This ensures that omitting --since doesn't default to a recent 30-day window
-	// which would exclude the 2023 data.
+	// This ensures that omitting --since applies no implicit lower time bound
+	// and that an --until-only query still returns historical rows (e.g., 2023 data).
 	err := runHistoryQueryCommand(t.Context(), "")
 	if err != nil {
 		t.Errorf("runHistoryQueryCommand() with historical --until error = %v, want nil", err)
