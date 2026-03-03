@@ -8,6 +8,8 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 
 	"github.com/cockroachdb/errors"
 	_ "github.com/dolthub/driver"
@@ -114,6 +116,82 @@ func (dm *DatabaseManager) BackfillTicket(ctx context.Context, correlationID, ti
 		if n, rowErr := result.RowsAffected(); rowErr == nil {
 			fmt.Fprintf(os.Stderr, "[events] backfilled %d event(s) with ticket %s\n", n, ticket)
 		}
+	}
+
+	return nil
+}
+
+// PruneEvents removes events older than the specified cutoff time.
+// If dryRun is true, it returns the count of rows that would be deleted without deleting them.
+func (dm *DatabaseManager) PruneEvents(ctx context.Context, cutoff time.Time, dryRun bool) (*PruneResult, error) {
+	conn, err := dm.db.Conn(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to acquire database connection")
+	}
+	defer conn.Close()
+
+	// Ensure we are using the correct database for Dolt system procedures
+	if _, err := conn.ExecContext(ctx, "USE rig_events"); err != nil {
+		return nil, errors.Wrap(err, "failed to use rig_events database")
+	}
+
+	// 1. Count rows to be pruned
+	var count int
+	countQuery := `SELECT COUNT(*) FROM workflow_events WHERE created_at < ?`
+	if err := conn.QueryRowContext(ctx, countQuery, cutoff).Scan(&count); err != nil {
+		return nil, errors.Wrap(err, "failed to count events for pruning")
+	}
+
+	res := &PruneResult{
+		EventsDeleted: count,
+		CutoffTime:    cutoff,
+	}
+
+	if dryRun || count == 0 {
+		return res, nil
+	}
+
+	// 2. Perform deletion
+	deleteQuery := `DELETE FROM workflow_events WHERE created_at < ?`
+	if _, err := conn.ExecContext(ctx, deleteQuery, cutoff); err != nil {
+		return nil, errors.Wrap(err, "failed to prune events")
+	}
+
+	// 3. Create Dolt commit for the deletion
+	msg := fmt.Sprintf("events: Pruned %d events older than %s", count, cutoff.Format(time.RFC3339))
+	if _, err := conn.ExecContext(ctx, "CALL DOLT_ADD('-A')"); err != nil {
+		return nil, errors.Wrap(err, "failed to CALL DOLT_ADD after prune")
+	}
+	if _, err := conn.ExecContext(ctx, "CALL DOLT_COMMIT('-m', ?)", msg); err != nil {
+		return nil, errors.Wrap(err, "failed to CALL DOLT_COMMIT after prune")
+	}
+
+	return res, nil
+}
+
+// DoltGC runs the Dolt garbage collection procedure to reclaim space.
+// This is a best-effort operation as the embedded driver may not support it.
+func (dm *DatabaseManager) DoltGC(ctx context.Context) error {
+	conn, err := dm.db.Conn(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to acquire database connection")
+	}
+	defer conn.Close()
+
+	if _, err := conn.ExecContext(ctx, "USE rig_events"); err != nil {
+		return errors.Wrap(err, "failed to use rig_events database")
+	}
+
+	if _, err := conn.ExecContext(ctx, "CALL DOLT_GC()"); err != nil {
+		errMsg := err.Error()
+		// Silently skip if the procedure is not supported by the driver/version.
+		if strings.Contains(errMsg, "not supported") || strings.Contains(errMsg, "unknown procedure") || strings.Contains(errMsg, "not found") {
+			if dm.Verbose {
+				fmt.Fprintf(os.Stderr, "[events] Dolt GC not supported: %v\n", err)
+			}
+			return nil
+		}
+		return errors.Wrap(err, "failed to CALL DOLT_GC")
 	}
 
 	return nil

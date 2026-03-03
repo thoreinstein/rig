@@ -15,3 +15,9 @@ type WorkflowEvent struct {
 	Metadata      json.RawMessage `json:"metadata,omitempty"`
 	CreatedAt     time.Time       `json:"created_at"`
 }
+
+// PruneResult contains the results of a database pruning operation.
+type PruneResult struct {
+	EventsDeleted int
+	CutoffTime    time.Time
+}
