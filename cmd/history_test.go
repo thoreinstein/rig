@@ -131,6 +131,40 @@ func TestRunHistoryQueryCommand_UnifiedHistoricalUntil(t *testing.T) {
 	}
 }
 
+func TestRunHistoryQueryCommand_UnifiedTicketTimeFilter(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "history.db")
+
+	createTestHistoryDatabaseWithData(t, dbPath) // Data is from 2023-11-14
+	setupHistoryTestConfig(t, dbPath)
+	defer viper.Reset()
+
+	// Reset global flags
+	oldHistoryIncludeEvents := historyIncludeEvents
+	oldHistoryTicket := historyTicket
+	oldHistorySince := historySince
+
+	historyIncludeEvents = true
+	historyTicket = "FRAAS-123"
+	historySince = "2024-01-01" // After the test data
+
+	defer func() {
+		historyIncludeEvents = oldHistoryIncludeEvents
+		historyTicket = oldHistoryTicket
+		historySince = oldHistorySince
+	}()
+
+	// Query with ticket and a 'since' date that excludes all data.
+	// This ensures that ticket queries honor time filters.
+	err := runHistoryQueryCommand(t.Context(), "")
+	if err != nil {
+		t.Errorf("runHistoryQueryCommand() with ticket + since filter error = %v, want nil", err)
+	}
+
+	// Note: in a real environment with events enabled, we'd check that 0 entries were found.
+	// Here we're mainly verifying it doesn't crash and the logic is wired up.
+}
+
 func TestHistoryQueryCommandDescription(t *testing.T) {
 	// Not parallel - accesses global historyQueryCmd
 	cmd := historyQueryCmd

@@ -173,18 +173,20 @@ func runHistoryQueryCommand(ctx context.Context, pattern string) error {
 				} else {
 					var evs []events.WorkflowEvent
 					var qErr error
+
+					startTime := time.Time{}
+					if since != nil {
+						startTime = *since
+					}
+					endTime := time.Now()
+					if until != nil {
+						endTime = *until
+					}
+
 					if historyTicket != "" {
-						evs, qErr = edm.QueryEventsByTicket(ctx, historyTicket)
+						evs, qErr = edm.QueryEventsByTicket(ctx, historyTicket, startTime, endTime)
 					} else {
 						// Time-range query
-						var startTime time.Time
-						if since != nil {
-							startTime = *since
-						}
-						endTime := time.Now()
-						if until != nil {
-							endTime = *until
-						}
 						evs, qErr = edm.QueryEventsByTimeRange(ctx, startTime, endTime)
 					}
 

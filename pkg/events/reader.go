@@ -13,15 +13,28 @@ import (
 // likeEscaper escapes SQL LIKE metacharacters to prevent wildcard injection.
 var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 
-// QueryEventsByTicket retrieves workflow events tagged with a specific ticket ID.
-func (dm *DatabaseManager) QueryEventsByTicket(ctx context.Context, ticket string) ([]WorkflowEvent, error) {
+// QueryEventsByTicket retrieves workflow events tagged with a specific ticket ID, optionally filtered by time.
+func (dm *DatabaseManager) QueryEventsByTicket(ctx context.Context, ticket string, since, until time.Time) ([]WorkflowEvent, error) {
 	query := `
 		SELECT id, correlation_id, step, status, message, metadata, created_at
 		FROM workflow_events
 		WHERE JSON_EXTRACT(metadata, '$.ticket') = ?
-		ORDER BY created_at ASC, id ASC
 	`
-	rows, err := dm.db.QueryContext(ctx, query, ticket)
+	var args []interface{}
+	args = append(args, ticket)
+
+	if !since.IsZero() {
+		query += " AND created_at >= ?"
+		args = append(args, since)
+	}
+	if !until.IsZero() {
+		query += " AND created_at <= ?"
+		args = append(args, until)
+	}
+
+	query += " ORDER BY created_at ASC, id ASC"
+
+	rows, err := dm.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		// Only fall back to LIKE for JSON_EXTRACT-related errors (function not supported).
 		// Propagate all other errors (connection, context cancellation, missing table).
@@ -34,11 +47,25 @@ func (dm *DatabaseManager) QueryEventsByTicket(ctx context.Context, ticket strin
 			SELECT id, correlation_id, step, status, message, metadata, created_at
 			FROM workflow_events
 			WHERE metadata LIKE ? ESCAPE '\'
-			ORDER BY created_at ASC, id ASC
 		`
 		escaped := likeEscaper.Replace(ticket)
 		pattern := fmt.Sprintf(`%%"ticket":"%s"%%`, escaped)
-		rows, err = dm.db.QueryContext(ctx, fallbackQuery, pattern)
+
+		var fallbackArgs []interface{}
+		fallbackArgs = append(fallbackArgs, pattern)
+
+		if !since.IsZero() {
+			fallbackQuery += " AND created_at >= ?"
+			fallbackArgs = append(fallbackArgs, since)
+		}
+		if !until.IsZero() {
+			fallbackQuery += " AND created_at <= ?"
+			fallbackArgs = append(fallbackArgs, until)
+		}
+
+		fallbackQuery += " ORDER BY created_at ASC, id ASC"
+
+		rows, err = dm.db.QueryContext(ctx, fallbackQuery, fallbackArgs...)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to query events by ticket (LIKE fallback)")
 		}

@@ -192,7 +192,15 @@ func runTimelineCommand(ctx context.Context, ticket string) error {
 				}
 				edm = nil // Prevent use of uninitialized database
 			} else {
-				evs, queryErr := edm.QueryEventsByTicket(ctx, ticketInfo.Full)
+				startTime := time.Time{}
+				if since != nil {
+					startTime = *since
+				}
+				endTime := time.Now()
+				if until != nil {
+					endTime = *until
+				}
+				evs, queryErr := edm.QueryEventsByTicket(ctx, ticketInfo.Full, startTime, endTime)
 				if queryErr != nil {
 					fmt.Fprintf(os.Stderr, "Note: workflow events unavailable (use --verbose for details)\n")
 					if verbose {
