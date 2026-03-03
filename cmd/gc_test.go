@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -94,6 +95,50 @@ func TestDetermineCutoffs(t *testing.T) {
 		_, _, err := determineEventsCutoff(&config.Config{}, "")
 		if err == nil {
 			t.Error("expected error when age not specified anywhere")
+		}
+	})
+}
+
+func TestRunGCCommand_Errors(t *testing.T) {
+	// This test uses a mock-like setup by pointing to a non-existent/invalid path
+	// to trigger failures in the DB initialization within runGCCommand.
+	// Since runGCCommand calls processEventsGC/processOrchGC which try to InitDatabase,
+	// invalid paths should cause errors.
+
+	tmpDir := t.TempDir()
+	invalidPath := filepath.Join(tmpDir, "does-not-exist-and-cannot-be-created/??invalid??")
+
+	cfg := &config.Config{
+		Events: config.EventsConfig{
+			Enabled:       true,
+			DataPath:      invalidPath,
+			RetentionDays: 30,
+		},
+		Orchestration: config.OrchestrationConfig{
+			Enabled:       true,
+			DataPath:      invalidPath,
+			RetentionDays: 30,
+		},
+	}
+
+	// We can't easily call runGCCommand because it calls loadConfig() internally.
+	// But we can test the error combining logic and the sub-functions.
+
+	t.Run("processEventsGC error propagation", func(t *testing.T) {
+		ctx := t.Context()
+		cutoff := time.Now()
+		err := processEventsGC(ctx, cfg, cutoff, "")
+		if err == nil {
+			t.Error("expected error for invalid path, got nil")
+		}
+	})
+
+	t.Run("processOrchGC error propagation", func(t *testing.T) {
+		ctx := t.Context()
+		cutoff := time.Now()
+		err := processOrchGC(ctx, cfg, cutoff, "")
+		if err == nil {
+			t.Error("expected error for invalid path, got nil")
 		}
 	})
 }
