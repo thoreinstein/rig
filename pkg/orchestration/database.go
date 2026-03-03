@@ -3,6 +3,7 @@ package orchestration
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/url"
@@ -974,4 +975,72 @@ func (dm *DatabaseManager) DoltGC(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// ExecutionArchive represents an execution and its associated node states for archival.
+type ExecutionArchive struct {
+	Execution  *Execution   `json:"execution"`
+	NodeStates []*NodeState `json:"node_states"`
+}
+
+// ExportExecutionsBeforeCutoff exports executions and their associated node states older than the cutoff to a JSON file.
+// Only executions with terminal statuses (SUCCESS, FAILED, CANCELLED) are eligible for archival.
+// Returns the count of exported executions and the absolute path to the archive file.
+func (dm *DatabaseManager) ExportExecutionsBeforeCutoff(ctx context.Context, cutoff time.Time, archiveDir string) (int, string, error) {
+	// 1. Identify executions to be archived (terminal status AND older than cutoff)
+	terminalStatuses := []interface{}{string(ExecutionStatusSuccess), string(ExecutionStatusFailed), string(ExecutionStatusCancelled)}
+	const query = `SELECT id, workflow_id, workflow_version, status, started_at, completed_at, COALESCE(error, ''), created_at FROM executions WHERE status IN (?, ?, ?) AND created_at < ?`
+	args := append(terminalStatuses, cutoff)
+
+	rows, err := dm.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return 0, "", errors.Wrap(err, "failed to query executions for export")
+	}
+	defer rows.Close()
+
+	var archives []*ExecutionArchive
+	for rows.Next() {
+		e := &Execution{}
+		if err := rows.Scan(&e.ID, &e.WorkflowID, &e.WorkflowVersion, &e.Status, &e.StartedAt, &e.CompletedAt, &e.Error, &e.CreatedAt); err != nil {
+			return 0, "", errors.Wrap(err, "failed to scan execution for export")
+		}
+
+		states, err := dm.GetNodeStatesByExecution(ctx, e.ID)
+		if err != nil {
+			return 0, "", errors.Wrapf(err, "failed to get node states for execution %s during export", e.ID)
+		}
+
+		archives = append(archives, &ExecutionArchive{
+			Execution:  e,
+			NodeStates: states,
+		})
+	}
+
+	if len(archives) == 0 {
+		return 0, "", nil
+	}
+
+	// 2. Write to file
+	if err := os.MkdirAll(archiveDir, 0700); err != nil {
+		return 0, "", errors.Wrap(err, "failed to create archive directory")
+	}
+
+	fileName := fmt.Sprintf("orchestration_%s.json", cutoff.Format("2006-01-02_150405"))
+	filePath := filepath.Join(archiveDir, fileName)
+
+	data, err := json.MarshalIndent(archives, "", "  ")
+	if err != nil {
+		return 0, "", errors.Wrap(err, "failed to marshal archives")
+	}
+
+	if err := os.WriteFile(filePath, data, 0600); err != nil {
+		return 0, "", errors.Wrap(err, "failed to write archive file")
+	}
+
+	absPath, err := filepath.Abs(filePath)
+	if err != nil {
+		return 0, "", errors.Wrap(err, "failed to resolve absolute path for archive")
+	}
+
+	return len(archives), absPath, nil
 }

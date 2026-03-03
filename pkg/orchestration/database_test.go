@@ -1,7 +1,9 @@
 package orchestration
 
 import (
+	"encoding/json"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -540,5 +542,88 @@ func TestDoltGC_Orchestration(t *testing.T) {
 
 	if err := dm.DoltGC(ctx); err != nil {
 		t.Errorf("DoltGC failed: %v", err)
+	}
+}
+
+func TestExportExecutions(t *testing.T) {
+	dm := setupTestDB(t)
+	defer dm.Close()
+	ctx := t.Context()
+
+	tmpDir := t.TempDir()
+	archiveDir := filepath.Join(tmpDir, "archive")
+
+	// 1. Setup workflow and node
+	w := &Workflow{Name: "export-test"}
+	if err := dm.CreateWorkflow(ctx, w); err != nil {
+		t.Fatal(err)
+	}
+	node := &Node{WorkflowID: w.ID, WorkflowVersion: 1, Name: "n1", Type: "task"}
+	if err := dm.CreateNode(ctx, node); err != nil {
+		t.Fatal(err)
+	}
+
+	now := time.Now()
+	oldTime := now.Add(-48 * time.Hour)
+	cutoff := now.Add(-24 * time.Hour)
+
+	// 2. Insert 1 old success, 1 old running, 1 new success
+	execs := []struct {
+		id     string
+		status ExecutionStatus
+		ts     time.Time
+	}{
+		{"old-success", ExecutionStatusSuccess, oldTime},
+		{"old-running", ExecutionStatusRunning, oldTime},
+		{"new-success", ExecutionStatusSuccess, now},
+	}
+
+	for _, ex := range execs {
+		query := `INSERT INTO executions (id, workflow_id, workflow_version, status, created_at) VALUES (?, ?, ?, ?, ?)`
+		if _, err := dm.db.ExecContext(ctx, query, ex.id, w.ID, w.Version, ex.status, ex.ts); err != nil {
+			t.Fatal(err)
+		}
+		nsID := uuid.New().String()
+		nsQuery := `INSERT INTO node_states (id, execution_id, node_id, status, created_at) VALUES (?, ?, ?, ?, ?)`
+		if _, err := dm.db.ExecContext(ctx, nsQuery, nsID, ex.id, node.ID, NodeStatusSuccess, ex.ts); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// 3. Export
+	count, path, err := dm.ExportExecutionsBeforeCutoff(ctx, cutoff, archiveDir)
+	if err != nil {
+		t.Fatalf("ExportExecutionsBeforeCutoff failed: %v", err)
+	}
+
+	if count != 1 {
+		t.Errorf("expected 1 execution exported, got %d", count)
+	}
+
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		t.Errorf("archive file does not exist at %s", path)
+	}
+
+	// 4. Verify content
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var exported []*ExecutionArchive
+	if err := json.Unmarshal(data, &exported); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(exported) != 1 {
+		t.Errorf("expected 1 archive entry, got %d", len(exported))
+	}
+
+	if exported[0].Execution.ID != "old-success" {
+		t.Errorf("wrong execution archived: got %s, want old-success", exported[0].Execution.ID)
+	}
+
+	if len(exported[0].NodeStates) != 1 {
+		t.Errorf("expected 1 node state archived, got %d", len(exported[0].NodeStates))
 	}
 }

@@ -196,3 +196,39 @@ func (dm *DatabaseManager) DoltGC(ctx context.Context) error {
 
 	return nil
 }
+
+// ExportEventsBeforeCutoff exports events older than the cutoff to a JSON file in archiveDir.
+// Returns the count of exported events and the absolute path to the archive file.
+func (dm *DatabaseManager) ExportEventsBeforeCutoff(ctx context.Context, cutoff time.Time, archiveDir string) (int, string, error) {
+	events, err := dm.QueryEventsByTimeRange(ctx, time.Time{}, cutoff)
+	if err != nil {
+		return 0, "", errors.Wrap(err, "failed to query events for export")
+	}
+
+	if len(events) == 0 {
+		return 0, "", nil
+	}
+
+	if err := os.MkdirAll(archiveDir, 0700); err != nil {
+		return 0, "", errors.Wrap(err, "failed to create archive directory")
+	}
+
+	fileName := fmt.Sprintf("events_%s.json", cutoff.Format("2006-01-02_150405"))
+	filePath := filepath.Join(archiveDir, fileName)
+
+	data, err := json.MarshalIndent(events, "", "  ")
+	if err != nil {
+		return 0, "", errors.Wrap(err, "failed to marshal events for archive")
+	}
+
+	if err := os.WriteFile(filePath, data, 0600); err != nil {
+		return 0, "", errors.Wrap(err, "failed to write archive file")
+	}
+
+	absPath, err := filepath.Abs(filePath)
+	if err != nil {
+		return 0, "", errors.Wrap(err, "failed to resolve absolute path for archive")
+	}
+
+	return len(events), absPath, nil
+}

@@ -2,6 +2,7 @@ package events
 
 import (
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -243,5 +244,72 @@ func TestDoltGC(t *testing.T) {
 	ctx := t.Context()
 	if err := dm.DoltGC(ctx); err != nil {
 		t.Errorf("DoltGC failed: %v", err)
+	}
+}
+
+func TestExportEvents(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
+	tmpDir := t.TempDir()
+	dataPath := filepath.Join(tmpDir, "data")
+	archiveDir := filepath.Join(tmpDir, "archive")
+	dm, err := NewDatabaseManager(dataPath, "Rig Bot", "rig@localhost", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dm.Close()
+
+	if err := dm.InitDatabase(); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := t.Context()
+	now := time.Now()
+	oldTime := now.Add(-48 * time.Hour)
+	cutoff := now.Add(-24 * time.Hour)
+
+	// 1. Insert 2 old events, 1 new
+	_, _ = dm.db.ExecContext(ctx, "INSERT INTO workflow_events (id, correlation_id, step, status, message, created_at) VALUES ('id1', 'c1', 's1', 'COMPLETED', '', ?)", oldTime)
+	_, _ = dm.db.ExecContext(ctx, "INSERT INTO workflow_events (id, correlation_id, step, status, message, created_at) VALUES ('id2', 'c1', 's2', 'COMPLETED', '', ?)", oldTime.Add(time.Hour))
+	_, _ = dm.db.ExecContext(ctx, "INSERT INTO workflow_events (id, correlation_id, step, status, message, created_at) VALUES ('id3', 'c1', 's3', 'COMPLETED', '', ?)", now)
+
+	// 2. Export
+	count, path, err := dm.ExportEventsBeforeCutoff(ctx, cutoff, archiveDir)
+	if err != nil {
+		t.Fatalf("ExportEventsBeforeCutoff failed: %v", err)
+	}
+
+	if count != 2 {
+		t.Errorf("expected 2 events exported, got %d", count)
+	}
+
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		t.Errorf("archive file does not exist at %s", path)
+	}
+
+	// 3. Verify content
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var exported []WorkflowEvent
+	if err := json.Unmarshal(data, &exported); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(exported) != 2 {
+		t.Errorf("expected 2 events in JSON, got %d", len(exported))
+	}
+
+	// Verify we got the right ones (id1, id2)
+	ids := make(map[string]bool)
+	for _, e := range exported {
+		ids[e.ID] = true
+	}
+	if !ids["id1"] || !ids["id2"] {
+		t.Errorf("missing expected event IDs: %v", ids)
 	}
 }
