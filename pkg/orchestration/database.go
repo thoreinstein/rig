@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/cockroachdb/errors"
@@ -884,4 +885,93 @@ func (dm *DatabaseManager) DoltLog(ctx context.Context, limit int) ([]DoltCommit
 		return nil, errors.Wrap(err, "error iterating dolt log rows")
 	}
 	return commits, nil
+}
+
+// PruneExecutions removes executions and their associated node states that are older than the specified cutoff time.
+// Only executions with terminal statuses (SUCCESS, FAILED, CANCELLED) are eligible for pruning.
+// If dryRun is true, it returns the counts of rows that would be deleted without deleting them.
+func (dm *DatabaseManager) PruneExecutions(ctx context.Context, cutoff time.Time, dryRun bool) (*PruneResult, error) {
+	tx, err := dm.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to begin transaction")
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	// Ensure we are using the correct database for Dolt system procedures
+	if _, err := tx.ExecContext(ctx, "USE rig_orchestration"); err != nil {
+		return nil, errors.Wrap(err, "failed to use rig_orchestration database")
+	}
+
+	// 1. Identify executions to be pruned (terminal status AND older than cutoff)
+	terminalStatuses := []interface{}{string(ExecutionStatusSuccess), string(ExecutionStatusFailed), string(ExecutionStatusCancelled)}
+	// We use 3 placeholders for the 3 terminal statuses to avoid G201
+	const countExecQuery = `SELECT COUNT(*) FROM executions WHERE status IN (?, ?, ?) AND created_at < ?`
+	args := append(terminalStatuses, cutoff)
+
+	var execCount int
+	if err := tx.QueryRowContext(ctx, countExecQuery, args...).Scan(&execCount); err != nil {
+		return nil, errors.Wrap(err, "failed to count executions for pruning")
+	}
+
+	var nodeStateCount int
+	const countNSQuery = `SELECT COUNT(*) FROM node_states WHERE execution_id IN (SELECT id FROM executions WHERE status IN (?, ?, ?) AND created_at < ?)`
+	if err := tx.QueryRowContext(ctx, countNSQuery, args...).Scan(&nodeStateCount); err != nil {
+		return nil, errors.Wrap(err, "failed to count node states for pruning")
+	}
+
+	res := &PruneResult{
+		ExecutionsPruned: execCount,
+		NodeStatesPruned: nodeStateCount,
+		CutoffTime:       cutoff,
+	}
+
+	if dryRun || execCount == 0 {
+		return res, nil
+	}
+
+	// 2. Perform deletion
+	const deleteExecQuery = `DELETE FROM executions WHERE status IN (?, ?, ?) AND created_at < ?`
+	if _, err := tx.ExecContext(ctx, deleteExecQuery, args...); err != nil {
+		return nil, errors.Wrap(err, "failed to prune executions")
+	}
+
+	// 3. Create Dolt commit for the deletion
+	msg := fmt.Sprintf("orchestration: Pruned %d executions and %d node states older than %s", execCount, nodeStateCount, cutoff.Format(time.RFC3339))
+	if err := txAutoCommit(ctx, tx, msg); err != nil {
+		return nil, errors.Wrap(err, "failed to dolt-commit after prune")
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, errors.Wrap(err, "failed to commit transaction")
+	}
+
+	return res, nil
+}
+
+// DoltGC runs the Dolt garbage collection procedure to reclaim space.
+// This is a best-effort operation as the embedded driver may not support it.
+func (dm *DatabaseManager) DoltGC(ctx context.Context) error {
+	conn, err := dm.db.Conn(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to acquire database connection")
+	}
+	defer conn.Close()
+
+	if _, err := conn.ExecContext(ctx, "USE rig_orchestration"); err != nil {
+		return errors.Wrap(err, "failed to use rig_orchestration database")
+	}
+
+	if _, err := conn.ExecContext(ctx, "CALL DOLT_GC()"); err != nil {
+		errMsg := err.Error()
+		// Silently skip if the procedure is not supported by the driver/version.
+		if strings.Contains(errMsg, "not supported") || strings.Contains(errMsg, "unknown procedure") || strings.Contains(errMsg, "not found") {
+			if dm.Verbose {
+				fmt.Fprintf(os.Stderr, "[orchestration] Dolt GC not supported: %v\n", err)
+			}
+			return nil
+		}
+		return errors.Wrap(err, "failed to CALL DOLT_GC")
+	}
+
+	return nil
 }

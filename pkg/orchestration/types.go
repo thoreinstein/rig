@@ -113,3 +113,10 @@ type DoltCommitInfo struct {
 	Message   string    `json:"message"`
 	Timestamp time.Time `json:"timestamp"`
 }
+
+// PruneResult contains the results of a database pruning operation.
+type PruneResult struct {
+	ExecutionsPruned int
+	NodeStatesPruned int
+	CutoffTime       time.Time
+}

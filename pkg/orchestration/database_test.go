@@ -4,6 +4,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -417,5 +418,127 @@ func TestMigrationIdempotency(t *testing.T) {
 	}
 	if currentVersion != expectedVersion {
 		t.Errorf("Expected migration version %d, got %d", expectedVersion, currentVersion)
+	}
+}
+
+func TestPruneExecutions(t *testing.T) {
+	dm := setupTestDB(t)
+	defer dm.Close()
+	ctx := t.Context()
+
+	// 1. Setup workflows and nodes
+	w := &Workflow{Name: "prune-test"}
+	if err := dm.CreateWorkflow(ctx, w); err != nil {
+		t.Fatal(err)
+	}
+	node1 := &Node{WorkflowID: w.ID, WorkflowVersion: 1, Name: "n1", Type: "task"}
+	if err := dm.CreateNode(ctx, node1); err != nil {
+		t.Fatal(err)
+	}
+	node2 := &Node{WorkflowID: w.ID, WorkflowVersion: 1, Name: "n2", Type: "task"}
+	if err := dm.CreateNode(ctx, node2); err != nil {
+		t.Fatal(err)
+	}
+
+	now := time.Now()
+	oldTime := now.Add(-48 * time.Hour)
+	cutoff := now.Add(-24 * time.Hour)
+
+	// 2. Create executions with various statuses and timestamps
+	execs := []struct {
+		id     string
+		status ExecutionStatus
+		ts     time.Time
+	}{
+		{"old-success", ExecutionStatusSuccess, oldTime},
+		{"old-failed", ExecutionStatusFailed, oldTime},
+		{"old-running", ExecutionStatusRunning, oldTime}, // Should NOT be pruned (not terminal)
+		{"new-success", ExecutionStatusSuccess, now},     // Should NOT be pruned (too recent)
+	}
+
+	for _, ex := range execs {
+		query := `INSERT INTO executions (id, workflow_id, workflow_version, status, created_at) VALUES (?, ?, ?, ?, ?)`
+		if _, err := dm.db.ExecContext(ctx, query, ex.id, w.ID, w.Version, ex.status, ex.ts); err != nil {
+			t.Fatalf("failed to insert execution %s: %v", ex.id, err)
+		}
+
+		// Insert 2 node states per execution
+		for _, n := range []*Node{node1, node2} {
+			nsID := uuid.New().String()
+			nsQuery := `INSERT INTO node_states (id, execution_id, node_id, status, created_at) VALUES (?, ?, ?, ?, ?)`
+			if _, err := dm.db.ExecContext(ctx, nsQuery, nsID, ex.id, n.ID, NodeStatusSuccess, ex.ts); err != nil {
+				t.Fatalf("failed to insert node state for %s: %v", ex.id, err)
+			}
+		}
+	}
+
+	// 3. Test Dry Run (should find 2 executions, 4 node states)
+	res, err := dm.PruneExecutions(ctx, cutoff, true)
+	if err != nil {
+		t.Fatalf("PruneExecutions(dryRun=true) failed: %v", err)
+	}
+	if res.ExecutionsPruned != 2 {
+		t.Errorf("Dry run: expected 2 executions, got %d", res.ExecutionsPruned)
+	}
+	if res.NodeStatesPruned != 4 {
+		t.Errorf("Dry run: expected 4 node states, got %d", res.NodeStatesPruned)
+	}
+
+	// Verify nothing deleted
+	var count int
+	if err := dm.db.QueryRow("SELECT COUNT(*) FROM executions").Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 4 {
+		t.Errorf("Dry run deleted executions: count = %d, want 4", count)
+	}
+
+	// 4. Perform actual Prune
+	res, err = dm.PruneExecutions(ctx, cutoff, false)
+	if err != nil {
+		t.Fatalf("PruneExecutions(dryRun=false) failed: %v", err)
+	}
+	if res.ExecutionsPruned != 2 {
+		t.Errorf("Actual prune: expected 2 executions, got %d", res.ExecutionsPruned)
+	}
+
+	// Verify results
+	if err := dm.db.QueryRow("SELECT COUNT(*) FROM executions").Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 2 {
+		t.Errorf("Actual prune failed: executions count = %d, want 2", count)
+	}
+
+	if err := dm.db.QueryRow("SELECT COUNT(*) FROM node_states").Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 4 {
+		t.Errorf("Actual prune failed: node_states count = %d, want 4 (2 remaining execs * 2 states each)", count)
+	}
+
+	// Verify correct executions remain
+	rows, _ := dm.db.Query("SELECT id FROM executions")
+	defer rows.Close()
+	remaining := make(map[string]bool)
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			t.Fatal(err)
+		}
+		remaining[id] = true
+	}
+	if !remaining["old-running"] || !remaining["new-success"] {
+		t.Errorf("Wrong executions remain: %v", remaining)
+	}
+}
+
+func TestDoltGC_Orchestration(t *testing.T) {
+	dm := setupTestDB(t)
+	defer dm.Close()
+	ctx := t.Context()
+
+	if err := dm.DoltGC(ctx); err != nil {
+		t.Errorf("DoltGC failed: %v", err)
 	}
 }
