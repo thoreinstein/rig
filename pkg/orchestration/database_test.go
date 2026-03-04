@@ -2,9 +2,11 @@ package orchestration
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -259,7 +261,87 @@ func TestWorkflowUpdateMerging(t *testing.T) {
 }
 
 func TestWorkflowConcurrency(t *testing.T) {
-	t.Skip("skipping known concurrency issue in embedded dolt - to be addressed in rig-ytn.7")
+	tmpDir := t.TempDir()
+	dataPath := filepath.Join(tmpDir, "data")
+
+	// Create two managers pointing to the same data
+	dm1, err := NewDatabaseManager(dataPath, "Rig Test 1", "test1@rig.sh", false)
+	if err != nil {
+		t.Fatalf("failed to create dm1: %v", err)
+	}
+	defer dm1.Close()
+	if err := dm1.InitDatabase(); err != nil {
+		t.Fatalf("dm1 InitDatabase failed: %v", err)
+	}
+
+	dm2, err := NewDatabaseManager(dataPath, "Rig Test 2", "test2@rig.sh", false)
+	if err != nil {
+		t.Fatalf("failed to create dm2: %v", err)
+	}
+	defer dm2.Close()
+
+	ctx := t.Context()
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	sharedID := "concurrent-wf-id"
+	w := &Workflow{ID: sharedID, Name: "concurrent-wf"}
+	if err := dm1.CreateWorkflow(ctx, w); err != nil {
+		t.Fatalf("failed to create initial workflow: %v", err)
+	}
+
+	errs := make(chan error, 200)
+
+	// Thread 1: dm1 updates
+	go func() {
+		defer wg.Done()
+		for i := range 50 {
+			wf, err := dm1.GetWorkflow(ctx, sharedID)
+			if err != nil {
+				errs <- fmt.Errorf("dm1 get failed: %v", err)
+				return
+			}
+			wf.Description = fmt.Sprintf("updated by dm1 - %d", i)
+			if err := dm1.UpdateWorkflow(ctx, wf); err != nil {
+				errs <- fmt.Errorf("dm1 update failed at %d: %v", i, err)
+				return
+			}
+		}
+	}()
+
+	// Thread 2: dm2 updates
+	go func() {
+		defer wg.Done()
+		for i := range 50 {
+			wf, err := dm2.GetWorkflow(ctx, sharedID)
+			if err != nil {
+				errs <- fmt.Errorf("dm2 get failed: %v", err)
+				return
+			}
+			wf.Description = fmt.Sprintf("updated by dm2 - %d", i)
+			if err := dm2.UpdateWorkflow(ctx, wf); err != nil {
+				errs <- fmt.Errorf("dm2 update failed at %d: %v", i, err)
+				return
+			}
+		}
+	}()
+
+	wg.Wait()
+	close(errs)
+
+	for err := range errs {
+		t.Errorf("Concurrency error detected: %v", err)
+	}
+
+	// Verify final state
+	final, err := dm1.GetWorkflow(ctx, sharedID)
+	if err != nil {
+		t.Fatalf("failed to get final workflow: %v", err)
+	}
+	// Total updates should be 100, so version should be 101 (1 initial + 100 updates)
+	if final.Version != 101 {
+		t.Errorf("Expected final version 101, got %d", final.Version)
+	}
 }
 
 func TestNodeHistoricalVersioning(t *testing.T) {

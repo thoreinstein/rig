@@ -139,6 +139,11 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 ### Persistence & State
 - **Transient State vs. Immutable Audit Trail:** Separate high-churn execution state (`rig_orchestration`) from versioned observability events (`rig_events`). Transient state is for logic; versioned events are for auditing. This prevents performance degradation from constant Dolt commits on high-churn data.
 - **Embedded Dolt Architecture:** For truly standalone, in-process versioned state (e.g., event tracking), use the `github.com/dolthub/driver` library. This allows Rig to act as its own SQL engine without requiring an external `dolt` binary or `sql-server` process. Access via the `dolt` driver name and `file://` DSN scheme.
+- **Concurrency & Locking Strategy:**
+  - **Row-Level Locking:** All state-modifying database methods use `SELECT ... FOR UPDATE` inside transactions to ensure atomic read-before-write operations.
+  - **Retry with Backoff:** To handle Dolt serialization failures (MySQL Error 1213: deadlock, 1205: lock wait timeout) in multi-process scenarios, database write operations are wrapped in an exponential backoff retry loop (via `pkg/errors/retry.go`).
+  - **Transaction Isolation:** Each retry attempt starts a fresh transaction to resolve stale lock states.
+  - **Versioning Scope:** `txAutoCommit` is only called for versioned data (Workflows, Definitions). Execution and Node state changes are transient and intentionally skip Dolt versioning.
 - **Optional Telemetry Pattern:** Decouple telemetry (e.g., event logging) from core logic using an interface (e.g., `EventLogger`) and functional options (`WithEventLogger`). Always provide a `Noop` implementation as the default to ensure the system remains resilient if the telemetry store is unavailable or disabled.
 - **Milestone Versioning Cadence:** To balance performance and auditability, log individual events via standard SQL `INSERT` and perform a `DOLT_COMMIT` only at significant milestones (e.g., workflow completion).
 - **Linter-Resilient Query Building Pattern:** When constructing dynamic SQL, prefer `fmt.Sprintf` with a constant format string (e.g., `fmt.Sprintf("%s WHERE %s", base, conditions)`) over raw string concatenation. This satisfies `gosec` G202 (SQL injection) without requiring fragile `//nolint` directives that trigger `nolintlint` if the environment changes.
