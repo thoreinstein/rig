@@ -135,7 +135,7 @@ func runGCCommand(cmdCtx context.Context) error {
 		archiveDir = filepath.Join(home, ".local", "share", "rig", "archives")
 	}
 
-	ctx, cancel := contextWithTimeout(cmdCtx, 30*time.Minute) // GC can be slow
+	ctx, cancel := context.WithTimeout(cmdCtx, 30*time.Minute) // GC can be slow
 	defer cancel()
 
 	var errs []error

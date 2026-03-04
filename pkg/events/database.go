@@ -16,6 +16,11 @@ import (
 )
 
 // DatabaseManager handles embedded Dolt database operations for event tracking.
+//
+// Unlike orchestration.DatabaseManager, this type does not use retry logic for
+// Dolt serialization errors. The events store is single-writer: the logger appends
+// rows sequentially, and maintenance operations (prune, backfill) run one at a time
+// via the CLI. There is no concurrent mutation path that would trigger Dolt conflicts.
 type DatabaseManager struct {
 	db       *sql.DB
 	dataPath string
@@ -212,10 +217,27 @@ func (dm *DatabaseManager) DoltGC(ctx context.Context) error {
 // ExportEventsBeforeCutoff exports events older than the cutoff to a JSON file in archiveDir.
 // Returns the count of exported events and the absolute path to the archive file.
 func (dm *DatabaseManager) ExportEventsBeforeCutoff(ctx context.Context, cutoff time.Time, archiveDir string) (int, string, error) {
-	// Use strict "before cutoff" to match PruneEvents' created_at < cutoff semantics.
-	events, err := dm.QueryEventsByTimeRange(ctx, time.Time{}, cutoff.Add(-time.Nanosecond))
+	// Use created_at < cutoff directly to match PruneEvents' deletion semantics exactly.
+	query := `SELECT id, correlation_id, step, status, message, metadata, created_at
+		FROM workflow_events WHERE created_at < ? ORDER BY created_at ASC, id ASC`
+	rows, err := dm.db.QueryContext(ctx, query, cutoff)
 	if err != nil {
 		return 0, "", errors.Wrap(err, "failed to query events for export")
+	}
+	defer rows.Close()
+
+	var events []WorkflowEvent
+	for rows.Next() {
+		var e WorkflowEvent
+		var metadata []byte
+		if err := rows.Scan(&e.ID, &e.CorrelationID, &e.Step, &e.Status, &e.Message, &metadata, &e.CreatedAt); err != nil {
+			return 0, "", errors.Wrap(err, "failed to scan event for export")
+		}
+		e.Metadata = metadata
+		events = append(events, e)
+	}
+	if err := rows.Err(); err != nil {
+		return 0, "", errors.Wrap(err, "error iterating events for export")
 	}
 
 	if len(events) == 0 {
