@@ -305,3 +305,10 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 - **Decoupled Metadata Tagging**: Use narrow interfaces (e.g., `TicketMetadataSetter`) and retroactive backfilling to decorate data with context resolved after creation. This prevents import cycles and maintains business logic isolation from data storage.
 - **Unified Presentation Model**: For CLI commands aggregating data from heterogeneous sources, use a flattened "Presentation Model" in a shared package. Map source-specific structs to this model using Go primitives to avoid circular dependencies and simplify sorting/formatting logic.
 - **Deterministic Sort Ordering**: Always use a unique tie-breaker (e.g., `id ASC`) in SQL queries and `sort.SliceStable` in Go when rendering chronological lists. This prevents nondeterministic output churn in persistent artifacts like Markdown notes.
+
+### Maintenance & Storage
+- **Maintenance Connection Pinning:** Maintenance operations in Dolt (e.g., `USE database`, `dolt_gc`, multi-table pruning) MUST use a pinned `*sql.Conn` to ensure session affinity. Using the general pool can lead to commands running against the wrong database context.
+- **Authoritative Pruning Feedback:** Rely on `RowsAffected()` from the database after a `DELETE` for reporting and logs, rather than pre-calculating counts. This avoids race conditions and ensures reporting is a truthful reflection of the disk state. In dry-run modes, use an explicit `SELECT COUNT(*)` with matching filters.
+
+### Storage & Retention Traps
+- **Minimum Retention Fallacy:** When managing multiple heterogeneous stores (e.g., events and orchestration), never derive a single "global" cutoff based on the minimum retention. Each store must calculate its own cutoff independently to avoid premature data loss in stores with longer retention guarantees.
