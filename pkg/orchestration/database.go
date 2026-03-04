@@ -1120,7 +1120,12 @@ func (dm *DatabaseManager) withRetry(ctx context.Context, operation string, fn f
 			if dm.Verbose {
 				log.Printf("[orchestration] retrying %s due to conflict: %v", operation, err)
 			}
-			return rigerrors.NewDatabaseError(operation, err.Error(), 1213)
+			msg := err.Error()
+			code := 1213
+			if strings.Contains(msg, "Error 1205") {
+				code = 1205
+			}
+			return rigerrors.NewDatabaseError(operation, msg, code)
 		}
 
 		return err

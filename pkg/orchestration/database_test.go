@@ -329,18 +329,22 @@ func TestWorkflowConcurrency(t *testing.T) {
 	wg.Wait()
 	close(errs)
 
+	var hadErrors bool
 	for err := range errs {
+		hadErrors = true
 		t.Errorf("Concurrency error detected: %v", err)
 	}
 
-	// Verify final state
-	final, err := dm1.GetWorkflow(ctx, sharedID)
-	if err != nil {
-		t.Fatalf("failed to get final workflow: %v", err)
-	}
-	// Total updates should be 100, so version should be 101 (1 initial + 100 updates)
-	if final.Version != 101 {
-		t.Errorf("Expected final version 101, got %d", final.Version)
+	// Verify final state only if all updates succeeded
+	if !hadErrors {
+		final, err := dm1.GetWorkflow(ctx, sharedID)
+		if err != nil {
+			t.Fatalf("failed to get final workflow: %v", err)
+		}
+		// Total updates should be 100, so version should be 101 (1 initial + 100 updates)
+		if final.Version != 101 {
+			t.Errorf("Expected final version 101, got %d", final.Version)
+		}
 	}
 }
 

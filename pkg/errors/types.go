@@ -414,16 +414,6 @@ func NewDatabaseError(operation, message string, code int) *DatabaseError {
 	}
 }
 
-// NewDatabaseErrorWithCause creates a new DatabaseError with an underlying cause.
-func NewDatabaseErrorWithCause(operation, message string, cause error) *DatabaseError {
-	return &DatabaseError{
-		Operation: operation,
-		Message:   message,
-		Retryable: IsRetryable(cause),
-		Cause:     cause,
-	}
-}
-
 // IsDoltSerializationError returns true if the error or its cause is a Dolt
 // serialization failure (deadlock or lock wait timeout).
 func IsDoltSerializationError(err error) bool {
@@ -535,6 +525,12 @@ func IsPluginError(err error) bool {
 func IsDaemonError(err error) bool {
 	var daemonErr *DaemonError
 	return errors.As(err, &daemonErr)
+}
+
+// IsDatabaseError checks if an error or any error in its chain is a DatabaseError.
+func IsDatabaseError(err error) bool {
+	var dbErr *DatabaseError
+	return errors.As(err, &dbErr)
 }
 
 // isRetryableHTTPStatus returns true for HTTP status codes that are typically retryable.
