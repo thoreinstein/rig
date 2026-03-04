@@ -417,6 +417,9 @@ func NewDatabaseError(operation, message string, code int) *DatabaseError {
 // IsDoltSerializationError returns true if the error or its cause is a Dolt
 // serialization failure (deadlock or lock wait timeout).
 func IsDoltSerializationError(err error) bool {
+	if err == nil {
+		return false
+	}
 	var dbErr *DatabaseError
 	if errors.As(err, &dbErr) {
 		return dbErr.Code == 1213 || dbErr.Code == 1205

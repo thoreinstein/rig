@@ -1125,7 +1125,9 @@ func (dm *DatabaseManager) withRetry(ctx context.Context, operation string, fn f
 			if strings.Contains(msg, "Error 1205") {
 				code = 1205
 			}
-			return rigerrors.NewDatabaseError(operation, msg, code)
+			dbErr := rigerrors.NewDatabaseError(operation, msg, code)
+			dbErr.Cause = err
+			return dbErr
 		}
 
 		return err
