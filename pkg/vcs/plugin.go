@@ -83,7 +83,7 @@ func (p *PluginProvider) GetDefaultBranch(path, baseBranchConfig string) (string
 }
 
 func (p *PluginProvider) CreateWorktree(path, ticketType, name, branchName, baseBranchConfig string) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), rpcLongTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), rpcTimeout)
 	defer cancel()
 
 	client, err := p.Manager.GetVCSClient(ctx, p.PluginName)

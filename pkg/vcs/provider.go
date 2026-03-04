@@ -10,7 +10,9 @@ type WorktreeInfo struct {
 // This abstraction allows Rig to support different VCS backends (like Git)
 // and to offload VCS logic to plugins.
 type Provider interface {
-	// GetRepoRoot returns the root directory of the repository containing the path.
+	// GetRepoRoot returns the shared git directory (git common dir) for the repository
+	// containing path. For non-bare repos this is the .git directory; for worktrees
+	// it resolves to the main repo's .git directory.
 	GetRepoRoot(path string) (string, error)
 
 	// GetRepoName returns the name of the repository.
