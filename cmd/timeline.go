@@ -16,7 +16,6 @@ import (
 	"thoreinstein.com/rig/pkg/events"
 	"thoreinstein.com/rig/pkg/history"
 	"thoreinstein.com/rig/pkg/notes"
-	"thoreinstein.com/rig/pkg/vcs"
 )
 
 // timelineCmd represents the timeline command
@@ -122,12 +121,13 @@ func runTimelineCommand(ctx context.Context, ticket string) error {
 	// If NOT provided, use worktree path as an OR condition (ProjectPaths)
 	if timelineDirectory == "" {
 		// Attempt to resolve worktree path
-		provider, err := vcs.NewProvider(cfg.VCS.Provider, verbose)
+		provider, cleanup, err := getVCSProvider(cfg)
 		if err != nil {
 			if verbose {
 				fmt.Printf("Warning: Could not initialize VCS provider: %v\n", err)
 			}
 		} else {
+			defer cleanup()
 			// Use current directory to find repo context
 			cwd, _ := os.Getwd()
 			worktreePath, err := provider.GetWorktreePath(cwd, ticketInfo.Type, ticketInfo.Full)

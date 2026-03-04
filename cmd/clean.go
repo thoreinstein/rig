@@ -61,10 +61,11 @@ func runCleanCommand() error {
 	}
 
 	// Initialize VCS provider
-	provider, err := vcs.NewProvider(cfg.VCS.Provider, verbose)
+	provider, cleanup, err := getVCSProvider(cfg)
 	if err != nil {
 		return errors.Wrap(err, "failed to initialize VCS provider")
 	}
+	defer cleanup()
 
 	// Find cleanup candidates
 	candidates, err := findCleanupCandidates(cfg, provider)

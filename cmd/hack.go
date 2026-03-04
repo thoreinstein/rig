@@ -10,7 +10,6 @@ import (
 
 	"thoreinstein.com/rig/pkg/notes"
 	"thoreinstein.com/rig/pkg/tmux"
-	"thoreinstein.com/rig/pkg/vcs"
 )
 
 var hackNoNotes bool
@@ -89,10 +88,11 @@ func runHackCommand(name string) error {
 	}
 
 	// Initialize VCS provider
-	provider, err := vcs.NewProvider(cfg.VCS.Provider, verbose)
+	provider, cleanup, err := getVCSProvider(cfg)
 	if err != nil {
 		return errors.Wrap(err, "failed to initialize VCS provider")
 	}
+	defer cleanup()
 
 	// Step 1: Create git worktree (uses projectPath to find repo)
 	if verbose {

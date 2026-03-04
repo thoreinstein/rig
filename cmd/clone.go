@@ -6,7 +6,6 @@ import (
 	"github.com/cockroachdb/errors"
 	"github.com/spf13/cobra"
 
-	"thoreinstein.com/rig/pkg/vcs"
 	vcsurl "thoreinstein.com/rig/pkg/vcs/url"
 )
 
@@ -68,10 +67,11 @@ func runCloneCommand(urlInput string) error {
 	}
 
 	// Initialize VCS provider
-	provider, err := vcs.NewProvider(cfg.VCS.Provider, verbose)
+	provider, cleanup, err := getVCSProvider(cfg)
 	if err != nil {
 		return errors.Wrap(err, "failed to initialize VCS provider")
 	}
+	defer cleanup()
 
 	// Get base path from config or use default
 	basePath := cfg.Clone.BasePath

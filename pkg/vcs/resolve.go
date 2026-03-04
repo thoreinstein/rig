@@ -1,14 +1,30 @@
 package vcs
 
+import (
+	"thoreinstein.com/rig/pkg/plugin"
+)
+
 // NewProvider creates a new VCS provider based on the provider name.
 // If providerName is empty or "git", it returns a LocalProvider.
-// This factory will be extended in Phase 3 to support plugin-based providers.
+// This is a convenience wrapper for NewProviderWithManager(nil, ...).
 func NewProvider(providerName string, verbose bool) (Provider, error) {
+	return NewProviderWithManager(nil, providerName, verbose)
+}
+
+// NewProviderWithManager creates a new VCS provider based on the provider name.
+// If providerName is "git" or empty, it returns a LocalProvider.
+// Otherwise, it returns a PluginProvider using the provided manager.
+func NewProviderWithManager(manager *plugin.Manager, providerName string, verbose bool) (Provider, error) {
 	// Default to local git provider
 	if providerName == "" || providerName == "git" {
 		return NewLocalProvider(verbose), nil
 	}
 
-	// For now, fallback to local provider
+	// If manager is provided, try to use it for plugin provider
+	if manager != nil {
+		return NewPluginProvider(manager, providerName, verbose), nil
+	}
+
+	// Fallback to local provider if no manager
 	return NewLocalProvider(verbose), nil
 }

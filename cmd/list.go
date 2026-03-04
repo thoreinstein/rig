@@ -11,7 +11,6 @@ import (
 
 	"thoreinstein.com/rig/pkg/config"
 	"thoreinstein.com/rig/pkg/tmux"
-	"thoreinstein.com/rig/pkg/vcs"
 )
 
 var listWorktrees bool
@@ -81,10 +80,11 @@ func listCurrentRepoWorktrees(cfg *config.Config) error {
 	fmt.Println()
 
 	// Initialize VCS provider
-	provider, err := vcs.NewProvider(cfg.VCS.Provider, verbose)
+	provider, cleanup, err := getVCSProvider(cfg)
 	if err != nil {
 		return errors.Wrap(err, "failed to initialize VCS provider")
 	}
+	defer cleanup()
 
 	// Use current directory to find repo
 	cwd, _ := config.UserHomeDir() // Fallback
