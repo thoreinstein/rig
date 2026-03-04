@@ -1,6 +1,7 @@
 package vcs
 
 import (
+	"fmt"
 	"testing"
 )
 
@@ -35,8 +36,15 @@ func TestNewProviderWithManager(t *testing.T) {
 				t.Errorf("NewProviderWithManager() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if !tt.wantErr && got == nil {
-				t.Error("NewProviderWithManager() returned nil provider")
+			if tt.wantErr {
+				return
+			}
+			if got == nil {
+				t.Fatal("NewProviderWithManager() returned nil provider")
+			}
+			gotType := fmt.Sprintf("%T", got)
+			if gotType != tt.wantType {
+				t.Errorf("NewProviderWithManager() type = %s, want %s", gotType, tt.wantType)
 			}
 		})
 	}

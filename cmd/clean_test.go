@@ -115,9 +115,12 @@ func TestIsBranchMerged(t *testing.T) {
 				tt.setup()
 			}
 			wm := git.NewWorktreeManagerAtPath(repoDir, "", false)
-			result, _ := wm.IsBranchMerged(tt.branch, tt.baseBranch)
+			result, err := wm.IsBranchMerged(tt.branch, tt.baseBranch)
+			if err != nil {
+				t.Fatalf("IsBranchMerged(%q, %q) returned error: %v", tt.branch, tt.baseBranch, err)
+			}
 			if result != tt.expected {
-				t.Errorf("isBranchMerged(%q, %q) = %v, want %v", tt.branch, tt.baseBranch, result, tt.expected)
+				t.Errorf("IsBranchMerged(%q, %q) = %v, want %v", tt.branch, tt.baseBranch, result, tt.expected)
 			}
 		})
 	}
@@ -198,7 +201,10 @@ func TestIsBranchMerged_MergedBranch(t *testing.T) {
 	// Now test if branch is detected as merged
 	// Get merge status
 	wm := git.NewWorktreeManagerAtPath(repoDir, "", false)
-	merged, _ := wm.IsBranchMerged("merged-feature", baseBranch)
+	merged, err := wm.IsBranchMerged("merged-feature", baseBranch)
+	if err != nil {
+		t.Fatalf("IsBranchMerged() returned error: %v", err)
+	}
 	if !merged {
 		t.Error("IsBranchMerged() should return true for merged branch")
 	}
@@ -269,7 +275,10 @@ func TestIsBranchMerged_WorktreeCheckedOut(t *testing.T) {
 	// The feature branch is still checked out in its worktree, so git branch --merged
 	// Check merge status
 	wm := git.NewWorktreeManagerAtPath(repoDir, "", false)
-	merged, _ := wm.IsBranchMerged("feature-branch", "main")
+	merged, err := wm.IsBranchMerged("feature-branch", "main")
+	if err != nil {
+		t.Fatalf("IsBranchMerged() returned error: %v", err)
+	}
 	if !merged {
 		t.Error("IsBranchMerged() should return true for merged branch checked out in worktree")
 	}
