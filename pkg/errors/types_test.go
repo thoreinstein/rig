@@ -477,3 +477,90 @@ func TestIsRetryable_BeadsErrorWithRetryableCause(t *testing.T) {
 		t.Error("IsRetryable() should return true for BeadsError with retryable flag set")
 	}
 }
+
+func TestDatabaseError(t *testing.T) {
+	t.Run("Error()", func(t *testing.T) {
+		err := &DatabaseError{Operation: "UpdateWorkflow", Code: 1213, Message: "deadlock"}
+		expected := "database UpdateWorkflow failed (code 1213): deadlock"
+		if err.Error() != expected {
+			t.Errorf("Error() = %q, want %q", err.Error(), expected)
+		}
+
+		errNoCode := &DatabaseError{Operation: "CreateWorkflow", Message: "failed"}
+		expectedNoCode := "database CreateWorkflow failed: failed"
+		if errNoCode.Error() != expectedNoCode {
+			t.Errorf("Error() = %q, want %q", errNoCode.Error(), expectedNoCode)
+		}
+	})
+
+	t.Run("Unwrap()", func(t *testing.T) {
+		cause := New("db locked")
+		err := &DatabaseError{Cause: cause}
+		if errors.Unwrap(err) != cause {
+			t.Errorf("Unwrap() = %v, want %v", errors.Unwrap(err), cause)
+		}
+	})
+
+	t.Run("NewDatabaseError()", func(t *testing.T) {
+		// Test retryable codes
+		if !NewDatabaseError("op", "msg", 1213).Retryable {
+			t.Error("code 1213 should be retryable")
+		}
+		if !NewDatabaseError("op", "msg", 1205).Retryable {
+			t.Error("code 1205 should be retryable")
+		}
+		// Test non-retryable code
+		if NewDatabaseError("op", "msg", 1000).Retryable {
+			t.Error("code 1000 should not be retryable")
+		}
+	})
+
+	t.Run("IsDoltSerializationError()", func(t *testing.T) {
+		dbErr := NewDatabaseError("op", "msg", 1213)
+		if !IsDoltSerializationError(dbErr) {
+			t.Error("IsDoltSerializationError should return true for code 1213")
+		}
+
+		rawErr := New("Error 1213: serialization failure")
+		if !IsDoltSerializationError(rawErr) {
+			t.Error("IsDoltSerializationError should return true for raw error message containing Error 1213")
+		}
+
+		otherErr := New("some other error")
+		if IsDoltSerializationError(otherErr) {
+			t.Error("IsDoltSerializationError should return false for unrelated error")
+		}
+	})
+}
+
+func TestIsRetryable_DatabaseError(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      error
+		expected bool
+	}{
+		{
+			name:     "retryable DatabaseError",
+			err:      NewDatabaseError("op", "msg", 1213),
+			expected: true,
+		},
+		{
+			name:     "non-retryable DatabaseError",
+			err:      NewDatabaseError("op", "msg", 1000),
+			expected: false,
+		},
+		{
+			name:     "wrapped retryable DatabaseError",
+			err:      Wrap(NewDatabaseError("op", "msg", 1213), "context"),
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if IsRetryable(tt.err) != tt.expected {
+				t.Errorf("IsRetryable() = %v, want %v", IsRetryable(tt.err), tt.expected)
+			}
+		})
+	}
+}

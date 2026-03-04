@@ -8,6 +8,7 @@ package errors
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/cockroachdb/errors"
 )
@@ -378,6 +379,63 @@ func (e *DaemonError) WithCause(cause error) *DaemonError {
 	return e
 }
 
+// DatabaseError represents errors related to database operations,
+// specifically targeting Dolt concurrency and locking issues.
+type DatabaseError struct {
+	Operation string // e.g., "CreateWorkflow", "UpdateStatus"
+	Message   string
+	Code      int  // MySQL/Dolt error code if applicable (e.g., 1213)
+	Retryable bool // Whether the operation should be retried
+	Cause     error
+}
+
+// Error implements the error interface.
+func (e *DatabaseError) Error() string {
+	if e.Code > 0 {
+		return fmt.Sprintf("database %s failed (code %d): %s", e.Operation, e.Code, e.Message)
+	}
+	return fmt.Sprintf("database %s failed: %s", e.Operation, e.Message)
+}
+
+// Unwrap returns the underlying cause for error chain traversal.
+func (e *DatabaseError) Unwrap() error {
+	return e.Cause
+}
+
+// NewDatabaseError creates a new DatabaseError.
+func NewDatabaseError(operation, message string, code int) *DatabaseError {
+	// Detect if this is a known retryable Dolt error
+	retryable := code == 1213 || code == 1205 // 1213: Deadlock, 1205: Lock wait timeout
+	return &DatabaseError{
+		Operation: operation,
+		Message:   message,
+		Code:      code,
+		Retryable: retryable,
+	}
+}
+
+// NewDatabaseErrorWithCause creates a new DatabaseError with an underlying cause.
+func NewDatabaseErrorWithCause(operation, message string, cause error) *DatabaseError {
+	return &DatabaseError{
+		Operation: operation,
+		Message:   message,
+		Retryable: IsRetryable(cause),
+		Cause:     cause,
+	}
+}
+
+// IsDoltSerializationError returns true if the error or its cause is a Dolt
+// serialization failure (deadlock or lock wait timeout).
+func IsDoltSerializationError(err error) bool {
+	var dbErr *DatabaseError
+	if errors.As(err, &dbErr) {
+		return dbErr.Code == 1213 || dbErr.Code == 1205
+	}
+	// Fallback to checking message if it's a raw SQL error we haven't wrapped yet
+	msg := err.Error()
+	return strings.Contains(msg, "Error 1213") || strings.Contains(msg, "Error 1205")
+}
+
 // IsRetryable checks if an error or any error in its chain is retryable.
 // It returns true if the error itself is retryable, or if any wrapped error
 // is marked as retryable.
@@ -414,6 +472,12 @@ func IsRetryable(err error) bool {
 	var wfErr *WorkflowError
 	if errors.As(err, &wfErr) {
 		return wfErr.Retryable
+	}
+
+	// Check DatabaseError
+	var dbErr *DatabaseError
+	if errors.As(err, &dbErr) {
+		return dbErr.Retryable
 	}
 
 	return false
