@@ -922,7 +922,14 @@ func (dm *DatabaseManager) PruneExecutions(ctx context.Context, cutoff time.Time
 		return &PruneResult{ExecutionsPruned: execCount, NodeStatesPruned: nodeStateCount, CutoffTime: cutoff}, nil
 	}
 
-	// 2. Perform deletion and use RowsAffected as authoritative count
+	// 2. Count node_states before deletion (cascade will remove them with executions)
+	var nodeStateCount int
+	const countNSQuery = `SELECT COUNT(*) FROM node_states WHERE execution_id IN (SELECT id FROM executions WHERE status IN (?, ?, ?) AND created_at < ?)`
+	if err := tx.QueryRowContext(ctx, countNSQuery, args...).Scan(&nodeStateCount); err != nil {
+		return nil, errors.Wrap(err, "failed to count node states for pruning")
+	}
+
+	// 3. Perform deletion and use RowsAffected as authoritative execution count
 	const deleteExecQuery = `DELETE FROM executions WHERE status IN (?, ?, ?) AND created_at < ?`
 	result, err := tx.ExecContext(ctx, deleteExecQuery, args...)
 	if err != nil {
@@ -935,6 +942,7 @@ func (dm *DatabaseManager) PruneExecutions(ctx context.Context, cutoff time.Time
 
 	res := &PruneResult{
 		ExecutionsPruned: int(execAffected),
+		NodeStatesPruned: nodeStateCount,
 		CutoffTime:       cutoff,
 	}
 
@@ -942,8 +950,8 @@ func (dm *DatabaseManager) PruneExecutions(ctx context.Context, cutoff time.Time
 		return res, nil
 	}
 
-	// 3. Create Dolt commit for the deletion
-	msg := fmt.Sprintf("orchestration: Pruned %d executions older than %s", execAffected, cutoff.Format(time.RFC3339))
+	// 4. Create Dolt commit for the deletion
+	msg := fmt.Sprintf("orchestration: Pruned %d executions and %d node states older than %s", execAffected, nodeStateCount, cutoff.Format(time.RFC3339))
 	if err := txAutoCommit(ctx, tx, msg); err != nil {
 		return nil, errors.Wrap(err, "failed to dolt-commit after prune")
 	}
