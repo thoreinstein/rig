@@ -40,13 +40,6 @@ func init() {
 	listCmd.Flags().BoolVar(&listSessions, "sessions", false, "Show only tmux sessions")
 }
 
-// WorktreeInfo holds information about a worktree
-type WorktreeInfo struct {
-	Path   string
-	Branch string
-	Repo   string
-}
-
 func runListCommand() error {
 	// Load configuration
 	cfg, err := loadConfig()
@@ -108,7 +101,14 @@ func listCurrentRepoWorktrees(cfg *config.Config) error {
 	}
 
 	// Get branch info for each worktree
-	worktreeInfos := getWorktreeDetails(repoRoot)
+	worktreeDetails, err := gitManager.ListWorktreesDetailed()
+	if err != nil {
+		return errors.Wrap(err, "failed to get worktree details")
+	}
+	worktreeInfos := make(map[string]git.WorktreeInfo)
+	for _, info := range worktreeDetails {
+		worktreeInfos[info.Path] = info
+	}
 
 	fmt.Printf("[%s]\n", repoName)
 
@@ -147,35 +147,6 @@ func listCurrentRepoWorktrees(cfg *config.Config) error {
 	}
 
 	return nil
-}
-
-func getWorktreeDetails(repoPath string) map[string]WorktreeInfo {
-	result := make(map[string]WorktreeInfo)
-
-	cmd := exec.Command("git", "worktree", "list", "--porcelain")
-	cmd.Dir = repoPath
-	output, err := cmd.Output()
-	if err != nil {
-		return result
-	}
-
-	lines := strings.Split(string(output), "\n")
-	var currentPath string
-
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "worktree ") {
-			currentPath = strings.TrimPrefix(line, "worktree ")
-			result[currentPath] = WorktreeInfo{Path: currentPath}
-		} else if strings.HasPrefix(line, "branch ") && currentPath != "" {
-			branch := strings.TrimPrefix(line, "branch refs/heads/")
-			info := result[currentPath]
-			info.Branch = branch
-			result[currentPath] = info
-		}
-	}
-
-	return result
 }
 
 func listAllSessions(cfg *config.Config) error {

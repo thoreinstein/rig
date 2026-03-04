@@ -392,3 +392,85 @@ func (wm *WorktreeManager) GetWorktreePath(ticketType, ticket string) (string, e
 	}
 	return filepath.Join(repoRoot, ticketType, ticket), nil
 }
+
+// WorktreeInfo contains information about a git worktree
+type WorktreeInfo struct {
+	Path   string
+	Branch string
+}
+
+// ListWorktreesDetailed returns a detailed list of all existing worktrees
+func (wm *WorktreeManager) ListWorktreesDetailed() ([]WorktreeInfo, error) {
+	repoRoot, err := wm.GetRepoRoot()
+	if err != nil {
+		return nil, err
+	}
+
+	output, err := wm.runner.Output(repoRoot, "git", "worktree", "list", "--porcelain")
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to list worktrees")
+	}
+
+	var worktrees []WorktreeInfo
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+
+	var current WorktreeInfo
+	for _, line := range lines {
+		if strings.HasPrefix(line, "worktree ") {
+			if current.Path != "" {
+				worktrees = append(worktrees, current)
+			}
+			current = WorktreeInfo{
+				Path: strings.TrimPrefix(line, "worktree "),
+			}
+		} else if strings.HasPrefix(line, "branch ") && current.Path != "" {
+			branch := strings.TrimPrefix(line, "branch refs/heads/")
+			current.Branch = branch
+		}
+	}
+	if current.Path != "" {
+		worktrees = append(worktrees, current)
+	}
+
+	return worktrees, nil
+}
+
+// IsBranchMerged checks if the given branch is merged into the base branch
+func (wm *WorktreeManager) IsBranchMerged(branch, baseBranch string) (bool, error) {
+	if branch == "" || branch == baseBranch {
+		return false, nil
+	}
+
+	repoRoot, err := wm.GetRepoRoot()
+	if err != nil {
+		return false, err
+	}
+
+	// Check if branch is merged into base branch
+	output, err := wm.runner.Output(repoRoot, "git", "branch", "--merged", baseBranch)
+	if err != nil {
+		return false, errors.Wrap(err, "failed to check if branch is merged")
+	}
+
+	lines := strings.Split(string(output), "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		line = strings.TrimPrefix(line, "* ") // Current branch marker
+		line = strings.TrimPrefix(line, "+ ") // Worktree branch marker
+		if line == branch {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+// ForceRemoveWorktree removes a worktree even if it's dirty
+func (wm *WorktreeManager) ForceRemoveWorktree(worktreePath string) error {
+	repoRoot, err := wm.GetRepoRoot()
+	if err != nil {
+		return err
+	}
+
+	return wm.runner.Run(repoRoot, "git", "worktree", "remove", "--force", worktreePath)
+}

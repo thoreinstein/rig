@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -158,7 +157,14 @@ func findCleanupCandidates(cfg *config.Config) ([]CleanupCandidate, error) {
 		return nil, errors.Wrap(err, "failed to list worktrees")
 	}
 
-	worktreeDetails := getWorktreeDetailsForClean(repoRoot)
+	worktreeDetails, err := gitManager.ListWorktreesDetailed()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get worktree details")
+	}
+	worktreeInfos := make(map[string]git.WorktreeInfo)
+	for _, info := range worktreeDetails {
+		worktreeInfos[info.Path] = info
+	}
 
 	// Determine base branch for merge checking
 	baseBranch, err := gitManager.GetDefaultBranch()
@@ -177,7 +183,7 @@ func findCleanupCandidates(cfg *config.Config) ([]CleanupCandidate, error) {
 
 		// Get branch info
 		branch := ""
-		if info, ok := worktreeDetails[wt]; ok {
+		if info, ok := worktreeInfos[wt]; ok {
 			branch = info.Branch
 		}
 
@@ -188,7 +194,7 @@ func findCleanupCandidates(cfg *config.Config) ([]CleanupCandidate, error) {
 		}
 
 		// Check if branch is merged
-		isMerged := isBranchMerged(repoRoot, branch, baseBranch)
+		isMerged, _ := gitManager.IsBranchMerged(branch, baseBranch)
 
 		candidate := CleanupCandidate{
 			Path:       wt,
@@ -203,61 +209,6 @@ func findCleanupCandidates(cfg *config.Config) ([]CleanupCandidate, error) {
 	}
 
 	return candidates, nil
-}
-
-func getWorktreeDetailsForClean(repoPath string) map[string]WorktreeInfo {
-	result := make(map[string]WorktreeInfo)
-
-	cmd := exec.Command("git", "worktree", "list", "--porcelain")
-	cmd.Dir = repoPath
-	output, err := cmd.Output()
-	if err != nil {
-		return result
-	}
-
-	lines := strings.Split(string(output), "\n")
-	var currentPath string
-
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "worktree ") {
-			currentPath = strings.TrimPrefix(line, "worktree ")
-			result[currentPath] = WorktreeInfo{Path: currentPath}
-		} else if strings.HasPrefix(line, "branch ") && currentPath != "" {
-			branch := strings.TrimPrefix(line, "branch refs/heads/")
-			info := result[currentPath]
-			info.Branch = branch
-			result[currentPath] = info
-		}
-	}
-
-	return result
-}
-
-func isBranchMerged(repoPath, branch, baseBranch string) bool {
-	if branch == "" || branch == baseBranch {
-		return false
-	}
-
-	// Check if branch is merged into base branch
-	cmd := exec.Command("git", "branch", "--merged", baseBranch)
-	cmd.Dir = repoPath
-	output, err := cmd.Output()
-	if err != nil {
-		return false
-	}
-
-	lines := strings.Split(string(output), "\n")
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		line = strings.TrimPrefix(line, "* ") // Current branch marker
-		line = strings.TrimPrefix(line, "+ ") // Worktree branch marker
-		if line == branch {
-			return true
-		}
-	}
-
-	return false
 }
 
 func removeWorktree(cfg *config.Config, candidate CleanupCandidate) error {
@@ -297,7 +248,7 @@ func removeWorktree(cfg *config.Config, candidate CleanupCandidate) error {
 	parts := strings.Split(relPath, string(filepath.Separator))
 	if len(parts) < 2 {
 		// Single-level path or unusual structure - use force remove
-		return forceRemoveWorktree(candidate.RepoPath, candidate.Path)
+		return gitManager.ForceRemoveWorktree(candidate.Path)
 	}
 
 	// First part is always the ticket type, last part is the ticket name
@@ -305,16 +256,4 @@ func removeWorktree(cfg *config.Config, candidate CleanupCandidate) error {
 	ticketName := parts[len(parts)-1]
 
 	return gitManager.RemoveWorktree(ticketType, ticketName)
-}
-
-func forceRemoveWorktree(repoPath, worktreePath string) error {
-	cmd := exec.Command("git", "worktree", "remove", "--force", worktreePath)
-	cmd.Dir = repoPath
-
-	if verbose {
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-	}
-
-	return cmd.Run()
 }

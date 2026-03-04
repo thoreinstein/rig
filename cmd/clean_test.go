@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/viper"
 
 	"thoreinstein.com/rig/pkg/config"
+	"thoreinstein.com/rig/pkg/git"
 )
 
 func TestIsBranchMerged(t *testing.T) {
@@ -112,7 +113,8 @@ func TestIsBranchMerged(t *testing.T) {
 			if tt.setup != nil {
 				tt.setup()
 			}
-			result := isBranchMerged(repoDir, tt.branch, tt.baseBranch)
+			wm := git.NewWorktreeManagerAtPath(repoDir, "", false)
+			result, _ := wm.IsBranchMerged(tt.branch, tt.baseBranch)
 			if result != tt.expected {
 				t.Errorf("isBranchMerged(%q, %q) = %v, want %v", tt.branch, tt.baseBranch, result, tt.expected)
 			}
@@ -193,8 +195,11 @@ func TestIsBranchMerged_MergedBranch(t *testing.T) {
 	}
 
 	// Now test if branch is detected as merged
-	if !isBranchMerged(repoDir, "merged-feature", baseBranch) {
-		t.Error("isBranchMerged() should return true for merged branch")
+	// Get merge status
+	wm := git.NewWorktreeManagerAtPath(repoDir, "", false)
+	merged, _ := wm.IsBranchMerged("merged-feature", baseBranch)
+	if !merged {
+		t.Error("IsBranchMerged() should return true for merged branch")
 	}
 }
 
@@ -261,9 +266,11 @@ func TestIsBranchMerged_WorktreeCheckedOut(t *testing.T) {
 	}
 
 	// The feature branch is still checked out in its worktree, so git branch --merged
-	// will show it with a '+' prefix. Test that isBranchMerged handles this correctly.
-	if !isBranchMerged(repoDir, "feature-branch", "main") {
-		t.Error("isBranchMerged() should return true for merged branch checked out in worktree (with '+' prefix)")
+	// Check merge status
+	wm := git.NewWorktreeManagerAtPath(repoDir, "", false)
+	merged, _ := wm.IsBranchMerged("feature-branch", "main")
+	if !merged {
+		t.Error("IsBranchMerged() should return true for merged branch checked out in worktree")
 	}
 }
 
@@ -304,17 +311,22 @@ func TestGetWorktreeDetailsForClean(t *testing.T) {
 	}
 
 	// Get worktree details (should have main repo)
-	details := getWorktreeDetailsForClean(repoDir)
+	wm := git.NewWorktreeManagerAtPath(repoDir, "", false)
+	details, err := wm.ListWorktreesDetailed()
+	if err != nil {
+		t.Fatalf("ListWorktreesDetailed failed: %v", err)
+	}
 
 	// Should have at least the main worktree
 	if len(details) == 0 {
-		t.Error("getWorktreeDetailsForClean() returned empty map, expected at least main worktree")
+		t.Error("ListWorktreesDetailed() returned empty list, expected at least main worktree")
 	}
 
 	// Check that the main repo path exists in details
 	// Note: On macOS, /var is a symlink to /private/var, so paths might differ
 	found := false
-	for path := range details {
+	for _, info := range details {
+		path := info.Path
 		// Compare using EvalSymlinks to handle symlink differences
 		realPath, _ := filepath.EvalSymlinks(path)
 		realRepoDir, _ := filepath.EvalSymlinks(repoDir)
@@ -324,8 +336,8 @@ func TestGetWorktreeDetailsForClean(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Logf("Details keys: %v", details)
-		t.Errorf("getWorktreeDetailsForClean() missing main repo path %q", repoDir)
+		t.Logf("Details: %v", details)
+		t.Errorf("ListWorktreesDetailed() missing main repo path %q", repoDir)
 	}
 }
 
@@ -440,13 +452,14 @@ func TestForceRemoveWorktree(t *testing.T) {
 	}
 
 	// Force remove the worktree
-	if err := forceRemoveWorktree(repoDir, worktreePath); err != nil {
-		t.Fatalf("forceRemoveWorktree() error: %v", err)
+	wm := git.NewWorktreeManagerAtPath(repoDir, "", false)
+	if err := wm.ForceRemoveWorktree(worktreePath); err != nil {
+		t.Fatalf("ForceRemoveWorktree() error: %v", err)
 	}
 
 	// Verify worktree is removed
 	if _, err := os.Stat(worktreePath); !os.IsNotExist(err) {
-		t.Error("Worktree should be removed after forceRemoveWorktree()")
+		t.Error("Worktree should be removed after ForceRemoveWorktree()")
 	}
 }
 
@@ -487,9 +500,9 @@ func TestForceRemoveWorktree_NonExistent(t *testing.T) {
 	}
 
 	// Try to remove non-existent worktree
-	// Should return an error for non-existent worktree
-	if err := forceRemoveWorktree(repoDir, "/nonexistent/worktree/path"); err == nil {
-		t.Error("forceRemoveWorktree() should error for non-existent worktree")
+	wm := git.NewWorktreeManagerAtPath(repoDir, "", false)
+	if err := wm.ForceRemoveWorktree("/nonexistent/worktree/path"); err == nil {
+		t.Error("ForceRemoveWorktree() should error for non-existent worktree")
 	}
 }
 
@@ -542,16 +555,21 @@ func TestGetWorktreeDetailsForClean_WithWorktree(t *testing.T) {
 	}
 
 	// Get worktree details
-	details := getWorktreeDetailsForClean(repoDir)
+	wm := git.NewWorktreeManagerAtPath(repoDir, "", false)
+	details, err := wm.ListWorktreesDetailed()
+	if err != nil {
+		t.Fatalf("ListWorktreesDetailed failed: %v", err)
+	}
 
 	// Should have 2 worktrees (main + feature)
 	if len(details) < 2 {
-		t.Errorf("getWorktreeDetailsForClean() returned %d worktrees, expected at least 2", len(details))
+		t.Errorf("ListWorktreesDetailed() returned %d worktrees, expected at least 2", len(details))
 	}
 
 	// Find the feature worktree and check its branch
 	found := false
-	for path, info := range details {
+	for _, info := range details {
+		path := info.Path
 		realPath, _ := filepath.EvalSymlinks(path)
 		realWorktreePath, _ := filepath.EvalSymlinks(worktreePath)
 		if path == worktreePath || realPath == realWorktreePath {
@@ -563,7 +581,7 @@ func TestGetWorktreeDetailsForClean_WithWorktree(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Errorf("getWorktreeDetailsForClean() missing feature worktree path %q", worktreePath)
+		t.Errorf("ListWorktreesDetailed() missing feature worktree path %q", worktreePath)
 	}
 }
 

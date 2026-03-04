@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"thoreinstein.com/rig/pkg/git"
 )
 
 func TestListCommandFlags(t *testing.T) {
@@ -56,11 +58,10 @@ func TestListCommandDescription(t *testing.T) {
 }
 
 func TestWorktreeInfo(t *testing.T) {
-	// Test the WorktreeInfo struct
-	info := WorktreeInfo{
+	// Test the git.WorktreeInfo struct
+	info := git.WorktreeInfo{
 		Path:   "/home/user/repo/fraas/FRAAS-123",
 		Branch: "FRAAS-123",
-		Repo:   "main",
 	}
 
 	if info.Path != "/home/user/repo/fraas/FRAAS-123" {
@@ -68,9 +69,6 @@ func TestWorktreeInfo(t *testing.T) {
 	}
 	if info.Branch != "FRAAS-123" {
 		t.Errorf("Branch = %q, want %q", info.Branch, "FRAAS-123")
-	}
-	if info.Repo != "main" {
-		t.Errorf("Repo = %q, want %q", info.Repo, "main")
 	}
 }
 
@@ -110,17 +108,22 @@ func TestGetWorktreeDetails(t *testing.T) {
 		t.Fatalf("git commit failed: %v", err)
 	}
 
-	// Get worktree details
-	details := getWorktreeDetails(repoDir)
+	// Get worktree details using manager
+	gitManager := git.NewWorktreeManagerAtPath(repoDir, "", false)
+	details, err := gitManager.ListWorktreesDetailed()
+	if err != nil {
+		t.Fatalf("ListWorktreesDetailed failed: %v", err)
+	}
 
 	// Should have at least the main worktree
 	if len(details) == 0 {
-		t.Error("getWorktreeDetails() returned empty map, expected at least main worktree")
+		t.Error("ListWorktreesDetailed() returned empty list, expected at least main worktree")
 	}
 
 	// Find the main repo in details (handle symlink differences on macOS)
 	found := false
-	for path := range details {
+	for _, info := range details {
+		path := info.Path
 		realPath, _ := filepath.EvalSymlinks(path)
 		realRepoDir, _ := filepath.EvalSymlinks(repoDir)
 		if path == repoDir || realPath == realRepoDir {
@@ -129,7 +132,7 @@ func TestGetWorktreeDetails(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Errorf("getWorktreeDetails() missing main repo path %q", repoDir)
+		t.Errorf("ListWorktreesDetailed() missing main repo path %q", repoDir)
 	}
 }
 
@@ -155,12 +158,9 @@ func TestGetWorktreeDetails_WithWorktree(t *testing.T) {
 	}
 
 	// Configure git user and disable GPG signing for tests
-	configEmail := exec.Command("git", "-C", repoDir, "config", "user.email", "test@example.com")
-	_ = configEmail.Run()
-	configName := exec.Command("git", "-C", repoDir, "config", "user.name", "Test User")
-	_ = configName.Run()
-	configGpg := exec.Command("git", "-C", repoDir, "config", "commit.gpgsign", "false")
-	_ = configGpg.Run()
+	_ = exec.Command("git", "-C", repoDir, "config", "user.email", "test@example.com").Run()
+	_ = exec.Command("git", "-C", repoDir, "config", "user.name", "Test User").Run()
+	_ = exec.Command("git", "-C", repoDir, "config", "commit.gpgsign", "false").Run()
 
 	// Create initial commit
 	cmd = exec.Command("git", "commit", "--allow-empty", "-m", "Initial commit")
@@ -177,17 +177,22 @@ func TestGetWorktreeDetails_WithWorktree(t *testing.T) {
 		t.Fatalf("git worktree add failed: %v", err)
 	}
 
-	// Get worktree details
-	details := getWorktreeDetails(repoDir)
+	// Get worktree details using manager
+	gitManager := git.NewWorktreeManagerAtPath(repoDir, "", false)
+	details, err := gitManager.ListWorktreesDetailed()
+	if err != nil {
+		t.Fatalf("ListWorktreesDetailed failed: %v", err)
+	}
 
 	// Should have 2 worktrees (main + feature)
 	if len(details) < 2 {
-		t.Errorf("getWorktreeDetails() returned %d worktrees, expected at least 2", len(details))
+		t.Errorf("ListWorktreesDetailed() returned %d worktrees, expected at least 2", len(details))
 	}
 
 	// Find the feature worktree and check its branch
 	found := false
-	for path, info := range details {
+	for _, info := range details {
+		path := info.Path
 		realPath, _ := filepath.EvalSymlinks(path)
 		realWorktreePath, _ := filepath.EvalSymlinks(worktreePath)
 		if path == worktreePath || realPath == realWorktreePath {
@@ -199,7 +204,7 @@ func TestGetWorktreeDetails_WithWorktree(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Errorf("getWorktreeDetails() missing feature worktree path %q", worktreePath)
+		t.Errorf("ListWorktreesDetailed() missing feature worktree path %q", worktreePath)
 	}
 }
 
