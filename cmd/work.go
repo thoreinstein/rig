@@ -258,14 +258,18 @@ func runWorkCommand(ticket string) error {
 
 		result, err := noteManager.CreateTicketNote(noteData)
 		if err != nil {
-			return errors.Wrap(err, "failed to create note")
-		}
-		if result.Created {
-			fmt.Printf("Note created at: %s\n", result.Path)
+			// Don't fail if note creation fails — worktree is already created
+			if verbose {
+				fmt.Printf("Warning: Could not create note: %v\n", err)
+			}
 		} else {
-			fmt.Printf("Opened existing note: %s\n", result.Path)
+			if result.Created {
+				fmt.Printf("Note created at: %s\n", result.Path)
+			} else {
+				fmt.Printf("Opened existing note: %s\n", result.Path)
+			}
+			notePath = result.Path
 		}
-		notePath = result.Path
 	}
 
 	// Step 4: Update daily note

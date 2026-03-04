@@ -202,6 +202,17 @@ func TestParseGitHubURL_OwnerRepoShorthand(t *testing.T) {
 				Repo:      "repo",
 			},
 		},
+		{
+			name:  "owner/repo shorthand with underscore in owner",
+			input: "my_org/repo",
+			want: &RepoURL{
+				Original:  "my_org/repo",
+				Canonical: "git@github.com:my_org/repo.git",
+				Protocol:  "ssh",
+				Owner:     "my_org",
+				Repo:      "repo",
+			},
+		},
 	}
 
 	for _, tt := range tests {

@@ -1,6 +1,8 @@
 package vcs
 
 import (
+	"github.com/cockroachdb/errors"
+
 	"thoreinstein.com/rig/pkg/plugin"
 )
 
@@ -20,11 +22,11 @@ func NewProviderWithManager(manager *plugin.Manager, providerName string, verbos
 		return NewLocalProvider(verbose), nil
 	}
 
-	// If manager is provided, try to use it for plugin provider
+	// If manager is provided, use it for plugin provider
 	if manager != nil {
-		return NewPluginProvider(manager, providerName, verbose), nil
+		return NewPluginProvider(manager, providerName), nil
 	}
 
-	// Fallback to local provider if no manager
-	return NewLocalProvider(verbose), nil
+	// No manager available for a non-default provider — this is a config error
+	return nil, errors.Newf("VCS provider %q requires a plugin manager", providerName)
 }

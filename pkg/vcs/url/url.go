@@ -29,8 +29,9 @@ var (
 	shorthandURLRegex = regexp.MustCompile(`^github\.com/([a-zA-Z0-9_.-]+)/([a-zA-Z0-9_.-]+?)(?:\.git)?$`)
 
 	// Shorthand format: owner/repo (interpreted as SSH by default)
-	// Restrict owner to alphanumeric and hyphens to avoid matching domains like github.com/owner
-	ownerRepoRegex = regexp.MustCompile(`^([a-zA-Z0-9-]+)/([a-zA-Z0-9_.-]+?)(?:\.git)?$`)
+	// Owner allows alphanumeric, hyphens, and underscores but excludes dots
+	// to avoid matching domain-like strings (e.g. "github.com/owner").
+	ownerRepoRegex = regexp.MustCompile(`^([a-zA-Z0-9_-]+)/([a-zA-Z0-9_.-]+?)(?:\.git)?$`)
 )
 
 // ParseGitHubURL parses various GitHub URL formats and returns a normalized RepoURL.

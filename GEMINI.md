@@ -78,6 +78,9 @@ Rig uses a TOML configuration file, typically located at `~/.config/rig/config.t
   - Fields/Files: `snake_case`
   - Directories: `kebab-case`
   - Enums: `SCREAMING_SNAKE`
+- **Error Handling Patterns:**
+  - **Fluent Error Chaining:** Custom domain errors MUST implement a `WithCause(err error) *CustomError` method to allow for readable, fluent wrapping while preserving the error chain for diagnostics.
+  - **Isolated Domain Types:** Subsystems (Database, GitHub, AI) should use their own error structs (e.g., `DatabaseError`) to provide structured metadata (error codes, retryability).
 - **Testing:**
   - Mandatory for new features.
   - ALWAYS use table-driven tests for all Go logic.
@@ -142,7 +145,7 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 - **Concurrency & Locking Strategy:**
   - **Row-Level Locking:** All state-modifying database methods use `SELECT ... FOR UPDATE` inside transactions to ensure atomic read-before-write operations.
   - **Retry with Backoff:** To handle Dolt serialization failures (MySQL Error 1213: deadlock, 1205: lock wait timeout) in multi-process scenarios, database write operations are wrapped in an exponential backoff retry loop (via `pkg/errors/retry.go`).
-  - **Transaction Isolation:** Each retry attempt starts a fresh transaction to resolve stale lock states.
+  - **Mandatory Transaction Restart:** **TRAP:** Simply retrying a failed SQL statement is insufficient. Each retry attempt MUST restart the entire transaction from `BeginTx` to ensure stale locks are cleared and the process sees the latest committed state.
   - **Versioning Scope:** `txAutoCommit` is only called for versioned data (Workflows, Definitions). Execution and Node state changes are transient and intentionally skip Dolt versioning.
 - **Optional Telemetry Pattern:** Decouple telemetry (e.g., event logging) from core logic using an interface (e.g., `EventLogger`) and functional options (`WithEventLogger`). Always provide a `Noop` implementation as the default to ensure the system remains resilient if the telemetry store is unavailable or disabled.
 - **Milestone Versioning Cadence:** To balance performance and auditability, log individual events via standard SQL `INSERT` and perform a `DOLT_COMMIT` only at significant milestones (e.g., workflow completion).
