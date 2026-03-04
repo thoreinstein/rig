@@ -905,39 +905,45 @@ func (dm *DatabaseManager) PruneExecutions(ctx context.Context, cutoff time.Time
 
 	// 1. Identify executions to be pruned (terminal status AND older than cutoff)
 	terminalStatuses := []interface{}{string(ExecutionStatusSuccess), string(ExecutionStatusFailed), string(ExecutionStatusCancelled)}
-	// We use 3 placeholders for the 3 terminal statuses to avoid G201
-	const countExecQuery = `SELECT COUNT(*) FROM executions WHERE status IN (?, ?, ?) AND created_at < ?`
 	args := append(terminalStatuses, cutoff)
 
-	var execCount int
-	if err := tx.QueryRowContext(ctx, countExecQuery, args...).Scan(&execCount); err != nil {
-		return nil, errors.Wrap(err, "failed to count executions for pruning")
+	// Dry-run: count and return without deleting
+	if dryRun {
+		var execCount int
+		const countExecQuery = `SELECT COUNT(*) FROM executions WHERE status IN (?, ?, ?) AND created_at < ?`
+		if err := tx.QueryRowContext(ctx, countExecQuery, args...).Scan(&execCount); err != nil {
+			return nil, errors.Wrap(err, "failed to count executions for pruning")
+		}
+		var nodeStateCount int
+		const countNSQuery = `SELECT COUNT(*) FROM node_states WHERE execution_id IN (SELECT id FROM executions WHERE status IN (?, ?, ?) AND created_at < ?)`
+		if err := tx.QueryRowContext(ctx, countNSQuery, args...).Scan(&nodeStateCount); err != nil {
+			return nil, errors.Wrap(err, "failed to count node states for pruning")
+		}
+		return &PruneResult{ExecutionsPruned: execCount, NodeStatesPruned: nodeStateCount, CutoffTime: cutoff}, nil
 	}
 
-	var nodeStateCount int
-	const countNSQuery = `SELECT COUNT(*) FROM node_states WHERE execution_id IN (SELECT id FROM executions WHERE status IN (?, ?, ?) AND created_at < ?)`
-	if err := tx.QueryRowContext(ctx, countNSQuery, args...).Scan(&nodeStateCount); err != nil {
-		return nil, errors.Wrap(err, "failed to count node states for pruning")
+	// 2. Perform deletion and use RowsAffected as authoritative count
+	const deleteExecQuery = `DELETE FROM executions WHERE status IN (?, ?, ?) AND created_at < ?`
+	result, err := tx.ExecContext(ctx, deleteExecQuery, args...)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to prune executions")
+	}
+	execAffected, err := result.RowsAffected()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get rows affected after execution prune")
 	}
 
 	res := &PruneResult{
-		ExecutionsPruned: execCount,
-		NodeStatesPruned: nodeStateCount,
+		ExecutionsPruned: int(execAffected),
 		CutoffTime:       cutoff,
 	}
 
-	if dryRun || execCount == 0 {
+	if execAffected == 0 {
 		return res, nil
 	}
 
-	// 2. Perform deletion
-	const deleteExecQuery = `DELETE FROM executions WHERE status IN (?, ?, ?) AND created_at < ?`
-	if _, err := tx.ExecContext(ctx, deleteExecQuery, args...); err != nil {
-		return nil, errors.Wrap(err, "failed to prune executions")
-	}
-
 	// 3. Create Dolt commit for the deletion
-	msg := fmt.Sprintf("orchestration: Pruned %d executions and %d node states older than %s", execCount, nodeStateCount, cutoff.Format(time.RFC3339))
+	msg := fmt.Sprintf("orchestration: Pruned %d executions older than %s", execAffected, cutoff.Format(time.RFC3339))
 	if err := txAutoCommit(ctx, tx, msg); err != nil {
 		return nil, errors.Wrap(err, "failed to dolt-commit after prune")
 	}

@@ -129,7 +129,7 @@ func TestRunGCCommand_Errors(t *testing.T) {
 	t.Run("processEventsGC error propagation", func(t *testing.T) {
 		ctx := t.Context()
 		cutoff := time.Now()
-		err := processEventsGC(ctx, cfg, cutoff, "")
+		err := processEventsGC(ctx, cfg, cutoff, "", false)
 		if err == nil {
 			t.Error("expected error for invalid path, got nil")
 		}
@@ -138,7 +138,7 @@ func TestRunGCCommand_Errors(t *testing.T) {
 	t.Run("processOrchGC error propagation", func(t *testing.T) {
 		ctx := t.Context()
 		cutoff := time.Now()
-		err := processOrchGC(ctx, cfg, cutoff, "")
+		err := processOrchGC(ctx, cfg, cutoff, "", false)
 		if err == nil {
 			t.Error("expected error for invalid path, got nil")
 		}

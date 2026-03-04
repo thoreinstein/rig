@@ -135,30 +135,38 @@ func (dm *DatabaseManager) PruneEvents(ctx context.Context, cutoff time.Time, dr
 		return nil, errors.Wrap(err, "failed to use rig_events database")
 	}
 
-	// 1. Count rows to be pruned
-	var count int
-	countQuery := `SELECT COUNT(*) FROM workflow_events WHERE created_at < ?`
-	if err := tx.QueryRowContext(ctx, countQuery, cutoff).Scan(&count); err != nil {
-		return nil, errors.Wrap(err, "failed to count events for pruning")
+	// 1. Dry-run: count and return without deleting
+	if dryRun {
+		var count int
+		countQuery := `SELECT COUNT(*) FROM workflow_events WHERE created_at < ?`
+		if err := tx.QueryRowContext(ctx, countQuery, cutoff).Scan(&count); err != nil {
+			return nil, errors.Wrap(err, "failed to count events for pruning")
+		}
+		return &PruneResult{EventsDeleted: count, CutoffTime: cutoff}, nil
+	}
+
+	// 2. Perform deletion and use RowsAffected as authoritative count
+	deleteQuery := `DELETE FROM workflow_events WHERE created_at < ?`
+	result, err := tx.ExecContext(ctx, deleteQuery, cutoff)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to prune events")
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get rows affected after prune")
 	}
 
 	res := &PruneResult{
-		EventsDeleted: count,
+		EventsDeleted: int(affected),
 		CutoffTime:    cutoff,
 	}
 
-	if dryRun || count == 0 {
+	if affected == 0 {
 		return res, nil
 	}
 
-	// 2. Perform deletion
-	deleteQuery := `DELETE FROM workflow_events WHERE created_at < ?`
-	if _, err := tx.ExecContext(ctx, deleteQuery, cutoff); err != nil {
-		return nil, errors.Wrap(err, "failed to prune events")
-	}
-
 	// 3. Create Dolt commit for the deletion
-	msg := fmt.Sprintf("events: Pruned %d events older than %s", count, cutoff.Format(time.RFC3339))
+	msg := fmt.Sprintf("events: Pruned %d events older than %s", affected, cutoff.Format(time.RFC3339))
 	if _, err := tx.ExecContext(ctx, "CALL DOLT_ADD('-A')"); err != nil {
 		return nil, errors.Wrap(err, "failed to CALL DOLT_ADD after prune")
 	}

@@ -142,7 +142,7 @@ func runGCCommand(cmdCtx context.Context) error {
 
 	// 3. Process Events
 	if targetEvents {
-		if err := processEventsGC(ctx, cfg, eventsCutoff, archiveDir); err != nil {
+		if err := processEventsGC(ctx, cfg, eventsCutoff, archiveDir, gcDryRun); err != nil {
 			fmt.Fprintf(os.Stderr, "Error during events GC: %v\n", err)
 			errs = append(errs, errors.Wrap(err, "events GC failed"))
 		}
@@ -150,7 +150,7 @@ func runGCCommand(cmdCtx context.Context) error {
 
 	// 4. Process Orchestration
 	if targetOrch {
-		if err := processOrchGC(ctx, cfg, orchCutoff, archiveDir); err != nil {
+		if err := processOrchGC(ctx, cfg, orchCutoff, archiveDir, gcDryRun); err != nil {
 			fmt.Fprintf(os.Stderr, "Error during orchestration GC: %v\n", err)
 			errs = append(errs, errors.Wrap(err, "orchestration GC failed"))
 		}
@@ -214,7 +214,7 @@ func parseAge(age string) (int, error) {
 	return days, nil
 }
 
-func processEventsGC(ctx context.Context, cfg *config.Config, cutoff time.Time, archiveDir string) error {
+func processEventsGC(ctx context.Context, cfg *config.Config, cutoff time.Time, archiveDir string, dryRun bool) error {
 	dm, err := events.NewDatabaseManager(cfg.Events.DataPath, cfg.Events.CommitName, cfg.Events.CommitEmail, verbose)
 	if err != nil {
 		return err
@@ -225,7 +225,7 @@ func processEventsGC(ctx context.Context, cfg *config.Config, cutoff time.Time, 
 		return errors.Wrap(err, "failed to initialize events database")
 	}
 
-	if gcArchive && !gcDryRun {
+	if archiveDir != "" && !dryRun {
 		count, path, err := dm.ExportEventsBeforeCutoff(ctx, cutoff, archiveDir)
 		if err != nil {
 			return errors.Wrap(err, "archival failed")
@@ -235,12 +235,12 @@ func processEventsGC(ctx context.Context, cfg *config.Config, cutoff time.Time, 
 		}
 	}
 
-	res, err := dm.PruneEvents(ctx, cutoff, gcDryRun)
+	res, err := dm.PruneEvents(ctx, cutoff, dryRun)
 	if err != nil {
 		return err
 	}
 
-	if gcDryRun {
+	if dryRun {
 		fmt.Printf("[events] Would prune %d events\n", res.EventsDeleted)
 	} else {
 		fmt.Printf("[events] Pruned %d events\n", res.EventsDeleted)
@@ -254,7 +254,7 @@ func processEventsGC(ctx context.Context, cfg *config.Config, cutoff time.Time, 
 	return nil
 }
 
-func processOrchGC(ctx context.Context, cfg *config.Config, cutoff time.Time, archiveDir string) error {
+func processOrchGC(ctx context.Context, cfg *config.Config, cutoff time.Time, archiveDir string, dryRun bool) error {
 	dm, err := orchestration.NewDatabaseManager(cfg.Orchestration.DataPath, cfg.Orchestration.CommitName, cfg.Orchestration.CommitEmail, verbose)
 	if err != nil {
 		return err
@@ -265,7 +265,7 @@ func processOrchGC(ctx context.Context, cfg *config.Config, cutoff time.Time, ar
 		return errors.Wrap(err, "failed to initialize orchestration database")
 	}
 
-	if gcArchive && !gcDryRun {
+	if archiveDir != "" && !dryRun {
 		count, path, err := dm.ExportExecutionsBeforeCutoff(ctx, cutoff, archiveDir)
 		if err != nil {
 			return errors.Wrap(err, "archival failed")
@@ -275,12 +275,12 @@ func processOrchGC(ctx context.Context, cfg *config.Config, cutoff time.Time, ar
 		}
 	}
 
-	res, err := dm.PruneExecutions(ctx, cutoff, gcDryRun)
+	res, err := dm.PruneExecutions(ctx, cutoff, dryRun)
 	if err != nil {
 		return err
 	}
 
-	if gcDryRun {
+	if dryRun {
 		fmt.Printf("[orchestration] Would prune %d executions and %d node states\n", res.ExecutionsPruned, res.NodeStatesPruned)
 	} else {
 		fmt.Printf("[orchestration] Pruned %d executions and %d node states\n", res.ExecutionsPruned, res.NodeStatesPruned)
