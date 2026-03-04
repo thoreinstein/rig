@@ -987,43 +987,73 @@ type ExecutionArchive struct {
 // Only executions with terminal statuses (SUCCESS, FAILED, CANCELLED) are eligible for archival.
 // Returns the count of exported executions and the absolute path to the archive file.
 func (dm *DatabaseManager) ExportExecutionsBeforeCutoff(ctx context.Context, cutoff time.Time, archiveDir string) (int, string, error) {
-	// 1. Identify executions to be archived (terminal status AND older than cutoff)
+	// 1. Fetch executions to be archived (terminal status AND older than cutoff)
 	terminalStatuses := []interface{}{string(ExecutionStatusSuccess), string(ExecutionStatusFailed), string(ExecutionStatusCancelled)}
-	const query = `SELECT id, workflow_id, workflow_version, status, started_at, completed_at, COALESCE(error, ''), created_at FROM executions WHERE status IN (?, ?, ?) AND created_at < ?`
-	args := append(terminalStatuses, cutoff)
+	const execQuery = `SELECT id, workflow_id, workflow_version, status, started_at, completed_at, COALESCE(error, ''), created_at FROM executions WHERE status IN (?, ?, ?) AND created_at < ?`
+	execArgs := append(terminalStatuses, cutoff)
 
-	rows, err := dm.db.QueryContext(ctx, query, args...)
+	rows, err := dm.db.QueryContext(ctx, execQuery, execArgs...)
 	if err != nil {
 		return 0, "", errors.Wrap(err, "failed to query executions for export")
 	}
 	defer rows.Close()
 
-	var archives []*ExecutionArchive
+	var executions []*Execution
 	for rows.Next() {
 		e := &Execution{}
 		if err := rows.Scan(&e.ID, &e.WorkflowID, &e.WorkflowVersion, &e.Status, &e.StartedAt, &e.CompletedAt, &e.Error, &e.CreatedAt); err != nil {
 			return 0, "", errors.Wrap(err, "failed to scan execution for export")
 		}
-
-		states, err := dm.GetNodeStatesByExecution(ctx, e.ID)
-		if err != nil {
-			return 0, "", errors.Wrapf(err, "failed to get node states for execution %s during export", e.ID)
-		}
-
-		archives = append(archives, &ExecutionArchive{
-			Execution:  e,
-			NodeStates: states,
-		})
+		executions = append(executions, e)
 	}
 	if err := rows.Err(); err != nil {
 		return 0, "", errors.Wrap(err, "error iterating execution rows for export")
 	}
 
-	if len(archives) == 0 {
+	if len(executions) == 0 {
 		return 0, "", nil
 	}
 
-	// 2. Write to file
+	// 2. Batch-fetch all node states for these executions in a single query
+	placeholders := make([]string, len(executions))
+	nsArgs := make([]interface{}, len(executions))
+	for i, e := range executions {
+		placeholders[i] = "?"
+		nsArgs[i] = e.ID
+	}
+	const nsBaseQuery = `SELECT id, execution_id, node_id, status, started_at, completed_at, result, COALESCE(error, ''), created_at FROM node_states WHERE execution_id IN (%s)`
+	nsQuery := fmt.Sprintf(nsBaseQuery, strings.Join(placeholders, ",")) //nolint:gosec // G201: placeholders are safe
+
+	nsRows, err := dm.db.QueryContext(ctx, nsQuery, nsArgs...)
+	if err != nil {
+		return 0, "", errors.Wrap(err, "failed to query node states for export")
+	}
+	defer nsRows.Close()
+
+	statesByExec := make(map[string][]*NodeState)
+	for nsRows.Next() {
+		ns := &NodeState{}
+		var result []byte
+		if err := nsRows.Scan(&ns.ID, &ns.ExecutionID, &ns.NodeID, &ns.Status, &ns.StartedAt, &ns.CompletedAt, &result, &ns.Error, &ns.CreatedAt); err != nil {
+			return 0, "", errors.Wrap(err, "failed to scan node state for export")
+		}
+		ns.Result = result
+		statesByExec[ns.ExecutionID] = append(statesByExec[ns.ExecutionID], ns)
+	}
+	if err := nsRows.Err(); err != nil {
+		return 0, "", errors.Wrap(err, "error iterating node state rows for export")
+	}
+
+	// 3. Assemble archives
+	archives := make([]*ExecutionArchive, len(executions))
+	for i, e := range executions {
+		archives[i] = &ExecutionArchive{
+			Execution:  e,
+			NodeStates: statesByExec[e.ID],
+		}
+	}
+
+	// 4. Write to file
 	if err := os.MkdirAll(archiveDir, 0700); err != nil {
 		return 0, "", errors.Wrap(err, "failed to create archive directory")
 	}

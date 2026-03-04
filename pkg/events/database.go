@@ -124,21 +124,21 @@ func (dm *DatabaseManager) BackfillTicket(ctx context.Context, correlationID, ti
 // PruneEvents removes events older than the specified cutoff time.
 // If dryRun is true, it returns the count of rows that would be deleted without deleting them.
 func (dm *DatabaseManager) PruneEvents(ctx context.Context, cutoff time.Time, dryRun bool) (*PruneResult, error) {
-	conn, err := dm.db.Conn(ctx)
+	tx, err := dm.db.BeginTx(ctx, nil)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to acquire database connection")
+		return nil, errors.Wrap(err, "failed to begin transaction")
 	}
-	defer conn.Close()
+	defer tx.Rollback() //nolint:errcheck
 
 	// Ensure we are using the correct database for Dolt system procedures
-	if _, err := conn.ExecContext(ctx, "USE rig_events"); err != nil {
+	if _, err := tx.ExecContext(ctx, "USE rig_events"); err != nil {
 		return nil, errors.Wrap(err, "failed to use rig_events database")
 	}
 
 	// 1. Count rows to be pruned
 	var count int
 	countQuery := `SELECT COUNT(*) FROM workflow_events WHERE created_at < ?`
-	if err := conn.QueryRowContext(ctx, countQuery, cutoff).Scan(&count); err != nil {
+	if err := tx.QueryRowContext(ctx, countQuery, cutoff).Scan(&count); err != nil {
 		return nil, errors.Wrap(err, "failed to count events for pruning")
 	}
 
@@ -153,17 +153,21 @@ func (dm *DatabaseManager) PruneEvents(ctx context.Context, cutoff time.Time, dr
 
 	// 2. Perform deletion
 	deleteQuery := `DELETE FROM workflow_events WHERE created_at < ?`
-	if _, err := conn.ExecContext(ctx, deleteQuery, cutoff); err != nil {
+	if _, err := tx.ExecContext(ctx, deleteQuery, cutoff); err != nil {
 		return nil, errors.Wrap(err, "failed to prune events")
 	}
 
 	// 3. Create Dolt commit for the deletion
 	msg := fmt.Sprintf("events: Pruned %d events older than %s", count, cutoff.Format(time.RFC3339))
-	if _, err := conn.ExecContext(ctx, "CALL DOLT_ADD('-A')"); err != nil {
+	if _, err := tx.ExecContext(ctx, "CALL DOLT_ADD('-A')"); err != nil {
 		return nil, errors.Wrap(err, "failed to CALL DOLT_ADD after prune")
 	}
-	if _, err := conn.ExecContext(ctx, "CALL DOLT_COMMIT('-m', ?)", msg); err != nil {
+	if _, err := tx.ExecContext(ctx, "CALL DOLT_COMMIT('-m', ?)", msg); err != nil {
 		return nil, errors.Wrap(err, "failed to CALL DOLT_COMMIT after prune")
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, errors.Wrap(err, "failed to commit transaction")
 	}
 
 	return res, nil

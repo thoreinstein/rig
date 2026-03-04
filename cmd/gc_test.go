@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -100,13 +101,14 @@ func TestDetermineCutoffs(t *testing.T) {
 }
 
 func TestRunGCCommand_Errors(t *testing.T) {
-	// This test uses a mock-like setup by pointing to a non-existent/invalid path
-	// to trigger failures in the DB initialization within runGCCommand.
-	// Since runGCCommand calls processEventsGC/processOrchGC which try to InitDatabase,
-	// invalid paths should cause errors.
-
+	// Create a regular file where InitDatabase expects a directory.
+	// MkdirAll fails deterministically on all platforms when a path component is a file.
 	tmpDir := t.TempDir()
-	invalidPath := filepath.Join(tmpDir, "does-not-exist-and-cannot-be-created/??invalid??")
+	blocker := filepath.Join(tmpDir, "blocker")
+	if err := os.WriteFile(blocker, []byte("not a dir"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	invalidPath := filepath.Join(blocker, "subdir")
 
 	cfg := &config.Config{
 		Events: config.EventsConfig{

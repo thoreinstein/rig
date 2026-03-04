@@ -213,6 +213,10 @@ func processEventsGC(ctx context.Context, cfg *config.Config, cutoff time.Time, 
 	}
 	defer dm.Close()
 
+	if err := dm.InitDatabase(); err != nil {
+		return errors.Wrap(err, "failed to initialize events database")
+	}
+
 	if gcArchive && !gcDryRun {
 		count, path, err := dm.ExportEventsBeforeCutoff(ctx, cutoff, archiveDir)
 		if err != nil {
@@ -248,6 +252,10 @@ func processOrchGC(ctx context.Context, cfg *config.Config, cutoff time.Time, ar
 		return err
 	}
 	defer dm.Close()
+
+	if err := dm.InitDatabase(); err != nil {
+		return errors.Wrap(err, "failed to initialize orchestration database")
+	}
 
 	if gcArchive && !gcDryRun {
 		count, path, err := dm.ExportExecutionsBeforeCutoff(ctx, cutoff, archiveDir)
