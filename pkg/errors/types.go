@@ -414,6 +414,12 @@ func NewDatabaseError(operation, message string, code int) *DatabaseError {
 	}
 }
 
+// WithCause adds an underlying cause to the DatabaseError.
+func (e *DatabaseError) WithCause(cause error) *DatabaseError {
+	e.Cause = cause
+	return e
+}
+
 // IsDoltSerializationError returns true if the error or its cause is a Dolt
 // serialization failure (deadlock or lock wait timeout).
 func IsDoltSerializationError(err error) bool {
