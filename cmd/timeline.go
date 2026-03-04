@@ -14,9 +14,9 @@ import (
 
 	"thoreinstein.com/rig/pkg/config"
 	"thoreinstein.com/rig/pkg/events"
-	"thoreinstein.com/rig/pkg/git"
 	"thoreinstein.com/rig/pkg/history"
 	"thoreinstein.com/rig/pkg/notes"
+	"thoreinstein.com/rig/pkg/vcs"
 )
 
 // timelineCmd represents the timeline command
@@ -122,15 +122,23 @@ func runTimelineCommand(ctx context.Context, ticket string) error {
 	// If NOT provided, use worktree path as an OR condition (ProjectPaths)
 	if timelineDirectory == "" {
 		// Attempt to resolve worktree path
-		gitManager := git.NewWorktreeManager(cfg.Git.BaseBranch, verbose)
-		worktreePath, err := gitManager.GetWorktreePath(ticketInfo.Type, ticketInfo.Full)
-		if err == nil {
-			projectPaths = append(projectPaths, worktreePath)
+		provider, err := vcs.NewProvider(cfg.VCS.Provider, verbose)
+		if err != nil {
 			if verbose {
-				fmt.Printf("Including commands from worktree: %s\n", worktreePath)
+				fmt.Printf("Warning: Could not initialize VCS provider: %v\n", err)
 			}
-		} else if verbose {
-			fmt.Printf("Warning: Could not resolve worktree path: %v\n", err)
+		} else {
+			// Use current directory to find repo context
+			cwd, _ := os.Getwd()
+			worktreePath, err := provider.GetWorktreePath(cwd, ticketInfo.Type, ticketInfo.Full)
+			if err == nil {
+				projectPaths = append(projectPaths, worktreePath)
+				if verbose {
+					fmt.Printf("Including commands from worktree: %s\n", worktreePath)
+				}
+			} else if verbose {
+				fmt.Printf("Warning: Could not resolve worktree path: %v\n", err)
+			}
 		}
 	}
 

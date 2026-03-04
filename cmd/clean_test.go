@@ -10,6 +10,7 @@ import (
 
 	"thoreinstein.com/rig/pkg/config"
 	"thoreinstein.com/rig/pkg/git"
+	"thoreinstein.com/rig/pkg/vcs"
 )
 
 func TestIsBranchMerged(t *testing.T) {
@@ -719,7 +720,8 @@ func TestFindCleanupCandidates(t *testing.T) {
 		t.Fatalf("Failed to load config: %v", err)
 	}
 
-	candidates, err := findCleanupCandidates(cfg)
+	provider := vcs.NewLocalProvider(false)
+	candidates, err := findCleanupCandidates(cfg, provider)
 	if err != nil {
 		t.Fatalf("findCleanupCandidates() error: %v", err)
 	}
@@ -964,7 +966,8 @@ func TestRunCleanCommand_MergedBranchDetection(t *testing.T) {
 		t.Fatalf("Failed to load config: %v", err)
 	}
 
-	candidates, err := findCleanupCandidates(cfg)
+	provider := vcs.NewLocalProvider(false)
+	candidates, err := findCleanupCandidates(cfg, provider)
 	if err != nil {
 		t.Fatalf("findCleanupCandidates() error: %v", err)
 	}

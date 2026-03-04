@@ -10,10 +10,10 @@ import (
 	"github.com/spf13/cobra"
 
 	"thoreinstein.com/rig/pkg/beads"
-	"thoreinstein.com/rig/pkg/git"
 	"thoreinstein.com/rig/pkg/jira"
 	"thoreinstein.com/rig/pkg/notes"
 	"thoreinstein.com/rig/pkg/tmux"
+	"thoreinstein.com/rig/pkg/vcs"
 	"thoreinstein.com/rig/pkg/workflow"
 )
 
@@ -134,23 +134,28 @@ func runWorkCommand(ticket string) error {
 		return errors.Wrapf(err, "failed to chdir to %s", repoPath)
 	}
 
+	// Initialize VCS provider
+	provider, err := vcs.NewProvider(cfg.VCS.Provider, verbose)
+	if err != nil {
+		return errors.Wrap(err, "failed to initialize VCS provider")
+	}
+
 	// Step 1: Create git worktree
 	if verbose {
 		fmt.Printf("Creating git worktree in %s...\n", repoPath)
 	}
-	gitManager := git.NewWorktreeManagerAtPath(repoPath, cfg.Git.BaseBranch, verbose)
 
 	// Get repo info for notes
-	repoRoot, err := gitManager.GetRepoRoot()
+	repoRoot, err := provider.GetRepoRoot(repoPath)
 	if err != nil {
 		return err
 	}
-	repoName, err := gitManager.GetRepoName()
+	repoName, err := provider.GetRepoName(repoPath)
 	if err != nil {
 		return err
 	}
 
-	worktreePath, err := gitManager.CreateWorktree(ticketInfo.Type, ticketInfo.ID)
+	worktreePath, err := provider.CreateWorktree(repoPath, ticketInfo.Type, ticketInfo.ID, ticketInfo.ID, cfg.Git.BaseBranch)
 	if err != nil {
 		return errors.Wrap(err, "failed to create git worktree")
 	}

@@ -6,7 +6,8 @@ import (
 	"github.com/cockroachdb/errors"
 	"github.com/spf13/cobra"
 
-	"thoreinstein.com/rig/pkg/git"
+	"thoreinstein.com/rig/pkg/vcs"
+	vcsurl "thoreinstein.com/rig/pkg/vcs/url"
 )
 
 // cloneCmd represents the clone command
@@ -46,7 +47,7 @@ func init() {
 
 func runCloneCommand(urlInput string) error {
 	// Parse the URL first
-	repoURL, err := git.ParseGitHubURL(urlInput)
+	repoURL, err := vcsurl.ParseGitHubURL(urlInput)
 	if err != nil {
 		return err
 	}
@@ -60,19 +61,22 @@ func runCloneCommand(urlInput string) error {
 		fmt.Printf("  Repo: %s\n", repoURL.Repo)
 	}
 
-	// Load configuration to get base path (if configured)
+	// Load configuration
 	cfg, err := loadConfig()
 	if err != nil {
 		return errors.Wrap(err, "failed to load configuration")
 	}
 
+	// Initialize VCS provider
+	provider, err := vcs.NewProvider(cfg.VCS.Provider, verbose)
+	if err != nil {
+		return errors.Wrap(err, "failed to initialize VCS provider")
+	}
+
 	// Get base path from config or use default
 	basePath := cfg.Clone.BasePath
 
-	// Create clone manager and perform clone
-	cloneManager := git.NewCloneManager(basePath, verbose)
-
-	repoPath, err := cloneManager.Clone(repoURL)
+	repoPath, err := provider.Clone(urlInput, basePath)
 	if err != nil {
 		return errors.Wrap(err, "clone failed")
 	}

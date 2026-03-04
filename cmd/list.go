@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 
@@ -9,8 +10,8 @@ import (
 	"github.com/spf13/cobra"
 
 	"thoreinstein.com/rig/pkg/config"
-	"thoreinstein.com/rig/pkg/git"
 	"thoreinstein.com/rig/pkg/tmux"
+	"thoreinstein.com/rig/pkg/vcs"
 )
 
 var listWorktrees bool
@@ -79,18 +80,28 @@ func listCurrentRepoWorktrees(cfg *config.Config) error {
 	fmt.Println("=== Git Worktrees ===")
 	fmt.Println()
 
-	gitManager := git.NewWorktreeManager(cfg.Git.BaseBranch, verbose)
+	// Initialize VCS provider
+	provider, err := vcs.NewProvider(cfg.VCS.Provider, verbose)
+	if err != nil {
+		return errors.Wrap(err, "failed to initialize VCS provider")
+	}
 
-	repoRoot, err := gitManager.GetRepoRoot()
+	// Use current directory to find repo
+	cwd, _ := config.UserHomeDir() // Fallback
+	if c, err := os.Getwd(); err == nil {
+		cwd = c
+	}
+
+	repoRoot, err := provider.GetRepoRoot(cwd)
 	if err != nil {
 		return err
 	}
-	repoName, err := gitManager.GetRepoName()
+	repoName, err := provider.GetRepoName(cwd)
 	if err != nil {
 		return err
 	}
 
-	worktrees, err := gitManager.ListWorktrees()
+	worktrees, err := provider.ListWorktrees(cwd)
 	if err != nil {
 		return errors.Wrap(err, "failed to list worktrees")
 	}
@@ -100,39 +111,23 @@ func listCurrentRepoWorktrees(cfg *config.Config) error {
 		return nil
 	}
 
-	// Get branch info for each worktree
-	worktreeDetails, err := gitManager.ListWorktreesDetailed()
-	if err != nil {
-		return errors.Wrap(err, "failed to get worktree details")
-	}
-	worktreeInfos := make(map[string]git.WorktreeInfo)
-	for _, info := range worktreeDetails {
-		worktreeInfos[info.Path] = info
-	}
-
 	fmt.Printf("[%s]\n", repoName)
 
 	totalWorktrees := 0
 	for _, wt := range worktrees {
 		// Skip the main repo path itself
-		if wt == repoRoot {
+		if wt.Path == repoRoot {
 			continue
 		}
 
 		// Get relative path from repo
-		relPath := strings.TrimPrefix(wt, repoRoot+"/")
-		if relPath == wt {
-			relPath = wt // Couldn't make relative, use full path
+		relPath := strings.TrimPrefix(wt.Path, repoRoot+"/")
+		if relPath == wt.Path {
+			relPath = wt.Path // Couldn't make relative, use full path
 		}
 
-		// Find branch info
-		branch := ""
-		if info, ok := worktreeInfos[wt]; ok {
-			branch = info.Branch
-		}
-
-		if branch != "" {
-			fmt.Printf("  %-40s [%s]\n", relPath, branch)
+		if wt.Branch != "" {
+			fmt.Printf("  %-40s [%s]\n", relPath, wt.Branch)
 		} else {
 			fmt.Printf("  %s\n", relPath)
 		}

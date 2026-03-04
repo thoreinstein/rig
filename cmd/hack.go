@@ -8,9 +8,9 @@ import (
 	"github.com/cockroachdb/errors"
 	"github.com/spf13/cobra"
 
-	"thoreinstein.com/rig/pkg/git"
 	"thoreinstein.com/rig/pkg/notes"
 	"thoreinstein.com/rig/pkg/tmux"
+	"thoreinstein.com/rig/pkg/vcs"
 )
 
 var hackNoNotes bool
@@ -88,24 +88,29 @@ func runHackCommand(name string) error {
 		return errors.Wrapf(err, "failed to chdir to %s", projectPath)
 	}
 
-	// Step 1: Create git worktree (uses CWD to find repo)
+	// Initialize VCS provider
+	provider, err := vcs.NewProvider(cfg.VCS.Provider, verbose)
+	if err != nil {
+		return errors.Wrap(err, "failed to initialize VCS provider")
+	}
+
+	// Step 1: Create git worktree (uses projectPath to find repo)
 	if verbose {
 		fmt.Println("Creating git worktree...")
 	}
-	gitManager := git.NewWorktreeManager(cfg.Git.BaseBranch, verbose)
 
 	// Get repo info for notes
-	repoRoot, err := gitManager.GetRepoRoot()
+	repoRoot, err := provider.GetRepoRoot(projectPath)
 	if err != nil {
 		return err
 	}
-	repoName, err := gitManager.GetRepoName()
+	repoName, err := provider.GetRepoName(projectPath)
 	if err != nil {
 		return err
 	}
 
 	// For hacks, use "hack" as the type directory
-	worktreePath, err := gitManager.CreateWorktreeWithBranch("hack", name, name)
+	worktreePath, err := provider.CreateWorktree(projectPath, "hack", name, name, cfg.Git.BaseBranch)
 	if err != nil {
 		return errors.Wrap(err, "failed to create git worktree")
 	}

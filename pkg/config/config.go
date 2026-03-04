@@ -28,7 +28,13 @@ type Config struct {
 	Orchestration OrchestrationConfig               `mapstructure:"orchestration"`
 	Discovery     DiscoveryConfig                   `mapstructure:"discovery"`
 	Daemon        DaemonConfig                      `mapstructure:"daemon"`
+	VCS           VCSConfig                         `mapstructure:"vcs"`
 	Plugins       map[string]map[string]interface{} `mapstructure:"plugins"`
+}
+
+// VCSConfig holds Version Control System configuration
+type VCSConfig struct {
+	Provider string `mapstructure:"provider"` // "git" (default) or plugin name
 }
 
 // EventsConfig holds the configuration for the embedded Dolt event store
@@ -389,6 +395,9 @@ func SetDefaults(v *viper.Viper) {
 	v.SetDefault("discovery.search_paths", []string{filepath.Join(homeDir, "src")})
 	v.SetDefault("discovery.max_depth", 3)
 	v.SetDefault("discovery.cache_path", filepath.Join(homeDir, ".cache", "rig", "projects.json"))
+
+	// VCS defaults
+	v.SetDefault("vcs.provider", "git")
 
 	// Daemon defaults
 	v.SetDefault("daemon.enabled", true)
