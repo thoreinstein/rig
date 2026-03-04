@@ -256,6 +256,47 @@ func (m *Manager) GetNodeClient(ctx context.Context, name string) (client apiv1.
 	return p.NodeClient, nil
 }
 
+// GetVCSClient returns a gRPC client for the specified VCS plugin.
+// If the plugin is not running, it will be started.
+func (m *Manager) GetVCSClient(ctx context.Context, name string) (client apiv1.VCSServiceClient, err error) {
+	p, err := m.getOrStartPlugin(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+
+	p.AcquireSession()
+	defer func() {
+		if err != nil {
+			p.ReleaseSession()
+		}
+	}()
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	// Verify the plugin has the vcs capability
+	hasVCS := false
+	for _, cap := range p.Capabilities {
+		if cap.Name == VCSCapability {
+			hasVCS = true
+			break
+		}
+	}
+
+	if !hasVCS {
+		return nil, errors.NewPluginError(name, "GetVCSClient", "plugin does not support vcs capability")
+	}
+
+	if p.VCSClient == nil {
+		if p.conn == nil {
+			return nil, errors.NewPluginError(name, "GetVCSClient", "plugin connection not established")
+		}
+		p.VCSClient = apiv1.NewVCSServiceClient(p.conn)
+	}
+
+	return p.VCSClient, nil
+}
+
 func (m *Manager) getOrStartPlugin(ctx context.Context, name string) (*Plugin, error) {
 	m.mu.Lock()
 	p, ok := m.plugins[name]

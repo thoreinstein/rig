@@ -129,6 +129,10 @@ func (p *Plugin) cleanup() error {
 	}
 
 	p.client = nil
+	p.AssistantClient = nil
+	p.CommandClient = nil
+	p.NodeClient = nil
+	p.VCSClient = nil
 	return err
 }
 

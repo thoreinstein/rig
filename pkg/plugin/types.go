@@ -31,6 +31,9 @@ const (
 	// NodeCapability is the name of the capability for plugins that can execute workflow nodes.
 	NodeCapability = "node"
 
+	// VCSCapability is the name of the capability for Version Control System plugins.
+	VCSCapability = "vcs"
+
 	// APIVersion is the current version of the Rig Plugin API contract.
 	APIVersion = "v1"
 )
@@ -84,6 +87,7 @@ type Plugin struct {
 	AssistantClient apiv1.AssistantServiceClient
 	CommandClient   apiv1.CommandServiceClient
 	NodeClient      apiv1.NodeExecutionServiceClient
+	VCSClient       apiv1.VCSServiceClient
 	conn            *grpc.ClientConn
 	cancel          context.CancelFunc
 }

@@ -55,3 +55,17 @@ type CommandHandler interface {
 type NodeHandler interface {
 	ExecuteNode(ctx context.Context, req *apiv1.ExecuteNodeRequest) (*apiv1.ExecuteNodeResponse, error)
 }
+
+// VCSHandler is an optional interface for plugins providing Version Control System capabilities.
+type VCSHandler interface {
+	GetRepoRoot(ctx context.Context, req *apiv1.GetRepoRootRequest) (*apiv1.GetRepoRootResponse, error)
+	GetRepoName(ctx context.Context, req *apiv1.GetRepoNameRequest) (*apiv1.GetRepoNameResponse, error)
+	GetDefaultBranch(ctx context.Context, req *apiv1.GetDefaultBranchRequest) (*apiv1.GetDefaultBranchResponse, error)
+	CreateWorktree(ctx context.Context, req *apiv1.CreateWorktreeRequest) (*apiv1.CreateWorktreeResponse, error)
+	ListWorktrees(ctx context.Context, req *apiv1.ListWorktreesRequest) (*apiv1.ListWorktreesResponse, error)
+	RemoveWorktree(ctx context.Context, req *apiv1.RemoveWorktreeRequest) (*apiv1.RemoveWorktreeResponse, error)
+	ForceRemoveWorktree(ctx context.Context, req *apiv1.ForceRemoveWorktreeRequest) (*apiv1.ForceRemoveWorktreeResponse, error)
+	GetWorktreePath(ctx context.Context, req *apiv1.GetWorktreePathRequest) (*apiv1.GetWorktreePathResponse, error)
+	Clone(ctx context.Context, req *apiv1.CloneRequest) (*apiv1.CloneResponse, error)
+	IsBranchMerged(ctx context.Context, req *apiv1.IsBranchMergedRequest) (*apiv1.IsBranchMergedResponse, error)
+}

@@ -1,0 +1,132 @@
+syntax = "proto3";
+
+package rig.v1;
+
+option go_package = "thoreinstein.com/rig/pkg/api/v1;apiv1";
+
+// VCSService defines the interface for Version Control System operations.
+service VCSService {
+  // GetRepoRoot returns the root directory of the repository containing the path.
+  rpc GetRepoRoot(GetRepoRootRequest) returns (GetRepoRootResponse);
+
+  // GetRepoName returns the name of the repository.
+  rpc GetRepoName(GetRepoNameRequest) returns (GetRepoNameResponse);
+
+  // GetDefaultBranch determines the default branch of the repository.
+  rpc GetDefaultBranch(GetDefaultBranchRequest) returns (GetDefaultBranchResponse);
+
+  // CreateWorktree creates a new worktree for the given ticket.
+  rpc CreateWorktree(CreateWorktreeRequest) returns (CreateWorktreeResponse);
+
+  // ListWorktrees returns a detailed list of all existing worktrees in the repository.
+  rpc ListWorktrees(ListWorktreesRequest) returns (ListWorktreesResponse);
+
+  // RemoveWorktree removes a worktree.
+  rpc RemoveWorktree(RemoveWorktreeRequest) returns (RemoveWorktreeResponse);
+
+  // ForceRemoveWorktree removes a worktree even if it has uncommitted changes.
+  rpc ForceRemoveWorktree(ForceRemoveWorktreeRequest) returns (ForceRemoveWorktreeResponse);
+
+  // GetWorktreePath returns the absolute path for a ticket's worktree.
+  rpc GetWorktreePath(GetWorktreePathRequest) returns (GetWorktreePathResponse);
+
+  // Clone clones a repository from the given URL to the base path.
+  rpc Clone(CloneRequest) returns (CloneResponse);
+
+  // IsBranchMerged checks if the given branch is merged into the base branch.
+  rpc IsBranchMerged(IsBranchMergedRequest) returns (IsBranchMergedResponse);
+}
+
+message GetRepoRootRequest {
+  string path = 1;
+}
+
+message GetRepoRootResponse {
+  string root = 1;
+}
+
+message GetRepoNameRequest {
+  string path = 1;
+}
+
+message GetRepoNameResponse {
+  string name = 1;
+}
+
+message GetDefaultBranchRequest {
+  string path = 1;
+  string base_branch_config = 2;
+}
+
+message GetDefaultBranchResponse {
+  string branch = 1;
+}
+
+message CreateWorktreeRequest {
+  string path = 1;
+  string ticket_type = 2;
+  string name = 3;
+  string branch_name = 4;
+  string base_branch_config = 5;
+}
+
+message CreateWorktreeResponse {
+  string worktree_path = 1;
+}
+
+message ListWorktreesRequest {
+  string path = 1;
+}
+
+message WorktreeInfo {
+  string path = 1;
+  string branch = 2;
+}
+
+message ListWorktreesResponse {
+  repeated WorktreeInfo worktrees = 1;
+}
+
+message RemoveWorktreeRequest {
+  string path = 1;
+  string ticket_type = 2;
+  string ticket = 3;
+}
+
+message RemoveWorktreeResponse {}
+
+message ForceRemoveWorktreeRequest {
+  string path = 1;
+  string worktree_path = 2;
+}
+
+message ForceRemoveWorktreeResponse {}
+
+message GetWorktreePathRequest {
+  string path = 1;
+  string ticket_type = 2;
+  string ticket = 3;
+}
+
+message GetWorktreePathResponse {
+  string worktree_path = 1;
+}
+
+message CloneRequest {
+  string url = 1;
+  string base_path = 2;
+}
+
+message CloneResponse {
+  string repo_path = 1;
+}
+
+message IsBranchMergedRequest {
+  string path = 1;
+  string branch = 2;
+  string base_branch = 3;
+}
+
+message IsBranchMergedResponse {
+  bool is_merged = 1;
+}

@@ -80,3 +80,63 @@ func (b *commandBridge) Execute(req *apiv1.ExecuteRequest, server apiv1.CommandS
 	err := b.h.Execute(req, server)
 	return mapError(err)
 }
+
+// vcsBridge adapts a VCSHandler implementation to the apiv1.VCSServiceServer interface.
+type vcsBridge struct {
+	apiv1.UnimplementedVCSServiceServer
+	h VCSHandler
+}
+
+func newVCSBridge(h VCSHandler) *vcsBridge {
+	return &vcsBridge{h: h}
+}
+
+func (b *vcsBridge) GetRepoRoot(ctx context.Context, req *apiv1.GetRepoRootRequest) (*apiv1.GetRepoRootResponse, error) {
+	resp, err := b.h.GetRepoRoot(ctx, req)
+	return resp, mapError(err)
+}
+
+func (b *vcsBridge) GetRepoName(ctx context.Context, req *apiv1.GetRepoNameRequest) (*apiv1.GetRepoNameResponse, error) {
+	resp, err := b.h.GetRepoName(ctx, req)
+	return resp, mapError(err)
+}
+
+func (b *vcsBridge) GetDefaultBranch(ctx context.Context, req *apiv1.GetDefaultBranchRequest) (*apiv1.GetDefaultBranchResponse, error) {
+	resp, err := b.h.GetDefaultBranch(ctx, req)
+	return resp, mapError(err)
+}
+
+func (b *vcsBridge) CreateWorktree(ctx context.Context, req *apiv1.CreateWorktreeRequest) (*apiv1.CreateWorktreeResponse, error) {
+	resp, err := b.h.CreateWorktree(ctx, req)
+	return resp, mapError(err)
+}
+
+func (b *vcsBridge) ListWorktrees(ctx context.Context, req *apiv1.ListWorktreesRequest) (*apiv1.ListWorktreesResponse, error) {
+	resp, err := b.h.ListWorktrees(ctx, req)
+	return resp, mapError(err)
+}
+
+func (b *vcsBridge) RemoveWorktree(ctx context.Context, req *apiv1.RemoveWorktreeRequest) (*apiv1.RemoveWorktreeResponse, error) {
+	resp, err := b.h.RemoveWorktree(ctx, req)
+	return resp, mapError(err)
+}
+
+func (b *vcsBridge) ForceRemoveWorktree(ctx context.Context, req *apiv1.ForceRemoveWorktreeRequest) (*apiv1.ForceRemoveWorktreeResponse, error) {
+	resp, err := b.h.ForceRemoveWorktree(ctx, req)
+	return resp, mapError(err)
+}
+
+func (b *vcsBridge) GetWorktreePath(ctx context.Context, req *apiv1.GetWorktreePathRequest) (*apiv1.GetWorktreePathResponse, error) {
+	resp, err := b.h.GetWorktreePath(ctx, req)
+	return resp, mapError(err)
+}
+
+func (b *vcsBridge) Clone(ctx context.Context, req *apiv1.CloneRequest) (*apiv1.CloneResponse, error) {
+	resp, err := b.h.Clone(ctx, req)
+	return resp, mapError(err)
+}
+
+func (b *vcsBridge) IsBranchMerged(ctx context.Context, req *apiv1.IsBranchMergedRequest) (*apiv1.IsBranchMergedResponse, error) {
+	resp, err := b.h.IsBranchMerged(ctx, req)
+	return resp, mapError(err)
+}
