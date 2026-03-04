@@ -189,8 +189,11 @@ func findCleanupCandidates(cfg *config.Config, provider vcs.Provider) ([]Cleanup
 			sessionName = cfg.Tmux.SessionPrefix + sessionName
 		}
 
-		// Check if branch is merged
-		isMerged, _ := provider.IsBranchMerged(cwd, wt.Branch, baseBranch)
+		// Check if branch is merged (default to not-merged on error to avoid accidental deletion)
+		isMerged, err := provider.IsBranchMerged(cwd, wt.Branch, baseBranch)
+		if err != nil && verbose {
+			fmt.Printf("Warning: could not check merge status for %s: %v\n", wt.Branch, err)
+		}
 
 		candidate := CleanupCandidate{
 			Path:       wt.Path,
