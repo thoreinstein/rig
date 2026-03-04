@@ -165,6 +165,8 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 - **Unix-Only Execution:** Plugins must be Unix executable files (marked with execute bits). Non-executable files and those with unknown extensions are ignored. Subdirectories must contain at least one executable file to be considered valid plugins.
 - **Manifest Resolution:** Sidecar manifests are matched against the logical plugin name (stripping extensions like `.sh` or `.py`).
 - **Fail-Fast Plugin Initialization Pattern**: Establish a mandatory validation gate during the initial handshake. The `Manager` MUST call `ValidateCompatibility` immediately after the handshake and reject (Stop) any plugin returning `StatusIncompatible` or `StatusError` before it enters the active pool.
+- **Asymmetric IPC Timeouts Pattern:** Standardize on tiered timeouts for plugin RPCs. Fast operations (metadata, listing) use a 30s deadline, while heavy/network-bound operations (Clone, Worktree creation) use a 15m deadline to prevent functional regressions on slow networks.
+- **Deferred Plugin Release Pattern:** Always call `defer Manager.ReleasePlugin(name)` immediately after successfully acquiring a plugin client. This ensures active session counts are correctly decremented even if subsequent logic fails, preventing "zombie" processes.
 
 ### Workflow Traps
 - **Embedded Database Ambiguity:** Distinguish between "embedded data" (local files accessed via protocol) and "embedded engine" (in-process executor). Conflating the two can lead to incorrect driver selection and unnecessary dependency on external processes. Truly embedded logic uses library-backed drivers like `github.com/dolthub/driver`.
@@ -175,6 +177,7 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 - **Automated Reviewer Naming Conflicts**: Conflicting bot suggestions (e.g., snake_case vs. camelCase) should be resolved by prioritizing Go idioms and established codebase patterns over generic bot rules.
 - **Stale Git Context in Hooks Trap**: Environment variables injected by `pre-commit` (e.g., `GIT_INDEX_FILE`) can interfere with unit tests that create temporary git repositories. Always unset `GIT_*` variables in test hooks.
 - **Host Flag Shadowing**: In dynamic CLIs, bootstrap parsers MUST stop scanning at the first non-flag token or `--` to avoid "stealing" arguments from subcommands. Host-only flags must be strictly filtered before forwarding to sub-processes.
+- **Circular Dependency Migration Trap:** Extracting existing logic (e.g., `pkg/git`) into abstractions (e.g., `pkg/vcs`) often triggers import cycles if shared types remain in the core. **Mitigation:** Extract shared DTOs, regexes, and utility functions into a dedicated "Leaf Package" (e.g., `pkg/vcs/url`) with zero dependencies on either side.
 
 ## API & Plugin Architecture (gRPC)
 
@@ -313,6 +316,7 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 - **Decoupled Metadata Tagging**: Use narrow interfaces (e.g., `TicketMetadataSetter`) and retroactive backfilling to decorate data with context resolved after creation. This prevents import cycles and maintains business logic isolation from data storage.
 - **Unified Presentation Model**: For CLI commands aggregating data from heterogeneous sources, use a flattened "Presentation Model" in a shared package. Map source-specific structs to this model using Go primitives to avoid circular dependencies and simplify sorting/formatting logic.
 - **Deterministic Sort Ordering**: Always use a unique tie-breaker (e.g., `id ASC`) in SQL queries and `sort.SliceStable` in Go when rendering chronological lists. This prevents nondeterministic output churn in persistent artifacts like Markdown notes.
+- **Hot-Path Core Isolation Decision:** Maintain high-frequency, low-latency filesystem predicates (like `IsGitRepo`) in the core `rig` binary rather than offloading them to plugins. This avoids IPC overhead for "snappy" CLI discovery while still decoupling semantic VCS logic into plugins.
 
 ### Maintenance & Storage
 - **Maintenance Connection Pinning:** Maintenance operations in Dolt (e.g., `USE database`, `dolt_gc`, multi-table pruning) MUST use a pinned `*sql.Conn` to ensure session affinity. Using the general pool can lead to commands running against the wrong database context.
