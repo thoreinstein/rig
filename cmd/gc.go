@@ -41,7 +41,7 @@ Examples:
   rig gc --dry-run       # Show what would be pruned without deleting
   rig gc --archive       # Export data to JSON before pruning`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return runGCCommand()
+		return runGCCommand(cmd.Context())
 	},
 }
 
@@ -55,7 +55,7 @@ func init() {
 	gcCmd.Flags().BoolVar(&gcArchive, "archive", false, "Export data to JSON before pruning")
 }
 
-func runGCCommand() error {
+func runGCCommand(cmdCtx context.Context) error {
 	cfg, err := loadConfig()
 	if err != nil {
 		return errors.Wrap(err, "failed to load configuration")
@@ -66,6 +66,14 @@ func runGCCommand() error {
 
 	if !targetEvents && !targetOrch {
 		return errors.Errorf("invalid target: %s. Must be events, orchestration, or all", gcTarget)
+	}
+
+	// Respect store enablement configuration to avoid side effects when disabled.
+	if targetEvents && !cfg.Events.Enabled {
+		return errors.New("events store is disabled in configuration; enable it or choose a different --target")
+	}
+	if targetOrch && !cfg.Orchestration.Enabled {
+		return errors.New("orchestration store is disabled in configuration; enable it or choose a different --target")
 	}
 
 	// 1. Determine Cutoffs
@@ -119,7 +127,7 @@ func runGCCommand() error {
 	}
 
 	archiveDir := ""
-	if gcArchive {
+	if gcArchive && !gcDryRun {
 		home, err := config.UserHomeDir()
 		if err != nil {
 			return errors.Wrap(err, "failed to determine home directory for archive")
@@ -127,7 +135,7 @@ func runGCCommand() error {
 		archiveDir = filepath.Join(home, ".local", "share", "rig", "archives")
 	}
 
-	ctx, cancel := contextWithTimeout(30 * time.Minute) // GC can be slow
+	ctx, cancel := contextWithTimeout(cmdCtx, 30*time.Minute) // GC can be slow
 	defer cancel()
 
 	var errs []error
@@ -135,7 +143,7 @@ func runGCCommand() error {
 	// 3. Process Events
 	if targetEvents {
 		if err := processEventsGC(ctx, cfg, eventsCutoff, archiveDir); err != nil {
-			fmt.Printf("Error during events GC: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Error during events GC: %v\n", err)
 			errs = append(errs, errors.Wrap(err, "events GC failed"))
 		}
 	}
@@ -143,7 +151,7 @@ func runGCCommand() error {
 	// 4. Process Orchestration
 	if targetOrch {
 		if err := processOrchGC(ctx, cfg, orchCutoff, archiveDir); err != nil {
-			fmt.Printf("Error during orchestration GC: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Error during orchestration GC: %v\n", err)
 			errs = append(errs, errors.Wrap(err, "orchestration GC failed"))
 		}
 	}

@@ -271,9 +271,15 @@ func TestExportEvents(t *testing.T) {
 	cutoff := now.Add(-24 * time.Hour)
 
 	// 1. Insert 2 old events, 1 new
-	_, _ = dm.db.ExecContext(ctx, "INSERT INTO workflow_events (id, correlation_id, step, status, message, created_at) VALUES ('id1', 'c1', 's1', 'COMPLETED', '', ?)", oldTime)
-	_, _ = dm.db.ExecContext(ctx, "INSERT INTO workflow_events (id, correlation_id, step, status, message, created_at) VALUES ('id2', 'c1', 's2', 'COMPLETED', '', ?)", oldTime.Add(time.Hour))
-	_, _ = dm.db.ExecContext(ctx, "INSERT INTO workflow_events (id, correlation_id, step, status, message, created_at) VALUES ('id3', 'c1', 's3', 'COMPLETED', '', ?)", now)
+	if _, err := dm.db.ExecContext(ctx, "INSERT INTO workflow_events (id, correlation_id, step, status, message, created_at) VALUES ('id1', 'c1', 's1', 'COMPLETED', '', ?)", oldTime); err != nil {
+		t.Fatalf("failed to insert test event id1: %v", err)
+	}
+	if _, err := dm.db.ExecContext(ctx, "INSERT INTO workflow_events (id, correlation_id, step, status, message, created_at) VALUES ('id2', 'c1', 's2', 'COMPLETED', '', ?)", oldTime.Add(time.Hour)); err != nil {
+		t.Fatalf("failed to insert test event id2: %v", err)
+	}
+	if _, err := dm.db.ExecContext(ctx, "INSERT INTO workflow_events (id, correlation_id, step, status, message, created_at) VALUES ('id3', 'c1', 's3', 'COMPLETED', '', ?)", now); err != nil {
+		t.Fatalf("failed to insert test event id3: %v", err)
+	}
 
 	// 2. Export
 	count, path, err := dm.ExportEventsBeforeCutoff(ctx, cutoff, archiveDir)

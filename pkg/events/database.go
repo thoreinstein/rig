@@ -204,7 +204,8 @@ func (dm *DatabaseManager) DoltGC(ctx context.Context) error {
 // ExportEventsBeforeCutoff exports events older than the cutoff to a JSON file in archiveDir.
 // Returns the count of exported events and the absolute path to the archive file.
 func (dm *DatabaseManager) ExportEventsBeforeCutoff(ctx context.Context, cutoff time.Time, archiveDir string) (int, string, error) {
-	events, err := dm.QueryEventsByTimeRange(ctx, time.Time{}, cutoff)
+	// Use strict "before cutoff" to match PruneEvents' created_at < cutoff semantics.
+	events, err := dm.QueryEventsByTimeRange(ctx, time.Time{}, cutoff.Add(-time.Nanosecond))
 	if err != nil {
 		return 0, "", errors.Wrap(err, "failed to query events for export")
 	}

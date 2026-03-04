@@ -1014,17 +1014,12 @@ func (dm *DatabaseManager) ExportExecutionsBeforeCutoff(ctx context.Context, cut
 		return 0, "", nil
 	}
 
-	// 2. Batch-fetch all node states for these executions in a single query
-	placeholders := make([]string, len(executions))
-	nsArgs := make([]interface{}, len(executions))
-	for i, e := range executions {
-		placeholders[i] = "?"
-		nsArgs[i] = e.ID
-	}
-	const nsBaseQuery = `SELECT id, execution_id, node_id, status, started_at, completed_at, result, COALESCE(error, ''), created_at FROM node_states WHERE execution_id IN (%s)`
-	nsQuery := fmt.Sprintf(nsBaseQuery, strings.Join(placeholders, ",")) //nolint:gosec // G201: placeholders are safe
+	// 2. Batch-fetch all node states via JOIN (avoids N+1 queries and dynamic SQL)
+	const nsQuery = `SELECT ns.id, ns.execution_id, ns.node_id, ns.status, ns.started_at, ns.completed_at, ns.result, COALESCE(ns.error, ''), ns.created_at
+		FROM node_states ns INNER JOIN executions e ON ns.execution_id = e.id
+		WHERE e.status IN (?, ?, ?) AND e.created_at < ?`
 
-	nsRows, err := dm.db.QueryContext(ctx, nsQuery, nsArgs...)
+	nsRows, err := dm.db.QueryContext(ctx, nsQuery, execArgs...)
 	if err != nil {
 		return 0, "", errors.Wrap(err, "failed to query node states for export")
 	}
