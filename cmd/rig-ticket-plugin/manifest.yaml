@@ -1,0 +1,9 @@
+name: rig-ticket
+version: 1.0.0
+description: Standard ticketing integration for Rig (Jira and Beads)
+author: Jim Myers
+requirements:
+  rig: ">=1.0.0"
+capabilities:
+  - name: ticket
+    version: 1.0.0
