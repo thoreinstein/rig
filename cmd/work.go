@@ -169,27 +169,25 @@ func runWorkCommand(ctx context.Context, ticketID string) error {
 		}
 	} else {
 		defer ticketCleanup()
-		if ticketProvider.IsAvailable(ctx) {
+		if verbose {
+			fmt.Println("Fetching ticket details...")
+		}
+		ticketDetails, err = ticketProvider.GetTicketInfo(ctx, ticketInfo.ID)
+		if err != nil {
 			if verbose {
-				fmt.Println("Fetching ticket details...")
+				fmt.Printf("Warning: Could not fetch ticket details: %v\n", err)
 			}
-			ticketDetails, err = ticketProvider.GetTicketInfo(ctx, ticketInfo.ID)
-			if err != nil {
+		} else {
+			if verbose {
+				fmt.Printf("Ticket details fetched: %s\n", ticketDetails.Title)
+			}
+			// Update status to in_progress
+			if err := ticketProvider.UpdateStatus(ctx, ticketInfo.ID, "in_progress"); err != nil {
 				if verbose {
-					fmt.Printf("Warning: Could not fetch ticket details: %v\n", err)
+					fmt.Printf("Warning: Could not update ticket status: %v\n", err)
 				}
 			} else {
-				if verbose {
-					fmt.Printf("Ticket details fetched: %s\n", ticketDetails.Title)
-				}
-				// Update status to in_progress
-				if err := ticketProvider.UpdateStatus(ctx, ticketInfo.ID, "in_progress"); err != nil {
-					if verbose {
-						fmt.Printf("Warning: Could not update ticket status: %v\n", err)
-					}
-				} else {
-					fmt.Println("Ticket status updated to in_progress")
-				}
+				fmt.Println("Ticket status updated to in_progress")
 			}
 		}
 	}
