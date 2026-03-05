@@ -18,12 +18,14 @@ import (
 )
 
 type PluginConfig struct {
-	BaseURL string `json:"base_url"`
-	Email   string `json:"email"`
+	BaseURL      string `json:"base_url"`
+	Email        string `json:"email"`
+	BeadsCommand string `json:"beads_command"`
 }
 
 type TicketPlugin struct {
-	config PluginConfig
+	config  PluginConfig
+	secrets *sdk.Secret
 }
 
 func (p *TicketPlugin) Info() sdk.Info {
@@ -67,25 +69,28 @@ func (p *TicketPlugin) GetTicketInfo(ctx context.Context, req *apiv1.GetTicketIn
 		}, nil
 	}
 
-	// Assume Beads otherwise
-	client, err := p.getBeadsClient(ctx)
-	if err != nil {
-		return nil, err
+	if workflow.IsBeadsTicket(req.TicketId) {
+		client, err := p.getBeadsClient(ctx)
+		if err != nil {
+			return nil, err
+		}
+		info, err := client.Show(req.TicketId)
+		if err != nil {
+			return nil, err
+		}
+		return &apiv1.GetTicketInfoResponse{
+			Ticket: &apiv1.TicketInfo{
+				Id:          info.ID,
+				Title:       info.Title,
+				Type:        info.Type,
+				Status:      info.Status,
+				Priority:    strconv.Itoa(info.Priority),
+				Description: info.Description,
+			},
+		}, nil
 	}
-	info, err := client.Show(req.TicketId)
-	if err != nil {
-		return nil, err
-	}
-	return &apiv1.GetTicketInfoResponse{
-		Ticket: &apiv1.TicketInfo{
-			Id:          info.ID,
-			Title:       info.Title,
-			Type:        info.Type,
-			Status:      info.Status,
-			Priority:    strconv.Itoa(info.Priority),
-			Description: info.Description,
-		},
-	}, nil
+
+	return nil, errors.Newf("unrecognized ticket format: %q", req.TicketId)
 }
 
 func (p *TicketPlugin) UpdateTicketStatus(ctx context.Context, req *apiv1.UpdateTicketStatusRequest) (*apiv1.UpdateTicketStatusResponse, error) {
@@ -109,15 +114,19 @@ func (p *TicketPlugin) UpdateTicketStatus(ctx context.Context, req *apiv1.Update
 		return &apiv1.UpdateTicketStatusResponse{Success: true}, nil
 	}
 
-	client, err := p.getBeadsClient(ctx)
-	if err != nil {
-		return nil, err
+	if workflow.IsBeadsTicket(req.TicketId) {
+		client, err := p.getBeadsClient(ctx)
+		if err != nil {
+			return nil, err
+		}
+		err = client.UpdateStatus(req.TicketId, req.Status)
+		if err != nil {
+			return nil, err
+		}
+		return &apiv1.UpdateTicketStatusResponse{Success: true}, nil
 	}
-	err = client.UpdateStatus(req.TicketId, req.Status)
-	if err != nil {
-		return nil, err
-	}
-	return &apiv1.UpdateTicketStatusResponse{Success: true}, nil
+
+	return nil, errors.Newf("unrecognized ticket format: %q", req.TicketId)
 }
 
 func (p *TicketPlugin) ListTransitions(ctx context.Context, req *apiv1.ListTransitionsRequest) (*apiv1.ListTransitionsResponse, error) {
@@ -139,18 +148,31 @@ func (p *TicketPlugin) ListTransitions(ctx context.Context, req *apiv1.ListTrans
 		}
 		return &apiv1.ListTransitionsResponse{Transitions: transitions}, nil
 	}
-	// Beads doesn't have a transitions API in the current client
-	return &apiv1.ListTransitionsResponse{}, nil
+	if workflow.IsBeadsTicket(req.TicketId) {
+		// Beads doesn't have a transitions API in the current client
+		return &apiv1.ListTransitionsResponse{}, nil
+	}
+
+	return nil, errors.Newf("unrecognized ticket format: %q", req.TicketId)
+}
+
+func (p *TicketPlugin) getSecrets() *sdk.Secret {
+	if p.secrets == nil {
+		p.secrets = sdk.NewSecret()
+	}
+	return p.secrets
 }
 
 func (p *TicketPlugin) getJiraClient(ctx context.Context) (jira.JiraClient, error) {
-	token, err := sdk.GetSecret(ctx, "JIRA_TOKEN")
+	s := p.getSecrets()
+
+	token, err := s.GetSecret(ctx, "JIRA_TOKEN")
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to retrieve JIRA_TOKEN")
 	}
 
-	baseURL, err := sdk.GetSecret(ctx, "JIRA_BASE_URL")
-	if err != nil {
+	baseURL, err := s.GetSecret(ctx, "JIRA_BASE_URL")
+	if err != nil || baseURL == "" {
 		// Fallback to plugin-scoped config
 		baseURL = p.config.BaseURL
 	}
@@ -159,8 +181,8 @@ func (p *TicketPlugin) getJiraClient(ctx context.Context) (jira.JiraClient, erro
 		return nil, errors.New("JIRA_BASE_URL not found in environment or config")
 	}
 
-	email, err := sdk.GetSecret(ctx, "JIRA_EMAIL")
-	if err != nil {
+	email, err := s.GetSecret(ctx, "JIRA_EMAIL")
+	if err != nil || email == "" {
 		// Fallback to plugin-scoped config
 		email = p.config.Email
 	}
@@ -175,9 +197,12 @@ func (p *TicketPlugin) getJiraClient(ctx context.Context) (jira.JiraClient, erro
 	return jira.NewJiraClient(cfg, false)
 }
 
-func (p *TicketPlugin) getBeadsClient(ctx context.Context) (beads.BeadsClient, error) {
-	// Beads usually uses the CLI directly
-	return beads.NewCLIClient("bd", false)
+func (p *TicketPlugin) getBeadsClient(_ context.Context) (beads.BeadsClient, error) {
+	cmd := p.config.BeadsCommand
+	if cmd == "" {
+		cmd = "bd"
+	}
+	return beads.NewCLIClient(cmd, false)
 }
 
 func main() {

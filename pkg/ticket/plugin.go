@@ -59,6 +59,10 @@ func (p *PluginProvider) GetTicketInfo(ctx context.Context, ticketID string) (*T
 		return nil, err
 	}
 
+	if resp == nil || resp.Ticket == nil {
+		return nil, errors.Newf("plugin returned empty response for ticket %q", ticketID)
+	}
+
 	return &TicketInfo{
 		ID:           resp.Ticket.Id,
 		Title:        resp.Ticket.Title,
@@ -87,6 +91,10 @@ func (p *PluginProvider) UpdateStatus(ctx context.Context, ticketID, status stri
 	})
 	if err != nil {
 		return err
+	}
+
+	if resp == nil {
+		return errors.Newf("plugin returned empty response for ticket %q status update", ticketID)
 	}
 
 	if !resp.Success {

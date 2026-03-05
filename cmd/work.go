@@ -162,7 +162,7 @@ func runWorkCommand(ctx context.Context, ticketID string) error {
 
 	// Step 2: Fetch Ticket details and update status
 	var ticketDetails *ticket.TicketInfo
-	ticketProvider, ticketCleanup, err := getTicketProvider(cfg, worktreePath)
+	ticketProvider, ticketCleanup, err := getTicketProvider(cfg, repoPath)
 	if err != nil {
 		if verbose {
 			fmt.Printf("Warning: Could not initialize ticket provider: %v\n", err)
