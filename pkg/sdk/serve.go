@@ -139,4 +139,8 @@ func RegisterServices(reg grpc.ServiceRegistrar, p PluginInfo) {
 	if h, ok := p.(VCSHandler); ok {
 		apiv1.RegisterVCSServiceServer(reg, newVCSBridge(h))
 	}
+
+	if h, ok := p.(TicketHandler); ok {
+		apiv1.RegisterTicketServiceServer(reg, newTicketBridge(h))
+	}
 }

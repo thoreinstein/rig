@@ -297,6 +297,47 @@ func (m *Manager) GetVCSClient(ctx context.Context, name string) (client apiv1.V
 	return p.VCSClient, nil
 }
 
+// GetTicketClient returns a gRPC client for the specified ticketing plugin.
+// If the plugin is not running, it will be started.
+func (m *Manager) GetTicketClient(ctx context.Context, name string) (client apiv1.TicketServiceClient, err error) {
+	p, err := m.getOrStartPlugin(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+
+	p.AcquireSession()
+	defer func() {
+		if err != nil {
+			p.ReleaseSession()
+		}
+	}()
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	// Verify the plugin has the ticket capability
+	hasTicket := false
+	for _, cap := range p.Capabilities {
+		if cap.Name == TicketCapability {
+			hasTicket = true
+			break
+		}
+	}
+
+	if !hasTicket {
+		return nil, errors.NewPluginError(name, "GetTicketClient", "plugin does not support ticket capability")
+	}
+
+	if p.TicketClient == nil {
+		if p.conn == nil {
+			return nil, errors.NewPluginError(name, "GetTicketClient", "plugin connection not established")
+		}
+		p.TicketClient = apiv1.NewTicketServiceClient(p.conn)
+	}
+
+	return p.TicketClient, nil
+}
+
 func (m *Manager) getOrStartPlugin(ctx context.Context, name string) (*Plugin, error) {
 	m.mu.Lock()
 	p, ok := m.plugins[name]

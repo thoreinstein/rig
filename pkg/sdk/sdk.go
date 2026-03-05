@@ -69,3 +69,10 @@ type VCSHandler interface {
 	Clone(ctx context.Context, req *apiv1.CloneRequest) (*apiv1.CloneResponse, error)
 	IsBranchMerged(ctx context.Context, req *apiv1.IsBranchMergedRequest) (*apiv1.IsBranchMergedResponse, error)
 }
+
+// TicketHandler is an optional interface for plugins providing ticketing integration.
+type TicketHandler interface {
+	GetTicketInfo(ctx context.Context, req *apiv1.GetTicketInfoRequest) (*apiv1.GetTicketInfoResponse, error)
+	UpdateTicketStatus(ctx context.Context, req *apiv1.UpdateTicketStatusRequest) (*apiv1.UpdateTicketStatusResponse, error)
+	ListTransitions(ctx context.Context, req *apiv1.ListTransitionsRequest) (*apiv1.ListTransitionsResponse, error)
+}

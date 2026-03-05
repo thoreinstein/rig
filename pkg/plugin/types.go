@@ -34,6 +34,9 @@ const (
 	// VCSCapability is the name of the capability for Version Control System plugins.
 	VCSCapability = "vcs"
 
+	// TicketCapability is the name of the capability for ticketing integration plugins.
+	TicketCapability = "ticket"
+
 	// APIVersion is the current version of the Rig Plugin API contract.
 	APIVersion = "v1"
 )
@@ -88,6 +91,7 @@ type Plugin struct {
 	CommandClient   apiv1.CommandServiceClient
 	NodeClient      apiv1.NodeExecutionServiceClient
 	VCSClient       apiv1.VCSServiceClient
+	TicketClient    apiv1.TicketServiceClient
 	conn            *grpc.ClientConn
 	cancel          context.CancelFunc
 }

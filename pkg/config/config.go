@@ -29,12 +29,18 @@ type Config struct {
 	Discovery     DiscoveryConfig                   `mapstructure:"discovery"`
 	Daemon        DaemonConfig                      `mapstructure:"daemon"`
 	VCS           VCSConfig                         `mapstructure:"vcs"`
+	Ticket        TicketConfig                      `mapstructure:"ticket"`
 	Plugins       map[string]map[string]interface{} `mapstructure:"plugins"`
 }
 
 // VCSConfig holds Version Control System configuration
 type VCSConfig struct {
 	Provider string `mapstructure:"provider"` // "git" (default) or plugin name
+}
+
+// TicketConfig holds ticketing integration configuration
+type TicketConfig struct {
+	Provider string `mapstructure:"provider"` // "local" (default) or plugin name
 }
 
 // EventsConfig holds the configuration for the embedded Dolt event store

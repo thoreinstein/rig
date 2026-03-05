@@ -140,3 +140,28 @@ func (b *vcsBridge) IsBranchMerged(ctx context.Context, req *apiv1.IsBranchMerge
 	resp, err := b.h.IsBranchMerged(ctx, req)
 	return resp, mapError(err)
 }
+
+// ticketBridge adapts a TicketHandler implementation to the apiv1.TicketServiceServer interface.
+type ticketBridge struct {
+	apiv1.UnimplementedTicketServiceServer
+	h TicketHandler
+}
+
+func newTicketBridge(h TicketHandler) *ticketBridge {
+	return &ticketBridge{h: h}
+}
+
+func (b *ticketBridge) GetTicketInfo(ctx context.Context, req *apiv1.GetTicketInfoRequest) (*apiv1.GetTicketInfoResponse, error) {
+	resp, err := b.h.GetTicketInfo(ctx, req)
+	return resp, mapError(err)
+}
+
+func (b *ticketBridge) UpdateTicketStatus(ctx context.Context, req *apiv1.UpdateTicketStatusRequest) (*apiv1.UpdateTicketStatusResponse, error) {
+	resp, err := b.h.UpdateTicketStatus(ctx, req)
+	return resp, mapError(err)
+}
+
+func (b *ticketBridge) ListTransitions(ctx context.Context, req *apiv1.ListTransitionsRequest) (*apiv1.ListTransitionsResponse, error) {
+	resp, err := b.h.ListTransitions(ctx, req)
+	return resp, mapError(err)
+}
