@@ -70,6 +70,7 @@ type DaemonConfig struct {
 
 // NotesConfig holds markdown notes configuration
 type NotesConfig struct {
+	Provider    string `mapstructure:"provider"`     // "local" (default) or plugin name
 	Path        string `mapstructure:"path"`         // Base directory for notes
 	DailyDir    string `mapstructure:"daily_dir"`    // Subdirectory for daily notes
 	TemplateDir string `mapstructure:"template_dir"` // Optional user template directory
@@ -321,6 +322,7 @@ func SetDefaults(v *viper.Viper) {
 	}
 
 	// Notes defaults
+	v.SetDefault("notes.provider", "local")
 	v.SetDefault("notes.path", filepath.Join(homeDir, "Documents", "Notes"))
 	v.SetDefault("notes.daily_dir", "daily")
 	v.SetDefault("notes.template_dir", filepath.Join(homeDir, ".config", "rig", "templates"))
