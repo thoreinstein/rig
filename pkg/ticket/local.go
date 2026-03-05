@@ -18,6 +18,7 @@ type LocalProvider struct {
 	cfg         *config.Config
 	projectPath string
 	verbose     bool
+	router      *workflow.TicketRouter
 }
 
 // NewLocalProvider creates a new LocalProvider with the given configuration.
@@ -26,6 +27,7 @@ func NewLocalProvider(cfg *config.Config, projectPath string, verbose bool) *Loc
 		cfg:         cfg,
 		projectPath: projectPath,
 		verbose:     verbose,
+		router:      workflow.NewTicketRouter(cfg, projectPath, verbose),
 	}
 }
 
@@ -37,8 +39,7 @@ func (p *LocalProvider) IsAvailable(ctx context.Context) bool {
 
 // GetTicketInfo retrieves ticket information by routing to the appropriate backend.
 func (p *LocalProvider) GetTicketInfo(ctx context.Context, ticketID string) (*TicketInfo, error) {
-	router := workflow.NewTicketRouter(p.cfg, p.projectPath, p.verbose)
-	source := router.RouteTicket(ticketID)
+	source := p.router.RouteTicket(ticketID)
 
 	switch source {
 	case workflow.TicketSourceBeads:
@@ -85,8 +86,7 @@ func (p *LocalProvider) GetTicketInfo(ctx context.Context, ticketID string) (*Ti
 
 // UpdateStatus updates the status of the ticket in the appropriate backend.
 func (p *LocalProvider) UpdateStatus(ctx context.Context, ticketID, status string) error {
-	router := workflow.NewTicketRouter(p.cfg, p.projectPath, p.verbose)
-	source := router.RouteTicket(ticketID)
+	source := p.router.RouteTicket(ticketID)
 
 	switch source {
 	case workflow.TicketSourceBeads:

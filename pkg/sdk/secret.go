@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/cockroachdb/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
@@ -77,6 +78,12 @@ func (s *Secret) connect() (apiv1.SecretServiceClient, error) {
 	// If no scheme is provided, and it looks like a path, default to unix:// for UDS.
 	if !strings.Contains(endpoint, "://") && (strings.HasPrefix(endpoint, "/") || strings.HasPrefix(endpoint, ".")) {
 		endpoint = "unix://" + endpoint
+	}
+
+	// Reject non-UDS endpoints when using insecure credentials to prevent
+	// transmitting secrets over the network in plaintext.
+	if !strings.HasPrefix(endpoint, "unix://") {
+		return nil, errors.New("sdk: secret service requires a unix:// endpoint for secure transport")
 	}
 
 	conn, err := grpc.NewClient(endpoint, opts...)

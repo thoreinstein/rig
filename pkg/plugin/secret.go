@@ -12,9 +12,10 @@ import (
 
 // secretAllowList defines the set of keys that plugins are allowed to request.
 var secretAllowList = map[string]bool{
-	"JIRA_TOKEN":  true,
-	"JIRA_EMAIL":  true,
-	"BEADS_TOKEN": true,
+	"JIRA_TOKEN":    true,
+	"JIRA_EMAIL":    true,
+	"JIRA_BASE_URL": true,
+	"BEADS_TOKEN":   true,
 }
 
 // HostSecretProxy implements apiv1.SecretServiceServer.
@@ -30,16 +31,12 @@ func NewHostSecretProxy() *HostSecretProxy {
 // GetSecret resolves a secret key from the host's environment.
 func (s *HostSecretProxy) GetSecret(ctx context.Context, req *apiv1.GetSecretRequest) (*apiv1.GetSecretResponse, error) {
 	if !secretAllowList[req.Key] {
-		return nil, status.Errorf(codes.PermissionDenied, "access to secret key %q is not allowed", req.Key)
+		return nil, status.Errorf(codes.PermissionDenied, "secret not available")
 	}
 
-	// Resolve from environment.
-	// Since Rig host already hydrated its config, these might be present in the environment
-	// if they were passed as RIG_AI_* or if the loader injected them (though loader usually doesn't inject back to env).
-	// NOTE: For full keychain support, we might need to pass the hydrated config to this proxy.
 	val, ok := os.LookupEnv(req.Key)
 	if !ok {
-		return nil, status.Errorf(codes.NotFound, "secret key %q not found", req.Key)
+		return nil, status.Errorf(codes.PermissionDenied, "secret not available")
 	}
 
 	return &apiv1.GetSecretResponse{Value: val}, nil

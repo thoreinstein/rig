@@ -164,7 +164,7 @@ func TestRunWorkCommand_ProjectAware(t *testing.T) {
 	// Run from a neutral directory
 	t.Chdir(tmpDir)
 
-	err := runWorkCommand("repo1:proj-123")
+	err := runWorkCommand(t.Context(), "repo1:proj-123")
 	if err != nil {
 		t.Logf("runWorkCommand warning (likely tmux): %v", err)
 	}

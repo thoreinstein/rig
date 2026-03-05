@@ -30,7 +30,9 @@ func (p *TicketPlugin) Info() sdk.Info {
 }
 
 func (p *TicketPlugin) GetTicketInfo(ctx context.Context, req *apiv1.GetTicketInfoRequest) (*apiv1.GetTicketInfoResponse, error) {
-	// For simplicity, this plugin handles both Jira and Beads based on ID format.
+	// Route by ticket ID format. The plugin uses simple heuristics (IsJiraTicket/IsBeadsTicket)
+	// rather than TicketRouter because plugins run in isolated processes without filesystem
+	// access to project markers like .beads/.
 	if workflow.IsJiraTicket(req.TicketId) {
 		client, err := p.getJiraClient(ctx)
 		if err != nil {
@@ -130,9 +132,15 @@ func (p *TicketPlugin) ListTransitions(ctx context.Context, req *apiv1.ListTrans
 }
 
 func (p *TicketPlugin) getJiraClient(ctx context.Context) (jira.JiraClient, error) {
-	token, _ := sdk.GetSecret(ctx, "JIRA_TOKEN")
+	token, err := sdk.GetSecret(ctx, "JIRA_TOKEN")
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to retrieve JIRA_TOKEN")
+	}
+	baseURL, err := sdk.GetSecret(ctx, "JIRA_BASE_URL")
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to retrieve JIRA_BASE_URL")
+	}
 	email, _ := sdk.GetSecret(ctx, "JIRA_EMAIL")
-	baseURL, _ := sdk.GetSecret(ctx, "JIRA_BASE_URL")
 
 	cfg := &config.JiraConfig{
 		Enabled: true,

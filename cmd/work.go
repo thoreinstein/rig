@@ -36,7 +36,7 @@ Examples:
   rig work incident-789 --no-notes`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return runWorkCommand(args[0])
+		return runWorkCommand(cmd.Context(), args[0])
 	},
 }
 
@@ -97,7 +97,7 @@ func parseTicket(ticket string) (*TicketInfo, error) {
 	}, nil
 }
 
-func runWorkCommand(ticketID string) error {
+func runWorkCommand(ctx context.Context, ticketID string) error {
 	// Load configuration
 	cfg, err := loadConfig()
 	if err != nil {
@@ -169,11 +169,11 @@ func runWorkCommand(ticketID string) error {
 		}
 	} else {
 		defer ticketCleanup()
-		if ticketProvider.IsAvailable(context.Background()) {
+		if ticketProvider.IsAvailable(ctx) {
 			if verbose {
 				fmt.Println("Fetching ticket details...")
 			}
-			ticketDetails, err = ticketProvider.GetTicketInfo(context.Background(), ticketInfo.ID)
+			ticketDetails, err = ticketProvider.GetTicketInfo(ctx, ticketInfo.ID)
 			if err != nil {
 				if verbose {
 					fmt.Printf("Warning: Could not fetch ticket details: %v\n", err)
@@ -183,7 +183,7 @@ func runWorkCommand(ticketID string) error {
 					fmt.Printf("Ticket details fetched: %s\n", ticketDetails.Title)
 				}
 				// Update status to in_progress
-				if err := ticketProvider.UpdateStatus(context.Background(), ticketInfo.ID, "in_progress"); err != nil {
+				if err := ticketProvider.UpdateStatus(ctx, ticketInfo.ID, "in_progress"); err != nil {
 					if verbose {
 						fmt.Printf("Warning: Could not update ticket status: %v\n", err)
 					}

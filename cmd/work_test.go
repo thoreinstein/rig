@@ -431,7 +431,7 @@ func TestRunWorkCommand_CreatesWorktreeAndNote(t *testing.T) {
 	defer func() { projectFlag = "" }()
 
 	// Run the work command
-	err := runWorkCommand("proj-123")
+	err := runWorkCommand(t.Context(), "proj-123")
 
 	// The command may fail on tmux session creation, but should create worktree and note
 	// Check for worktree creation regardless of tmux status
@@ -530,7 +530,7 @@ func TestRunWorkCommand_InvalidTicketFormat(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := runWorkCommand(tt.ticket)
+			err := runWorkCommand(t.Context(), tt.ticket)
 			if err == nil {
 				t.Errorf("runWorkCommand(%q) should have returned an error", tt.ticket)
 				return
@@ -558,7 +558,7 @@ func TestRunWorkCommand_UpdatesDailyNote(t *testing.T) {
 	defer func() { projectFlag = "" }()
 
 	// Run the work command
-	_ = runWorkCommand("ops-456")
+	_ = runWorkCommand(t.Context(), "ops-456")
 
 	// Verify daily note was created/updated
 	today := time.Now().Format("2006-01-02")
@@ -601,10 +601,10 @@ func TestRunWorkCommand_IdempotentWorktree(t *testing.T) {
 	defer func() { projectFlag = "" }()
 
 	// Run the work command twice
-	_ = runWorkCommand("test-789")
+	_ = runWorkCommand(t.Context(), "test-789")
 
 	// Second call should not fail (worktree already exists)
-	_ = runWorkCommand("test-789")
+	_ = runWorkCommand(t.Context(), "test-789")
 
 	worktreePath := filepath.Join(repoDir, "test", "test-789")
 	if _, statErr := os.Stat(worktreePath); os.IsNotExist(statErr) {
@@ -656,7 +656,7 @@ func TestRunWorkCommand_DifferentTicketTypes(t *testing.T) {
 			projectFlag = repoDir
 			defer func() { projectFlag = "" }()
 
-			_ = runWorkCommand(tt.ticket)
+			_ = runWorkCommand(t.Context(), tt.ticket)
 
 			// Worktree should be under the ticket type directory
 			worktreePath := filepath.Join(repoDir, tt.expectedType, tt.ticket)
@@ -691,7 +691,7 @@ func TestRunWorkCommand_JiraDisabled(t *testing.T) {
 
 	// Run the work command
 	// should succeed without JIRA
-	_ = runWorkCommand("nojira-100")
+	_ = runWorkCommand(t.Context(), "nojira-100")
 
 	// Worktree should still be created
 	worktreePath := filepath.Join(repoDir, "nojira", "nojira-100")
@@ -732,7 +732,7 @@ func TestRunWorkCommand_PreservesOriginalTicketCase(t *testing.T) {
 	defer func() { projectFlag = "" }()
 
 	// Use uppercase ticket
-	_ = runWorkCommand("FRAAS-999")
+	_ = runWorkCommand(t.Context(), "FRAAS-999")
 
 	// Note filename should preserve original case
 	notePath := filepath.Join(notesDir, "fraas", "FRAAS-999.md")

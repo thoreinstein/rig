@@ -1,6 +1,8 @@
 package ticket
 
 import (
+	"github.com/cockroachdb/errors"
+
 	"thoreinstein.com/rig/pkg/config"
 	"thoreinstein.com/rig/pkg/plugin"
 )
@@ -13,8 +15,7 @@ func NewProviderWithManager(cfg *config.Config, manager *plugin.Manager, project
 	}
 
 	if manager == nil {
-		// Fallback to local if no manager provided
-		return NewLocalProvider(cfg, projectPath, verbose), nil
+		return nil, errors.Newf("ticket provider %q requires a plugin manager", providerName)
 	}
 
 	return NewPluginProvider(manager, providerName), nil
