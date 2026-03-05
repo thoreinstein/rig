@@ -117,54 +117,51 @@ func runHackCommand(cmd *cobra.Command, name string) error {
 	fmt.Printf("Git worktree created at: %s\n", worktreePath)
 
 	// Step 2: Create note (unless --no-notes flag is set)
+	var notePath string
 	noteProvider, knowledgeCleanup, err := getKnowledgeProvider(cfg, projectPath)
 	if err != nil {
-		return errors.Wrap(err, "failed to initialize knowledge provider")
-	}
-	defer knowledgeCleanup()
-
-	var notePath string
-	if !hackNoNotes {
-		if verbose {
-			fmt.Println("Creating note...")
-		}
-
-		noteData := knowledge.NoteData{
-			Ticket:       name,
-			TicketType:   "hack",
-			RepoName:     repoName,
-			RepoPath:     repoRoot,
-			WorktreePath: worktreePath,
-		}
-
-		result, err := noteProvider.CreateTicketNote(cmd.Context(), &noteData)
-		if err != nil {
-			// Don't fail if note creation fails
-			if verbose {
-				fmt.Printf("Warning: Could not create note: %v\n", err)
-			}
-		} else {
-			if result.Created {
-				fmt.Printf("Note created at: %s\n", result.Path)
-			} else {
-				fmt.Printf("Opened existing note: %s\n", result.Path)
-			}
-			notePath = result.Path
-		}
-	}
-
-	// Step 3: Update daily note (always, regardless of --no-notes)
-	if verbose {
-		fmt.Println("Updating daily note...")
-	}
-	err = noteProvider.UpdateDailyNote(cmd.Context(), name, "hack")
-	if err != nil {
-		// Don't fail if daily note update fails
-		if verbose {
-			fmt.Printf("Warning: Could not update daily note: %v\n", err)
-		}
+		fmt.Printf("Warning: Could not initialize knowledge provider: %v\n", err)
 	} else {
-		fmt.Println("Daily note updated")
+		defer knowledgeCleanup()
+
+		if !hackNoNotes {
+			if verbose {
+				fmt.Println("Creating note...")
+			}
+
+			noteData := knowledge.NoteData{
+				Ticket:       name,
+				TicketType:   "hack",
+				RepoName:     repoName,
+				RepoPath:     repoRoot,
+				WorktreePath: worktreePath,
+			}
+
+			result, err := noteProvider.CreateTicketNote(cmd.Context(), &noteData)
+			if err != nil {
+				// Don't fail if note creation fails
+				fmt.Printf("Warning: Could not create note: %v\n", err)
+			} else {
+				if result.Created {
+					fmt.Printf("Note created at: %s\n", result.Path)
+				} else {
+					fmt.Printf("Opened existing note: %s\n", result.Path)
+				}
+				notePath = result.Path
+			}
+		}
+
+		// Step 3: Update daily note (always, regardless of --no-notes)
+		if verbose {
+			fmt.Println("Updating daily note...")
+		}
+		err = noteProvider.UpdateDailyNote(cmd.Context(), name, "hack")
+		if err != nil {
+			// Don't fail if daily note update fails
+			fmt.Printf("Warning: Could not update daily note: %v\n", err)
+		} else {
+			fmt.Println("Daily note updated")
+		}
 	}
 
 	// Step 4: Create tmux session

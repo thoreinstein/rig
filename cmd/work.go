@@ -154,9 +154,7 @@ func runWorkCommand(cmd *cobra.Command, ticketID string) error {
 	var notePath string
 	noteProvider, knowledgeCleanup, err := getKnowledgeProvider(cfg, repoPath)
 	if err != nil {
-		if verbose {
-			fmt.Printf("Warning: Could not initialize knowledge provider: %v\n", err)
-		}
+		fmt.Printf("Warning: Could not initialize knowledge provider: %v\n", err)
 	} else {
 		defer knowledgeCleanup()
 
