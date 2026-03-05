@@ -134,6 +134,7 @@ func (p *Plugin) cleanup() error {
 	p.NodeClient = nil
 	p.VCSClient = nil
 	p.TicketClient = nil
+	p.KnowledgeClient = nil
 	return err
 }
 

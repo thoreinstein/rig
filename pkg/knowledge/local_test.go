@@ -75,4 +75,25 @@ func TestLocalProvider(t *testing.T) {
 			t.Error("Daily note was not created")
 		}
 	})
+
+	t.Run("GetDailyNotePath", func(t *testing.T) {
+		path, err := provider.GetDailyNotePath(ctx)
+		if err != nil {
+			t.Fatalf("Failed to get daily note path: %v", err)
+		}
+
+		if path == "" {
+			t.Error("Expected non-empty daily note path")
+		}
+
+		// Should be under the daily directory
+		dailyDir := filepath.Join(tmpDir, "daily")
+		rel, err := filepath.Rel(dailyDir, path)
+		if err != nil {
+			t.Fatalf("Path %s is not relative to daily dir %s: %v", path, dailyDir, err)
+		}
+		if filepath.IsAbs(rel) || rel[:2] == ".." {
+			t.Errorf("Daily note path %s is not under daily dir %s", path, dailyDir)
+		}
+	})
 }

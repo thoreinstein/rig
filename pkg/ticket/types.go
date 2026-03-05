@@ -7,6 +7,9 @@ import (
 	"github.com/cockroachdb/errors"
 )
 
+// ticketIDRegex matches TYPE-ID where ID can be digits or alphanumeric (e.g., proj-123, rig-abc, beads-42f).
+var ticketIDRegex = regexp.MustCompile(`^([a-zA-Z]+)-([a-zA-Z0-9]+)$`)
+
 // TicketInfo holds unified ticket information from various backends (Jira, Beads, etc.)
 type TicketInfo struct {
 	ID           string
@@ -51,9 +54,7 @@ func ParseTicket(ticketID string) (*ParsedTicket, error) {
 		ticketID = t
 	}
 
-	// Match pattern: TYPE-ID where ID can be digits or alphanumeric (e.g., proj-123, rig-abc, beads-42f)
-	re := regexp.MustCompile(`^([a-zA-Z]+)-([a-zA-Z0-9]+)$`)
-	matches := re.FindStringSubmatch(ticketID)
+	matches := ticketIDRegex.FindStringSubmatch(ticketID)
 
 	if len(matches) != 3 {
 		return nil, errors.New("invalid ticket format. Expected format: [project:]TYPE-ID (e.g., proj-123, rig:proj-123 or rig-abc)")

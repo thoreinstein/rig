@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -61,7 +60,7 @@ func runSyncCommand(cmd *cobra.Command, ticketID string) error {
 
 	// Handle daily note sync
 	if syncDaily {
-		return syncDailyNote(cfg)
+		return syncDailyNote(cmd, cfg)
 	}
 
 	// Handle ticket sync
@@ -161,7 +160,7 @@ func syncTicketNote(cmd *cobra.Command, cfg *config.Config, ticketID string) err
 	return nil
 }
 
-func syncDailyNote(cfg *config.Config) error {
+func syncDailyNote(cmd *cobra.Command, cfg *config.Config) error {
 	if verbose {
 		fmt.Println("Syncing today's daily note...")
 	}
@@ -175,7 +174,7 @@ func syncDailyNote(cfg *config.Config) error {
 	defer knowledgeCleanup()
 
 	// For now, just verify the daily note exists
-	dailyNotePath, err := noteProvider.GetDailyNotePath(context.Background())
+	dailyNotePath, err := noteProvider.GetDailyNotePath(cmd.Context())
 	if err != nil {
 		return errors.Wrap(err, "failed to get daily note path")
 	}

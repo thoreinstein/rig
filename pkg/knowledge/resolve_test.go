@@ -12,6 +12,7 @@ func TestNewProviderWithManager(t *testing.T) {
 	tests := []struct {
 		name         string
 		providerName string
+		nilManager   bool
 		wantType     string
 		wantErr      bool
 	}{
@@ -30,6 +31,12 @@ func TestNewProviderWithManager(t *testing.T) {
 			providerName: "obsidian-plugin",
 			wantType:     "*knowledge.PluginProvider",
 		},
+		{
+			name:         "Plugin without manager",
+			providerName: "foo",
+			nilManager:   true,
+			wantErr:      true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -41,7 +48,7 @@ func TestNewProviderWithManager(t *testing.T) {
 			}
 
 			var mgr *plugin.Manager
-			if tt.providerName != "" && tt.providerName != "local" {
+			if !tt.nilManager && tt.providerName != "" && tt.providerName != "local" {
 				mgr = &plugin.Manager{} // Non-nil dummy
 			}
 
