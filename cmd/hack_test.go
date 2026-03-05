@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
 
@@ -330,7 +331,7 @@ func TestRunHackCommand_CreatesWorktree(t *testing.T) {
 	hackNoNotes = false
 
 	// Run the hack command
-	err := runHackCommand("test-experiment")
+	err := runHackCommand(&cobra.Command{}, "test-experiment")
 
 	// The command may fail on tmux session creation, but should create worktree
 	// Check for worktree creation regardless of tmux status
@@ -409,13 +410,13 @@ func TestRunHackCommand_InvalidName(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := runHackCommand(tt.hackName)
+			err := runHackCommand(&cobra.Command{}, tt.hackName)
 			if err == nil {
-				t.Errorf("runHackCommand(%q) should have returned an error", tt.hackName)
+				t.Errorf("runHackCommand(&cobra.Command{}, %q) should have returned an error", tt.hackName)
 				return
 			}
 			if !strings.Contains(err.Error(), tt.errMsg) {
-				t.Errorf("runHackCommand(%q) error = %q, should contain %q", tt.hackName, err.Error(), tt.errMsg)
+				t.Errorf("runHackCommand(&cobra.Command{}, %q) error = %q, should contain %q", tt.hackName, err.Error(), tt.errMsg)
 			}
 		})
 	}
@@ -470,7 +471,7 @@ hack
 	defer func() { hackNoNotes = false }()
 
 	// Run the hack command
-	_ = runHackCommand("notes-default-test")
+	_ = runHackCommand(&cobra.Command{}, "notes-default-test")
 
 	// Worktree should be created
 	worktreePath := filepath.Join(repoDir, "hack", "notes-default-test")
@@ -521,7 +522,7 @@ func TestRunHackCommand_WithNoNotesFlag(t *testing.T) {
 	defer func() { hackNoNotes = false }()
 
 	// Run the hack command
-	_ = runHackCommand("no-notes-test")
+	_ = runHackCommand(&cobra.Command{}, "no-notes-test")
 
 	// Worktree should still be created
 	worktreePath := filepath.Join(repoDir, "hack", "no-notes-test")
@@ -554,10 +555,10 @@ func TestRunHackCommand_IdempotentWorktree(t *testing.T) {
 	hackNoNotes = false
 
 	// Run the hack command twice
-	_ = runHackCommand("idempotent-test")
+	_ = runHackCommand(&cobra.Command{}, "idempotent-test")
 
 	// Second call should not fail (worktree already exists)
-	_ = runHackCommand("idempotent-test")
+	_ = runHackCommand(&cobra.Command{}, "idempotent-test")
 	// The command should complete without error for existing worktree
 	// (tmux might fail, but that's separate)
 

@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
 	"thoreinstein.com/rig/pkg/jira"
@@ -557,9 +558,9 @@ func TestRunSyncCommand_NoTicketNoDaily(t *testing.T) {
 	syncDaily = false
 	syncForce = false
 
-	err := runSyncCommand("")
+	err := runSyncCommand(&cobra.Command{}, "")
 	if err == nil {
-		t.Error("runSyncCommand() should error when no ticket and no --daily flag")
+		t.Error("runSyncCommand(&cobra.Command{}, ) should error when no ticket and no --daily flag")
 	}
 
 	if !strings.Contains(err.Error(), "ticket required") {
@@ -588,9 +589,9 @@ func TestRunSyncCommand_InvalidTicketFormat(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := runSyncCommand(tt.ticket)
+			err := runSyncCommand(&cobra.Command{}, tt.ticket)
 			if err == nil {
-				t.Errorf("runSyncCommand(%q) should error for invalid ticket format", tt.ticket)
+				t.Errorf("runSyncCommand(&cobra.Command{}, %q) should error for invalid ticket format", tt.ticket)
 			}
 		})
 	}
@@ -606,12 +607,12 @@ func TestRunSyncCommand_NoteNotFound(t *testing.T) {
 	syncForce = false
 
 	// Don't create the note - it should handle missing note gracefully
-	err := runSyncCommand("proj-123")
+	err := runSyncCommand(&cobra.Command{}, "proj-123")
 
 	// The command returns nil but prints a message when note is not found
 	// This is by design - it's not an error, just informational
 	if err != nil {
-		t.Errorf("runSyncCommand() should not error for missing note (returns nil with message), got: %v", err)
+		t.Errorf("runSyncCommand(&cobra.Command{}, ) should not error for missing note (returns nil with message), got: %v", err)
 	}
 }
 
@@ -651,9 +652,9 @@ Some notes.`
 		t.Fatalf("Failed to create daily dir: %v", err)
 	}
 
-	err := runSyncCommand("proj-123")
+	err := runSyncCommand(&cobra.Command{}, "proj-123")
 	if err != nil {
-		t.Errorf("runSyncCommand() unexpected error: %v", err)
+		t.Errorf("runSyncCommand(&cobra.Command{}, ) unexpected error: %v", err)
 	}
 
 	// Verify note still exists
@@ -673,11 +674,11 @@ func TestRunSyncCommand_WithDailyFlag(t *testing.T) {
 	defer func() { syncDaily = false }()
 
 	// When --daily is set, it should not require a ticket
-	err := runSyncCommand("")
+	err := runSyncCommand(&cobra.Command{}, "")
 
 	// The command returns nil but prints a message when daily note is not found
 	if err != nil {
-		t.Errorf("runSyncCommand() with --daily should not error: %v", err)
+		t.Errorf("runSyncCommand(&cobra.Command{}, ) with --daily should not error: %v", err)
 	}
 }
 
@@ -709,9 +710,9 @@ func TestRunSyncCommand_DailyNoteExists(t *testing.T) {
 		t.Fatalf("Failed to write daily note: %v", err)
 	}
 
-	err := runSyncCommand("")
+	err := runSyncCommand(&cobra.Command{}, "")
 	if err != nil {
-		t.Errorf("runSyncCommand() with --daily and existing note should not error: %v", err)
+		t.Errorf("runSyncCommand(&cobra.Command{}, ) with --daily and existing note should not error: %v", err)
 	}
 }
 
@@ -755,9 +756,9 @@ func TestRunSyncCommand_DifferentTicketTypes(t *testing.T) {
 				t.Fatalf("Failed to create daily dir: %v", err)
 			}
 
-			err := runSyncCommand(tt.ticket)
+			err := runSyncCommand(&cobra.Command{}, tt.ticket)
 			if err != nil {
-				t.Errorf("runSyncCommand(%q) unexpected error: %v", tt.ticket, err)
+				t.Errorf("runSyncCommand(&cobra.Command{}, %q) unexpected error: %v", tt.ticket, err)
 			}
 		})
 	}
@@ -800,9 +801,9 @@ Test content.`
 		t.Fatalf("Failed to create daily dir: %v", err)
 	}
 
-	err := runSyncCommand("proj-456")
+	err := runSyncCommand(&cobra.Command{}, "proj-456")
 	if err != nil {
-		t.Fatalf("runSyncCommand() error: %v", err)
+		t.Fatalf("runSyncCommand(&cobra.Command{}, ) error: %v", err)
 	}
 
 	// Verify daily note was created/updated
@@ -855,9 +856,9 @@ func TestSyncTicketNote_WithJiraDisabled(t *testing.T) {
 	}
 
 	// Should not error even with JIRA disabled
-	err := runSyncCommand("proj-789")
+	err := runSyncCommand(&cobra.Command{}, "proj-789")
 	if err != nil {
-		t.Errorf("runSyncCommand() should not error with JIRA disabled: %v", err)
+		t.Errorf("runSyncCommand(&cobra.Command{}, ) should not error with JIRA disabled: %v", err)
 	}
 }
 
@@ -890,9 +891,9 @@ func TestSyncTicketNote_IncidentTypeSkipsJira(t *testing.T) {
 	}
 
 	// Should work for incident type (skips JIRA unless --jira flag is set)
-	err := runSyncCommand("incident-100")
+	err := runSyncCommand(&cobra.Command{}, "incident-100")
 	if err != nil {
-		t.Errorf("runSyncCommand() should handle incident type: %v", err)
+		t.Errorf("runSyncCommand(&cobra.Command{}, ) should handle incident type: %v", err)
 	}
 }
 
@@ -911,7 +912,7 @@ func TestSyncDailyNote_NotFound(t *testing.T) {
 	defer func() { syncDaily = false }()
 
 	// Don't create the daily note
-	err := runSyncCommand("")
+	err := runSyncCommand(&cobra.Command{}, "")
 
 	// The function returns nil and prints a message when daily note doesn't exist
 	if err != nil {
@@ -942,7 +943,7 @@ func TestSyncDailyNote_Exists(t *testing.T) {
 		t.Fatalf("Failed to write daily note: %v", err)
 	}
 
-	err := runSyncCommand("")
+	err := runSyncCommand(&cobra.Command{}, "")
 	if err != nil {
 		t.Errorf("syncDailyNote() should not error when daily note exists: %v", err)
 	}
@@ -980,9 +981,9 @@ func TestRunSyncCommand_PreservesOriginalTicketCase(t *testing.T) {
 	}
 
 	// Sync with uppercase ticket
-	err := runSyncCommand("FRAAS-999")
+	err := runSyncCommand(&cobra.Command{}, "FRAAS-999")
 	if err != nil {
-		t.Errorf("runSyncCommand() unexpected error: %v", err)
+		t.Errorf("runSyncCommand(&cobra.Command{}, ) unexpected error: %v", err)
 	}
 
 	// Verify daily note contains original case
@@ -1032,9 +1033,9 @@ func TestRunSyncCommand_VerboseMode(t *testing.T) {
 	}
 
 	// Should work in verbose mode
-	err := runSyncCommand("proj-888")
+	err := runSyncCommand(&cobra.Command{}, "proj-888")
 	if err != nil {
-		t.Errorf("runSyncCommand() should work in verbose mode: %v", err)
+		t.Errorf("runSyncCommand(&cobra.Command{}, ) should work in verbose mode: %v", err)
 	}
 }
 
@@ -1050,12 +1051,12 @@ func TestRunSyncCommand_ConfigLoadFailure(t *testing.T) {
 	syncForce = false
 
 	// The command should handle this gracefully
-	err := runSyncCommand("proj-123")
+	err := runSyncCommand(&cobra.Command{}, "proj-123")
 
 	// It should return nil (note not found message) rather than error
 	// since the notes path doesn't exist but the command handles missing notes
 	if err != nil {
 		// This is expected behavior - missing notes directory is handled gracefully
-		t.Logf("runSyncCommand() returned error as expected: %v", err)
+		t.Logf("runSyncCommand(&cobra.Command{}, ) returned error as expected: %v", err)
 	}
 }

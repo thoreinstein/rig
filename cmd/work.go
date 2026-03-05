@@ -1,16 +1,13 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"os"
-	"regexp"
-	"strings"
 
 	"github.com/cockroachdb/errors"
 	"github.com/spf13/cobra"
 
-	"thoreinstein.com/rig/pkg/notes"
+	"thoreinstein.com/rig/pkg/knowledge"
 	"thoreinstein.com/rig/pkg/ticket"
 	"thoreinstein.com/rig/pkg/tmux"
 )
@@ -23,20 +20,21 @@ var workCmd = &cobra.Command{
 	Short: "Start workflow for a ticket",
 	Long: `Start the complete workflow for a given ticket.
 
-This command performs the following actions:
-- Parses ticket type and number
-- Creates git worktree and branch
-- Creates/updates markdown note with JIRA integration (use --no-notes to skip)
+This command automates the entire setup process for a new ticket:
+- Creates git worktree at {repo}/{ticket_type}/{ticket_id}
+- Creates branch for the ticket
+- Updates JIRA status to In Progress (if configured)
+- Creates markdown note (use --no-notes to skip)
 - Updates daily note with log entry
-- Creates tmux session with configured windows
+- Creates tmux session with predefined windows
 
 Examples:
-  rig work proj-123
-  rig work ops-456
-  rig work incident-789 --no-notes`,
+  rig work PROJ-123
+  rig work PROJ-123 --no-notes
+  rig work PROJ-123 -p /path/to/project`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return runWorkCommand(cmd.Context(), args[0])
+		return runWorkCommand(cmd, args[0])
 	},
 }
 
@@ -47,57 +45,9 @@ func init() {
 	workCmd.Flags().StringVarP(&projectFlag, "project", "p", "", "Override project directory")
 }
 
-// TicketInfo holds parsed ticket information
-type TicketInfo struct {
-	Full    string // Original user input (e.g., "project:TYPE-ID")
-	Project string // Optional project prefix (e.g., "project")
-	ID      string // Clean ticket identifier (e.g., "TYPE-ID")
-	Type    string // Ticket type, normalized to lowercase (e.g., "type")
-	Number  string // Ticket number or alphanumeric identifier (e.g., "ID")
-}
+func runWorkCommand(cmd *cobra.Command, ticketID string) error {
+	ctx := cmd.Context()
 
-// SessionID returns a sanitized ticket identifier suitable for tmux session names
-func (t *TicketInfo) SessionID() string {
-	if t.Project != "" {
-		return t.Project + "-" + t.ID
-	}
-	return t.ID
-}
-
-// parseTicket parses a ticket string into type and number/identifier components.
-// Supports both traditional Jira-style tickets (proj-123) and beads-style tickets (rig-abc123).
-// Also supports optional project prefix (project:ticket).
-func parseTicket(ticket string) (*TicketInfo, error) {
-	var project string
-	fullInput := ticket
-
-	// Check for optional project prefix
-	if p, t, ok := strings.Cut(ticket, ":"); ok {
-		if p == "" {
-			return nil, errors.New("invalid ticket format. Project name cannot be empty when using ':'")
-		}
-		project = p
-		ticket = t
-	}
-
-	// Match pattern: TYPE-ID where ID can be digits or alphanumeric (e.g., proj-123, rig-abc, beads-42f)
-	re := regexp.MustCompile(`^([a-zA-Z]+)-([a-zA-Z0-9]+)$`)
-	matches := re.FindStringSubmatch(ticket)
-
-	if len(matches) != 3 {
-		return nil, errors.New("invalid ticket format. Expected format: [project:]TYPE-ID (e.g., proj-123, rig:proj-123 or rig-abc)")
-	}
-
-	return &TicketInfo{
-		Full:    fullInput,
-		Project: project,
-		ID:      ticket,
-		Type:    strings.ToLower(matches[1]),
-		Number:  matches[2],
-	}, nil
-}
-
-func runWorkCommand(ctx context.Context, ticketID string) error {
 	// Load configuration
 	cfg, err := loadConfig()
 	if err != nil {
@@ -105,7 +55,7 @@ func runWorkCommand(ctx context.Context, ticketID string) error {
 	}
 
 	// Parse ticket
-	ticketInfo, err := parseTicket(ticketID)
+	ticketInfo, err := ticket.ParseTicket(ticketID)
 	if err != nil {
 		return err
 	}
@@ -161,7 +111,7 @@ func runWorkCommand(ctx context.Context, ticketID string) error {
 	fmt.Printf("Git worktree created at: %s\n", worktreePath)
 
 	// Step 2: Fetch Ticket details and update status
-	var ticketDetails *ticket.TicketInfo
+	var ticketDetails *knowledge.NoteData
 	ticketProvider, ticketCleanup, err := getTicketProvider(cfg, repoPath)
 	if err != nil {
 		if verbose {
@@ -174,13 +124,20 @@ func runWorkCommand(ctx context.Context, ticketID string) error {
 		if verbose {
 			fmt.Println("Fetching ticket details...")
 		}
-		ticketDetails, err = ticketProvider.GetTicketInfo(ctx, ticketInfo.ID)
+		info, err := ticketProvider.GetTicketInfo(ctx, ticketInfo.ID)
 		if err != nil {
 			if verbose {
 				fmt.Printf("Warning: Could not fetch ticket details: %v\n", err)
 			}
-		} else if verbose {
-			fmt.Printf("Ticket details fetched: %s\n", ticketDetails.Title)
+		} else {
+			if verbose {
+				fmt.Printf("Ticket details fetched: %s\n", info.Title)
+			}
+			ticketDetails = &knowledge.NoteData{
+				Summary:     info.Title,
+				Status:      info.Status,
+				Description: info.Description,
+			}
 		}
 
 		// Update status independently — don't gate on GetTicketInfo success
@@ -194,99 +151,104 @@ func runWorkCommand(ctx context.Context, ticketID string) error {
 	}
 
 	// Step 3: Create/update note (unless --no-notes flag is set)
-	noteManager := notes.NewManager(
-		cfg.Notes.Path,
-		cfg.Notes.DailyDir,
-		cfg.Notes.TemplateDir,
-		verbose,
-	)
-
-	var notePath string
-	if !workNoNotes {
+	noteProvider, knowledgeCleanup, err := getKnowledgeProvider(cfg, repoPath)
+	if err != nil {
 		if verbose {
-			fmt.Println("Creating note...")
+			fmt.Printf("Warning: Could not initialize knowledge provider: %v\n", err)
 		}
+	} else {
+		defer knowledgeCleanup()
 
-		// Build ticket data for template
-		noteData := notes.TicketData{
-			Ticket:       ticketInfo.ID,
-			TicketType:   ticketInfo.Type,
-			RepoName:     repoName,
-			RepoPath:     repoRoot,
-			WorktreePath: worktreePath,
-		}
-
-		// Add issue info if available
-		if ticketDetails != nil {
-			noteData.Summary = ticketDetails.Title
-			noteData.Status = ticketDetails.Status
-			noteData.Description = ticketDetails.Description
-		}
-
-		result, err := noteManager.CreateTicketNote(noteData)
-		if err != nil {
-			// Don't fail if note creation fails — worktree is already created
+		var notePath string
+		if !workNoNotes {
 			if verbose {
-				fmt.Printf("Warning: Could not create note: %v\n", err)
+				fmt.Println("Creating note...")
+			}
+
+			// Build ticket data for template
+			noteData := knowledge.NoteData{
+				Ticket:       ticketInfo.ID,
+				TicketType:   ticketInfo.Type,
+				RepoName:     repoName,
+				RepoPath:     repoRoot,
+				WorktreePath: worktreePath,
+			}
+
+			// Add issue info if available
+			if ticketDetails != nil {
+				noteData.Summary = ticketDetails.Summary
+				noteData.Status = ticketDetails.Status
+				noteData.Description = ticketDetails.Description
+			}
+
+			result, err := noteProvider.CreateTicketNote(ctx, &noteData)
+			if err != nil {
+				// Don't fail if note creation fails — worktree is already created
+				if verbose {
+					fmt.Printf("Warning: Could not create note: %v\n", err)
+				}
+			} else {
+				if result.Created {
+					fmt.Printf("Note created at: %s\n", result.Path)
+				} else {
+					fmt.Printf("Opened existing note: %s\n", result.Path)
+				}
+				notePath = result.Path
+			}
+		}
+
+		// Step 4: Update daily note
+		if verbose {
+			fmt.Println("Updating daily note...")
+		}
+		err = noteProvider.UpdateDailyNote(ctx, ticketInfo.ID, ticketInfo.Type)
+		if err != nil {
+			// Don't fail if daily note update fails
+			if verbose {
+				fmt.Printf("Warning: Could not update daily note: %v\n", err)
 			}
 		} else {
-			if result.Created {
-				fmt.Printf("Note created at: %s\n", result.Path)
-			} else {
-				fmt.Printf("Opened existing note: %s\n", result.Path)
+			fmt.Println("Daily note updated")
+		}
+
+		// Pass notePath to tmux if created
+		if notePath != "" {
+			// Step 5: Create tmux session
+			if verbose {
+				fmt.Println("Creating tmux session...")
 			}
-			notePath = result.Path
+
+			// Convert config windows to tmux windows
+			tmuxWindows := make([]tmux.WindowConfig, 0, len(cfg.Tmux.Windows))
+			for _, window := range cfg.Tmux.Windows {
+				tmuxWindows = append(tmuxWindows, tmux.WindowConfig{
+					Name:       window.Name,
+					Command:    window.Command,
+					WorkingDir: window.WorkingDir,
+				})
+			}
+
+			// Use sanitized ticket for session name (no colons)
+			sessionID := ticketInfo.SessionID()
+
+			sessionManager := tmux.NewSessionManager(cfg.Tmux.SessionPrefix, tmuxWindows, verbose)
+			err = sessionManager.CreateSession(sessionID, worktreePath, notePath)
+			if err != nil {
+				// Don't fail the entire process if tmux session creation fails
+				if verbose {
+					fmt.Printf("Warning: Could not create tmux session: %v\n", err)
+				}
+				fmt.Println("Warning: Tmux session creation failed, but other steps completed successfully")
+			} else {
+				fmt.Println("Tmux session created successfully")
+			}
+
+			fmt.Printf("\nWorkflow initialization for %s completed successfully!\n", ticketInfo.Full)
+			fmt.Printf("Worktree: %s\n", worktreePath)
+			if notePath != "" {
+				fmt.Printf("Note: %s\n", notePath)
+			}
 		}
-	}
-
-	// Step 4: Update daily note
-	if verbose {
-		fmt.Println("Updating daily note...")
-	}
-	err = noteManager.UpdateDailyNote(ticketInfo.ID, ticketInfo.Type)
-	if err != nil {
-		// Don't fail if daily note update fails
-		if verbose {
-			fmt.Printf("Warning: Could not update daily note: %v\n", err)
-		}
-	} else {
-		fmt.Println("Daily note updated")
-	}
-
-	// Step 5: Create tmux session
-	if verbose {
-		fmt.Println("Creating tmux session...")
-	}
-
-	// Convert config windows to tmux windows
-	tmuxWindows := make([]tmux.WindowConfig, 0, len(cfg.Tmux.Windows))
-	for _, window := range cfg.Tmux.Windows {
-		tmuxWindows = append(tmuxWindows, tmux.WindowConfig{
-			Name:       window.Name,
-			Command:    window.Command,
-			WorkingDir: window.WorkingDir,
-		})
-	}
-
-	// Use sanitized ticket for session name (no colons)
-	sessionID := ticketInfo.SessionID()
-
-	sessionManager := tmux.NewSessionManager(cfg.Tmux.SessionPrefix, tmuxWindows, verbose)
-	err = sessionManager.CreateSession(sessionID, worktreePath, notePath)
-	if err != nil {
-		// Don't fail the entire process if tmux session creation fails
-		if verbose {
-			fmt.Printf("Warning: Could not create tmux session: %v\n", err)
-		}
-		fmt.Println("Warning: Tmux session creation failed, but other steps completed successfully")
-	} else {
-		fmt.Println("Tmux session created successfully")
-	}
-
-	fmt.Printf("\nWorkflow initialization for %s completed successfully!\n", ticketInfo.Full)
-	fmt.Printf("Worktree: %s\n", worktreePath)
-	if notePath != "" {
-		fmt.Printf("Note: %s\n", notePath)
 	}
 
 	return nil

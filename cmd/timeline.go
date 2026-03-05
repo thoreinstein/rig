@@ -15,7 +15,7 @@ import (
 	"thoreinstein.com/rig/pkg/config"
 	"thoreinstein.com/rig/pkg/events"
 	"thoreinstein.com/rig/pkg/history"
-	"thoreinstein.com/rig/pkg/notes"
+	"thoreinstein.com/rig/pkg/ticket"
 )
 
 // timelineCmd represents the timeline command
@@ -37,7 +37,7 @@ Examples:
   rig timeline proj-123 --min-duration 5s`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return runTimelineCommand(cmd.Context(), args[0])
+		return runTimelineCommand(cmd, args[0])
 	},
 }
 
@@ -71,7 +71,8 @@ func init() {
 	timelineCmd.Flags().BoolVar(&timelineShowDiffs, "show-diffs", false, "Show Dolt diffs between workflow checkpoints")
 }
 
-func runTimelineCommand(ctx context.Context, ticket string) error {
+func runTimelineCommand(cmd *cobra.Command, ticketID string) error {
+	ctx := cmd.Context()
 	// Load configuration
 	cfg, err := loadConfig()
 	if err != nil {
@@ -79,7 +80,7 @@ func runTimelineCommand(ctx context.Context, ticket string) error {
 	}
 
 	// Parse ticket
-	ticketInfo, err := parseTicket(ticket)
+	ticketInfo, err := ticket.ParseTicket(ticketID)
 	if err != nil {
 		return err
 	}
@@ -273,7 +274,7 @@ func runTimelineCommand(ctx context.Context, ticket string) error {
 		fmt.Printf("Timeline written to: %s\n", timelineOutput)
 	} else {
 		// Update ticket note
-		err = updateTicketNoteWithTimeline(cfg, ticketInfo, timeline)
+		err = updateTicketNoteWithTimeline(cmd, cfg, ticketInfo, timeline)
 		if err != nil {
 			return errors.Wrap(err, "failed to update ticket note")
 		}
@@ -380,10 +381,19 @@ func writeTimelineToFile(timeline, filename string) error {
 }
 
 // updateTicketNoteWithTimeline updates the ticket's note with the timeline
-func updateTicketNoteWithTimeline(cfg *config.Config, ticketInfo *TicketInfo, timeline string) error {
-	// Get note path using notes manager
-	notesMgr := notes.NewManager(cfg.Notes.Path, cfg.Notes.DailyDir, cfg.Notes.TemplateDir, verbose)
-	notePath := notesMgr.GetNotePath(ticketInfo.Type, ticketInfo.Full)
+func updateTicketNoteWithTimeline(cmd *cobra.Command, cfg *config.Config, ticketInfo *ticket.ParsedTicket, timeline string) error {
+	// Initialize knowledge provider
+	noteProvider, knowledgeCleanup, err := getKnowledgeProvider(cfg, "")
+	if err != nil {
+		return errors.Wrap(err, "failed to initialize knowledge provider")
+	}
+	defer knowledgeCleanup()
+
+	// Get note path using knowledge provider
+	notePath, err := noteProvider.GetNotePath(cmd.Context(), ticketInfo.Type, ticketInfo.Full)
+	if err != nil {
+		return errors.Wrap(err, "failed to get note path")
+	}
 
 	// Check if note exists
 	if _, err := os.Stat(notePath); os.IsNotExist(err) {

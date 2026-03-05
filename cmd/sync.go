@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/cockroachdb/errors"
 	"github.com/spf13/cobra"
@@ -12,9 +11,9 @@ import (
 	"thoreinstein.com/rig/pkg/config"
 	"thoreinstein.com/rig/pkg/jira"
 	"thoreinstein.com/rig/pkg/notes"
+	"thoreinstein.com/rig/pkg/ticket"
 )
 
-// syncCmd represents the sync command
 var syncCmd = &cobra.Command{
 	Use:   "sync [ticket]",
 	Short: "Sync and update notes",
@@ -32,14 +31,13 @@ Examples:
   rig sync --daily            # Update today's daily note`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		ticket := ""
+		ticketID := ""
 		if len(args) > 0 {
-			ticket = args[0]
+			ticketID = args[0]
 		}
-		return runSyncCommand(ticket)
+		return runSyncCommand(cmd, ticketID)
 	},
 }
-
 var (
 	syncJira  bool
 	syncDaily bool
@@ -54,7 +52,7 @@ func init() {
 	syncCmd.Flags().BoolVar(&syncForce, "force", false, "Force update even if note was recently modified")
 }
 
-func runSyncCommand(ticket string) error {
+func runSyncCommand(cmd *cobra.Command, ticketID string) error {
 	// Load configuration
 	cfg, err := loadConfig()
 	if err != nil {
@@ -67,16 +65,16 @@ func runSyncCommand(ticket string) error {
 	}
 
 	// Handle ticket sync
-	if ticket == "" {
-		return errors.New("ticket required (or use --daily flag)")
+	if ticketID == "" {
+		return errors.New("ticket required (could not detect from branch)")
 	}
 
-	return syncTicketNote(cfg, ticket)
+	return syncTicketNote(cmd, cfg, ticketID)
 }
 
-func syncTicketNote(cfg *config.Config, ticket string) error {
+func syncTicketNote(cmd *cobra.Command, cfg *config.Config, ticketID string) error {
 	// Parse ticket
-	ticketInfo, err := parseTicket(ticket)
+	ticketInfo, err := ticket.ParseTicket(ticketID)
 	if err != nil {
 		return err
 	}
@@ -85,16 +83,19 @@ func syncTicketNote(cfg *config.Config, ticket string) error {
 		fmt.Printf("Syncing note for ticket: %s\n", ticketInfo.Full)
 	}
 
-	// Initialize note manager
-	noteManager := notes.NewManager(
-		cfg.Notes.Path,
-		cfg.Notes.DailyDir,
-		cfg.Notes.TemplateDir,
-		verbose,
-	)
+	// Initialize knowledge provider
+	projectPath, _ := os.Getwd()
+	noteProvider, knowledgeCleanup, err := getKnowledgeProvider(cfg, projectPath)
+	if err != nil {
+		return errors.Wrap(err, "failed to initialize knowledge provider")
+	}
+	defer knowledgeCleanup()
 
 	// Get note path
-	notePath := noteManager.GetNotePath(ticketInfo.Type, ticketInfo.Full)
+	notePath, err := noteProvider.GetNotePath(cmd.Context(), ticketInfo.Type, ticketInfo.Full)
+	if err != nil {
+		return errors.Wrap(err, "failed to get note path")
+	}
 
 	// Check if note exists
 	if _, err := os.Stat(notePath); os.IsNotExist(err) {
@@ -115,7 +116,7 @@ func syncTicketNote(cfg *config.Config, ticket string) error {
 			jiraClient, err := jira.NewJiraClient(&cfg.Jira, verbose)
 			if err != nil {
 				if verbose {
-					fmt.Printf("Warning: Invalid JIRA CLI command: %v\n", err)
+					fmt.Printf("Warning: Could not initialize JIRA client: %v\n", err)
 				}
 			} else {
 				jiraInfo, err := jiraClient.FetchTicketDetails(ticketInfo.Full)
@@ -141,7 +142,7 @@ func syncTicketNote(cfg *config.Config, ticket string) error {
 		fmt.Println("Updating daily note entry...")
 	}
 
-	err = noteManager.UpdateDailyNote(ticketInfo.Full, ticketInfo.Type)
+	err = noteProvider.UpdateDailyNote(cmd.Context(), ticketInfo.Full, ticketInfo.Type)
 	if err != nil {
 		if verbose {
 			fmt.Printf("Warning: Could not update daily note: %v\n", err)
@@ -173,11 +174,7 @@ func syncDailyNote(cfg *config.Config) error {
 	)
 
 	// For now, just verify the daily note exists
-	today := time.Now().Format("2006-01-02")
 	dailyNotePath := noteManager.GetDailyNotePath()
-
-	// Use the noteManager for any future daily note operations
-	_ = today
 
 	if _, err := os.Stat(dailyNotePath); os.IsNotExist(err) {
 		fmt.Printf("Daily note not found: %s\n", dailyNotePath)

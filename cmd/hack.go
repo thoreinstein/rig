@@ -8,7 +8,7 @@ import (
 	"github.com/cockroachdb/errors"
 	"github.com/spf13/cobra"
 
-	"thoreinstein.com/rig/pkg/notes"
+	"thoreinstein.com/rig/pkg/knowledge"
 	"thoreinstein.com/rig/pkg/tmux"
 )
 
@@ -32,7 +32,7 @@ Examples:
   rig hack experiment-auth --no-notes`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return runHackCommand(args[0])
+		return runHackCommand(cmd, args[0])
 	},
 }
 
@@ -57,7 +57,7 @@ func validateHackName(name string) error {
 	return nil
 }
 
-func runHackCommand(name string) error {
+func runHackCommand(cmd *cobra.Command, name string) error {
 	// Validate hack name first
 	if err := validateHackName(name); err != nil {
 		return err
@@ -117,12 +117,11 @@ func runHackCommand(name string) error {
 	fmt.Printf("Git worktree created at: %s\n", worktreePath)
 
 	// Step 2: Create note (unless --no-notes flag is set)
-	noteManager := notes.NewManager(
-		cfg.Notes.Path,
-		cfg.Notes.DailyDir,
-		cfg.Notes.TemplateDir,
-		verbose,
-	)
+	noteProvider, knowledgeCleanup, err := getKnowledgeProvider(cfg, projectPath)
+	if err != nil {
+		return errors.Wrap(err, "failed to initialize knowledge provider")
+	}
+	defer knowledgeCleanup()
 
 	var notePath string
 	if !hackNoNotes {
@@ -130,7 +129,7 @@ func runHackCommand(name string) error {
 			fmt.Println("Creating note...")
 		}
 
-		noteData := notes.TicketData{
+		noteData := knowledge.NoteData{
 			Ticket:       name,
 			TicketType:   "hack",
 			RepoName:     repoName,
@@ -138,7 +137,7 @@ func runHackCommand(name string) error {
 			WorktreePath: worktreePath,
 		}
 
-		result, err := noteManager.CreateTicketNote(noteData)
+		result, err := noteProvider.CreateTicketNote(cmd.Context(), &noteData)
 		if err != nil {
 			// Don't fail if note creation fails
 			if verbose {
@@ -158,7 +157,7 @@ func runHackCommand(name string) error {
 	if verbose {
 		fmt.Println("Updating daily note...")
 	}
-	err = noteManager.UpdateDailyNote(name, "hack")
+	err = noteProvider.UpdateDailyNote(cmd.Context(), name, "hack")
 	if err != nil {
 		// Don't fail if daily note update fails
 		if verbose {

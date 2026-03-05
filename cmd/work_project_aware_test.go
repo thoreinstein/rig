@@ -6,7 +6,10 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+
+	"thoreinstein.com/rig/pkg/ticket"
 )
 
 func TestParseTicketWithProject(t *testing.T) {
@@ -79,33 +82,33 @@ func TestParseTicketWithProject(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := parseTicket(tt.ticket)
+			result, err := ticket.ParseTicket(tt.ticket)
 
 			if tt.expectError {
 				if err == nil {
-					t.Errorf("parseTicket(%q) expected error, got nil", tt.ticket)
+					t.Errorf("ticket.ParseTicket(%q) expected error, got nil", tt.ticket)
 				}
 				return
 			}
 
 			if err != nil {
-				t.Fatalf("parseTicket(%q) unexpected error: %v", tt.ticket, err)
+				t.Fatalf("ticket.ParseTicket(%q) unexpected error: %v", tt.ticket, err)
 			}
 
 			if result.Full != tt.wantFull {
-				t.Errorf("parseTicket(%q).Full = %q, want %q", tt.ticket, result.Full, tt.wantFull)
+				t.Errorf("ticket.ParseTicket(%q).Full = %q, want %q", tt.ticket, result.Full, tt.wantFull)
 			}
 			if result.Project != tt.wantProject {
-				t.Errorf("parseTicket(%q).Project = %q, want %q", tt.ticket, result.Project, tt.wantProject)
+				t.Errorf("ticket.ParseTicket(%q).Project = %q, want %q", tt.ticket, result.Project, tt.wantProject)
 			}
 			if result.ID != tt.wantID {
-				t.Errorf("parseTicket(%q).ID = %q, want %q", tt.ticket, result.ID, tt.wantID)
+				t.Errorf("ticket.ParseTicket(%q).ID = %q, want %q", tt.ticket, result.ID, tt.wantID)
 			}
 			if result.Type != tt.wantType {
-				t.Errorf("parseTicket(%q).Type = %q, want %q", tt.ticket, result.Type, tt.wantType)
+				t.Errorf("ticket.ParseTicket(%q).Type = %q, want %q", tt.ticket, result.Type, tt.wantType)
 			}
 			if result.Number != tt.wantNumber {
-				t.Errorf("parseTicket(%q).Number = %q, want %q", tt.ticket, result.Number, tt.wantNumber)
+				t.Errorf("ticket.ParseTicket(%q).Number = %q, want %q", tt.ticket, result.Number, tt.wantNumber)
 			}
 		})
 	}
@@ -164,7 +167,7 @@ func TestRunWorkCommand_ProjectAware(t *testing.T) {
 	// Run from a neutral directory
 	t.Chdir(tmpDir)
 
-	err := runWorkCommand(t.Context(), "repo1:proj-123")
+	err := runWorkCommand(&cobra.Command{}, "repo1:proj-123")
 	if err != nil {
 		t.Logf("runWorkCommand warning (likely tmux): %v", err)
 	}

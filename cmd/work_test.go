@@ -8,7 +8,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+
+	"thoreinstein.com/rig/pkg/ticket"
 )
 
 func TestParseTicket(t *testing.T) {
@@ -158,35 +161,35 @@ func TestParseTicket(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := parseTicket(tt.ticket)
+			result, err := ticket.ParseTicket(tt.ticket)
 
 			if tt.expectError {
 				if err == nil {
-					t.Errorf("parseTicket(%q) expected error, got nil", tt.ticket)
+					t.Errorf("ticket.ParseTicket(%q) expected error, got nil", tt.ticket)
 				}
 				return
 			}
 
 			if err != nil {
-				t.Fatalf("parseTicket(%q) unexpected error: %v", tt.ticket, err)
+				t.Fatalf("ticket.ParseTicket(%q) unexpected error: %v", tt.ticket, err)
 			}
 
 			if result.Full != tt.wantFull {
-				t.Errorf("parseTicket(%q).Full = %q, want %q", tt.ticket, result.Full, tt.wantFull)
+				t.Errorf("ticket.ParseTicket(%q).Full = %q, want %q", tt.ticket, result.Full, tt.wantFull)
 			}
 			if result.Type != tt.wantType {
-				t.Errorf("parseTicket(%q).Type = %q, want %q", tt.ticket, result.Type, tt.wantType)
+				t.Errorf("ticket.ParseTicket(%q).Type = %q, want %q", tt.ticket, result.Type, tt.wantType)
 			}
 			if result.Number != tt.wantNumber {
-				t.Errorf("parseTicket(%q).Number = %q, want %q", tt.ticket, result.Number, tt.wantNumber)
+				t.Errorf("ticket.ParseTicket(%q).Number = %q, want %q", tt.ticket, result.Number, tt.wantNumber)
 			}
 		})
 	}
 }
 
 func TestTicketInfo(t *testing.T) {
-	// Test the TicketInfo struct
-	info := &TicketInfo{
+	// Test the ticket.ParsedTicket struct
+	info := &ticket.ParsedTicket{
 		Full:   "FRAAS-123",
 		Type:   "fraas",
 		Number: "123",
@@ -277,13 +280,14 @@ func TestTicketTypeNormalization(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := parseTicket(tt.ticket)
+			result, err := ticket.ParseTicket(tt.ticket)
+
 			if err != nil {
-				t.Fatalf("parseTicket(%q) error: %v", tt.ticket, err)
+				t.Fatalf("ticket.ParseTicket(%q) error: %v", tt.ticket, err)
 			}
 
 			if result.Type != tt.expectedType {
-				t.Errorf("parseTicket(%q).Type = %q, want %q", tt.ticket, result.Type, tt.expectedType)
+				t.Errorf("ticket.ParseTicket(%q).Type = %q, want %q", tt.ticket, result.Type, tt.expectedType)
 			}
 		})
 	}
@@ -315,13 +319,14 @@ func TestTicketFullPreservation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := parseTicket(tt.ticket)
+			result, err := ticket.ParseTicket(tt.ticket)
+
 			if err != nil {
-				t.Fatalf("parseTicket(%q) error: %v", tt.ticket, err)
+				t.Fatalf("ticket.ParseTicket(%q) error: %v", tt.ticket, err)
 			}
 
 			if result.Full != tt.expectedFull {
-				t.Errorf("parseTicket(%q).Full = %q, want %q", tt.ticket, result.Full, tt.expectedFull)
+				t.Errorf("ticket.ParseTicket(%q).Full = %q, want %q", tt.ticket, result.Full, tt.expectedFull)
 			}
 		})
 	}
@@ -329,7 +334,8 @@ func TestTicketFullPreservation(t *testing.T) {
 
 func TestParseTicketErrorMessages(t *testing.T) {
 	// Test that error messages are helpful
-	_, err := parseTicket("invalid")
+	_, err := ticket.ParseTicket("invalid")
+
 	if err == nil {
 		t.Fatal("Expected error for invalid ticket")
 	}
@@ -431,7 +437,7 @@ func TestRunWorkCommand_CreatesWorktreeAndNote(t *testing.T) {
 	defer func() { projectFlag = "" }()
 
 	// Run the work command
-	err := runWorkCommand(t.Context(), "proj-123")
+	err := runWorkCommand(&cobra.Command{}, "proj-123")
 
 	// The command may fail on tmux session creation, but should create worktree and note
 	// Check for worktree creation regardless of tmux status
@@ -530,7 +536,7 @@ func TestRunWorkCommand_InvalidTicketFormat(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := runWorkCommand(t.Context(), tt.ticket)
+			err := runWorkCommand(&cobra.Command{}, tt.ticket)
 			if err == nil {
 				t.Errorf("runWorkCommand(%q) should have returned an error", tt.ticket)
 				return
@@ -558,7 +564,7 @@ func TestRunWorkCommand_UpdatesDailyNote(t *testing.T) {
 	defer func() { projectFlag = "" }()
 
 	// Run the work command
-	_ = runWorkCommand(t.Context(), "ops-456")
+	_ = runWorkCommand(&cobra.Command{}, "ops-456")
 
 	// Verify daily note was created/updated
 	today := time.Now().Format("2006-01-02")
@@ -601,10 +607,10 @@ func TestRunWorkCommand_IdempotentWorktree(t *testing.T) {
 	defer func() { projectFlag = "" }()
 
 	// Run the work command twice
-	_ = runWorkCommand(t.Context(), "test-789")
+	_ = runWorkCommand(&cobra.Command{}, "test-789")
 
 	// Second call should not fail (worktree already exists)
-	_ = runWorkCommand(t.Context(), "test-789")
+	_ = runWorkCommand(&cobra.Command{}, "test-789")
 
 	worktreePath := filepath.Join(repoDir, "test", "test-789")
 	if _, statErr := os.Stat(worktreePath); os.IsNotExist(statErr) {
@@ -656,7 +662,7 @@ func TestRunWorkCommand_DifferentTicketTypes(t *testing.T) {
 			projectFlag = repoDir
 			defer func() { projectFlag = "" }()
 
-			_ = runWorkCommand(t.Context(), tt.ticket)
+			_ = runWorkCommand(&cobra.Command{}, tt.ticket)
 
 			// Worktree should be under the ticket type directory
 			worktreePath := filepath.Join(repoDir, tt.expectedType, tt.ticket)
@@ -691,7 +697,7 @@ func TestRunWorkCommand_JiraDisabled(t *testing.T) {
 
 	// Run the work command
 	// should succeed without JIRA
-	_ = runWorkCommand(t.Context(), "nojira-100")
+	_ = runWorkCommand(&cobra.Command{}, "nojira-100")
 
 	// Worktree should still be created
 	worktreePath := filepath.Join(repoDir, "nojira", "nojira-100")
@@ -732,7 +738,7 @@ func TestRunWorkCommand_PreservesOriginalTicketCase(t *testing.T) {
 	defer func() { projectFlag = "" }()
 
 	// Use uppercase ticket
-	_ = runWorkCommand(t.Context(), "FRAAS-999")
+	_ = runWorkCommand(&cobra.Command{}, "FRAAS-999")
 
 	// Note filename should preserve original case
 	notePath := filepath.Join(notesDir, "fraas", "FRAAS-999.md")
