@@ -248,8 +248,14 @@ func (l *LayeredLoader) Load() (*Config, error) {
 		return nil, errors.Wrap(err, "config validation failed")
 	}
 
-	// Sync local viper back to global viper for the rest of the application
+	// Sync local viper back to global viper for the rest of the application.
 	// This ensures that existing calls to viper.Get() work as expected.
+	//
+	// NOTE: The global viper state intentionally contains unresolved
+	// `keychain://` URIs under `plugins.*` keys. Plugin configurations are
+	// NOT hydrated here — plugins must use the host's SecretService (via
+	// gRPC) to resolve secrets at runtime. This prevents accidental leakage
+	// of plaintext secrets through the handshake config JSON.
 	if !l.SkipGlobalSync {
 		if err := viper.MergeConfigMap(v.AllSettings()); err != nil {
 			return nil, errors.Wrap(err, "failed to sync to global viper")

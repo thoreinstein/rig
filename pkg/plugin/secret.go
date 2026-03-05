@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"context"
+	"strings"
 	"sync"
 
 	"google.golang.org/grpc/codes"
@@ -10,8 +11,10 @@ import (
 	apiv1 "thoreinstein.com/rig/pkg/api/v1"
 )
 
-// SecretResolver is a function that resolves a configuration key to its value.
-type SecretResolver func(key string) (string, error)
+// SecretResolver resolves a secret for a given plugin. The pluginName and
+// secretKey are validated and passed separately to prevent dot-injection
+// attacks where a crafted key could escape the plugin's secret scope.
+type SecretResolver func(pluginName, secretKey string) (string, error)
 
 // HostSecretProxy implements apiv1.SecretServiceServer.
 type HostSecretProxy struct {
@@ -53,18 +56,14 @@ func (s *HostSecretProxy) GetSecret(ctx context.Context, req *apiv1.GetSecretReq
 		return nil, status.Errorf(codes.Unauthenticated, "invalid secret token")
 	}
 
-	// Scoping Logic:
-	// A plugin 'p' can only access secrets that are either:
-	// 1. In a global 'secrets' section (not yet implemented, but could be).
-	// 2. In its own specific config: 'plugins.p.secrets.K'.
-	// We'll start with (2).
+	// Validate the requested key to prevent dot-injection, null bytes, and
+	// path traversal. A well-formed secret key is a simple identifier.
+	if req.Key == "" ||
+		strings.ContainsAny(req.Key, ".\x00/\\") {
+		return nil, status.Errorf(codes.InvalidArgument, "invalid secret key")
+	}
 
-	// The request key 'K' is interpreted as a relative key within the plugin's secrets.
-	// So if plugin 'jira' asks for 'token', we look up 'plugins.jira.secrets.token'.
-	// This ensures plugins can't peek into each other's configuration.
-	scopedKey := "plugins." + pluginName + ".secrets." + req.Key
-
-	val, err := s.resolver(scopedKey)
+	val, err := s.resolver(pluginName, req.Key)
 	if err != nil {
 		// Anti-enumeration: return the same error for missing or denied keys.
 		return nil, status.Errorf(codes.NotFound, "secret not available")

@@ -8,7 +8,6 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
@@ -119,16 +118,9 @@ func NewManager(executor pluginExecutor, scanner *Scanner, rigVersion string, co
 	}
 
 	// Host secret proxy uses the config provider to resolve secrets.
-	// Since configProvider returns the full plugin JSON, we extract the 'secrets' section.
-	resolver := func(key string) (string, error) {
-		// key is "plugins.<pluginName>.secrets.<secretKey>"
-		parts := strings.Split(key, ".")
-		if len(parts) < 4 {
-			return "", fmt.Errorf("invalid secret key format: %s", key)
-		}
-		pluginName := parts[1]
-		secretKey := parts[3]
-
+	// The resolver receives pluginName and secretKey as separate, validated
+	// parameters — no dot-delimited key parsing required.
+	resolver := func(pluginName, secretKey string) (string, error) {
 		if m.configProvider == nil {
 			return "", errors.New("no config provider available")
 		}
@@ -154,7 +146,8 @@ func NewManager(executor pluginExecutor, scanner *Scanner, rigVersion string, co
 		}
 
 		// Resolve keychain URI if present using the shared config logic.
-		resolved, err := config.ResolveValue(val, nil, key, false)
+		scopedKey := "plugins." + pluginName + ".secrets." + secretKey
+		resolved, err := config.ResolveValue(val, nil, scopedKey, false)
 		if err != nil {
 			return "", err
 		}
@@ -483,6 +476,7 @@ func (m *Manager) getOrStartPlugin(ctx context.Context, name string) (*Plugin, e
 
 	// Prepare the base client and handshake
 	if err := m.executor.PrepareClient(target); err != nil {
+		m.secretProxy.UnregisterPlugin(target.secretToken)
 		_ = m.executor.Stop(target)
 		return nil, errors.Wrapf(err, "failed to prepare client for plugin %q", name)
 	}
@@ -502,6 +496,7 @@ func (m *Manager) getOrStartPlugin(ctx context.Context, name string) (*Plugin, e
 
 	// Perform handshake with host version and API contract version
 	if err := m.executor.Handshake(ctx, target, m.rigVersion, APIVersion, configJSON); err != nil {
+		m.secretProxy.UnregisterPlugin(target.secretToken)
 		_ = m.executor.Stop(target)
 		return nil, errors.Wrapf(err, "handshake failed for plugin %q", name)
 	}
@@ -530,6 +525,7 @@ func (m *Manager) StopAll() {
 	defer m.mu.Unlock()
 
 	for _, p := range m.plugins {
+		m.secretProxy.UnregisterPlugin(p.secretToken)
 		_ = m.executor.Stop(p)
 	}
 	m.plugins = make(map[string]*Plugin)

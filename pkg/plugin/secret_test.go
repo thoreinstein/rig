@@ -11,13 +11,18 @@ import (
 )
 
 func TestGetSecret(t *testing.T) {
-	mockConfig := map[string]string{
-		"plugins.jira.secrets.token": "jira-secret",
-		"plugins.beads.secrets.api":  "beads-secret",
+	// Mock secrets indexed by pluginName -> secretKey -> value.
+	mockSecrets := map[string]map[string]string{
+		"jira":  {"token": "jira-secret"},
+		"beads": {"api": "beads-secret"},
 	}
 
-	resolver := func(key string) (string, error) {
-		val, ok := mockConfig[key]
+	resolver := func(pluginName, secretKey string) (string, error) {
+		secrets, ok := mockSecrets[pluginName]
+		if !ok {
+			return "", errors.New("plugin not found")
+		}
+		val, ok := secrets[secretKey]
 		if !ok {
 			return "", errors.New("not found")
 		}
@@ -71,6 +76,34 @@ func TestGetSecret(t *testing.T) {
 			wantCode: codes.NotFound,
 			wantMsg:  "secret not available",
 		},
+		{
+			name:     "dotted key is rejected",
+			key:      "beads.secrets.api",
+			token:    jiraToken,
+			wantCode: codes.InvalidArgument,
+			wantMsg:  "invalid secret key",
+		},
+		{
+			name:     "empty key is rejected",
+			key:      "",
+			token:    jiraToken,
+			wantCode: codes.InvalidArgument,
+			wantMsg:  "invalid secret key",
+		},
+		{
+			name:     "null byte in key is rejected",
+			key:      "token\x00other",
+			token:    jiraToken,
+			wantCode: codes.InvalidArgument,
+			wantMsg:  "invalid secret key",
+		},
+		{
+			name:     "path separator in key is rejected",
+			key:      "../etc/passwd",
+			token:    jiraToken,
+			wantCode: codes.InvalidArgument,
+			wantMsg:  "invalid secret key",
+		},
 	}
 
 	for _, tc := range tests {
@@ -113,7 +146,7 @@ func TestGetSecret(t *testing.T) {
 }
 
 func TestGetSecret_Unregister(t *testing.T) {
-	resolver := func(key string) (string, error) { return "val", nil }
+	resolver := func(_, _ string) (string, error) { return "val", nil }
 	proxy := NewHostSecretProxy(resolver)
 	token := "tok"
 	proxy.RegisterPlugin(token, "p")

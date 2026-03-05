@@ -34,6 +34,7 @@
   - `pkg/github/`: GitHub API and CLI client.
   - `pkg/bootstrap/`: Heavy CLI initialization and bootstrap logic.
   - `pkg/orchestration/`: Dolt-backed workflow persistence and DAG orchestration.
+  - `pkg/knowledge/`: Unified interface for notes, Obsidian, and plugins.
 - `main.go`: Application entry point.
 - `project.yaml`: Project metadata and governance.
 
@@ -86,13 +87,15 @@ Rig uses a TOML configuration file, typically located at `~/.config/rig/config.t
   - ALWAYS use table-driven tests for all Go logic.
   - Prefer table-driven tests for comprehensive edge case coverage.
   - Use interfaces for mocking external dependencies (Git, JIRA, Tmux, Plugin Executors).
+  - **gRPC Integration Testing:** New plugin capabilities MUST include a full-loop integration test using `testsdk`. Unit tests verify logic, but integration tests verify the gRPC wiring and service registration.
 - **Architecture:**
   - Keep CLI logic in `cmd/` minimal (thin wrappers).
   - Delegate orchestration and business logic to `pkg/`.
   - Move heavy bootstrap and initialization logic to `pkg/bootstrap`.
-  - **Unified Provider Pattern:** Core integrations (VCS, Ticketing, Knowledge) must follow a tiered provider architecture: `Provider` interface -> `LocalProvider` (direct logic) -> `PluginProvider` (gRPC client). This ensures zero-IPC for local development while enabling isolated plugin-based backends.
+  - **Tiered Provider Pattern:** Core integrations (VCS, Ticketing, Knowledge) must follow a tiered provider architecture: `Provider` interface -> `LocalProvider` (direct logic) -> `PluginProvider` (gRPC client). This ensures zero-IPC for local development while enabling isolated plugin-based backends.
   - **Secret Proxy (Host-as-Server):** Isolated plugins MUST NOT have direct access to host environment variables or keychains. Sensitive API tokens (like `JIRA_TOKEN`) must be requested via the `SecretService` gRPC proxy on the host (`RIG_HOST_ENDPOINT`), which enforces a strict key allow-list.
   - **Configurable Plugin Handshake:** To maintain seamless configuration fallbacks, plugins should implement the `sdk.Configurable` interface. The host's `config_json` is automatically delivered during the gRPC Handshake, allowing plugins to prioritize env-based secrets from the proxy while falling back to static config for non-sensitive fields (URLs, emails).
+  - **Provider-Side Template Rendering:** Responsibility for rendering notes and templates belongs to the `Provider`. The CLI passes rich metadata (`NoteMetadata`) to the provider, allowing backends (especially plugins) to use specialized formats or logic without host awareness.
 - **Linting:** Strict mode using `golangci-lint`.
 - **Pre-commit Mandate:** NEVER push changes without running the full pre-commit suite, even if the automatic git hook fails to trigger. Local validation is the primary guardrail.
 
@@ -181,6 +184,7 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 - **Stale Git Context in Hooks Trap**: Environment variables injected by `pre-commit` (e.g., `GIT_INDEX_FILE`) can interfere with unit tests that create temporary git repositories. Always unset `GIT_*` variables in test hooks.
 - **Host Flag Shadowing**: In dynamic CLIs, bootstrap parsers MUST stop scanning at the first non-flag token or `--` to avoid "stealing" arguments from subcommands. Host-only flags must be strictly filtered before forwarding to sub-processes.
 - **Circular Dependency Migration Trap:** Extracting existing logic (e.g., `pkg/git`) into abstractions (e.g., `pkg/vcs`) often triggers import cycles if shared types remain in the core. **Mitigation:** Extract shared DTOs, regexes, and utility functions into a dedicated "Leaf Package" (e.g., `pkg/vcs/url`) with zero dependencies on either side.
+- **Package Shadowing in CLI Commands Trap:** Moving shared logic into a package with a common name (e.g., `pkg/ticket`) can lead to package shadowing if local variables in `cmd` use the same name (e.g., `ticket := "PROJ-123"`). This makes package-level functions inaccessible. **Mitigation:** Rename local CLI variables to be more specific (e.g., `ticketID`).
 
 ## API & Plugin Architecture (gRPC)
 
@@ -236,12 +240,13 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 - **Fail-Fast Shutdown Protocol**: UI request loops must monitor both the request context AND the global reader's shutdown signal (`done` channel) to prevent deadlocks during process exit.
 
 ### Plugin SDK Conventions
-- **Type-Assertion Registration Pattern**: Use Go type assertions in the SDK's `Serve` or `Register` logic to automatically discover and register supported capability handlers (`AssistantHandler`, `CommandHandler`) from a base `PluginInfo` implementation.
+- **Type-Assertion Registration Pattern:** Use Go type assertions in the SDK's `Serve` or `Register` logic to automatically discover and register supported capability handlers (`AssistantHandler`, `CommandHandler`, `KnowledgeHandler`) from a base `PluginInfo` implementation.
 - **Double-Resolver Addressing**: Use `passthrough://bufnet` (or similar) when using `bufconn` in tests to ensure cross-platform compatibility with gRPC resolvers (especially on Darwin).
 
 ### Resiliency Patterns
 - **Lying State Resiliency**: Treat external state artifacts (like UDS socket files) as hints, not absolute truth. Respect the full timeout loop for daemon connection attempts even if a (potentially stale) socket file exists.
 - **Daemon-CLI Scope Alignment**: Daemon plugin discovery must match CLI discovery scope. If a daemon cannot find a plugin (e.g., due to being started in a different directory), it MUST return a `codes.NotFound` gRPC error to trigger the CLI's fallback to direct execution.
+- **Transparent Initialization Warnings:** Non-critical subsystem failures (like a misconfigured knowledge provider) should always surface a `Warning:` to the user rather than failing silently or crashing. This maintains UX transparency without blocking the primary workflow.
 
 ### Hierarchical Configuration System (V1)
 - **5-Tier Precedence**: Settings resolve in strict order: **Flags > Env > Project Recursive > User > Defaults**.

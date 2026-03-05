@@ -43,7 +43,7 @@ func StoreConfigValue(key, value string) error {
 	} else {
 		m = make(map[string]interface{})
 		// If file doesn't exist, ensure directory exists
-		if err := os.MkdirAll(filepath.Dir(configFile), 0755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(configFile), 0700); err != nil {
 			return errors.Wrapf(err, "failed to create config directory %q", filepath.Dir(configFile))
 		}
 	}
