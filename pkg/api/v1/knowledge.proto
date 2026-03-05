@@ -14,6 +14,9 @@ service KnowledgeService {
 
   // GetNotePath retrieves the path for a ticket note without creating it.
   rpc GetNotePath(GetNotePathRequest) returns (GetNotePathResponse);
+
+  // GetDailyNotePath retrieves the path for today's daily note.
+  rpc GetDailyNotePath(GetDailyNotePathRequest) returns (GetDailyNotePathResponse);
 }
 
 // NoteMetadata carries all information needed to render a ticket note.
@@ -54,5 +57,12 @@ message GetNotePathRequest {
 }
 
 message GetNotePathResponse {
+  string path = 1;
+}
+
+message GetDailyNotePathRequest {
+}
+
+message GetDailyNotePathResponse {
   string path = 1;
 }

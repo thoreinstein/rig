@@ -426,6 +426,86 @@ func (x *GetNotePathResponse) GetPath() string {
 	return ""
 }
 
+type GetDailyNotePathRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetDailyNotePathRequest) Reset() {
+	*x = GetDailyNotePathRequest{}
+	mi := &file_pkg_api_v1_knowledge_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetDailyNotePathRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetDailyNotePathRequest) ProtoMessage() {}
+
+func (x *GetDailyNotePathRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_api_v1_knowledge_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetDailyNotePathRequest.ProtoReflect.Descriptor instead.
+func (*GetDailyNotePathRequest) Descriptor() ([]byte, []int) {
+	return file_pkg_api_v1_knowledge_proto_rawDescGZIP(), []int{7}
+}
+
+type GetDailyNotePathResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Path          string                 `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetDailyNotePathResponse) Reset() {
+	*x = GetDailyNotePathResponse{}
+	mi := &file_pkg_api_v1_knowledge_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetDailyNotePathResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetDailyNotePathResponse) ProtoMessage() {}
+
+func (x *GetDailyNotePathResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_api_v1_knowledge_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetDailyNotePathResponse.ProtoReflect.Descriptor instead.
+func (*GetDailyNotePathResponse) Descriptor() ([]byte, []int) {
+	return file_pkg_api_v1_knowledge_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *GetDailyNotePathResponse) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
 var File_pkg_api_v1_knowledge_proto protoreflect.FileDescriptor
 
 const file_pkg_api_v1_knowledge_proto_rawDesc = "" +
@@ -460,11 +540,15 @@ const file_pkg_api_v1_knowledge_proto_rawDesc = "" +
 	"\vticket_type\x18\x02 \x01(\tR\n" +
 	"ticketType\")\n" +
 	"\x13GetNotePathResponse\x12\x12\n" +
-	"\x04path\x18\x01 \x01(\tR\x04path2\x85\x02\n" +
+	"\x04path\x18\x01 \x01(\tR\x04path\"\x19\n" +
+	"\x17GetDailyNotePathRequest\".\n" +
+	"\x18GetDailyNotePathResponse\x12\x12\n" +
+	"\x04path\x18\x01 \x01(\tR\x04path2\xdc\x02\n" +
 	"\x10KnowledgeService\x12U\n" +
 	"\x10CreateTicketNote\x12\x1f.rig.v1.CreateTicketNoteRequest\x1a .rig.v1.CreateTicketNoteResponse\x12R\n" +
 	"\x0fUpdateDailyNote\x12\x1e.rig.v1.UpdateDailyNoteRequest\x1a\x1f.rig.v1.UpdateDailyNoteResponse\x12F\n" +
-	"\vGetNotePath\x12\x1a.rig.v1.GetNotePathRequest\x1a\x1b.rig.v1.GetNotePathResponseB'Z%thoreinstein.com/rig/pkg/api/v1;apiv1b\x06proto3"
+	"\vGetNotePath\x12\x1a.rig.v1.GetNotePathRequest\x1a\x1b.rig.v1.GetNotePathResponse\x12U\n" +
+	"\x10GetDailyNotePath\x12\x1f.rig.v1.GetDailyNotePathRequest\x1a .rig.v1.GetDailyNotePathResponseB'Z%thoreinstein.com/rig/pkg/api/v1;apiv1b\x06proto3"
 
 var (
 	file_pkg_api_v1_knowledge_proto_rawDescOnce sync.Once
@@ -478,7 +562,7 @@ func file_pkg_api_v1_knowledge_proto_rawDescGZIP() []byte {
 	return file_pkg_api_v1_knowledge_proto_rawDescData
 }
 
-var file_pkg_api_v1_knowledge_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_pkg_api_v1_knowledge_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_pkg_api_v1_knowledge_proto_goTypes = []any{
 	(*NoteMetadata)(nil),             // 0: rig.v1.NoteMetadata
 	(*CreateTicketNoteRequest)(nil),  // 1: rig.v1.CreateTicketNoteRequest
@@ -487,17 +571,21 @@ var file_pkg_api_v1_knowledge_proto_goTypes = []any{
 	(*UpdateDailyNoteResponse)(nil),  // 4: rig.v1.UpdateDailyNoteResponse
 	(*GetNotePathRequest)(nil),       // 5: rig.v1.GetNotePathRequest
 	(*GetNotePathResponse)(nil),      // 6: rig.v1.GetNotePathResponse
+	(*GetDailyNotePathRequest)(nil),  // 7: rig.v1.GetDailyNotePathRequest
+	(*GetDailyNotePathResponse)(nil), // 8: rig.v1.GetDailyNotePathResponse
 }
 var file_pkg_api_v1_knowledge_proto_depIdxs = []int32{
 	0, // 0: rig.v1.CreateTicketNoteRequest.metadata:type_name -> rig.v1.NoteMetadata
 	1, // 1: rig.v1.KnowledgeService.CreateTicketNote:input_type -> rig.v1.CreateTicketNoteRequest
 	3, // 2: rig.v1.KnowledgeService.UpdateDailyNote:input_type -> rig.v1.UpdateDailyNoteRequest
 	5, // 3: rig.v1.KnowledgeService.GetNotePath:input_type -> rig.v1.GetNotePathRequest
-	2, // 4: rig.v1.KnowledgeService.CreateTicketNote:output_type -> rig.v1.CreateTicketNoteResponse
-	4, // 5: rig.v1.KnowledgeService.UpdateDailyNote:output_type -> rig.v1.UpdateDailyNoteResponse
-	6, // 6: rig.v1.KnowledgeService.GetNotePath:output_type -> rig.v1.GetNotePathResponse
-	4, // [4:7] is the sub-list for method output_type
-	1, // [1:4] is the sub-list for method input_type
+	7, // 4: rig.v1.KnowledgeService.GetDailyNotePath:input_type -> rig.v1.GetDailyNotePathRequest
+	2, // 5: rig.v1.KnowledgeService.CreateTicketNote:output_type -> rig.v1.CreateTicketNoteResponse
+	4, // 6: rig.v1.KnowledgeService.UpdateDailyNote:output_type -> rig.v1.UpdateDailyNoteResponse
+	6, // 7: rig.v1.KnowledgeService.GetNotePath:output_type -> rig.v1.GetNotePathResponse
+	8, // 8: rig.v1.KnowledgeService.GetDailyNotePath:output_type -> rig.v1.GetDailyNotePathResponse
+	5, // [5:9] is the sub-list for method output_type
+	1, // [1:5] is the sub-list for method input_type
 	1, // [1:1] is the sub-list for extension type_name
 	1, // [1:1] is the sub-list for extension extendee
 	0, // [0:1] is the sub-list for field type_name
@@ -514,7 +602,7 @@ func file_pkg_api_v1_knowledge_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pkg_api_v1_knowledge_proto_rawDesc), len(file_pkg_api_v1_knowledge_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   7,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

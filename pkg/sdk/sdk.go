@@ -82,6 +82,7 @@ type KnowledgeHandler interface {
 	CreateTicketNote(ctx context.Context, req *apiv1.CreateTicketNoteRequest) (*apiv1.CreateTicketNoteResponse, error)
 	UpdateDailyNote(ctx context.Context, req *apiv1.UpdateDailyNoteRequest) (*apiv1.UpdateDailyNoteResponse, error)
 	GetNotePath(ctx context.Context, req *apiv1.GetNotePathRequest) (*apiv1.GetNotePathResponse, error)
+	GetDailyNotePath(ctx context.Context, req *apiv1.GetDailyNotePathRequest) (*apiv1.GetDailyNotePathResponse, error)
 }
 
 // Configurable is an optional interface for plugins that need to receive configuration

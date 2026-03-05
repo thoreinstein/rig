@@ -121,3 +121,26 @@ func (p *PluginProvider) GetNotePath(ctx context.Context, ticketType, ticket str
 
 	return resp.Path, nil
 }
+
+// GetDailyNotePath returns the path for today's daily note via gRPC.
+func (p *PluginProvider) GetDailyNotePath(ctx context.Context) (string, error) {
+	rpcCtx, cancel := context.WithTimeout(ctx, rpcTimeout)
+	defer cancel()
+
+	client, err := p.Manager.GetKnowledgeClient(rpcCtx, p.PluginName)
+	if err != nil {
+		return "", err
+	}
+	defer p.Manager.ReleasePlugin(p.PluginName)
+
+	resp, err := client.GetDailyNotePath(rpcCtx, &apiv1.GetDailyNotePathRequest{})
+	if err != nil {
+		return "", err
+	}
+
+	if resp == nil {
+		return "", errors.Newf("plugin %q returned empty response for GetDailyNotePath", p.PluginName)
+	}
+
+	return resp.Path, nil
+}

@@ -59,3 +59,8 @@ func (p *LocalProvider) UpdateDailyNote(ctx context.Context, ticket, ticketType 
 func (p *LocalProvider) GetNotePath(ctx context.Context, ticketType, ticket string) (string, error) {
 	return p.manager.GetNotePath(ticketType, ticket), nil
 }
+
+// GetDailyNotePath returns the path for today's daily note using the local manager.
+func (p *LocalProvider) GetDailyNotePath(ctx context.Context) (string, error) {
+	return p.manager.GetDailyNotePath(), nil
+}

@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -10,7 +11,6 @@ import (
 
 	"thoreinstein.com/rig/pkg/config"
 	"thoreinstein.com/rig/pkg/jira"
-	"thoreinstein.com/rig/pkg/notes"
 	"thoreinstein.com/rig/pkg/ticket"
 )
 
@@ -166,15 +166,19 @@ func syncDailyNote(cfg *config.Config) error {
 		fmt.Println("Syncing today's daily note...")
 	}
 
-	noteManager := notes.NewManager(
-		cfg.Notes.Path,
-		cfg.Notes.DailyDir,
-		cfg.Notes.TemplateDir,
-		verbose,
-	)
+	// Initialize knowledge provider
+	projectPath, _ := os.Getwd()
+	noteProvider, knowledgeCleanup, err := getKnowledgeProvider(cfg, projectPath)
+	if err != nil {
+		return errors.Wrap(err, "failed to initialize knowledge provider")
+	}
+	defer knowledgeCleanup()
 
 	// For now, just verify the daily note exists
-	dailyNotePath := noteManager.GetDailyNotePath()
+	dailyNotePath, err := noteProvider.GetDailyNotePath(context.Background())
+	if err != nil {
+		return errors.Wrap(err, "failed to get daily note path")
+	}
 
 	if _, err := os.Stat(dailyNotePath); os.IsNotExist(err) {
 		fmt.Printf("Daily note not found: %s\n", dailyNotePath)

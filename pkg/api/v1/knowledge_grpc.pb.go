@@ -22,6 +22,7 @@ const (
 	KnowledgeService_CreateTicketNote_FullMethodName = "/rig.v1.KnowledgeService/CreateTicketNote"
 	KnowledgeService_UpdateDailyNote_FullMethodName  = "/rig.v1.KnowledgeService/UpdateDailyNote"
 	KnowledgeService_GetNotePath_FullMethodName      = "/rig.v1.KnowledgeService/GetNotePath"
+	KnowledgeService_GetDailyNotePath_FullMethodName = "/rig.v1.KnowledgeService/GetDailyNotePath"
 )
 
 // KnowledgeServiceClient is the client API for KnowledgeService service.
@@ -36,6 +37,8 @@ type KnowledgeServiceClient interface {
 	UpdateDailyNote(ctx context.Context, in *UpdateDailyNoteRequest, opts ...grpc.CallOption) (*UpdateDailyNoteResponse, error)
 	// GetNotePath retrieves the path for a ticket note without creating it.
 	GetNotePath(ctx context.Context, in *GetNotePathRequest, opts ...grpc.CallOption) (*GetNotePathResponse, error)
+	// GetDailyNotePath retrieves the path for today's daily note.
+	GetDailyNotePath(ctx context.Context, in *GetDailyNotePathRequest, opts ...grpc.CallOption) (*GetDailyNotePathResponse, error)
 }
 
 type knowledgeServiceClient struct {
@@ -76,6 +79,16 @@ func (c *knowledgeServiceClient) GetNotePath(ctx context.Context, in *GetNotePat
 	return out, nil
 }
 
+func (c *knowledgeServiceClient) GetDailyNotePath(ctx context.Context, in *GetDailyNotePathRequest, opts ...grpc.CallOption) (*GetDailyNotePathResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetDailyNotePathResponse)
+	err := c.cc.Invoke(ctx, KnowledgeService_GetDailyNotePath_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // KnowledgeServiceServer is the server API for KnowledgeService service.
 // All implementations must embed UnimplementedKnowledgeServiceServer
 // for forward compatibility.
@@ -88,6 +101,8 @@ type KnowledgeServiceServer interface {
 	UpdateDailyNote(context.Context, *UpdateDailyNoteRequest) (*UpdateDailyNoteResponse, error)
 	// GetNotePath retrieves the path for a ticket note without creating it.
 	GetNotePath(context.Context, *GetNotePathRequest) (*GetNotePathResponse, error)
+	// GetDailyNotePath retrieves the path for today's daily note.
+	GetDailyNotePath(context.Context, *GetDailyNotePathRequest) (*GetDailyNotePathResponse, error)
 	mustEmbedUnimplementedKnowledgeServiceServer()
 }
 
@@ -106,6 +121,9 @@ func (UnimplementedKnowledgeServiceServer) UpdateDailyNote(context.Context, *Upd
 }
 func (UnimplementedKnowledgeServiceServer) GetNotePath(context.Context, *GetNotePathRequest) (*GetNotePathResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetNotePath not implemented")
+}
+func (UnimplementedKnowledgeServiceServer) GetDailyNotePath(context.Context, *GetDailyNotePathRequest) (*GetDailyNotePathResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetDailyNotePath not implemented")
 }
 func (UnimplementedKnowledgeServiceServer) mustEmbedUnimplementedKnowledgeServiceServer() {}
 func (UnimplementedKnowledgeServiceServer) testEmbeddedByValue()                          {}
@@ -182,6 +200,24 @@ func _KnowledgeService_GetNotePath_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _KnowledgeService_GetDailyNotePath_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetDailyNotePathRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(KnowledgeServiceServer).GetDailyNotePath(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: KnowledgeService_GetDailyNotePath_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(KnowledgeServiceServer).GetDailyNotePath(ctx, req.(*GetDailyNotePathRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // KnowledgeService_ServiceDesc is the grpc.ServiceDesc for KnowledgeService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -200,6 +236,10 @@ var KnowledgeService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetNotePath",
 			Handler:    _KnowledgeService_GetNotePath_Handler,
+		},
+		{
+			MethodName: "GetDailyNotePath",
+			Handler:    _KnowledgeService_GetDailyNotePath_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

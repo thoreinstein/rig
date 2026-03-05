@@ -34,4 +34,7 @@ type Provider interface {
 
 	// GetNotePath returns the path for a ticket note without creating it.
 	GetNotePath(ctx context.Context, ticketType, ticket string) (string, error)
+
+	// GetDailyNotePath returns the path for today's daily note.
+	GetDailyNotePath(ctx context.Context) (string, error)
 }
