@@ -212,9 +212,23 @@ func (l *LayeredLoader) Load() (*Config, error) {
 	// Tier 6: Secret Hydration (Keychain)
 	l.logDiscovery("keychain", "Resolving keychain values")
 	settings := v.AllSettings()
+
+	// Defer hydration of the 'plugins' section.
+	// This ensures that secrets stored in the keychain are not automatically
+	// included in the configuration JSON sent to plugins during Handshake.
+	// Instead, plugins must use the host's SecretService to resolve them.
+	pluginsRaw, hasPlugins := settings["plugins"]
+	delete(settings, "plugins")
+
 	if err := ResolveKeychainValues(settings, l.sources, l.verbose); err != nil {
 		return nil, errors.Wrap(err, "failed to resolve keychain secrets")
 	}
+
+	// Restore plugins (un-hydrated)
+	if hasPlugins {
+		settings["plugins"] = pluginsRaw
+	}
+
 	// Merge resolved secrets back into our local viper
 	if err := v.MergeConfigMap(settings); err != nil {
 		return nil, errors.Wrap(err, "failed to merge resolved secrets")

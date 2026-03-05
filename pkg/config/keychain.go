@@ -22,7 +22,7 @@ func resolveRecursive(m map[string]interface{}, sources SourceMap, prefix string
 			key = prefix + "." + k
 		}
 
-		resolved, err := resolveValue(v, sources, key, verbose)
+		resolved, err := ResolveValue(v, sources, key, verbose)
 		if err != nil {
 			return err
 		}
@@ -31,7 +31,8 @@ func resolveRecursive(m map[string]interface{}, sources SourceMap, prefix string
 	return nil
 }
 
-func resolveValue(v interface{}, sources SourceMap, key string, verbose bool) (interface{}, error) {
+// ResolveValue resolves a single value, handling keychain:// URIs if present.
+func ResolveValue(v interface{}, sources SourceMap, key string, verbose bool) (interface{}, error) {
 	switch val := v.(type) {
 	case string:
 		if strings.HasPrefix(val, KeychainPrefix) {
@@ -75,7 +76,7 @@ func resolveValue(v interface{}, sources SourceMap, key string, verbose bool) (i
 			// Slices don't have individual source attribution in our SourceMap yet,
 			// but we still resolve them. Use index suffix for key tracking if needed.
 			elemKey := fmt.Sprintf("%s[%d]", key, i)
-			res, err := resolveValue(elem, sources, elemKey, verbose)
+			res, err := ResolveValue(elem, sources, elemKey, verbose)
 			if err != nil {
 				return nil, err
 			}

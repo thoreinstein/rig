@@ -16,6 +16,7 @@ import (
 	"google.golang.org/grpc"
 
 	apiv1 "thoreinstein.com/rig/pkg/api/v1"
+	"thoreinstein.com/rig/pkg/config"
 	"thoreinstein.com/rig/pkg/errors"
 	"thoreinstein.com/rig/pkg/ui"
 )
@@ -147,12 +148,23 @@ func NewManager(executor pluginExecutor, scanner *Scanner, rigVersion string, co
 			return "", fmt.Errorf("no 'secrets' section found for plugin %q", pluginName)
 		}
 
-		val, ok := secrets[secretKey].(string)
+		val, ok := secrets[secretKey]
 		if !ok {
-			return "", fmt.Errorf("secret %q not found or not a string for plugin %q", secretKey, pluginName)
+			return "", fmt.Errorf("secret %q not found for plugin %q", secretKey, pluginName)
 		}
 
-		return val, nil
+		// Resolve keychain URI if present using the shared config logic.
+		resolved, err := config.ResolveValue(val, nil, key, false)
+		if err != nil {
+			return "", err
+		}
+
+		resStr, ok := resolved.(string)
+		if !ok {
+			return "", fmt.Errorf("resolved secret %q is not a string for plugin %q", secretKey, pluginName)
+		}
+
+		return resStr, nil
 	}
 
 	m.secretProxy = NewHostSecretProxy(resolver)
