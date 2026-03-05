@@ -143,4 +143,8 @@ func RegisterServices(reg grpc.ServiceRegistrar, p PluginInfo) {
 	if h, ok := p.(TicketHandler); ok {
 		apiv1.RegisterTicketServiceServer(reg, newTicketBridge(h))
 	}
+
+	if h, ok := p.(KnowledgeHandler); ok {
+		apiv1.RegisterKnowledgeServiceServer(reg, newKnowledgeBridge(h))
+	}
 }

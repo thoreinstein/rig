@@ -171,3 +171,33 @@ func (b *ticketBridge) ListTransitions(ctx context.Context, req *apiv1.ListTrans
 	resp, err := b.h.ListTransitions(ctx, req)
 	return resp, mapError(err)
 }
+
+// knowledgeBridge adapts a KnowledgeHandler implementation to the apiv1.KnowledgeServiceServer interface.
+type knowledgeBridge struct {
+	apiv1.UnimplementedKnowledgeServiceServer
+	h KnowledgeHandler
+}
+
+func newKnowledgeBridge(h KnowledgeHandler) *knowledgeBridge {
+	return &knowledgeBridge{h: h}
+}
+
+func (b *knowledgeBridge) CreateTicketNote(ctx context.Context, req *apiv1.CreateTicketNoteRequest) (*apiv1.CreateTicketNoteResponse, error) {
+	resp, err := b.h.CreateTicketNote(ctx, req)
+	return resp, mapError(err)
+}
+
+func (b *knowledgeBridge) UpdateDailyNote(ctx context.Context, req *apiv1.UpdateDailyNoteRequest) (*apiv1.UpdateDailyNoteResponse, error) {
+	resp, err := b.h.UpdateDailyNote(ctx, req)
+	return resp, mapError(err)
+}
+
+func (b *knowledgeBridge) GetNotePath(ctx context.Context, req *apiv1.GetNotePathRequest) (*apiv1.GetNotePathResponse, error) {
+	resp, err := b.h.GetNotePath(ctx, req)
+	return resp, mapError(err)
+}
+
+func (b *knowledgeBridge) GetDailyNotePath(ctx context.Context, req *apiv1.GetDailyNotePathRequest) (*apiv1.GetDailyNotePathResponse, error) {
+	resp, err := b.h.GetDailyNotePath(ctx, req)
+	return resp, mapError(err)
+}
