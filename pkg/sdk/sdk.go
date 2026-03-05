@@ -77,6 +77,13 @@ type TicketHandler interface {
 	ListTransitions(ctx context.Context, req *apiv1.ListTransitionsRequest) (*apiv1.ListTransitionsResponse, error)
 }
 
+// KnowledgeHandler is an optional interface for plugins providing knowledge management integration.
+type KnowledgeHandler interface {
+	CreateTicketNote(ctx context.Context, req *apiv1.CreateTicketNoteRequest) (*apiv1.CreateTicketNoteResponse, error)
+	UpdateDailyNote(ctx context.Context, req *apiv1.UpdateDailyNoteRequest) (*apiv1.UpdateDailyNoteResponse, error)
+	GetNotePath(ctx context.Context, req *apiv1.GetNotePathRequest) (*apiv1.GetNotePathResponse, error)
+}
+
 // Configurable is an optional interface for plugins that need to receive configuration
 // from the host during the Handshake process.
 type Configurable interface {

@@ -90,6 +90,9 @@ Rig uses a TOML configuration file, typically located at `~/.config/rig/config.t
   - Keep CLI logic in `cmd/` minimal (thin wrappers).
   - Delegate orchestration and business logic to `pkg/`.
   - Move heavy bootstrap and initialization logic to `pkg/bootstrap`.
+  - **Unified Provider Pattern:** Core integrations (VCS, Ticketing, Knowledge) must follow a tiered provider architecture: `Provider` interface -> `LocalProvider` (direct logic) -> `PluginProvider` (gRPC client). This ensures zero-IPC for local development while enabling isolated plugin-based backends.
+  - **Secret Proxy (Host-as-Server):** Isolated plugins MUST NOT have direct access to host environment variables or keychains. Sensitive API tokens (like `JIRA_TOKEN`) must be requested via the `SecretService` gRPC proxy on the host (`RIG_HOST_ENDPOINT`), which enforces a strict key allow-list.
+  - **Configurable Plugin Handshake:** To maintain seamless configuration fallbacks, plugins should implement the `sdk.Configurable` interface. The host's `config_json` is automatically delivered during the gRPC Handshake, allowing plugins to prioritize env-based secrets from the proxy while falling back to static config for non-sensitive fields (URLs, emails).
 - **Linting:** Strict mode using `golangci-lint`.
 - **Pre-commit Mandate:** NEVER push changes without running the full pre-commit suite, even if the automatic git hook fails to trigger. Local validation is the primary guardrail.
 
@@ -197,6 +200,7 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 - **Readiness Polling:** The host must poll for the socket file and verify readiness with a `net.Dial` before attempting the gRPC `Handshake` RPC.
 - **Insecure Local Transport:** Use `insecure.NewCredentials()` for gRPC over UDS, as communication is restricted to the local host.
 - **Total State Reset Pattern:** Handshake logic must explicitly clear all internal state (capabilities, versions) if corresponding response fields are absent. This prevents "ghost state" where Rig retains stale information from previous sessions.
+- **Stale Client Reference Trap:** Cached gRPC clients (e.g., `TicketClient`) in the `Plugin` struct MUST be explicitly nil-ed out in the `cleanup()` method during plugin stops or restarts. Failing to do so causes "connection closed" errors when the host attempts to use a stale client reference from a previous process execution.
 - **Compatibility Translation Layer:** The host client should act as a translation shim, prioritizing modern structured fields (e.g., `plugin_semver`) but providing fallbacks/translation for legacy tags (e.g., `plugin_version`) to maintain wire compatibility during V1 migration.
 
 #### Capability Modeling & AI

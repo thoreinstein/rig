@@ -1,0 +1,58 @@
+syntax = "proto3";
+
+package rig.v1;
+
+option go_package = "thoreinstein.com/rig/pkg/api/v1;apiv1";
+
+// KnowledgeService defines the interface for knowledge management operations (Notes, Obsidian, etc.)
+service KnowledgeService {
+  // CreateTicketNote creates a new ticket note and returns its path.
+  rpc CreateTicketNote(CreateTicketNoteRequest) returns (CreateTicketNoteResponse);
+
+  // UpdateDailyNote updates the daily note with a log entry.
+  rpc UpdateDailyNote(UpdateDailyNoteRequest) returns (UpdateDailyNoteResponse);
+
+  // GetNotePath retrieves the path for a ticket note without creating it.
+  rpc GetNotePath(GetNotePathRequest) returns (GetNotePathResponse);
+}
+
+// NoteMetadata carries all information needed to render a ticket note.
+message NoteMetadata {
+  string ticket_id = 1;
+  string ticket_type = 2;
+  string summary = 3;
+  string status = 4;
+  string description = 5;
+  string repo_name = 6;
+  string repo_path = 7;
+  string worktree_path = 8;
+  string date = 9;
+  string time = 10;
+}
+
+message CreateTicketNoteRequest {
+  NoteMetadata metadata = 1;
+}
+
+message CreateTicketNoteResponse {
+  string path = 1;
+  bool created = 2;
+}
+
+message UpdateDailyNoteRequest {
+  string ticket_id = 1;
+  string ticket_type = 2;
+}
+
+message UpdateDailyNoteResponse {
+  bool success = 1;
+}
+
+message GetNotePathRequest {
+  string ticket_id = 1;
+  string ticket_type = 2;
+}
+
+message GetNotePathResponse {
+  string path = 1;
+}

@@ -339,6 +339,47 @@ func (m *Manager) GetTicketClient(ctx context.Context, name string) (client apiv
 	return p.TicketClient, nil
 }
 
+// GetKnowledgeClient returns a gRPC client for the specified knowledge plugin.
+// If the plugin is not running, it will be started.
+func (m *Manager) GetKnowledgeClient(ctx context.Context, name string) (client apiv1.KnowledgeServiceClient, err error) {
+	p, err := m.getOrStartPlugin(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+
+	p.AcquireSession()
+	defer func() {
+		if err != nil {
+			p.ReleaseSession()
+		}
+	}()
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	// Verify the plugin has the knowledge capability
+	hasKnowledge := false
+	for _, cap := range p.Capabilities {
+		if cap.Name == KnowledgeCapability {
+			hasKnowledge = true
+			break
+		}
+	}
+
+	if !hasKnowledge {
+		return nil, errors.NewPluginError(name, "GetKnowledgeClient", "plugin does not support knowledge capability")
+	}
+
+	if p.KnowledgeClient == nil {
+		if p.conn == nil {
+			return nil, errors.NewPluginError(name, "GetKnowledgeClient", "plugin connection not established")
+		}
+		p.KnowledgeClient = apiv1.NewKnowledgeServiceClient(p.conn)
+	}
+
+	return p.KnowledgeClient, nil
+}
+
 func (m *Manager) getOrStartPlugin(ctx context.Context, name string) (*Plugin, error) {
 	m.mu.Lock()
 	p, ok := m.plugins[name]

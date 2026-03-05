@@ -37,6 +37,9 @@ const (
 	// TicketCapability is the name of the capability for ticketing integration plugins.
 	TicketCapability = "ticket"
 
+	// KnowledgeCapability is the name of the capability for knowledge management plugins.
+	KnowledgeCapability = "knowledge"
+
 	// APIVersion is the current version of the Rig Plugin API contract.
 	APIVersion = "v1"
 )
@@ -92,6 +95,7 @@ type Plugin struct {
 	NodeClient      apiv1.NodeExecutionServiceClient
 	VCSClient       apiv1.VCSServiceClient
 	TicketClient    apiv1.TicketServiceClient
+	KnowledgeClient apiv1.KnowledgeServiceClient
 	conn            *grpc.ClientConn
 	cancel          context.CancelFunc
 }
