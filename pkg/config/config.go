@@ -405,6 +405,9 @@ func SetDefaults(v *viper.Viper) {
 	// VCS defaults
 	v.SetDefault("vcs.provider", "git")
 
+	// Ticket defaults
+	v.SetDefault("ticket.provider", "local")
+
 	// Daemon defaults
 	v.SetDefault("daemon.enabled", true)
 	v.SetDefault("daemon.plugin_idle_timeout", "5m")
