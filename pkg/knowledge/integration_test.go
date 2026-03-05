@@ -72,4 +72,30 @@ func TestKnowledgePluginIntegration(t *testing.T) {
 			t.Errorf("Unexpected path: %s", resp.Path)
 		}
 	})
+
+	t.Run("UpdateDailyNote", func(t *testing.T) {
+		resp, err := client.UpdateDailyNote(ctx, &apiv1.UpdateDailyNoteRequest{
+			TicketId:   "PROJ-1",
+			TicketType: "feature",
+		})
+		if err != nil {
+			t.Fatalf("UpdateDailyNote failed: %v", err)
+		}
+		if !resp.Success {
+			t.Error("Expected success: true")
+		}
+	})
+
+	t.Run("GetNotePath", func(t *testing.T) {
+		resp, err := client.GetNotePath(ctx, &apiv1.GetNotePathRequest{
+			TicketId:   "PROJ-1",
+			TicketType: "feature",
+		})
+		if err != nil {
+			t.Fatalf("GetNotePath failed: %v", err)
+		}
+		if resp.Path != "/mock/path/PROJ-1.md" {
+			t.Errorf("Unexpected path: %s", resp.Path)
+		}
+	})
 }
