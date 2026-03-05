@@ -151,6 +151,7 @@ func runWorkCommand(cmd *cobra.Command, ticketID string) error {
 	}
 
 	// Step 3: Create/update note (unless --no-notes flag is set)
+	var notePath string
 	noteProvider, knowledgeCleanup, err := getKnowledgeProvider(cfg, repoPath)
 	if err != nil {
 		if verbose {
@@ -159,7 +160,6 @@ func runWorkCommand(cmd *cobra.Command, ticketID string) error {
 	} else {
 		defer knowledgeCleanup()
 
-		var notePath string
 		if !workNoNotes {
 			if verbose {
 				fmt.Println("Creating note...")
@@ -210,45 +210,42 @@ func runWorkCommand(cmd *cobra.Command, ticketID string) error {
 		} else {
 			fmt.Println("Daily note updated")
 		}
+	}
 
-		// Pass notePath to tmux if created
-		if notePath != "" {
-			// Step 5: Create tmux session
-			if verbose {
-				fmt.Println("Creating tmux session...")
-			}
+	// Step 5: Create tmux session
+	if verbose {
+		fmt.Println("Creating tmux session...")
+	}
 
-			// Convert config windows to tmux windows
-			tmuxWindows := make([]tmux.WindowConfig, 0, len(cfg.Tmux.Windows))
-			for _, window := range cfg.Tmux.Windows {
-				tmuxWindows = append(tmuxWindows, tmux.WindowConfig{
-					Name:       window.Name,
-					Command:    window.Command,
-					WorkingDir: window.WorkingDir,
-				})
-			}
+	// Convert config windows to tmux windows
+	tmuxWindows := make([]tmux.WindowConfig, 0, len(cfg.Tmux.Windows))
+	for _, window := range cfg.Tmux.Windows {
+		tmuxWindows = append(tmuxWindows, tmux.WindowConfig{
+			Name:       window.Name,
+			Command:    window.Command,
+			WorkingDir: window.WorkingDir,
+		})
+	}
 
-			// Use sanitized ticket for session name (no colons)
-			sessionID := ticketInfo.SessionID()
+	// Use sanitized ticket for session name (no colons)
+	sessionID := ticketInfo.SessionID()
 
-			sessionManager := tmux.NewSessionManager(cfg.Tmux.SessionPrefix, tmuxWindows, verbose)
-			err = sessionManager.CreateSession(sessionID, worktreePath, notePath)
-			if err != nil {
-				// Don't fail the entire process if tmux session creation fails
-				if verbose {
-					fmt.Printf("Warning: Could not create tmux session: %v\n", err)
-				}
-				fmt.Println("Warning: Tmux session creation failed, but other steps completed successfully")
-			} else {
-				fmt.Println("Tmux session created successfully")
-			}
-
-			fmt.Printf("\nWorkflow initialization for %s completed successfully!\n", ticketInfo.Full)
-			fmt.Printf("Worktree: %s\n", worktreePath)
-			if notePath != "" {
-				fmt.Printf("Note: %s\n", notePath)
-			}
+	sessionManager := tmux.NewSessionManager(cfg.Tmux.SessionPrefix, tmuxWindows, verbose)
+	err = sessionManager.CreateSession(sessionID, worktreePath, notePath)
+	if err != nil {
+		// Don't fail the entire process if tmux session creation fails
+		if verbose {
+			fmt.Printf("Warning: Could not create tmux session: %v\n", err)
 		}
+		fmt.Println("Warning: Tmux session creation failed, but other steps completed successfully")
+	} else {
+		fmt.Println("Tmux session created successfully")
+	}
+
+	fmt.Printf("\nWorkflow initialization for %s completed successfully!\n", ticketInfo.Full)
+	fmt.Printf("Worktree: %s\n", worktreePath)
+	if notePath != "" {
+		fmt.Printf("Note: %s\n", notePath)
 	}
 
 	return nil

@@ -83,7 +83,10 @@ func syncTicketNote(cmd *cobra.Command, cfg *config.Config, ticketID string) err
 	}
 
 	// Initialize knowledge provider
-	projectPath, _ := os.Getwd()
+	projectPath, err := os.Getwd()
+	if err != nil {
+		return errors.Wrap(err, "failed to get current directory")
+	}
 	noteProvider, knowledgeCleanup, err := getKnowledgeProvider(cfg, projectPath)
 	if err != nil {
 		return errors.Wrap(err, "failed to initialize knowledge provider")
@@ -166,7 +169,10 @@ func syncDailyNote(cmd *cobra.Command, cfg *config.Config) error {
 	}
 
 	// Initialize knowledge provider
-	projectPath, _ := os.Getwd()
+	projectPath, err := os.Getwd()
+	if err != nil {
+		return errors.Wrap(err, "failed to get current directory")
+	}
 	noteProvider, knowledgeCleanup, err := getKnowledgeProvider(cfg, projectPath)
 	if err != nil {
 		return errors.Wrap(err, "failed to initialize knowledge provider")

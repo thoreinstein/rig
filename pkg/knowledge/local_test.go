@@ -3,6 +3,7 @@ package knowledge
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"thoreinstein.com/rig/pkg/config"
@@ -92,7 +93,7 @@ func TestLocalProvider(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Path %s is not relative to daily dir %s: %v", path, dailyDir, err)
 		}
-		if filepath.IsAbs(rel) || rel[:2] == ".." {
+		if filepath.IsAbs(rel) || strings.HasPrefix(rel, "..") {
 			t.Errorf("Daily note path %s is not under daily dir %s", path, dailyDir)
 		}
 	})
