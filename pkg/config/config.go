@@ -491,7 +491,7 @@ func expandPath(path string) (string, error) {
 
 // IsSensitiveKey returns true if the key likely contains sensitive information.
 func IsSensitiveKey(key string) bool {
-	sensitive := []string{"token", "secret", "key", "password", "api_key"}
+	sensitive := []string{"token", "secret", "key", "password", "api_key", "credential", "auth"}
 	lowerKey := strings.ToLower(key)
 	for _, s := range sensitive {
 		if strings.Contains(lowerKey, s) {
