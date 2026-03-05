@@ -40,11 +40,15 @@ func StoreConfigValue(key, value string) error {
 		if err := toml.Unmarshal(data, &m); err != nil {
 			return errors.Wrapf(err, "failed to unmarshal config file %q", configFile)
 		}
-	} else {
+	}
+
+	if m == nil {
 		m = make(map[string]interface{})
 		// If file doesn't exist, ensure directory exists
-		if err := os.MkdirAll(filepath.Dir(configFile), 0700); err != nil {
-			return errors.Wrapf(err, "failed to create config directory %q", filepath.Dir(configFile))
+		if _, err := os.Stat(configFile); os.IsNotExist(err) {
+			if err := os.MkdirAll(filepath.Dir(configFile), 0700); err != nil {
+				return errors.Wrapf(err, "failed to create config directory %q", filepath.Dir(configFile))
+			}
 		}
 	}
 

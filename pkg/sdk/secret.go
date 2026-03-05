@@ -17,6 +17,7 @@ import (
 type Secret struct {
 	mu       sync.Mutex
 	endpoint string
+	token    string
 	conn     *grpc.ClientConn
 	client   apiv1.SecretServiceClient
 	dialOpts []grpc.DialOption
@@ -32,11 +33,20 @@ func WithSecretHostEndpoint(endpoint string) SecretOption {
 	}
 }
 
+// WithSecretToken overrides the host's secret token.
+func WithSecretToken(token string) SecretOption {
+	return func(s *Secret) {
+		s.token = token
+	}
+}
+
 // NewSecret creates a new Secret client.
-// It reads the host's endpoint from the RIG_HOST_ENDPOINT environment variable by default.
+// It reads the host's endpoint from the RIG_HOST_ENDPOINT environment variable and
+// the secret token from RIG_HOST_SECRET_TOKEN by default.
 func NewSecret(opts ...SecretOption) *Secret {
 	s := &Secret{
 		endpoint: os.Getenv("RIG_HOST_ENDPOINT"),
+		token:    os.Getenv("RIG_HOST_SECRET_TOKEN"),
 	}
 	for _, opt := range opts {
 		opt(s)
@@ -103,7 +113,10 @@ func (s *Secret) GetSecret(ctx context.Context, key string) (string, error) {
 		return "", err
 	}
 
-	resp, err := client.GetSecret(ctx, &apiv1.GetSecretRequest{Key: key})
+	resp, err := client.GetSecret(ctx, &apiv1.GetSecretRequest{
+		Key:   key,
+		Token: s.token,
+	})
 	if err != nil {
 		return "", mapError(err)
 	}

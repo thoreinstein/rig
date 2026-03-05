@@ -69,4 +69,23 @@ func TestStoreConfigValue(t *testing.T) {
 	if !strings.Contains(content, `token = 'token-val'`) {
 		t.Errorf("config missing jira.token: %s", content)
 	}
+
+	// 4. Store in a comment-only file
+	commentFile := filepath.Join(tmpDir, "comment.toml")
+	if err := os.WriteFile(commentFile, []byte("# Just a comment\n"), 0644); err != nil {
+		t.Fatalf("failed to write comment file: %v", err)
+	}
+	// We need to point StoreConfigValue to this file, but it's hardcoded to ~/.config/rig/config.toml.
+	// The test already sets HOME to tmpDir, so let's just use that.
+	os.Remove(configFile)
+	if err := os.WriteFile(configFile, []byte("# Just a comment\n"), 0644); err != nil {
+		t.Fatalf("failed to write comment file: %v", err)
+	}
+	if err := StoreConfigValue("foo.bar", "baz"); err != nil {
+		t.Fatalf("StoreConfigValue (comment-only) failed: %v", err)
+	}
+	data, _ = os.ReadFile(configFile)
+	if !strings.Contains(string(data), `bar = 'baz'`) {
+		t.Errorf("config missing foo.bar after comment-only load: %s", string(data))
+	}
 }

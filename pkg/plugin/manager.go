@@ -505,6 +505,7 @@ func (m *Manager) getOrStartPlugin(ctx context.Context, name string) (*Plugin, e
 	// (which might have updated the plugin's metadata/version).
 	ValidateCompatibility(target, m.rigVersion)
 	if target.Status == StatusIncompatible || target.Status == StatusError {
+		m.secretProxy.UnregisterPlugin(target.secretToken)
 		_ = m.executor.Stop(target)
 		if target.Error != nil {
 			return nil, errors.Wrapf(target.Error, "plugin %q is incompatible", name)
