@@ -76,3 +76,9 @@ type TicketHandler interface {
 	UpdateTicketStatus(ctx context.Context, req *apiv1.UpdateTicketStatusRequest) (*apiv1.UpdateTicketStatusResponse, error)
 	ListTransitions(ctx context.Context, req *apiv1.ListTransitionsRequest) (*apiv1.ListTransitionsResponse, error)
 }
+
+// Configurable is an optional interface for plugins that need to receive configuration
+// from the host during the Handshake process.
+type Configurable interface {
+	Configure(configJSON []byte) error
+}

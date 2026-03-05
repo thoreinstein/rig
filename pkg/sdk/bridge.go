@@ -17,6 +17,12 @@ func newPluginBridge(p PluginInfo) *pluginBridge {
 }
 
 func (b *pluginBridge) Handshake(ctx context.Context, req *apiv1.HandshakeRequest) (*apiv1.HandshakeResponse, error) {
+	if c, ok := b.p.(Configurable); ok && len(req.ConfigJson) > 0 {
+		if err := c.Configure(req.ConfigJson); err != nil {
+			return nil, err
+		}
+	}
+
 	info := b.p.Info()
 
 	caps := make([]*apiv1.Capability, len(info.Capabilities))

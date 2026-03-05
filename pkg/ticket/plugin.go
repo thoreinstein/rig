@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/cockroachdb/errors"
+
 	apiv1 "thoreinstein.com/rig/pkg/api/v1"
 	"thoreinstein.com/rig/pkg/plugin"
 )
@@ -79,9 +81,17 @@ func (p *PluginProvider) UpdateStatus(ctx context.Context, ticketID, status stri
 	}
 	defer p.Manager.ReleasePlugin(p.PluginName)
 
-	_, err = client.UpdateTicketStatus(rpcCtx, &apiv1.UpdateTicketStatusRequest{
+	resp, err := client.UpdateTicketStatus(rpcCtx, &apiv1.UpdateTicketStatusRequest{
 		TicketId: ticketID,
 		Status:   status,
 	})
-	return err
+	if err != nil {
+		return err
+	}
+
+	if !resp.Success {
+		return errors.Newf("plugin failed to update ticket status for %q to %q", ticketID, status)
+	}
+
+	return nil
 }

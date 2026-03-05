@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
@@ -16,7 +17,14 @@ import (
 	"thoreinstein.com/rig/pkg/workflow"
 )
 
-type TicketPlugin struct{}
+type PluginConfig struct {
+	BaseURL string `json:"base_url"`
+	Email   string `json:"email"`
+}
+
+type TicketPlugin struct {
+	config PluginConfig
+}
 
 func (p *TicketPlugin) Info() sdk.Info {
 	return sdk.Info{
@@ -27,6 +35,10 @@ func (p *TicketPlugin) Info() sdk.Info {
 			{Name: "ticket", Version: "1.0.0"},
 		},
 	}
+}
+
+func (p *TicketPlugin) Configure(configJSON []byte) error {
+	return json.Unmarshal(configJSON, &p.config)
 }
 
 func (p *TicketPlugin) GetTicketInfo(ctx context.Context, req *apiv1.GetTicketInfoRequest) (*apiv1.GetTicketInfoResponse, error) {
@@ -136,11 +148,22 @@ func (p *TicketPlugin) getJiraClient(ctx context.Context) (jira.JiraClient, erro
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to retrieve JIRA_TOKEN")
 	}
+
 	baseURL, err := sdk.GetSecret(ctx, "JIRA_BASE_URL")
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to retrieve JIRA_BASE_URL")
+		// Fallback to plugin-scoped config
+		baseURL = p.config.BaseURL
 	}
-	email, _ := sdk.GetSecret(ctx, "JIRA_EMAIL")
+
+	if baseURL == "" {
+		return nil, errors.New("JIRA_BASE_URL not found in environment or config")
+	}
+
+	email, err := sdk.GetSecret(ctx, "JIRA_EMAIL")
+	if err != nil {
+		// Fallback to plugin-scoped config
+		email = p.config.Email
+	}
 
 	cfg := &config.JiraConfig{
 		Enabled: true,
