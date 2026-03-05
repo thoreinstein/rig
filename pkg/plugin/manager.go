@@ -8,10 +8,12 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/zalando/go-keyring"
 	"google.golang.org/grpc"
 
 	apiv1 "thoreinstein.com/rig/pkg/api/v1"
@@ -120,44 +122,67 @@ func NewManager(executor pluginExecutor, scanner *Scanner, rigVersion string, co
 	// Host secret proxy uses the config provider to resolve secrets.
 	// The resolver receives pluginName and secretKey as separate, validated
 	// parameters — no dot-delimited key parsing required.
+	//
+	// A sync.Map caches the parsed secrets map per plugin to avoid calling
+	// configProvider and json.Unmarshal on every GetSecret request. Plugin
+	// configs are immutable at runtime, so the cache never needs invalidation.
+	var secretCache sync.Map // map[pluginName]map[string]interface{}
+
 	resolver := func(pluginName, secretKey string) (string, error) {
-		if m.configProvider == nil {
-			return "", errors.New("no config provider available")
+		// 1. Look up or populate the per-plugin secrets map.
+		var secrets map[string]interface{}
+		if cached, ok := secretCache.Load(pluginName); ok {
+			secrets = cached.(map[string]interface{})
+		} else {
+			if m.configProvider == nil {
+				return "", errors.New("no config provider available")
+			}
+
+			data, err := m.configProvider(pluginName)
+			if err != nil {
+				return "", err
+			}
+
+			var cfg map[string]interface{}
+			if err := json.Unmarshal(data, &cfg); err != nil {
+				return "", fmt.Errorf("failed to unmarshal plugin config: %w", err)
+			}
+
+			sec, ok := cfg["secrets"].(map[string]interface{})
+			if !ok {
+				return "", errors.Wrap(ErrSecretNotFound, fmt.Sprintf("no 'secrets' section found for plugin %q", pluginName))
+			}
+
+			secrets = sec
+			secretCache.Store(pluginName, secrets)
 		}
 
-		data, err := m.configProvider(pluginName)
-		if err != nil {
-			return "", err
-		}
-
-		var cfg map[string]interface{}
-		if err := json.Unmarshal(data, &cfg); err != nil {
-			return "", fmt.Errorf("failed to unmarshal plugin config: %w", err)
-		}
-
-		secrets, ok := cfg["secrets"].(map[string]interface{})
-		if !ok {
-			return "", fmt.Errorf("no 'secrets' section found for plugin %q", pluginName)
-		}
-
+		// 2. Look up the requested key.
 		val, ok := secrets[secretKey]
 		if !ok {
-			return "", fmt.Errorf("secret %q not found for plugin %q", secretKey, pluginName)
+			return "", errors.Wrap(ErrSecretNotFound, fmt.Sprintf("secret %q not found for plugin %q", secretKey, pluginName))
 		}
 
-		// Resolve keychain URI if present using the shared config logic.
-		scopedKey := "plugins." + pluginName + ".secrets." + secretKey
-		resolved, err := config.ResolveValue(val, nil, scopedKey, false)
-		if err != nil {
-			return "", err
-		}
-
-		resStr, ok := resolved.(string)
+		// 3. Resolve keychain:// URI if present, otherwise return as-is.
+		strVal, ok := val.(string)
 		if !ok {
-			return "", fmt.Errorf("resolved secret %q is not a string for plugin %q", secretKey, pluginName)
+			return "", fmt.Errorf("secret %q is not a string for plugin %q", secretKey, pluginName)
 		}
 
-		return resStr, nil
+		if strings.HasPrefix(strVal, config.KeychainPrefix) {
+			uri := strings.TrimPrefix(strVal, config.KeychainPrefix)
+			parts := strings.SplitN(uri, "/", 2)
+			if len(parts) != 2 {
+				return "", fmt.Errorf("invalid keychain URI for secret %q: expected keychain://service/account", secretKey)
+			}
+			secret, err := keyring.Get(parts[0], parts[1])
+			if err != nil {
+				return "", fmt.Errorf("failed to resolve keychain secret %q (%s/%s): %w", secretKey, parts[0], parts[1], err)
+			}
+			return secret, nil
+		}
+
+		return strVal, nil
 	}
 
 	m.secretProxy = NewHostSecretProxy(resolver)

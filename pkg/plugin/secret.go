@@ -9,7 +9,13 @@ import (
 	"google.golang.org/grpc/status"
 
 	apiv1 "thoreinstein.com/rig/pkg/api/v1"
+	rigerrors "thoreinstein.com/rig/pkg/errors"
 )
+
+// ErrSecretNotFound indicates a secret key does not exist in the plugin's
+// configuration. Callers can test for this with errors.Is to distinguish
+// "not found" from host-side resolution failures (e.g. keychain errors).
+var ErrSecretNotFound = rigerrors.New("secret not found")
 
 // SecretResolver resolves a secret for a given plugin. The pluginName and
 // secretKey are validated and passed separately to prevent dot-injection
@@ -65,8 +71,10 @@ func (s *HostSecretProxy) GetSecret(ctx context.Context, req *apiv1.GetSecretReq
 
 	val, err := s.resolver(pluginName, req.Key)
 	if err != nil {
-		// Anti-enumeration: return the same error for missing or denied keys.
-		return nil, status.Errorf(codes.NotFound, "secret not available")
+		if rigerrors.Is(err, ErrSecretNotFound) {
+			return nil, status.Errorf(codes.NotFound, "secret not available")
+		}
+		return nil, status.Errorf(codes.Internal, "secret resolution failed")
 	}
 
 	return &apiv1.GetSecretResponse{Value: val}, nil

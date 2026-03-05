@@ -151,7 +151,10 @@ func TestCommandExecution_SecretLookupSmoke(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	pluginBin := filepath.Join(tmpDir, "secret-cmd-plugin")
-	cwd, _ := os.Getwd()
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get working directory: %v", err)
+	}
 	sourceFile := filepath.Join(cwd, "testdata", "secret-cmd-plugin", "main.go")
 
 	compileCmd := exec.Command("go", "build", "-o", pluginBin, sourceFile)

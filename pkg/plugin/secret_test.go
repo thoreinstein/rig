@@ -1,13 +1,14 @@
 package plugin
 
 import (
-	"errors"
+	"fmt"
 	"testing"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
 	apiv1 "thoreinstein.com/rig/pkg/api/v1"
+	rigerrors "thoreinstein.com/rig/pkg/errors"
 )
 
 func TestGetSecret(t *testing.T) {
@@ -20,11 +21,11 @@ func TestGetSecret(t *testing.T) {
 	resolver := func(pluginName, secretKey string) (string, error) {
 		secrets, ok := mockSecrets[pluginName]
 		if !ok {
-			return "", errors.New("plugin not found")
+			return "", rigerrors.Wrap(ErrSecretNotFound, fmt.Sprintf("plugin %q not found", pluginName))
 		}
 		val, ok := secrets[secretKey]
 		if !ok {
-			return "", errors.New("not found")
+			return "", rigerrors.Wrap(ErrSecretNotFound, fmt.Sprintf("secret %q not found", secretKey))
 		}
 		return val, nil
 	}
@@ -142,6 +143,33 @@ func TestGetSecret(t *testing.T) {
 				t.Errorf("value: got %q, want %q", resp.Value, tc.wantVal)
 			}
 		})
+	}
+}
+
+func TestGetSecret_InternalError(t *testing.T) {
+	// A resolver that returns an error NOT wrapping ErrSecretNotFound
+	// should produce codes.Internal, not codes.NotFound.
+	resolver := func(_, _ string) (string, error) {
+		return "", rigerrors.New("keychain access failed")
+	}
+
+	proxy := NewHostSecretProxy(resolver)
+	proxy.RegisterPlugin("tok", "myplugin")
+
+	_, err := proxy.GetSecret(t.Context(), &apiv1.GetSecretRequest{Key: "k", Token: "tok"})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+
+	st, ok := status.FromError(err)
+	if !ok {
+		t.Fatalf("expected gRPC status error, got %T: %v", err, err)
+	}
+	if st.Code() != codes.Internal {
+		t.Errorf("code: got %v, want %v", st.Code(), codes.Internal)
+	}
+	if st.Message() != "secret resolution failed" {
+		t.Errorf("message: got %q, want %q", st.Message(), "secret resolution failed")
 	}
 }
 

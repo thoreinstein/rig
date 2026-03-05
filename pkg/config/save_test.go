@@ -3,9 +3,9 @@ package config
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
+	toml "github.com/pelletier/go-toml/v2"
 	"github.com/zalando/go-keyring"
 )
 
@@ -62,12 +62,17 @@ func TestStoreConfigValue(t *testing.T) {
 		t.Fatalf("failed to read config file: %v", err)
 	}
 
-	content := string(data)
-	if !strings.Contains(content, `path = '~/WorkNotes'`) {
-		t.Errorf("config missing updated notes.path: %s", content)
+	var parsed map[string]interface{}
+	if err := toml.Unmarshal(data, &parsed); err != nil {
+		t.Fatalf("failed to parse config TOML: %v", err)
 	}
-	if !strings.Contains(content, `token = 'token-val'`) {
-		t.Errorf("config missing jira.token: %s", content)
+	notes, _ := parsed["notes"].(map[string]interface{})
+	if notes == nil || notes["path"] != "~/WorkNotes" {
+		t.Errorf("expected notes.path = ~/WorkNotes, got %v", parsed)
+	}
+	jira, _ := parsed["jira"].(map[string]interface{})
+	if jira == nil || jira["token"] != "token-val" {
+		t.Errorf("expected jira.token = token-val, got %v", parsed)
 	}
 
 	// 4. Store in a comment-only file
@@ -85,7 +90,12 @@ func TestStoreConfigValue(t *testing.T) {
 		t.Fatalf("StoreConfigValue (comment-only) failed: %v", err)
 	}
 	data, _ = os.ReadFile(configFile)
-	if !strings.Contains(string(data), `bar = 'baz'`) {
-		t.Errorf("config missing foo.bar after comment-only load: %s", string(data))
+	var parsed2 map[string]interface{}
+	if err := toml.Unmarshal(data, &parsed2); err != nil {
+		t.Fatalf("failed to parse config TOML after comment-only load: %v", err)
+	}
+	foo, _ := parsed2["foo"].(map[string]interface{})
+	if foo == nil || foo["bar"] != "baz" {
+		t.Errorf("expected foo.bar = baz, got %v", parsed2)
 	}
 }

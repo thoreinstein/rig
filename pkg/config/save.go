@@ -22,6 +22,15 @@ func StoreKeychainSecret(service, account, value string) (string, error) {
 // StoreConfigValue updates a key-value pair in the user's config file.
 // If the key is already present, it's updated. If not, it's added.
 func StoreConfigValue(key, value string) error {
+	// Validate the key to prevent empty segments that would create invalid TOML.
+	if key == "" {
+		return errors.New("config key must not be empty")
+	}
+	for _, seg := range strings.Split(key, ".") {
+		if seg == "" {
+			return errors.Newf("config key %q contains an empty segment", key)
+		}
+	}
 	home, err := UserHomeDir()
 	if err != nil {
 		return errors.Wrap(err, "failed to get home directory")

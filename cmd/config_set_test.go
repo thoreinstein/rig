@@ -52,6 +52,12 @@ func TestConfigSet(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			buf := new(bytes.Buffer)
+			prevOut := rootCmd.OutOrStdout()
+			prevArgs := rootCmd.Flags().Args()
+			t.Cleanup(func() {
+				rootCmd.SetOut(prevOut)
+				rootCmd.SetArgs(prevArgs)
+			})
 			rootCmd.SetOut(buf)
 			rootCmd.SetArgs(tt.args)
 
