@@ -10,6 +10,7 @@ import (
 	"thoreinstein.com/rig/pkg/discovery"
 	"thoreinstein.com/rig/pkg/plugin"
 	"thoreinstein.com/rig/pkg/project"
+	"thoreinstein.com/rig/pkg/ticket"
 	"thoreinstein.com/rig/pkg/ui"
 	"thoreinstein.com/rig/pkg/vcs"
 )
@@ -49,6 +50,47 @@ func getVCSProvider(cfg *config.Config) (vcs.Provider, func(), error) {
 	}
 
 	provider, err := vcs.NewProviderWithManager(manager, cfg.VCS.Provider, verbose)
+	if err != nil {
+		cleanup()
+		return nil, nil, err
+	}
+
+	return provider, cleanup, nil
+}
+
+// getTicketProvider returns the ticketing provider based on configuration.
+func getTicketProvider(cfg *config.Config, projectPath string) (ticket.Provider, func(), error) {
+	if cfg.Ticket.Provider == "" || cfg.Ticket.Provider == "local" {
+		return ticket.NewLocalProvider(cfg, projectPath, verbose), func() {}, nil
+	}
+
+	// For plugin providers, we need a manager
+	var scanner *plugin.Scanner
+	var err error
+
+	if ctx, ctxErr := project.CachedDiscover(projectPath); ctxErr == nil && ctx.HasMarker(project.MarkerGit) {
+		scanner, err = plugin.NewScannerWithProjectRoot(ctx.Markers[project.MarkerGit])
+	} else {
+		scanner, err = plugin.NewScanner()
+	}
+
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "failed to initialize plugin scanner")
+	}
+
+	executor := plugin.NewExecutor("")
+
+	// Create manager
+	manager, err := plugin.NewManager(executor, scanner, GetVersion(), cfg.PluginConfig, slog.Default())
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "failed to initialize plugin manager")
+	}
+
+	cleanup := func() {
+		manager.StopAll()
+	}
+
+	provider, err := ticket.NewProviderWithManager(cfg, manager, projectPath, verbose)
 	if err != nil {
 		cleanup()
 		return nil, nil, err

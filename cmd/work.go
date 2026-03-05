@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"regexp"
@@ -9,11 +10,9 @@ import (
 	"github.com/cockroachdb/errors"
 	"github.com/spf13/cobra"
 
-	"thoreinstein.com/rig/pkg/beads"
-	"thoreinstein.com/rig/pkg/jira"
 	"thoreinstein.com/rig/pkg/notes"
+	"thoreinstein.com/rig/pkg/ticket"
 	"thoreinstein.com/rig/pkg/tmux"
-	"thoreinstein.com/rig/pkg/workflow"
 )
 
 var workNoNotes bool
@@ -98,7 +97,7 @@ func parseTicket(ticket string) (*TicketInfo, error) {
 	}, nil
 }
 
-func runWorkCommand(ticket string) error {
+func runWorkCommand(ticketID string) error {
 	// Load configuration
 	cfg, err := loadConfig()
 	if err != nil {
@@ -106,7 +105,7 @@ func runWorkCommand(ticket string) error {
 	}
 
 	// Parse ticket
-	ticketInfo, err := parseTicket(ticket)
+	ticketInfo, err := parseTicket(ticketID)
 	if err != nil {
 		return err
 	}
@@ -161,64 +160,37 @@ func runWorkCommand(ticket string) error {
 	}
 	fmt.Printf("Git worktree created at: %s\n", worktreePath)
 
-	// Step 2: Fetch JIRA details (if enabled)
-	var jiraInfo *jira.TicketInfo
-	if cfg.Jira.Enabled {
+	// Step 2: Fetch Ticket details and update status
+	var ticketDetails *ticket.TicketInfo
+	ticketProvider, ticketCleanup, err := getTicketProvider(cfg, worktreePath)
+	if err != nil {
 		if verbose {
-			fmt.Println("Fetching JIRA details...")
+			fmt.Printf("Warning: Could not initialize ticket provider: %v\n", err)
 		}
-		jiraClient, err := jira.NewJiraClient(&cfg.Jira, verbose)
-		if err != nil {
+	} else {
+		defer ticketCleanup()
+		if ticketProvider.IsAvailable(context.Background()) {
 			if verbose {
-				fmt.Printf("Warning: Could not initialize JIRA client: %v\n", err)
+				fmt.Println("Fetching ticket details...")
 			}
-		} else {
-			jiraInfo, err = jiraClient.FetchTicketDetails(ticketInfo.ID)
+			ticketDetails, err = ticketProvider.GetTicketInfo(context.Background(), ticketInfo.ID)
 			if err != nil {
 				if verbose {
-					fmt.Printf("Warning: Could not fetch JIRA details: %v\n", err)
-				}
-				// Don't fail the entire process if JIRA fetch fails
-				jiraInfo = nil
-			} else {
-				fmt.Println("JIRA details fetched successfully")
-			}
-		}
-	}
-
-	// Step 2b: Update beads status (if beads project detected)
-	var beadsInfo *beads.IssueInfo
-	router := workflow.NewTicketRouter(cfg, worktreePath, verbose)
-	ticketSource := router.RouteTicket(ticketInfo.ID)
-
-	if ticketSource == workflow.TicketSourceBeads && cfg.Beads.Enabled {
-		if verbose {
-			fmt.Println("Detected beads project, updating issue status...")
-		}
-		beadsClient, err := beads.NewCLIClient(cfg.Beads.CliCommand, verbose)
-		if err != nil {
-			if verbose {
-				fmt.Printf("Warning: Invalid beads CLI command: %v\n", err)
-			}
-		} else if beadsClient.IsAvailable() {
-			// First, fetch issue details for note integration
-			beadsInfo, err = beadsClient.Show(ticketInfo.ID)
-			if err != nil {
-				if verbose {
-					fmt.Printf("Warning: Could not fetch beads issue details: %v\n", err)
-				}
-			}
-
-			// Update status to in_progress
-			if err := beadsClient.UpdateStatus(ticketInfo.ID, "in_progress"); err != nil {
-				if verbose {
-					fmt.Printf("Warning: Could not update beads status: %v\n", err)
+					fmt.Printf("Warning: Could not fetch ticket details: %v\n", err)
 				}
 			} else {
-				fmt.Println("Beads issue status updated to in_progress")
+				if verbose {
+					fmt.Printf("Ticket details fetched: %s\n", ticketDetails.Title)
+				}
+				// Update status to in_progress
+				if err := ticketProvider.UpdateStatus(context.Background(), ticketInfo.ID, "in_progress"); err != nil {
+					if verbose {
+						fmt.Printf("Warning: Could not update ticket status: %v\n", err)
+					}
+				} else {
+					fmt.Println("Ticket status updated to in_progress")
+				}
 			}
-		} else if verbose {
-			fmt.Printf("Warning: beads CLI '%s' not found in PATH\n", cfg.Beads.CliCommand)
 		}
 	}
 
@@ -245,15 +217,11 @@ func runWorkCommand(ticket string) error {
 			WorktreePath: worktreePath,
 		}
 
-		// Add issue info if available (beads takes precedence over JIRA)
-		if beadsInfo != nil {
-			noteData.Summary = beadsInfo.Title
-			noteData.Status = beadsInfo.Status
-			noteData.Description = beadsInfo.Description
-		} else if jiraInfo != nil {
-			noteData.Summary = jiraInfo.Summary
-			noteData.Status = jiraInfo.Status
-			noteData.Description = jiraInfo.Description
+		// Add issue info if available
+		if ticketDetails != nil {
+			noteData.Summary = ticketDetails.Title
+			noteData.Status = ticketDetails.Status
+			noteData.Description = ticketDetails.Description
 		}
 
 		result, err := noteManager.CreateTicketNote(noteData)
