@@ -24,6 +24,7 @@ const (
 type GetSecretRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Key           string                 `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
+	Token         string                 `protobuf:"bytes,2,opt,name=token,proto3" json:"token,omitempty"` // Secret token provided to the plugin via RIG_HOST_SECRET_TOKEN
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -61,6 +62,13 @@ func (*GetSecretRequest) Descriptor() ([]byte, []int) {
 func (x *GetSecretRequest) GetKey() string {
 	if x != nil {
 		return x.Key
+	}
+	return ""
+}
+
+func (x *GetSecretRequest) GetToken() string {
+	if x != nil {
+		return x.Token
 	}
 	return ""
 }
@@ -113,9 +121,10 @@ var File_pkg_api_v1_secret_proto protoreflect.FileDescriptor
 
 const file_pkg_api_v1_secret_proto_rawDesc = "" +
 	"\n" +
-	"\x17pkg/api/v1/secret.proto\x12\x06rig.v1\"$\n" +
+	"\x17pkg/api/v1/secret.proto\x12\x06rig.v1\":\n" +
 	"\x10GetSecretRequest\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\")\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05token\x18\x02 \x01(\tR\x05token\")\n" +
 	"\x11GetSecretResponse\x12\x14\n" +
 	"\x05value\x18\x01 \x01(\tR\x05value2Q\n" +
 	"\rSecretService\x12@\n" +

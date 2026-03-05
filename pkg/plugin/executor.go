@@ -76,6 +76,10 @@ func (e *Executor) Start(ctx context.Context, p *Plugin) error {
 		cmd.Env = append(cmd.Env, "RIG_HOST_ENDPOINT="+hostEndpoint)
 	}
 
+	if p.secretToken != "" {
+		cmd.Env = append(cmd.Env, "RIG_HOST_SECRET_TOKEN="+p.secretToken)
+	}
+
 	// Ensure we can capture some output if needed for debugging
 	cmd.Stderr = os.Stderr
 

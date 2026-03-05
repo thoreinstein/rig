@@ -89,6 +89,7 @@ type Plugin struct {
 	active_sessions int
 	process         *os.Process
 	socketPath      string
+	secretToken     string
 	client          apiv1.PluginServiceClient
 	AssistantClient apiv1.AssistantServiceClient
 	CommandClient   apiv1.CommandServiceClient

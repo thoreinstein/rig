@@ -2,11 +2,13 @@ package plugin
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -51,12 +53,13 @@ type Manager struct {
 	configProvider ConfigProvider
 	logger         *slog.Logger
 
-	// Host-side UI Proxy Service
-	hostServer *grpc.Server
-	hostUI     apiv1.UIServiceServer
-	hostL      net.Listener
-	hostPath   string
-	hostDir    string
+	// Host-side Proxy Services
+	hostServer  *grpc.Server
+	hostUI      apiv1.UIServiceServer
+	secretProxy *HostSecretProxy
+	hostL       net.Listener
+	hostPath    string
+	hostDir     string
 
 	mu      sync.Mutex
 	plugins map[string]*Plugin
@@ -114,9 +117,49 @@ func NewManager(executor pluginExecutor, scanner *Scanner, rigVersion string, co
 		m.hostUI = ui.NewUIServer()
 	}
 
+	// Host secret proxy uses the config provider to resolve secrets.
+	// Since configProvider returns the full plugin JSON, we extract the 'secrets' section.
+	resolver := func(key string) (string, error) {
+		// key is "plugins.<pluginName>.secrets.<secretKey>"
+		parts := strings.Split(key, ".")
+		if len(parts) < 4 {
+			return "", fmt.Errorf("invalid secret key format: %s", key)
+		}
+		pluginName := parts[1]
+		secretKey := parts[3]
+
+		if m.configProvider == nil {
+			return "", errors.New("no config provider available")
+		}
+
+		data, err := m.configProvider(pluginName)
+		if err != nil {
+			return "", err
+		}
+
+		var cfg map[string]interface{}
+		if err := json.Unmarshal(data, &cfg); err != nil {
+			return "", fmt.Errorf("failed to unmarshal plugin config: %w", err)
+		}
+
+		secrets, ok := cfg["secrets"].(map[string]interface{})
+		if !ok {
+			return "", fmt.Errorf("no 'secrets' section found for plugin %q", pluginName)
+		}
+
+		val, ok := secrets[secretKey].(string)
+		if !ok {
+			return "", fmt.Errorf("secret %q not found or not a string for plugin %q", secretKey, pluginName)
+		}
+
+		return val, nil
+	}
+
+	m.secretProxy = NewHostSecretProxy(resolver)
+
 	srv := grpc.NewServer()
 	apiv1.RegisterUIServiceServer(srv, m.hostUI)
-	apiv1.RegisterSecretServiceServer(srv, NewHostSecretProxy())
+	apiv1.RegisterSecretServiceServer(srv, m.secretProxy)
 	m.hostServer = srv
 
 	go func() {
@@ -412,8 +455,17 @@ func (m *Manager) getOrStartPlugin(ctx context.Context, name string) (*Plugin, e
 		return nil, ErrPluginNotFound
 	}
 
+	// Generate a unique secret token for this plugin instance
+	u, err := uuid.NewRandom()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to generate secret token")
+	}
+	target.secretToken = u.String()
+	m.secretProxy.RegisterPlugin(target.secretToken, name)
+
 	// Start the plugin
 	if err := m.executor.Start(ctx, target); err != nil {
+		m.secretProxy.UnregisterPlugin(target.secretToken)
 		return nil, errors.Wrapf(err, "failed to start plugin %q", name)
 	}
 
@@ -530,6 +582,7 @@ func (m *Manager) StopPluginIfIdle(name string, idleTimeout time.Duration) error
 			return nil
 		}
 
+		m.secretProxy.UnregisterPlugin(p.secretToken)
 		delete(m.plugins, name)
 	}
 	m.mu.Unlock()

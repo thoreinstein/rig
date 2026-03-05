@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"errors"
 	"testing"
 
 	"google.golang.org/grpc/codes"
@@ -10,51 +11,74 @@ import (
 )
 
 func TestGetSecret(t *testing.T) {
-	proxy := NewHostSecretProxy()
+	mockConfig := map[string]string{
+		"plugins.jira.secrets.token": "jira-secret",
+		"plugins.beads.secrets.api":  "beads-secret",
+	}
+
+	resolver := func(key string) (string, error) {
+		val, ok := mockConfig[key]
+		if !ok {
+			return "", errors.New("not found")
+		}
+		return val, nil
+	}
+
+	proxy := NewHostSecretProxy(resolver)
+	jiraToken := "jira-tok-123"
+	beadsToken := "beads-tok-456"
+	proxy.RegisterPlugin(jiraToken, "jira")
+	proxy.RegisterPlugin(beadsToken, "beads")
 
 	tests := []struct {
 		name     string
 		key      string
-		envKey   string // if non-empty, set this env var before the call
-		envVal   string
+		token    string
 		wantVal  string
 		wantCode codes.Code
 		wantMsg  string
 	}{
 		{
-			name:    "allowed key with value set returns value",
-			key:     "JIRA_TOKEN",
-			envKey:  "JIRA_TOKEN",
-			envVal:  "tok-abc-123",
-			wantVal: "tok-abc-123",
+			name:    "valid token and allowed key returns value",
+			key:     "token",
+			token:   jiraToken,
+			wantVal: "jira-secret",
 		},
 		{
-			name:     "allowed key not set in env returns PermissionDenied",
-			key:      "BEADS_TOKEN",
-			wantCode: codes.PermissionDenied,
+			name:    "valid token for another plugin returns its own value",
+			key:     "api",
+			token:   beadsToken,
+			wantVal: "beads-secret",
+		},
+		{
+			name:     "invalid token returns Unauthenticated",
+			key:      "token",
+			token:    "wrong-token",
+			wantCode: codes.Unauthenticated,
+			wantMsg:  "invalid secret token",
+		},
+		{
+			name:     "valid token but missing key returns NotFound",
+			key:      "wrong-key",
+			token:    jiraToken,
+			wantCode: codes.NotFound,
 			wantMsg:  "secret not available",
 		},
 		{
-			name:     "disallowed key returns PermissionDenied",
-			key:      "AWS_SECRET_ACCESS_KEY",
-			wantCode: codes.PermissionDenied,
-			wantMsg:  "secret not available",
-		},
-		{
-			name:     "empty key returns PermissionDenied",
-			key:      "",
-			wantCode: codes.PermissionDenied,
+			name:     "plugin cannot access another plugin's secret",
+			key:      "api", // jira doesn't have 'api' secret, only beads does
+			token:    jiraToken,
+			wantCode: codes.NotFound,
 			wantMsg:  "secret not available",
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if tc.envKey != "" {
-				t.Setenv(tc.envKey, tc.envVal)
-			}
-
-			resp, err := proxy.GetSecret(t.Context(), &apiv1.GetSecretRequest{Key: tc.key})
+			resp, err := proxy.GetSecret(t.Context(), &apiv1.GetSecretRequest{
+				Key:   tc.key,
+				Token: tc.token,
+			})
 
 			if tc.wantCode != codes.OK {
 				if err == nil {
@@ -88,55 +112,21 @@ func TestGetSecret(t *testing.T) {
 	}
 }
 
-func TestGetSecret_AllAllowListKeys(t *testing.T) {
-	proxy := NewHostSecretProxy()
+func TestGetSecret_Unregister(t *testing.T) {
+	resolver := func(key string) (string, error) { return "val", nil }
+	proxy := NewHostSecretProxy(resolver)
+	token := "tok"
+	proxy.RegisterPlugin(token, "p")
 
-	for key := range secretAllowList {
-		t.Run(key, func(t *testing.T) {
-			want := "test-value-" + key
-			t.Setenv(key, want)
-
-			resp, err := proxy.GetSecret(t.Context(), &apiv1.GetSecretRequest{Key: key})
-			if err != nil {
-				t.Fatalf("unexpected error for allowed key %q: %v", key, err)
-			}
-
-			if resp.Value != want {
-				t.Errorf("value: got %q, want %q", resp.Value, want)
-			}
-		})
-	}
-}
-
-func TestGetSecret_AntiEnumeration(t *testing.T) {
-	proxy := NewHostSecretProxy()
-
-	// A disallowed key and an allowed-but-unset key must produce
-	// identical gRPC error codes and messages so callers cannot
-	// distinguish "key exists but not set" from "key not allowed."
-
-	disallowedReq := &apiv1.GetSecretRequest{Key: "NOT_IN_ALLOW_LIST"}
-	_, disallowedErr := proxy.GetSecret(t.Context(), disallowedReq)
-
-	// BEADS_TOKEN is allowed but not set in this test's environment.
-	unsetReq := &apiv1.GetSecretRequest{Key: "BEADS_TOKEN"}
-	_, unsetErr := proxy.GetSecret(t.Context(), unsetReq)
-
-	dSt, ok := status.FromError(disallowedErr)
-	if !ok {
-		t.Fatalf("disallowed error is not a gRPC status: %v", disallowedErr)
+	_, err := proxy.GetSecret(t.Context(), &apiv1.GetSecretRequest{Key: "k", Token: token})
+	if err != nil {
+		t.Fatalf("expected success before unregister, got %v", err)
 	}
 
-	uSt, ok := status.FromError(unsetErr)
-	if !ok {
-		t.Fatalf("unset error is not a gRPC status: %v", unsetErr)
-	}
+	proxy.UnregisterPlugin(token)
 
-	if dSt.Code() != uSt.Code() {
-		t.Errorf("codes differ: disallowed=%v, unset=%v", dSt.Code(), uSt.Code())
-	}
-
-	if dSt.Message() != uSt.Message() {
-		t.Errorf("messages differ: disallowed=%q, unset=%q", dSt.Message(), uSt.Message())
+	_, err = proxy.GetSecret(t.Context(), &apiv1.GetSecretRequest{Key: "k", Token: token})
+	if status.Code(err) != codes.Unauthenticated {
+		t.Errorf("expected Unauthenticated after unregister, got %v", err)
 	}
 }
