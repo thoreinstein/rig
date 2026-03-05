@@ -18,17 +18,13 @@ import (
 
 var projectFlag string
 
-// getVCSProvider returns the VCS provider based on configuration.
-func getVCSProvider(cfg *config.Config) (vcs.Provider, func(), error) {
-	if cfg.VCS.Provider == "" || cfg.VCS.Provider == "git" {
-		return vcs.NewLocalProvider(verbose), func() {}, nil
-	}
-
-	// For plugin providers, we need a manager
+// newPluginManager creates a plugin manager for the given project path.
+// Returns the manager and a cleanup function that stops all plugins.
+func newPluginManager(cfg *config.Config, projectPath string) (*plugin.Manager, func(), error) {
 	var scanner *plugin.Scanner
 	var err error
 
-	if ctx, ctxErr := project.CachedDiscover(""); ctxErr == nil && ctx.HasMarker(project.MarkerGit) {
+	if ctx, ctxErr := project.CachedDiscover(projectPath); ctxErr == nil && ctx.HasMarker(project.MarkerGit) {
 		scanner, err = plugin.NewScannerWithProjectRoot(ctx.Markers[project.MarkerGit])
 	} else {
 		scanner, err = plugin.NewScanner()
@@ -40,7 +36,6 @@ func getVCSProvider(cfg *config.Config) (vcs.Provider, func(), error) {
 
 	executor := plugin.NewExecutor("")
 
-	// Create manager
 	manager, err := plugin.NewManager(executor, scanner, GetVersion(), cfg.PluginConfig, slog.Default())
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "failed to initialize plugin manager")
@@ -48,6 +43,20 @@ func getVCSProvider(cfg *config.Config) (vcs.Provider, func(), error) {
 
 	cleanup := func() {
 		manager.StopAll()
+	}
+
+	return manager, cleanup, nil
+}
+
+// getVCSProvider returns the VCS provider based on configuration.
+func getVCSProvider(cfg *config.Config) (vcs.Provider, func(), error) {
+	if cfg.VCS.Provider == "" || cfg.VCS.Provider == "git" {
+		return vcs.NewLocalProvider(verbose), func() {}, nil
+	}
+
+	manager, cleanup, err := newPluginManager(cfg, "")
+	if err != nil {
+		return nil, nil, err
 	}
 
 	provider, err := vcs.NewProviderWithManager(manager, cfg.VCS.Provider, verbose)
@@ -65,30 +74,9 @@ func getTicketProvider(cfg *config.Config, projectPath string) (ticket.Provider,
 		return ticket.NewLocalProvider(cfg, projectPath, verbose), func() {}, nil
 	}
 
-	// For plugin providers, we need a manager
-	var scanner *plugin.Scanner
-	var err error
-
-	if ctx, ctxErr := project.CachedDiscover(projectPath); ctxErr == nil && ctx.HasMarker(project.MarkerGit) {
-		scanner, err = plugin.NewScannerWithProjectRoot(ctx.Markers[project.MarkerGit])
-	} else {
-		scanner, err = plugin.NewScanner()
-	}
-
+	manager, cleanup, err := newPluginManager(cfg, projectPath)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "failed to initialize plugin scanner")
-	}
-
-	executor := plugin.NewExecutor("")
-
-	// Create manager
-	manager, err := plugin.NewManager(executor, scanner, GetVersion(), cfg.PluginConfig, slog.Default())
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "failed to initialize plugin manager")
-	}
-
-	cleanup := func() {
-		manager.StopAll()
+		return nil, nil, err
 	}
 
 	provider, err := ticket.NewProviderWithManager(cfg, manager, projectPath, verbose)
@@ -106,30 +94,9 @@ func getKnowledgeProvider(cfg *config.Config, projectPath string) (knowledge.Pro
 		return knowledge.NewLocalProvider(cfg, verbose), func() {}, nil
 	}
 
-	// For plugin providers, we need a manager
-	var scanner *plugin.Scanner
-	var err error
-
-	if ctx, ctxErr := project.CachedDiscover(projectPath); ctxErr == nil && ctx.HasMarker(project.MarkerGit) {
-		scanner, err = plugin.NewScannerWithProjectRoot(ctx.Markers[project.MarkerGit])
-	} else {
-		scanner, err = plugin.NewScanner()
-	}
-
+	manager, cleanup, err := newPluginManager(cfg, projectPath)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "failed to initialize plugin scanner")
-	}
-
-	executor := plugin.NewExecutor("")
-
-	// Create manager
-	manager, err := plugin.NewManager(executor, scanner, GetVersion(), cfg.PluginConfig, slog.Default())
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "failed to initialize plugin manager")
-	}
-
-	cleanup := func() {
-		manager.StopAll()
+		return nil, nil, err
 	}
 
 	provider, err := knowledge.NewProviderWithManager(cfg, manager, verbose)

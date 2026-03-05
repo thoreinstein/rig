@@ -65,7 +65,7 @@ func runSyncCommand(cmd *cobra.Command, ticketID string) error {
 
 	// Handle ticket sync
 	if ticketID == "" {
-		return errors.New("ticket required (could not detect from branch)")
+		return errors.New("ticket required (or use --daily flag)")
 	}
 
 	return syncTicketNote(cmd, cfg, ticketID)

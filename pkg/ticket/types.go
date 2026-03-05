@@ -52,6 +52,9 @@ func ParseTicket(ticketID string) (*ParsedTicket, error) {
 		}
 		project = p
 		ticketID = t
+		if ticketID == "" {
+			return nil, errors.New("invalid ticket format. Ticket ID cannot be empty when using 'project:ticket'")
+		}
 	}
 
 	matches := ticketIDRegex.FindStringSubmatch(ticketID)

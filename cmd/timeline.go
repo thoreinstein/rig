@@ -383,7 +383,11 @@ func writeTimelineToFile(timeline, filename string) error {
 // updateTicketNoteWithTimeline updates the ticket's note with the timeline
 func updateTicketNoteWithTimeline(cmd *cobra.Command, cfg *config.Config, ticketInfo *ticket.ParsedTicket, timeline string) error {
 	// Initialize knowledge provider
-	noteProvider, knowledgeCleanup, err := getKnowledgeProvider(cfg, "")
+	projectPath, err := os.Getwd()
+	if err != nil {
+		return errors.Wrap(err, "failed to determine working directory")
+	}
+	noteProvider, knowledgeCleanup, err := getKnowledgeProvider(cfg, projectPath)
 	if err != nil {
 		return errors.Wrap(err, "failed to initialize knowledge provider")
 	}
