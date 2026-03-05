@@ -1,0 +1,57 @@
+syntax = "proto3";
+
+package rig.v1;
+
+option go_package = "thoreinstein.com/rig/pkg/api/v1;apiv1";
+
+// TicketService defines the interface for ticketing operations (Jira, Beads, etc.)
+service TicketService {
+  // GetTicketInfo retrieves information for a specific ticket.
+  rpc GetTicketInfo(GetTicketInfoRequest) returns (GetTicketInfoResponse);
+
+  // UpdateTicketStatus updates the status of a ticket.
+  rpc UpdateTicketStatus(UpdateTicketStatusRequest) returns (UpdateTicketStatusResponse);
+
+  // ListTransitions returns available transitions for a ticket.
+  rpc ListTransitions(ListTransitionsRequest) returns (ListTransitionsResponse);
+}
+
+message GetTicketInfoRequest {
+  string ticket_id = 1;
+}
+
+message TicketInfo {
+  string id = 1;
+  string title = 2;
+  string status = 3;
+  string priority = 4;
+  string description = 5;
+  map<string, string> custom_fields = 6;
+  string type = 7;
+}
+
+message GetTicketInfoResponse {
+  TicketInfo ticket = 1;
+}
+
+message UpdateTicketStatusRequest {
+  string ticket_id = 1;
+  string status = 2;
+}
+
+message UpdateTicketStatusResponse {
+  bool success = 1;
+}
+
+message Transition {
+  string id = 1;
+  string name = 2;
+}
+
+message ListTransitionsRequest {
+  string ticket_id = 1;
+}
+
+message ListTransitionsResponse {
+  repeated Transition transitions = 1;
+}
