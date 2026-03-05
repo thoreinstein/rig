@@ -1,0 +1,10 @@
+name: secret-cmd
+version: 0.1.0
+description: Command plugin for host secret lookup smoke testing
+author: thoreinstein
+requirements:
+  rig: ">=0.1.0"
+commands:
+  - name: get-secret
+    short: "Fetch a host secret"
+    long: "Resolves api_key from the Rig host secret service"

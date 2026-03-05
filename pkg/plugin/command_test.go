@@ -146,3 +146,101 @@ func TestCommandExecution(t *testing.T) {
 		})
 	}
 }
+
+func TestCommandExecution_SecretLookupSmoke(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	pluginBin := filepath.Join(tmpDir, "secret-cmd-plugin")
+	cwd, _ := os.Getwd()
+	sourceFile := filepath.Join(cwd, "testdata", "secret-cmd-plugin", "main.go")
+
+	compileCmd := exec.Command("go", "build", "-o", pluginBin, sourceFile)
+	if out, err := compileCmd.CombinedOutput(); err != nil {
+		t.Fatalf("failed to compile secret-cmd-plugin: %v\nOutput: %s", err, string(out))
+	}
+
+	pluginDir := filepath.Join(tmpDir, "plugins")
+	if err := os.Mkdir(pluginDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	targetBin := filepath.Join(pluginDir, "secret-cmd")
+	if err := os.Rename(pluginBin, targetBin); err != nil {
+		t.Fatal(err)
+	}
+
+	manifestSrc := filepath.Join(cwd, "testdata", "secret-cmd-plugin", "manifest.yaml")
+	manifestData, err := os.ReadFile(manifestSrc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(targetBin+".manifest.yaml", manifestData, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	scanner := &Scanner{Paths: []string{pluginDir}}
+	executor := NewExecutor("")
+	configProvider := func(name string) ([]byte, error) {
+		return []byte(`{"secrets":{"api_key":"super-secret-value"}}`), nil
+	}
+
+	manager, err := NewManager(executor, scanner, "0.1.0", configProvider, nil)
+	if err != nil {
+		t.Fatalf("NewManager() failed: %v", err)
+	}
+	defer manager.StopAll()
+
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+
+	client, err := manager.GetCommandClient(ctx, "secret-cmd")
+	if err != nil {
+		t.Fatalf("GetCommandClient() failed: %v", err)
+	}
+
+	stream, err := client.Execute(ctx, &apiv1.ExecuteRequest{
+		Command: "get-secret",
+	})
+	if err != nil {
+		t.Fatalf("Execute() failed: %v", err)
+	}
+
+	var stdout, stderr strings.Builder
+	var gotDone bool
+	var exitCode int32
+
+	for {
+		resp, err := stream.Recv()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("stream.Recv() failed: %v", err)
+		}
+
+		if len(resp.Stdout) > 0 {
+			stdout.Write(resp.Stdout)
+		}
+		if len(resp.Stderr) > 0 {
+			stderr.Write(resp.Stderr)
+		}
+		if resp.Done {
+			gotDone = true
+			exitCode = resp.ExitCode
+			break
+		}
+	}
+
+	if !gotDone {
+		t.Fatal("expected done=true in stream")
+	}
+	if exitCode != 0 {
+		t.Fatalf("exit_code = %d, want 0 (stderr: %q)", exitCode, stderr.String())
+	}
+	if stderr.String() != "" {
+		t.Fatalf("stderr = %q, want empty", stderr.String())
+	}
+	if stdout.String() != "super-secret-value" {
+		t.Fatalf("stdout = %q, want %q", stdout.String(), "super-secret-value")
+	}
+}
