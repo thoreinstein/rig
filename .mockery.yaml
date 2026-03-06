@@ -1,6 +1,6 @@
 all: false
 template: testify
-# Required: KnowledgeServiceClient lives in protobuf-generated code
+# Required: PluginManager lives in a package with internal logic
 include-auto-generated: true
 packages:
   thoreinstein.com/rig/pkg/knowledge:
@@ -10,10 +10,3 @@ packages:
       pkgname: "mocks"
     interfaces:
       PluginManager: {}
-  thoreinstein.com/rig/pkg/api/v1:
-    config:
-      dir: "{{.InterfaceDir}}/mocks"
-      filename: "mock_{{snakecase .InterfaceName}}.go"
-      pkgname: "mocks"
-    interfaces:
-      KnowledgeServiceClient: {}
