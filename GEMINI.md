@@ -337,6 +337,9 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 
 ### Testing & Lifecycle
 - **In-Package Lifecycle Interfacing:** When a component depends on a heavy system manager (like `plugin.Manager`) for session acquisition and release, define a minimal, consumer-specific interface within the same package as the component. This enables zero-IPC unit testing of the component's internal logic and `defer` cleanup behavior.
+- **Package-Centric Mocking:** Generate mocks using Mockery v3's package-centric configuration (`.mockery.yaml`). Place mocks in a dedicated `mocks/` subdirectory adjacent to the target interface, assigning them the package name `mocks` and standard `.go` extensions (e.g. `mock_*.go`). This ensures mocks are importable by external test packages without compilation errors.
+- **Mocking Auto-Generated Interfaces:** Interfaces defined in packages with generated code (like gRPC clients) require `include-auto-generated: true` in the mockery configuration to be discovered.
+- **Mockery Variadic Option Trap:** Mockery v3's `testify` template currently mishandles variadic arguments (like `...grpc.CallOption`), causing mismatches between the generated `Called()` slice and the `EXPECT()` variadic expansion. gRPC client interfaces must use hand-written mocks that manually expand the slice before calling testify's `Called()` method.
 
 ### Maintenance & Storage
 - **Maintenance Connection Pinning:** Maintenance operations in Dolt (e.g., `USE database`, `dolt_gc`, multi-table pruning) MUST use a pinned `*sql.Conn` to ensure session affinity. Using the general pool can lead to commands running against the wrong database context.
