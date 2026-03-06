@@ -1,11 +1,19 @@
 all: false
 template: testify
-dir: "{{.InterfaceDir}}/mocks"
+# Required: KnowledgeServiceClient lives in protobuf-generated code
 include-auto-generated: true
 packages:
   thoreinstein.com/rig/pkg/knowledge:
+    config:
+      dir: "{{.InterfaceDir}}/mocks"
+      filename: "mock_{{snakecase .InterfaceName}}.go"
+      pkgname: "mocks"
     interfaces:
       PluginManager: {}
   thoreinstein.com/rig/pkg/api/v1:
+    config:
+      dir: "{{.InterfaceDir}}/mocks"
+      filename: "mock_{{snakecase .InterfaceName}}.go"
+      pkgname: "mocks"
     interfaces:
       KnowledgeServiceClient: {}

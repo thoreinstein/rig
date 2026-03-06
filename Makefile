@@ -1,6 +1,6 @@
 .PHONY: all generate lint install-tools generate-mocks
 
-all: generate lint generate-mocks
+all: generate lint
 
 # Tool versions
 BUF_VERSION := v1.50.0

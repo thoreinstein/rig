@@ -142,6 +142,7 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 - **Isolated Secret Resolution:** Use isolated resolution functions for each provider to prevent "cross-provider contamination" (e.g., using an Anthropic key for Gemini).
 - **Security Warning Accuracy:** When implementing security warnings for config-stored secrets, ensure all valid environment variable sources (e.g., `RIG_AI_*`) are checked to avoid false positives.
 - **Implicit Default Bounds Trap:** Avoid "helpful" default time bounds (like `now - 30d`) in historical query paths if they aren't strictly required for performance. Providing a default lower bound when a user only specifies an upper bound (`--until`) creates a functional regression where old data is silently dropped. Always default to zero-value bounds (`time.Time{}`) for open-ended queries to match established CLI semantics.
+- **Constructor Signature Mismatch:** When refactoring a concrete dependency to an interface, maintain the original constructor's return signature (e.g. avoid adding a new `error` return) to prevent breaking external callers in other packages unless explicitly required.
 
 ### Development Strategy
 - **SDK-First:** Prefer official Go SDKs (like Genkit for Google AI) over CLI wrappers for stability and robust streaming support.
@@ -333,6 +334,9 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 
 ### VCS & URL Patterns
 - **Discriminatory Shorthand Processing**: When supporting both full URLs and shorthands (e.g., `owner/repo`), explicitly flag the input as a shorthand during initial parsing (e.g., `IsShorthand: true`). This allows for safe, conditional application of user preferences (like protocol selection) without mangling explicit, well-formed URLs.
+
+### Testing & Lifecycle
+- **In-Package Lifecycle Interfacing:** When a component depends on a heavy system manager (like `plugin.Manager`) for session acquisition and release, define a minimal, consumer-specific interface within the same package as the component. This enables zero-IPC unit testing of the component's internal logic and `defer` cleanup behavior.
 
 ### Maintenance & Storage
 - **Maintenance Connection Pinning:** Maintenance operations in Dolt (e.g., `USE database`, `dolt_gc`, multi-table pruning) MUST use a pinned `*sql.Conn` to ensure session affinity. Using the general pool can lead to commands running against the wrong database context.
