@@ -583,6 +583,34 @@ func TestConfig_Validate(t *testing.T) {
 			},
 			wantErr: false,
 		},
+		{
+			name: "clone protocol ssh",
+			config: &Config{
+				Clone: CloneConfig{Protocol: "ssh"},
+			},
+			wantErr: false,
+		},
+		{
+			name: "clone protocol https",
+			config: &Config{
+				Clone: CloneConfig{Protocol: "https"},
+			},
+			wantErr: false,
+		},
+		{
+			name: "clone protocol empty",
+			config: &Config{
+				Clone: CloneConfig{Protocol: ""},
+			},
+			wantErr: false,
+		},
+		{
+			name: "clone protocol invalid",
+			config: &Config{
+				Clone: CloneConfig{Protocol: "ftp"},
+			},
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {
