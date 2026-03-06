@@ -79,6 +79,14 @@ func assertReleaseCalled(t *testing.T, m *mockPluginManager, expected int) {
 
 func assertTimeoutApplied(t *testing.T, ctx context.Context, expectedTimeout time.Duration) {
 	t.Helper()
+
+	const (
+		// lowerSlack accounts for time elapsed between WithTimeout and this assertion.
+		lowerSlack = 5 * time.Second
+		// upperSlack accounts for minor clock drift or scheduling jitter.
+		upperSlack = 1 * time.Second
+	)
+
 	deadline, ok := ctx.Deadline()
 	if !ok {
 		t.Error("expected context to have a deadline")
@@ -86,8 +94,7 @@ func assertTimeoutApplied(t *testing.T, ctx context.Context, expectedTimeout tim
 	}
 
 	remaining := time.Until(deadline)
-	// Allow for a generous window (25s to 31s)
-	if remaining < expectedTimeout-5*time.Second || remaining > expectedTimeout+1*time.Second {
+	if remaining < expectedTimeout-lowerSlack || remaining > expectedTimeout+upperSlack {
 		t.Errorf("expected deadline around %v from now, remaining: %v", expectedTimeout, remaining)
 	}
 }
