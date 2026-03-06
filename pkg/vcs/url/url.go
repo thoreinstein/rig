@@ -10,11 +10,28 @@ import (
 
 // RepoURL represents a parsed GitHub repository URL
 type RepoURL struct {
-	Original  string // Original input
-	Canonical string // Normalized URL for cloning
-	Protocol  string // "ssh" or "https"
-	Owner     string // GitHub org/user
-	Repo      string // Repository name (without .git)
+	Original    string // Original input
+	Canonical   string // Normalized URL for cloning
+	Protocol    string // "ssh" or "https"
+	Owner       string // GitHub org/user
+	Repo        string // Repository name (without .git)
+	IsShorthand bool   // True if the URL was provided as a shorthand
+}
+
+// SetProtocol updates the protocol and canonical URL.
+// This is only applied if the original URL was a shorthand.
+func (r *RepoURL) SetProtocol(protocol string) {
+	if !r.IsShorthand || protocol == "" || protocol == r.Protocol {
+		return
+	}
+
+	r.Protocol = protocol
+	switch protocol {
+	case "ssh":
+		r.Canonical = fmt.Sprintf("git@github.com:%s/%s.git", r.Owner, r.Repo)
+	case "https":
+		r.Canonical = fmt.Sprintf("https://github.com/%s/%s.git", r.Owner, r.Repo)
+	}
 }
 
 // URL parsing patterns for GitHub repository URLs
@@ -71,22 +88,24 @@ func ParseGitHubURL(input string) (*RepoURL, error) {
 	// Try shorthand format (default to SSH)
 	if matches := shorthandURLRegex.FindStringSubmatch(input); len(matches) == 3 {
 		return &RepoURL{
-			Original:  input,
-			Canonical: fmt.Sprintf("git@github.com:%s/%s.git", matches[1], matches[2]),
-			Protocol:  "ssh",
-			Owner:     matches[1],
-			Repo:      matches[2],
+			Original:    input,
+			Canonical:   fmt.Sprintf("git@github.com:%s/%s.git", matches[1], matches[2]),
+			Protocol:    "ssh",
+			Owner:       matches[1],
+			Repo:        matches[2],
+			IsShorthand: true,
 		}, nil
 	}
 
 	// Try owner/repo shorthand (default to SSH)
 	if matches := ownerRepoRegex.FindStringSubmatch(input); len(matches) == 3 {
 		return &RepoURL{
-			Original:  input,
-			Canonical: fmt.Sprintf("git@github.com:%s/%s.git", matches[1], matches[2]),
-			Protocol:  "ssh",
-			Owner:     matches[1],
-			Repo:      matches[2],
+			Original:    input,
+			Canonical:   fmt.Sprintf("git@github.com:%s/%s.git", matches[1], matches[2]),
+			Protocol:    "ssh",
+			Owner:       matches[1],
+			Repo:        matches[2],
+			IsShorthand: true,
 		}, nil
 	}
 

@@ -16,44 +16,48 @@ func TestParseGitHubURL_SSH(t *testing.T) {
 			name:  "SSH with .git suffix",
 			input: "git@github.com:thoreinstein/rig.git",
 			want: &RepoURL{
-				Original:  "git@github.com:thoreinstein/rig.git",
-				Canonical: "git@github.com:thoreinstein/rig.git",
-				Protocol:  "ssh",
-				Owner:     "thoreinstein",
-				Repo:      "rig",
+				Original:    "git@github.com:thoreinstein/rig.git",
+				Canonical:   "git@github.com:thoreinstein/rig.git",
+				Protocol:    "ssh",
+				Owner:       "thoreinstein",
+				Repo:        "rig",
+				IsShorthand: false,
 			},
 		},
 		{
 			name:  "SSH without .git suffix",
 			input: "git@github.com:thoreinstein/rig",
 			want: &RepoURL{
-				Original:  "git@github.com:thoreinstein/rig",
-				Canonical: "git@github.com:thoreinstein/rig.git",
-				Protocol:  "ssh",
-				Owner:     "thoreinstein",
-				Repo:      "rig",
+				Original:    "git@github.com:thoreinstein/rig",
+				Canonical:   "git@github.com:thoreinstein/rig.git",
+				Protocol:    "ssh",
+				Owner:       "thoreinstein",
+				Repo:        "rig",
+				IsShorthand: false,
 			},
 		},
 		{
 			name:  "SSH with dashes and underscores",
 			input: "git@github.com:my-org/my_repo.git",
 			want: &RepoURL{
-				Original:  "git@github.com:my-org/my_repo.git",
-				Canonical: "git@github.com:my-org/my_repo.git",
-				Protocol:  "ssh",
-				Owner:     "my-org",
-				Repo:      "my_repo",
+				Original:    "git@github.com:my-org/my_repo.git",
+				Canonical:   "git@github.com:my-org/my_repo.git",
+				Protocol:    "ssh",
+				Owner:       "my-org",
+				Repo:        "my_repo",
+				IsShorthand: false,
 			},
 		},
 		{
 			name:  "SSH with dots in repo name",
 			input: "git@github.com:owner/repo.name.git",
 			want: &RepoURL{
-				Original:  "git@github.com:owner/repo.name.git",
-				Canonical: "git@github.com:owner/repo.name.git",
-				Protocol:  "ssh",
-				Owner:     "owner",
-				Repo:      "repo.name",
+				Original:    "git@github.com:owner/repo.name.git",
+				Canonical:   "git@github.com:owner/repo.name.git",
+				Protocol:    "ssh",
+				Owner:       "owner",
+				Repo:        "repo.name",
+				IsShorthand: false,
 			},
 		},
 	}
@@ -83,33 +87,36 @@ func TestParseGitHubURL_HTTPS(t *testing.T) {
 			name:  "HTTPS with .git suffix",
 			input: "https://github.com/thoreinstein/rig.git",
 			want: &RepoURL{
-				Original:  "https://github.com/thoreinstein/rig.git",
-				Canonical: "https://github.com/thoreinstein/rig.git",
-				Protocol:  "https",
-				Owner:     "thoreinstein",
-				Repo:      "rig",
+				Original:    "https://github.com/thoreinstein/rig.git",
+				Canonical:   "https://github.com/thoreinstein/rig.git",
+				Protocol:    "https",
+				Owner:       "thoreinstein",
+				Repo:        "rig",
+				IsShorthand: false,
 			},
 		},
 		{
 			name:  "HTTPS without .git suffix",
 			input: "https://github.com/thoreinstein/rig",
 			want: &RepoURL{
-				Original:  "https://github.com/thoreinstein/rig",
-				Canonical: "https://github.com/thoreinstein/rig.git",
-				Protocol:  "https",
-				Owner:     "thoreinstein",
-				Repo:      "rig",
+				Original:    "https://github.com/thoreinstein/rig",
+				Canonical:   "https://github.com/thoreinstein/rig.git",
+				Protocol:    "https",
+				Owner:       "thoreinstein",
+				Repo:        "rig",
+				IsShorthand: false,
 			},
 		},
 		{
 			name:  "HTTPS with dashes",
 			input: "https://github.com/my-org/my-repo",
 			want: &RepoURL{
-				Original:  "https://github.com/my-org/my-repo",
-				Canonical: "https://github.com/my-org/my-repo.git",
-				Protocol:  "https",
-				Owner:     "my-org",
-				Repo:      "my-repo",
+				Original:    "https://github.com/my-org/my-repo",
+				Canonical:   "https://github.com/my-org/my-repo.git",
+				Protocol:    "https",
+				Owner:       "my-org",
+				Repo:        "my-repo",
+				IsShorthand: false,
 			},
 		},
 	}
@@ -139,22 +146,24 @@ func TestParseGitHubURL_Shorthand(t *testing.T) {
 			name:  "shorthand basic",
 			input: "github.com/thoreinstein/rig",
 			want: &RepoURL{
-				Original:  "github.com/thoreinstein/rig",
-				Canonical: "git@github.com:thoreinstein/rig.git",
-				Protocol:  "ssh",
-				Owner:     "thoreinstein",
-				Repo:      "rig",
+				Original:    "github.com/thoreinstein/rig",
+				Canonical:   "git@github.com:thoreinstein/rig.git",
+				Protocol:    "ssh",
+				Owner:       "thoreinstein",
+				Repo:        "rig",
+				IsShorthand: true,
 			},
 		},
 		{
 			name:  "shorthand with .git",
 			input: "github.com/owner/repo.git",
 			want: &RepoURL{
-				Original:  "github.com/owner/repo.git",
-				Canonical: "git@github.com:owner/repo.git",
-				Protocol:  "ssh",
-				Owner:     "owner",
-				Repo:      "repo",
+				Original:    "github.com/owner/repo.git",
+				Canonical:   "git@github.com:owner/repo.git",
+				Protocol:    "ssh",
+				Owner:       "owner",
+				Repo:        "repo",
+				IsShorthand: true,
 			},
 		},
 	}
@@ -184,33 +193,36 @@ func TestParseGitHubURL_OwnerRepoShorthand(t *testing.T) {
 			name:  "owner/repo shorthand",
 			input: "thoreinstein/rig",
 			want: &RepoURL{
-				Original:  "thoreinstein/rig",
-				Canonical: "git@github.com:thoreinstein/rig.git",
-				Protocol:  "ssh",
-				Owner:     "thoreinstein",
-				Repo:      "rig",
+				Original:    "thoreinstein/rig",
+				Canonical:   "git@github.com:thoreinstein/rig.git",
+				Protocol:    "ssh",
+				Owner:       "thoreinstein",
+				Repo:        "rig",
+				IsShorthand: true,
 			},
 		},
 		{
 			name:  "owner/repo shorthand with .git",
 			input: "owner/repo.git",
 			want: &RepoURL{
-				Original:  "owner/repo.git",
-				Canonical: "git@github.com:owner/repo.git",
-				Protocol:  "ssh",
-				Owner:     "owner",
-				Repo:      "repo",
+				Original:    "owner/repo.git",
+				Canonical:   "git@github.com:owner/repo.git",
+				Protocol:    "ssh",
+				Owner:       "owner",
+				Repo:        "repo",
+				IsShorthand: true,
 			},
 		},
 		{
 			name:  "owner/repo shorthand with underscore in owner",
 			input: "my_org/repo",
 			want: &RepoURL{
-				Original:  "my_org/repo",
-				Canonical: "git@github.com:my_org/repo.git",
-				Protocol:  "ssh",
-				Owner:     "my_org",
-				Repo:      "repo",
+				Original:    "my_org/repo",
+				Canonical:   "git@github.com:my_org/repo.git",
+				Protocol:    "ssh",
+				Owner:       "my_org",
+				Repo:        "repo",
+				IsShorthand: true,
 			},
 		},
 	}
@@ -293,6 +305,61 @@ func TestParseGitHubURL_Invalid(t *testing.T) {
 	}
 }
 
+func TestRepoURL_SetProtocol(t *testing.T) {
+	tests := []struct {
+		name          string
+		input         string
+		protocol      string
+		wantProtocol  string
+		wantCanonical string
+	}{
+		{
+			name:          "shorthand to https",
+			input:         "owner/repo",
+			protocol:      "https",
+			wantProtocol:  "https",
+			wantCanonical: "https://github.com/owner/repo.git",
+		},
+		{
+			name:          "shorthand stay ssh",
+			input:         "owner/repo",
+			protocol:      "ssh",
+			wantProtocol:  "ssh",
+			wantCanonical: "git@github.com:owner/repo.git",
+		},
+		{
+			name:          "explicit ssh stays ssh",
+			input:         "git@github.com:owner/repo.git",
+			protocol:      "https",
+			wantProtocol:  "ssh",
+			wantCanonical: "git@github.com:owner/repo.git",
+		},
+		{
+			name:          "explicit https stays https",
+			input:         "https://github.com/owner/repo.git",
+			protocol:      "ssh",
+			wantProtocol:  "https",
+			wantCanonical: "https://github.com/owner/repo.git",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ParseGitHubURL(tt.input)
+			if err != nil {
+				t.Fatalf("ParseGitHubURL() error = %v", err)
+			}
+			got.SetProtocol(tt.protocol)
+			if got.Protocol != tt.wantProtocol {
+				t.Errorf("Protocol = %q, want %q", got.Protocol, tt.wantProtocol)
+			}
+			if got.Canonical != tt.wantCanonical {
+				t.Errorf("Canonical = %q, want %q", got.Canonical, tt.wantCanonical)
+			}
+		})
+	}
+}
+
 // Helper function to compare RepoURL structs
 func assertRepoURLEqual(t *testing.T, got, want *RepoURL) {
 	t.Helper()
@@ -310,5 +377,8 @@ func assertRepoURLEqual(t *testing.T, got, want *RepoURL) {
 	}
 	if got.Repo != want.Repo {
 		t.Errorf("Repo = %q, want %q", got.Repo, want.Repo)
+	}
+	if got.IsShorthand != want.IsShorthand {
+		t.Errorf("IsShorthand = %v, want %v", got.IsShorthand, want.IsShorthand)
 	}
 }
