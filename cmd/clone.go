@@ -45,11 +45,20 @@ func init() {
 }
 
 func runCloneCommand(urlInput string) error {
-	// Parse the URL first
+	// 1. Parse the URL
 	repoURL, err := vcsurl.ParseGitHubURL(urlInput)
 	if err != nil {
 		return err
 	}
+
+	// 2. Load configuration
+	cfg, err := loadConfig()
+	if err != nil {
+		return errors.Wrap(err, "failed to load configuration")
+	}
+
+	// 3. Apply protocol preference for shorthands
+	repoURL.SetProtocol(cfg.Clone.Protocol)
 
 	if verbose {
 		fmt.Printf("Parsed URL:\n")
@@ -58,25 +67,18 @@ func runCloneCommand(urlInput string) error {
 		fmt.Printf("  Protocol: %s\n", repoURL.Protocol)
 		fmt.Printf("  Owner: %s\n", repoURL.Owner)
 		fmt.Printf("  Repo: %s\n", repoURL.Repo)
+		fmt.Printf("  Shorthand: %v\n", repoURL.IsShorthand)
 	}
 
-	// Load configuration
-	cfg, err := loadConfig()
-	if err != nil {
-		return errors.Wrap(err, "failed to load configuration")
-	}
-
-	// Initialize VCS provider
+	// 4. Initialize VCS provider
 	provider, cleanup, err := getVCSProvider(cfg)
 	if err != nil {
 		return errors.Wrap(err, "failed to initialize VCS provider")
 	}
 	defer cleanup()
 
-	// Get base path from config or use default
-	basePath := cfg.Clone.BasePath
-
-	repoPath, err := provider.Clone(urlInput, basePath)
+	// 5. Clone using the expanded canonical URL
+	repoPath, err := provider.Clone(repoURL.Canonical, cfg.Clone.BasePath)
 	if err != nil {
 		return errors.Wrap(err, "clone failed")
 	}
