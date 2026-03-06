@@ -7,20 +7,25 @@ import (
 	"github.com/cockroachdb/errors"
 
 	apiv1 "thoreinstein.com/rig/pkg/api/v1"
-	"thoreinstein.com/rig/pkg/plugin"
 )
 
 // rpcTimeout is the timeout for knowledge plugin RPC calls.
 const rpcTimeout = 30 * time.Second
 
+// PluginManager abstracts plugin session lifecycle for testing.
+type PluginManager interface {
+	GetKnowledgeClient(ctx context.Context, name string) (apiv1.KnowledgeServiceClient, error)
+	ReleasePlugin(name string)
+}
+
 // PluginProvider implements the Provider interface by delegating to a Rig plugin.
 type PluginProvider struct {
-	Manager    *plugin.Manager
+	Manager    PluginManager
 	PluginName string
 }
 
 // NewPluginProvider creates a new PluginProvider.
-func NewPluginProvider(manager *plugin.Manager, pluginName string) *PluginProvider {
+func NewPluginProvider(manager PluginManager, pluginName string) *PluginProvider {
 	return &PluginProvider{
 		Manager:    manager,
 		PluginName: pluginName,
