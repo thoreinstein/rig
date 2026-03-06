@@ -91,6 +91,7 @@ type GitConfig struct {
 // CloneConfig holds clone command configuration
 type CloneConfig struct {
 	BasePath string `mapstructure:"base_path"` // Base directory for clones (default: ~/src)
+	Protocol string `mapstructure:"protocol"`  // Preferred protocol for shorthands ("ssh" or "https")
 }
 
 // HistoryConfig holds command history configuration
@@ -266,6 +267,10 @@ func (c *Config) Validate() error {
 		return errors.Wrap(err, "github.default_merge_method")
 	}
 
+	if c.Clone.Protocol != "" && c.Clone.Protocol != "ssh" && c.Clone.Protocol != "https" {
+		return errors.Newf("clone.protocol must be either 'ssh' or 'https', got %q", c.Clone.Protocol)
+	}
+
 	if c.Events.Enabled {
 		if c.Events.DataPath == "" {
 			return errors.New("events.data_path must not be empty when events are enabled")
@@ -332,6 +337,7 @@ func SetDefaults(v *viper.Viper) {
 
 	// Clone defaults (empty means ~/src)
 	v.SetDefault("clone.base_path", "")
+	v.SetDefault("clone.protocol", "ssh")
 
 	// History defaults
 	v.SetDefault("history.database_path", filepath.Join(homeDir, ".histdb", "zsh-history.db"))
