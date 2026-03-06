@@ -187,6 +187,7 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 - **Circular Dependency Migration Trap:** Extracting existing logic (e.g., `pkg/git`) into abstractions (e.g., `pkg/vcs`) often triggers import cycles if shared types remain in the core. **Mitigation:** Extract shared DTOs, regexes, and utility functions into a dedicated "Leaf Package" (e.g., `pkg/vcs/url`) with zero dependencies on either side.
 - **Package Shadowing in CLI Commands Trap:** Moving shared logic into a package with a common name (e.g., `pkg/ticket`) can lead to package shadowing if local variables in `cmd` use the same name (e.g., `ticket := "PROJ-123"`). This makes package-level functions inaccessible. **Mitigation:** Rename local CLI variables to be more specific (e.g., `ticketID`).
 - **Empty TOML Unmarshal Nil Map Trap:** Programmatic TOML mutation (e.g., in `rig config set`) must account for the fact that unmarshalling comment-only or empty files can return a `nil` map. Always check and initialize the map before assignment to avoid panics.
+- **The `sed` Multi-line Replacement Trap**: Avoid using `sed` for complex, multi-line regex replacements, especially across platforms (Darwin vs. Linux). It is finicky and prone to file corruption or silent failure. Prefer surgical `replace` calls with ample context or full-file `write_file` for predictable results.
 
 ## API & Plugin Architecture (gRPC)
 
@@ -329,6 +330,9 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 - **Unified Presentation Model**: For CLI commands aggregating data from heterogeneous sources, use a flattened "Presentation Model" in a shared package. Map source-specific structs to this model using Go primitives to avoid circular dependencies and simplify sorting/formatting logic.
 - **Deterministic Sort Ordering**: Always use a unique tie-breaker (e.g., `id ASC`) in SQL queries and `sort.SliceStable` in Go when rendering chronological lists. This prevents nondeterministic output churn in persistent artifacts like Markdown notes.
 - **Hot-Path Core Isolation Decision:** Maintain high-frequency, low-latency filesystem predicates (like `IsGitRepo`) in the core `rig` binary rather than offloading them to plugins. This avoids IPC overhead for "snappy" CLI discovery while still decoupling semantic VCS logic into plugins.
+
+### VCS & URL Patterns
+- **Discriminatory Shorthand Processing**: When supporting both full URLs and shorthands (e.g., `owner/repo`), explicitly flag the input as a shorthand during initial parsing (e.g., `IsShorthand: true`). This allows for safe, conditional application of user preferences (like protocol selection) without mangling explicit, well-formed URLs.
 
 ### Maintenance & Storage
 - **Maintenance Connection Pinning:** Maintenance operations in Dolt (e.g., `USE database`, `dolt_gc`, multi-table pruning) MUST use a pinned `*sql.Conn` to ensure session affinity. Using the general pool can lead to commands running against the wrong database context.
