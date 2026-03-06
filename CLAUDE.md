@@ -21,8 +21,9 @@ go test -tags integration ./...        # Integration tests (require live service
 golangci-lint run --timeout=5m         # Lint (matches CI)
 golangci-lint fmt ./...                # Format (gofmt + gci import ordering)
 
-# Protobuf
+# Protobuf & Mocks
 make generate                          # Generate Go code from .proto files
+make generate-mocks                    # Generate mocks using mockery (v3)
 buf lint                               # Lint proto files
 
 # Pre-commit (mandatory before push)
@@ -92,7 +93,11 @@ import (
 - **Table-driven tests are mandatory** for all Go logic
 - Tests live alongside code (`*_test.go` in same package)
 - Use `t.TempDir()`, `t.Setenv()`, `t.Context()` (enforced by `usetesting` linter)
-- Mock external dependencies via interfaces (hand-written mocks, not generated)
+- **Mocking**: Mock external dependencies via interfaces.
+    - Prefer **generated mocks** using `mockery` (run `make generate-mocks`).
+    - Mocks are stored in `mocks/` subdirectories adjacent to the interface.
+    - Hand-written mocks are acceptable for legacy code or complex logic.
+- **Assertions**: Use `github.com/stretchr/testify/require` (or `assert`) to supplement standard library testing. Table-driven tests and `t.Run` subtests remain mandatory.
 - Integration tests use `//go:build integration` build tag
 - Unset `GIT_*` env vars in tests that create temporary git repos (pre-commit injects these)
 - Reset global caches (`project.ResetCache()`, `resetConfig()`) between tests to prevent cross-test contamination
