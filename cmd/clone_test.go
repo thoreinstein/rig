@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/viper"
 
 	"thoreinstein.com/rig/pkg/git"
+	vcsurl "thoreinstein.com/rig/pkg/vcs/url"
 )
 
 func TestCloneCommandArgs(t *testing.T) {
@@ -217,4 +218,84 @@ func TestRunCloneCommand_ValidURL_Integration(t *testing.T) {
 			t.Errorf("Repo = %q, want %q", url.Repo, "test-repo")
 		}
 	})
+}
+
+func TestRunCloneCommand_ShorthandProtocolPreference(t *testing.T) {
+	// Create a temporary directory for the test
+	tmpDir := t.TempDir()
+
+	tests := []struct {
+		name         string
+		url          string
+		prefProtocol string
+		wantProtocol string
+		wantPrefix   string
+	}{
+		{
+			name:         "shorthand default (ssh)",
+			url:          "owner/repo",
+			prefProtocol: "ssh",
+			wantProtocol: "ssh",
+			wantPrefix:   "git@github.com:",
+		},
+		{
+			name:         "shorthand prefer https",
+			url:          "owner/repo",
+			prefProtocol: "https",
+			wantProtocol: "https",
+			wantPrefix:   "https://github.com/",
+		},
+		{
+			name:         "explicit ssh unaffected by https preference",
+			url:          "git@github.com:owner/repo.git",
+			prefProtocol: "https",
+			wantProtocol: "ssh",
+			wantPrefix:   "git@github.com:",
+		},
+		{
+			name:         "explicit https unaffected by ssh preference",
+			url:          "https://github.com/owner/repo.git",
+			prefProtocol: "ssh",
+			wantProtocol: "https",
+			wantPrefix:   "https://github.com/",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Configure viper for the test
+			viper.Reset()
+			resetConfig()
+			viper.Set("clone.base_path", tmpDir)
+			viper.Set("clone.protocol", tt.prefProtocol)
+			defer viper.Reset()
+
+			// We only want to test the parsing and protocol application logic
+			// in runCloneCommand, so we'll check the RepoURL expansion logic
+			// rather than executing the full clone (which requires network/git).
+
+			// Load config
+			cfg, err := loadConfig()
+			if err != nil {
+				t.Fatalf("loadConfig failed: %v", err)
+			}
+
+			// Parse URL
+			repoURL, err := vcsurl.ParseGitHubURL(tt.url)
+			if err != nil {
+				t.Fatalf("ParseGitHubURL failed: %v", err)
+			}
+
+			// Apply protocol
+			repoURL.SetProtocol(cfg.Clone.Protocol)
+
+			if repoURL.Protocol != tt.wantProtocol {
+				t.Errorf("Protocol = %q, want %q", repoURL.Protocol, tt.wantProtocol)
+			}
+
+			if !strings.HasPrefix(repoURL.Canonical, tt.wantPrefix) {
+				t.Errorf("Canonical = %q, should start with %q", repoURL.Canonical, tt.wantPrefix)
+			}
+		})
+	}
 }
