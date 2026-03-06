@@ -1,13 +1,11 @@
 all: false
 template: testify
+dir: "{{.InterfaceDir}}/mocks"
+include-auto-generated: true
 packages:
   thoreinstein.com/rig/pkg/knowledge:
-    config:
-      dir: "{{.InterfaceDir}}/mocks"
     interfaces:
       PluginManager: {}
   thoreinstein.com/rig/pkg/api/v1:
-    config:
-      dir: "{{.InterfaceDir}}/mocks"
     interfaces:
       KnowledgeServiceClient: {}

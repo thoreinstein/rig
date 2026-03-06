@@ -1,16 +1,22 @@
-.PHONY: all generate lint install-tools
+.PHONY: all generate lint install-tools generate-mocks
 
-all: generate lint
+all: generate lint generate-mocks
 
 # Tool versions
 BUF_VERSION := v1.50.0
 PROTOC_GEN_GO_VERSION := v1.36.11
 PROTOC_GEN_GO_GRPC_VERSION := v1.5.1
+MOCKERY_VERSION := v3.6.3
 
 # Generate Go code from proto files
 generate:
 	@echo "Generating Go code from proto files..."
 	@buf generate
+
+# Generate mocks
+generate-mocks:
+	@echo "Generating mocks..."
+	@mockery
 
 # Lint proto files
 lint:
@@ -19,10 +25,11 @@ lint:
 
 # Install required tools
 install-tools:
-	@echo "Installing gRPC and buf tools..."
+	@echo "Installing gRPC, buf and mockery tools..."
 	@go install github.com/bufbuild/buf/cmd/buf@$(BUF_VERSION)
 	@go install google.golang.org/protobuf/cmd/protoc-gen-go@$(PROTOC_GEN_GO_VERSION)
 	@go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@$(PROTOC_GEN_GO_GRPC_VERSION)
+	@go install github.com/vektra/mockery/v3@$(MOCKERY_VERSION)
 
 # Clean generated files
 clean:
