@@ -220,8 +220,7 @@ func TestRunCloneCommand_ValidURL_Integration(t *testing.T) {
 	})
 }
 
-func TestRunCloneCommand_ShorthandProtocolPreference(t *testing.T) {
-	// Create a temporary directory for the test
+func TestShorthandProtocolExpansion(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	tests := []struct {
@@ -269,10 +268,6 @@ func TestRunCloneCommand_ShorthandProtocolPreference(t *testing.T) {
 			viper.Set("clone.base_path", tmpDir)
 			viper.Set("clone.protocol", tt.prefProtocol)
 			defer viper.Reset()
-
-			// We only want to test the parsing and protocol application logic
-			// in runCloneCommand, so we'll check the RepoURL expansion logic
-			// rather than executing the full clone (which requires network/git).
 
 			// Load config
 			cfg, err := loadConfig()

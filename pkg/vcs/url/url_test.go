@@ -341,6 +341,20 @@ func TestRepoURL_SetProtocol(t *testing.T) {
 			wantProtocol:  "https",
 			wantCanonical: "https://github.com/owner/repo.git",
 		},
+		{
+			name:          "invalid protocol is no-op",
+			input:         "owner/repo",
+			protocol:      "ftp",
+			wantProtocol:  "ssh",
+			wantCanonical: "git@github.com:owner/repo.git",
+		},
+		{
+			name:          "empty protocol is no-op",
+			input:         "owner/repo",
+			protocol:      "",
+			wantProtocol:  "ssh",
+			wantCanonical: "git@github.com:owner/repo.git",
+		},
 	}
 
 	for _, tt := range tests {

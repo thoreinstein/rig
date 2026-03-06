@@ -25,11 +25,12 @@ func (r *RepoURL) SetProtocol(protocol string) {
 		return
 	}
 
-	r.Protocol = protocol
 	switch protocol {
 	case "ssh":
+		r.Protocol = protocol
 		r.Canonical = fmt.Sprintf("git@github.com:%s/%s.git", r.Owner, r.Repo)
 	case "https":
+		r.Protocol = protocol
 		r.Canonical = fmt.Sprintf("https://github.com/%s/%s.git", r.Owner, r.Repo)
 	}
 }
