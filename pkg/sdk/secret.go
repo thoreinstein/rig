@@ -113,9 +113,13 @@ func (s *Secret) GetSecret(ctx context.Context, key string) (string, error) {
 		return "", err
 	}
 
+	s.mu.Lock()
+	token := s.token
+	s.mu.Unlock()
+
 	resp, err := client.GetSecret(ctx, &apiv1.GetSecretRequest{
 		Key:   key,
-		Token: s.token,
+		Token: token,
 	})
 	if err != nil {
 		return "", mapError(err)
@@ -134,9 +138,13 @@ func (s *Secret) GetSecrets(ctx context.Context, keys []string) (map[string]stri
 		return nil, err
 	}
 
+	s.mu.Lock()
+	token := s.token
+	s.mu.Unlock()
+
 	resp, err := client.GetSecrets(ctx, &apiv1.GetSecretsRequest{
 		Keys:  keys,
-		Token: s.token,
+		Token: token,
 	})
 	if err != nil {
 		return nil, mapError(err)

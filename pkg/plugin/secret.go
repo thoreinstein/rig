@@ -3,9 +3,7 @@ package plugin
 import (
 	"context"
 	"strings"
-	"sync"
 
-	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -26,39 +24,21 @@ type SecretResolver func(pluginName, secretKey string) (string, error)
 // HostSecretProxy implements apiv1.SecretServiceServer.
 type HostSecretProxy struct {
 	apiv1.UnimplementedSecretServiceServer
-	mu       sync.RWMutex
-	tokens   map[string]string // token -> plugin name
+	store    *tokenStore
 	resolver SecretResolver
 }
 
 // NewHostSecretProxy creates a new HostSecretProxy.
-func NewHostSecretProxy(resolver SecretResolver) *HostSecretProxy {
+func NewHostSecretProxy(store *tokenStore, resolver SecretResolver) *HostSecretProxy {
 	return &HostSecretProxy{
-		tokens:   make(map[string]string),
+		store:    store,
 		resolver: resolver,
 	}
 }
 
-// RegisterPlugin registers a secret token for a specific plugin.
-func (s *HostSecretProxy) RegisterPlugin(token, name string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.tokens[token] = name
-}
-
-// UnregisterPlugin removes a secret token.
-func (s *HostSecretProxy) UnregisterPlugin(token string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	delete(s.tokens, token)
-}
-
 // GetSecret resolves a secret key from the host's configuration.
 func (s *HostSecretProxy) GetSecret(ctx context.Context, req *apiv1.GetSecretRequest) (*apiv1.GetSecretResponse, error) {
-	s.mu.RLock()
-	pluginName, ok := s.tokens[req.Token]
-	s.mu.RUnlock()
-
+	pluginName, ok := s.store.Resolve(req.Token)
 	if !ok || pluginName == "" {
 		return nil, status.Errorf(codes.Unauthenticated, "invalid secret token")
 	}
@@ -88,10 +68,7 @@ func (s *HostSecretProxy) GetSecret(ctx context.Context, req *apiv1.GetSecretReq
 // GetSecrets resolves multiple secret keys in a single request.
 // Missing keys are omitted from the response map (partial-failure semantics).
 func (s *HostSecretProxy) GetSecrets(ctx context.Context, req *apiv1.GetSecretsRequest) (*apiv1.GetSecretsResponse, error) {
-	s.mu.RLock()
-	pluginName, ok := s.tokens[req.Token]
-	s.mu.RUnlock()
-
+	pluginName, ok := s.store.Resolve(req.Token)
 	if !ok || pluginName == "" {
 		return nil, status.Errorf(codes.Unauthenticated, "invalid secret token")
 	}
@@ -114,22 +91,14 @@ func (s *HostSecretProxy) GetSecrets(ctx context.Context, req *apiv1.GetSecretsR
 
 // RefreshToken rotates a plugin's session token.
 func (s *HostSecretProxy) RefreshToken(_ context.Context, req *apiv1.RefreshTokenRequest) (*apiv1.RefreshTokenResponse, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	_, newToken, err := s.store.Rotate(req.CurrentToken)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to rotate token: %v", err)
+	}
 
-	pluginName, ok := s.tokens[req.CurrentToken]
-	if !ok || pluginName == "" {
+	if newToken == "" {
 		return nil, status.Errorf(codes.Unauthenticated, "invalid secret token")
 	}
-
-	u, err := uuid.NewRandom()
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to generate new token")
-	}
-	newToken := u.String()
-
-	delete(s.tokens, req.CurrentToken)
-	s.tokens[newToken] = pluginName
 
 	return &apiv1.RefreshTokenResponse{
 		NewToken: newToken,

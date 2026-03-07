@@ -30,11 +30,12 @@ func TestGetSecret(t *testing.T) {
 		return val, nil
 	}
 
-	proxy := NewHostSecretProxy(resolver)
+	store := newTokenStore()
+	proxy := NewHostSecretProxy(store, resolver)
 	jiraToken := "jira-tok-123"
 	beadsToken := "beads-tok-456"
-	proxy.RegisterPlugin(jiraToken, "jira")
-	proxy.RegisterPlugin(beadsToken, "beads")
+	store.Register(jiraToken, "jira")
+	store.Register(beadsToken, "beads")
 
 	tests := []struct {
 		name     string
@@ -167,9 +168,10 @@ func TestGetSecrets(t *testing.T) {
 		return val, nil
 	}
 
-	proxy := NewHostSecretProxy(resolver)
+	store := newTokenStore()
+	proxy := NewHostSecretProxy(store, resolver)
 	jiraToken := "jira-tok-123"
-	proxy.RegisterPlugin(jiraToken, "jira")
+	store.Register(jiraToken, "jira")
 
 	tests := []struct {
 		name     string
@@ -261,9 +263,10 @@ func TestGetSecrets(t *testing.T) {
 
 func TestRefreshToken(t *testing.T) {
 	resolver := func(_, _ string) (string, error) { return "val", nil }
-	proxy := NewHostSecretProxy(resolver)
+	store := newTokenStore()
+	proxy := NewHostSecretProxy(store, resolver)
 	originalToken := "original-tok"
-	proxy.RegisterPlugin(originalToken, "myplugin")
+	store.Register(originalToken, "myplugin")
 
 	t.Run("successful rotation", func(t *testing.T) {
 		resp, err := proxy.RefreshToken(t.Context(), &apiv1.RefreshTokenRequest{
@@ -312,8 +315,9 @@ func TestGetSecret_InternalError(t *testing.T) {
 		return "", rigerrors.New("keychain access failed")
 	}
 
-	proxy := NewHostSecretProxy(resolver)
-	proxy.RegisterPlugin("tok", "myplugin")
+	store := newTokenStore()
+	proxy := NewHostSecretProxy(store, resolver)
+	store.Register("tok", "myplugin")
 
 	_, err := proxy.GetSecret(t.Context(), &apiv1.GetSecretRequest{Key: "k", Token: "tok"})
 	if err == nil {
@@ -334,16 +338,17 @@ func TestGetSecret_InternalError(t *testing.T) {
 
 func TestGetSecret_Unregister(t *testing.T) {
 	resolver := func(_, _ string) (string, error) { return "val", nil }
-	proxy := NewHostSecretProxy(resolver)
+	store := newTokenStore()
+	proxy := NewHostSecretProxy(store, resolver)
 	token := "tok"
-	proxy.RegisterPlugin(token, "p")
+	store.Register(token, "p")
 
 	_, err := proxy.GetSecret(t.Context(), &apiv1.GetSecretRequest{Key: "k", Token: token})
 	if err != nil {
 		t.Fatalf("expected success before unregister, got %v", err)
 	}
 
-	proxy.UnregisterPlugin(token)
+	store.Unregister(token)
 
 	_, err = proxy.GetSecret(t.Context(), &apiv1.GetSecretRequest{Key: "k", Token: token})
 	if status.Code(err) != codes.Unauthenticated {
