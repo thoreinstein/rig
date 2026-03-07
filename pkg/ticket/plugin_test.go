@@ -75,12 +75,11 @@ func assertReleaseCalled(t *testing.T, m *mockPluginManager, expected int) {
 func assertTimeoutApplied(t *testing.T, ctx context.Context, expectedTimeout time.Duration) {
 	t.Helper()
 
-	const (
-		// lowerSlack accounts for time elapsed between WithTimeout and this assertion.
-		lowerSlack = 5 * time.Second
-		// upperSlack accounts for minor clock drift or scheduling jitter.
-		upperSlack = 1 * time.Second
-	)
+	// upperSlack accounts for minor clock drift or scheduling jitter.
+	const upperSlack = 1 * time.Second
+
+	// lowerSlack scales with expectedTimeout so short timeouts are checked tightly.
+	lowerSlack := min(max(expectedTimeout/10, 50*time.Millisecond), 5*time.Second)
 
 	deadline, ok := ctx.Deadline()
 	if !ok {
