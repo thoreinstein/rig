@@ -77,5 +77,9 @@ func (s *HostSecretProxy) GetSecret(ctx context.Context, req *apiv1.GetSecretReq
 		return nil, status.Errorf(codes.Internal, "secret resolution failed")
 	}
 
-	return &apiv1.GetSecretResponse{Value: val}, nil
+	return &apiv1.GetSecretResponse{
+		Secret: &apiv1.SecretValue{
+			Value: val,
+		},
+	}, nil
 }

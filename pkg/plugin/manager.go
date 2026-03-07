@@ -190,6 +190,7 @@ func NewManager(executor pluginExecutor, scanner *Scanner, rigVersion string, co
 	srv := grpc.NewServer()
 	apiv1.RegisterUIServiceServer(srv, m.hostUI)
 	apiv1.RegisterSecretServiceServer(srv, m.secretProxy)
+	apiv1.RegisterContextServiceServer(srv, &apiv1.UnimplementedContextServiceServer{})
 	m.hostServer = srv
 
 	go func() {

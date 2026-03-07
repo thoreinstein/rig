@@ -9,6 +9,8 @@ package apiv1
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	durationpb "google.golang.org/protobuf/types/known/durationpb"
+	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -21,6 +23,66 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type SecretValue struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Value         string                 `protobuf:"bytes,1,opt,name=value,proto3" json:"value,omitempty"`
+	Ttl           *durationpb.Duration   `protobuf:"bytes,2,opt,name=ttl,proto3" json:"ttl,omitempty"`
+	LastUpdated   *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=last_updated,json=lastUpdated,proto3" json:"last_updated,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SecretValue) Reset() {
+	*x = SecretValue{}
+	mi := &file_pkg_api_v1_secret_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SecretValue) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SecretValue) ProtoMessage() {}
+
+func (x *SecretValue) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_api_v1_secret_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SecretValue.ProtoReflect.Descriptor instead.
+func (*SecretValue) Descriptor() ([]byte, []int) {
+	return file_pkg_api_v1_secret_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *SecretValue) GetValue() string {
+	if x != nil {
+		return x.Value
+	}
+	return ""
+}
+
+func (x *SecretValue) GetTtl() *durationpb.Duration {
+	if x != nil {
+		return x.Ttl
+	}
+	return nil
+}
+
+func (x *SecretValue) GetLastUpdated() *timestamppb.Timestamp {
+	if x != nil {
+		return x.LastUpdated
+	}
+	return nil
+}
+
 type GetSecretRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Key           string                 `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
@@ -31,7 +93,7 @@ type GetSecretRequest struct {
 
 func (x *GetSecretRequest) Reset() {
 	*x = GetSecretRequest{}
-	mi := &file_pkg_api_v1_secret_proto_msgTypes[0]
+	mi := &file_pkg_api_v1_secret_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -43,7 +105,7 @@ func (x *GetSecretRequest) String() string {
 func (*GetSecretRequest) ProtoMessage() {}
 
 func (x *GetSecretRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_api_v1_secret_proto_msgTypes[0]
+	mi := &file_pkg_api_v1_secret_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -56,7 +118,7 @@ func (x *GetSecretRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSecretRequest.ProtoReflect.Descriptor instead.
 func (*GetSecretRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_api_v1_secret_proto_rawDescGZIP(), []int{0}
+	return file_pkg_api_v1_secret_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *GetSecretRequest) GetKey() string {
@@ -75,14 +137,14 @@ func (x *GetSecretRequest) GetToken() string {
 
 type GetSecretResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Value         string                 `protobuf:"bytes,1,opt,name=value,proto3" json:"value,omitempty"`
+	Secret        *SecretValue           `protobuf:"bytes,2,opt,name=secret,proto3" json:"secret,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *GetSecretResponse) Reset() {
 	*x = GetSecretResponse{}
-	mi := &file_pkg_api_v1_secret_proto_msgTypes[1]
+	mi := &file_pkg_api_v1_secret_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -94,7 +156,7 @@ func (x *GetSecretResponse) String() string {
 func (*GetSecretResponse) ProtoMessage() {}
 
 func (x *GetSecretResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_api_v1_secret_proto_msgTypes[1]
+	mi := &file_pkg_api_v1_secret_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -107,28 +169,241 @@ func (x *GetSecretResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSecretResponse.ProtoReflect.Descriptor instead.
 func (*GetSecretResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_api_v1_secret_proto_rawDescGZIP(), []int{1}
+	return file_pkg_api_v1_secret_proto_rawDescGZIP(), []int{2}
 }
 
-func (x *GetSecretResponse) GetValue() string {
+func (x *GetSecretResponse) GetSecret() *SecretValue {
 	if x != nil {
-		return x.Value
+		return x.Secret
+	}
+	return nil
+}
+
+type GetSecretsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Keys          []string               `protobuf:"bytes,1,rep,name=keys,proto3" json:"keys,omitempty"`
+	Token         string                 `protobuf:"bytes,2,opt,name=token,proto3" json:"token,omitempty"` // Secret token provided to the plugin via RIG_HOST_SECRET_TOKEN
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetSecretsRequest) Reset() {
+	*x = GetSecretsRequest{}
+	mi := &file_pkg_api_v1_secret_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetSecretsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetSecretsRequest) ProtoMessage() {}
+
+func (x *GetSecretsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_api_v1_secret_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetSecretsRequest.ProtoReflect.Descriptor instead.
+func (*GetSecretsRequest) Descriptor() ([]byte, []int) {
+	return file_pkg_api_v1_secret_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *GetSecretsRequest) GetKeys() []string {
+	if x != nil {
+		return x.Keys
+	}
+	return nil
+}
+
+func (x *GetSecretsRequest) GetToken() string {
+	if x != nil {
+		return x.Token
 	}
 	return ""
+}
+
+type GetSecretsResponse struct {
+	state         protoimpl.MessageState  `protogen:"open.v1"`
+	Secrets       map[string]*SecretValue `protobuf:"bytes,1,rep,name=secrets,proto3" json:"secrets,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetSecretsResponse) Reset() {
+	*x = GetSecretsResponse{}
+	mi := &file_pkg_api_v1_secret_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetSecretsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetSecretsResponse) ProtoMessage() {}
+
+func (x *GetSecretsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_api_v1_secret_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetSecretsResponse.ProtoReflect.Descriptor instead.
+func (*GetSecretsResponse) Descriptor() ([]byte, []int) {
+	return file_pkg_api_v1_secret_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *GetSecretsResponse) GetSecrets() map[string]*SecretValue {
+	if x != nil {
+		return x.Secrets
+	}
+	return nil
+}
+
+type RefreshTokenRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	CurrentToken  string                 `protobuf:"bytes,1,opt,name=current_token,json=currentToken,proto3" json:"current_token,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RefreshTokenRequest) Reset() {
+	*x = RefreshTokenRequest{}
+	mi := &file_pkg_api_v1_secret_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RefreshTokenRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RefreshTokenRequest) ProtoMessage() {}
+
+func (x *RefreshTokenRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_api_v1_secret_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RefreshTokenRequest.ProtoReflect.Descriptor instead.
+func (*RefreshTokenRequest) Descriptor() ([]byte, []int) {
+	return file_pkg_api_v1_secret_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *RefreshTokenRequest) GetCurrentToken() string {
+	if x != nil {
+		return x.CurrentToken
+	}
+	return ""
+}
+
+type RefreshTokenResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	NewToken      string                 `protobuf:"bytes,1,opt,name=new_token,json=newToken,proto3" json:"new_token,omitempty"`
+	ExpiresAt     *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RefreshTokenResponse) Reset() {
+	*x = RefreshTokenResponse{}
+	mi := &file_pkg_api_v1_secret_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RefreshTokenResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RefreshTokenResponse) ProtoMessage() {}
+
+func (x *RefreshTokenResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_api_v1_secret_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RefreshTokenResponse.ProtoReflect.Descriptor instead.
+func (*RefreshTokenResponse) Descriptor() ([]byte, []int) {
+	return file_pkg_api_v1_secret_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *RefreshTokenResponse) GetNewToken() string {
+	if x != nil {
+		return x.NewToken
+	}
+	return ""
+}
+
+func (x *RefreshTokenResponse) GetExpiresAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.ExpiresAt
+	}
+	return nil
 }
 
 var File_pkg_api_v1_secret_proto protoreflect.FileDescriptor
 
 const file_pkg_api_v1_secret_proto_rawDesc = "" +
 	"\n" +
-	"\x17pkg/api/v1/secret.proto\x12\x06rig.v1\":\n" +
+	"\x17pkg/api/v1/secret.proto\x12\x06rig.v1\x1a\x1egoogle/protobuf/duration.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\x8f\x01\n" +
+	"\vSecretValue\x12\x14\n" +
+	"\x05value\x18\x01 \x01(\tR\x05value\x12+\n" +
+	"\x03ttl\x18\x02 \x01(\v2\x19.google.protobuf.DurationR\x03ttl\x12=\n" +
+	"\flast_updated\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\vlastUpdated\":\n" +
 	"\x10GetSecretRequest\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05token\x18\x02 \x01(\tR\x05token\")\n" +
-	"\x11GetSecretResponse\x12\x14\n" +
-	"\x05value\x18\x01 \x01(\tR\x05value2Q\n" +
+	"\x05token\x18\x02 \x01(\tR\x05token\"F\n" +
+	"\x11GetSecretResponse\x12+\n" +
+	"\x06secret\x18\x02 \x01(\v2\x13.rig.v1.SecretValueR\x06secretJ\x04\b\x01\x10\x02\"=\n" +
+	"\x11GetSecretsRequest\x12\x12\n" +
+	"\x04keys\x18\x01 \x03(\tR\x04keys\x12\x14\n" +
+	"\x05token\x18\x02 \x01(\tR\x05token\"\xa8\x01\n" +
+	"\x12GetSecretsResponse\x12A\n" +
+	"\asecrets\x18\x01 \x03(\v2'.rig.v1.GetSecretsResponse.SecretsEntryR\asecrets\x1aO\n" +
+	"\fSecretsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12)\n" +
+	"\x05value\x18\x02 \x01(\v2\x13.rig.v1.SecretValueR\x05value:\x028\x01\":\n" +
+	"\x13RefreshTokenRequest\x12#\n" +
+	"\rcurrent_token\x18\x01 \x01(\tR\fcurrentToken\"n\n" +
+	"\x14RefreshTokenResponse\x12\x1b\n" +
+	"\tnew_token\x18\x01 \x01(\tR\bnewToken\x129\n" +
+	"\n" +
+	"expires_at\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt2\xe1\x01\n" +
 	"\rSecretService\x12@\n" +
-	"\tGetSecret\x12\x18.rig.v1.GetSecretRequest\x1a\x19.rig.v1.GetSecretResponseB'Z%thoreinstein.com/rig/pkg/api/v1;apiv1b\x06proto3"
+	"\tGetSecret\x12\x18.rig.v1.GetSecretRequest\x1a\x19.rig.v1.GetSecretResponse\x12C\n" +
+	"\n" +
+	"GetSecrets\x12\x19.rig.v1.GetSecretsRequest\x1a\x1a.rig.v1.GetSecretsResponse\x12I\n" +
+	"\fRefreshToken\x12\x1b.rig.v1.RefreshTokenRequest\x1a\x1c.rig.v1.RefreshTokenResponseB'Z%thoreinstein.com/rig/pkg/api/v1;apiv1b\x06proto3"
 
 var (
 	file_pkg_api_v1_secret_proto_rawDescOnce sync.Once
@@ -142,19 +417,37 @@ func file_pkg_api_v1_secret_proto_rawDescGZIP() []byte {
 	return file_pkg_api_v1_secret_proto_rawDescData
 }
 
-var file_pkg_api_v1_secret_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_pkg_api_v1_secret_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_pkg_api_v1_secret_proto_goTypes = []any{
-	(*GetSecretRequest)(nil),  // 0: rig.v1.GetSecretRequest
-	(*GetSecretResponse)(nil), // 1: rig.v1.GetSecretResponse
+	(*SecretValue)(nil),           // 0: rig.v1.SecretValue
+	(*GetSecretRequest)(nil),      // 1: rig.v1.GetSecretRequest
+	(*GetSecretResponse)(nil),     // 2: rig.v1.GetSecretResponse
+	(*GetSecretsRequest)(nil),     // 3: rig.v1.GetSecretsRequest
+	(*GetSecretsResponse)(nil),    // 4: rig.v1.GetSecretsResponse
+	(*RefreshTokenRequest)(nil),   // 5: rig.v1.RefreshTokenRequest
+	(*RefreshTokenResponse)(nil),  // 6: rig.v1.RefreshTokenResponse
+	nil,                           // 7: rig.v1.GetSecretsResponse.SecretsEntry
+	(*durationpb.Duration)(nil),   // 8: google.protobuf.Duration
+	(*timestamppb.Timestamp)(nil), // 9: google.protobuf.Timestamp
 }
 var file_pkg_api_v1_secret_proto_depIdxs = []int32{
-	0, // 0: rig.v1.SecretService.GetSecret:input_type -> rig.v1.GetSecretRequest
-	1, // 1: rig.v1.SecretService.GetSecret:output_type -> rig.v1.GetSecretResponse
-	1, // [1:2] is the sub-list for method output_type
-	0, // [0:1] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+	8, // 0: rig.v1.SecretValue.ttl:type_name -> google.protobuf.Duration
+	9, // 1: rig.v1.SecretValue.last_updated:type_name -> google.protobuf.Timestamp
+	0, // 2: rig.v1.GetSecretResponse.secret:type_name -> rig.v1.SecretValue
+	7, // 3: rig.v1.GetSecretsResponse.secrets:type_name -> rig.v1.GetSecretsResponse.SecretsEntry
+	9, // 4: rig.v1.RefreshTokenResponse.expires_at:type_name -> google.protobuf.Timestamp
+	0, // 5: rig.v1.GetSecretsResponse.SecretsEntry.value:type_name -> rig.v1.SecretValue
+	1, // 6: rig.v1.SecretService.GetSecret:input_type -> rig.v1.GetSecretRequest
+	3, // 7: rig.v1.SecretService.GetSecrets:input_type -> rig.v1.GetSecretsRequest
+	5, // 8: rig.v1.SecretService.RefreshToken:input_type -> rig.v1.RefreshTokenRequest
+	2, // 9: rig.v1.SecretService.GetSecret:output_type -> rig.v1.GetSecretResponse
+	4, // 10: rig.v1.SecretService.GetSecrets:output_type -> rig.v1.GetSecretsResponse
+	6, // 11: rig.v1.SecretService.RefreshToken:output_type -> rig.v1.RefreshTokenResponse
+	9, // [9:12] is the sub-list for method output_type
+	6, // [6:9] is the sub-list for method input_type
+	6, // [6:6] is the sub-list for extension type_name
+	6, // [6:6] is the sub-list for extension extendee
+	0, // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_pkg_api_v1_secret_proto_init() }
@@ -168,7 +461,7 @@ func file_pkg_api_v1_secret_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pkg_api_v1_secret_proto_rawDesc), len(file_pkg_api_v1_secret_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   2,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

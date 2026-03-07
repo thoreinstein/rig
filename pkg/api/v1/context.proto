@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package rig.v1;
+
+import "google/protobuf/struct.proto";
+
+option go_package = "thoreinstein.com/rig/pkg/api/v1;apiv1";
+
+// ContextService is implemented by the host to provide environment context to plugins.
+service ContextService {
+  // GetContext retrieves current environment metadata including paths and ticket IDs.
+  // Returns:
+  //   - UNAUTHENTICATED: Invalid/expired/missing token
+  rpc GetContext(GetContextRequest) returns (GetContextResponse);
+}
+
+message GetContextRequest {
+  string token = 1; // Secret token provided to the plugin via RIG_HOST_SECRET_TOKEN
+}
+
+message GetContextResponse {
+  string project_root = 1;
+  string worktree_root = 2;
+  string ticket_id = 3;
+  google.protobuf.Struct metadata = 4;
+}

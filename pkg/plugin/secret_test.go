@@ -139,8 +139,12 @@ func TestGetSecret(t *testing.T) {
 				t.Fatalf("unexpected error: %v", err)
 			}
 
-			if resp.Value != tc.wantVal {
-				t.Errorf("value: got %q, want %q", resp.Value, tc.wantVal)
+			if resp.Secret == nil {
+				t.Fatal("secret is nil in response")
+			}
+
+			if resp.Secret.Value != tc.wantVal {
+				t.Errorf("value: got %q, want %q", resp.Secret.Value, tc.wantVal)
 			}
 		})
 	}

@@ -120,7 +120,10 @@ func (s *Secret) GetSecret(ctx context.Context, key string) (string, error) {
 	if err != nil {
 		return "", mapError(err)
 	}
-	return resp.Value, nil
+	if resp.Secret == nil {
+		return "", errors.New("secret not available")
+	}
+	return resp.Secret.Value, nil
 }
 
 // GetSecret is a convenience helper that uses a default Secret client.
