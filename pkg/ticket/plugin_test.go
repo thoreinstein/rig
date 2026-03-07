@@ -18,9 +18,11 @@ type mockPluginManager struct {
 	err          error
 	releaseCalls int
 	lastReleased string
+	lastCtx      context.Context
 }
 
 func (m *mockPluginManager) GetTicketClient(ctx context.Context, name string) (apiv1.TicketServiceClient, error) {
+	m.lastCtx = ctx
 	if m.err != nil {
 		return nil, m.err
 	}
@@ -101,6 +103,7 @@ func TestPluginProvider_Lifecycle(t *testing.T) {
 		if !provider.IsAvailable(t.Context()) {
 			t.Error("expected IsAvailable to be true")
 		}
+		assertTimeoutApplied(t, mockMgr.lastCtx, 5*time.Second)
 		assertReleaseCalled(t, mockMgr, 1)
 		if mockMgr.lastReleased != "test-plugin" {
 			t.Errorf("expected released plugin 'test-plugin', got %q", mockMgr.lastReleased)
@@ -198,7 +201,8 @@ func TestPluginProvider_Robustness(t *testing.T) {
 		if provider.IsAvailable(t.Context()) {
 			t.Error("expected IsAvailable to be false when client is nil")
 		}
-		assertReleaseCalled(t, mockMgr, 0)
+		// ReleasePlugin is deferred after successful acquisition, so it fires even for nil client.
+		assertReleaseCalled(t, mockMgr, 1)
 	})
 
 	t.Run("RPC failure coverage", func(t *testing.T) {

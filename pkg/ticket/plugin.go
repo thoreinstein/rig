@@ -40,11 +40,12 @@ func (p *PluginProvider) IsAvailable(ctx context.Context) bool {
 	defer cancel()
 
 	client, err := p.Manager.GetTicketClient(checkCtx, p.PluginName)
-	if err != nil || client == nil {
+	if err != nil {
 		return false
 	}
-	p.Manager.ReleasePlugin(p.PluginName)
-	return true
+	defer p.Manager.ReleasePlugin(p.PluginName)
+
+	return client != nil
 }
 
 // GetTicketInfo retrieves detailed information for a specific ticket via gRPC.
