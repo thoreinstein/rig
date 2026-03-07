@@ -2,6 +2,7 @@ package ticket
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -160,21 +161,33 @@ func TestPluginProvider_Lifecycle(t *testing.T) {
 }
 
 func TestPluginProvider_Robustness(t *testing.T) {
-	t.Run("Acquisition failure coverage", func(t *testing.T) {
-		expectedErr := errors.New("failed to acquire plugin")
-		mockMgr := &mockPluginManager{err: expectedErr}
+	t.Run("IsAvailable acquisition failure", func(t *testing.T) {
+		mockMgr := &mockPluginManager{err: errors.New("failed to acquire plugin")}
 		provider := NewPluginProvider(mockMgr, "test-plugin")
 
 		if provider.IsAvailable(t.Context()) {
 			t.Error("expected IsAvailable to be false on acquisition failure")
 		}
+		assertReleaseCalled(t, mockMgr, 0)
+	})
+
+	t.Run("GetTicketInfo acquisition failure", func(t *testing.T) {
+		mockMgr := &mockPluginManager{err: errors.New("failed to acquire plugin")}
+		provider := NewPluginProvider(mockMgr, "test-plugin")
+
 		if _, err := provider.GetTicketInfo(t.Context(), "RIG-1"); err == nil {
 			t.Error("expected error for GetTicketInfo acquisition failure")
 		}
+		assertReleaseCalled(t, mockMgr, 0)
+	})
+
+	t.Run("UpdateStatus acquisition failure", func(t *testing.T) {
+		mockMgr := &mockPluginManager{err: errors.New("failed to acquire plugin")}
+		provider := NewPluginProvider(mockMgr, "test-plugin")
+
 		if err := provider.UpdateStatus(t.Context(), "RIG-1", "Done"); err == nil {
 			t.Error("expected error for UpdateStatus acquisition failure")
 		}
-		// Release should NOT be called if client acquisition fails.
 		assertReleaseCalled(t, mockMgr, 0)
 	})
 
@@ -185,7 +198,7 @@ func TestPluginProvider_Robustness(t *testing.T) {
 		if provider.IsAvailable(t.Context()) {
 			t.Error("expected IsAvailable to be false when client is nil")
 		}
-		assertReleaseCalled(t, mockMgr, 1)
+		assertReleaseCalled(t, mockMgr, 0)
 	})
 
 	t.Run("RPC failure coverage", func(t *testing.T) {
@@ -210,18 +223,38 @@ func TestPluginProvider_Robustness(t *testing.T) {
 		assertReleaseCalled(t, mockMgr, 2)
 	})
 
-	t.Run("Nil response error coverage", func(t *testing.T) {
+	t.Run("GetTicketInfo nil response", func(t *testing.T) {
 		mockClient := &mockTicketClient{} // returns (nil, nil) by default
 		mockMgr := &mockPluginManager{client: mockClient}
 		provider := NewPluginProvider(mockMgr, "test-plugin")
 
-		if _, err := provider.GetTicketInfo(t.Context(), "RIG-1"); err == nil {
-			t.Error("expected error for GetTicketInfo nil response")
+		_, err := provider.GetTicketInfo(t.Context(), "RIG-1")
+		if err == nil {
+			t.Fatal("expected error for GetTicketInfo nil response")
 		}
-		if err := provider.UpdateStatus(t.Context(), "RIG-1", "Done"); err == nil {
-			t.Error("expected error for UpdateStatus nil response")
+		if !strings.Contains(err.Error(), "RIG-1") {
+			t.Errorf("expected error to contain ticket ID, got: %v", err)
 		}
-		assertReleaseCalled(t, mockMgr, 2)
+		assertReleaseCalled(t, mockMgr, 1)
+	})
+
+	t.Run("UpdateStatus nil response", func(t *testing.T) {
+		mockClient := &mockTicketClient{
+			updateTicketStatusFn: func(ctx context.Context, in *apiv1.UpdateTicketStatusRequest, opts ...grpc.CallOption) (*apiv1.UpdateTicketStatusResponse, error) {
+				return nil, nil
+			},
+		}
+		mockMgr := &mockPluginManager{client: mockClient}
+		provider := NewPluginProvider(mockMgr, "test-plugin")
+
+		err := provider.UpdateStatus(t.Context(), "RIG-1", "Done")
+		if err == nil {
+			t.Fatal("expected error for UpdateStatus nil response")
+		}
+		if !strings.Contains(err.Error(), "RIG-1") {
+			t.Errorf("expected error to contain ticket ID, got: %v", err)
+		}
+		assertReleaseCalled(t, mockMgr, 1)
 	})
 
 	t.Run("Nil ticket in response", func(t *testing.T) {
@@ -235,7 +268,10 @@ func TestPluginProvider_Robustness(t *testing.T) {
 
 		_, err := provider.GetTicketInfo(t.Context(), "RIG-1")
 		if err == nil {
-			t.Error("expected error for GetTicketInfo nil ticket in response")
+			t.Fatal("expected error for GetTicketInfo nil ticket in response")
+		}
+		if !strings.Contains(err.Error(), "RIG-1") {
+			t.Errorf("expected error to contain ticket ID, got: %v", err)
 		}
 		assertReleaseCalled(t, mockMgr, 1)
 	})
@@ -251,7 +287,13 @@ func TestPluginProvider_Robustness(t *testing.T) {
 
 		err := provider.UpdateStatus(t.Context(), "RIG-1", "Done")
 		if err == nil {
-			t.Error("expected error for UpdateStatus success=false")
+			t.Fatal("expected error for UpdateStatus success=false")
+		}
+		if !strings.Contains(err.Error(), "RIG-1") {
+			t.Errorf("expected error to contain ticket ID, got: %v", err)
+		}
+		if !strings.Contains(err.Error(), "Done") {
+			t.Errorf("expected error to contain status, got: %v", err)
 		}
 		assertReleaseCalled(t, mockMgr, 1)
 	})
