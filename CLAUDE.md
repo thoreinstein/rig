@@ -96,6 +96,7 @@ import (
 - **Mocking**: Mock external dependencies via interfaces.
     - Prefer **generated mocks** using `mockery` (run `make generate-mocks`).
     - Mocks are stored in `mocks/` subdirectories adjacent to the interface.
+    - See `docs/v1/testing-standards.md` for detailed patterns, traps, and configuration.
     - Hand-written mocks are acceptable for legacy code or complex logic.
 - **Assertions**: Use `github.com/stretchr/testify/require` (or `assert`) to supplement standard library testing. Table-driven tests and `t.Run` subtests remain mandatory.
 - Integration tests use `//go:build integration` build tag
