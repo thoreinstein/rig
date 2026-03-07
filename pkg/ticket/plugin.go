@@ -7,20 +7,25 @@ import (
 	"github.com/cockroachdb/errors"
 
 	apiv1 "thoreinstein.com/rig/pkg/api/v1"
-	"thoreinstein.com/rig/pkg/plugin"
 )
 
 // rpcLongTimeout is the timeout for potentially long-running ticket plugin RPC calls (e.g., Jira API).
 const rpcLongTimeout = 15 * time.Minute
 
+// PluginManager is the interface for getting and releasing ticket plugin clients.
+type PluginManager interface {
+	GetTicketClient(ctx context.Context, name string) (apiv1.TicketServiceClient, error)
+	ReleasePlugin(name string)
+}
+
 // PluginProvider implements the Provider interface by delegating to a Rig plugin.
 type PluginProvider struct {
-	Manager    *plugin.Manager
+	Manager    PluginManager
 	PluginName string
 }
 
 // NewPluginProvider creates a new PluginProvider.
-func NewPluginProvider(manager *plugin.Manager, pluginName string) *PluginProvider {
+func NewPluginProvider(manager PluginManager, pluginName string) *PluginProvider {
 	return &PluginProvider{
 		Manager:    manager,
 		PluginName: pluginName,
@@ -38,7 +43,8 @@ func (p *PluginProvider) IsAvailable(ctx context.Context) bool {
 	if err != nil {
 		return false
 	}
-	p.Manager.ReleasePlugin(p.PluginName)
+	defer p.Manager.ReleasePlugin(p.PluginName)
+
 	return client != nil
 }
 
