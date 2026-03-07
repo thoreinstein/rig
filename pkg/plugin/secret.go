@@ -59,6 +59,7 @@ func (s *HostSecretProxy) GetSecret(ctx context.Context, req *apiv1.GetSecretReq
 	}
 
 	return &apiv1.GetSecretResponse{
+		Value: val,
 		Secret: &apiv1.SecretValue{
 			Value: val,
 		},

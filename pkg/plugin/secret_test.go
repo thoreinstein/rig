@@ -308,6 +308,29 @@ func TestRefreshToken(t *testing.T) {
 	})
 }
 
+func TestTokenStore_UnregisterPlugin(t *testing.T) {
+	store := newTokenStore()
+	name := "my-plugin"
+	t1 := "token-1"
+	t2 := "token-2"
+
+	store.Register(t1, name)
+	store.Register(t2, name)
+	store.Register("other-token", "other-plugin")
+
+	store.UnregisterPlugin(name)
+
+	if _, ok := store.Resolve(t1); ok {
+		t.Errorf("token %s still exists after UnregisterPlugin", t1)
+	}
+	if _, ok := store.Resolve(t2); ok {
+		t.Errorf("token %s still exists after UnregisterPlugin", t2)
+	}
+	if _, ok := store.Resolve("other-token"); !ok {
+		t.Error("other-token was incorrectly removed")
+	}
+}
+
 func TestGetSecret_InternalError(t *testing.T) {
 	// A resolver that returns an error NOT wrapping ErrSecretNotFound
 	// should produce codes.Internal, not codes.NotFound.

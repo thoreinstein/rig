@@ -512,13 +512,13 @@ func (m *Manager) getOrStartPlugin(ctx context.Context, name string) (*Plugin, e
 
 	// Start the plugin
 	if err := m.executor.Start(ctx, target); err != nil {
-		m.tokenStore.Unregister(target.secretToken)
+		m.tokenStore.UnregisterPlugin(name)
 		return nil, errors.Wrapf(err, "failed to start plugin %q", name)
 	}
 
 	// Prepare the base client and handshake
 	if err := m.executor.PrepareClient(target); err != nil {
-		m.tokenStore.Unregister(target.secretToken)
+		m.tokenStore.UnregisterPlugin(name)
 		_ = m.executor.Stop(target)
 		return nil, errors.Wrapf(err, "failed to prepare client for plugin %q", name)
 	}
@@ -538,7 +538,7 @@ func (m *Manager) getOrStartPlugin(ctx context.Context, name string) (*Plugin, e
 
 	// Perform handshake with host version and API contract version
 	if err := m.executor.Handshake(ctx, target, m.rigVersion, APIVersion, configJSON); err != nil {
-		m.tokenStore.Unregister(target.secretToken)
+		m.tokenStore.UnregisterPlugin(name)
 		_ = m.executor.Stop(target)
 		return nil, errors.Wrapf(err, "handshake failed for plugin %q", name)
 	}
@@ -547,7 +547,7 @@ func (m *Manager) getOrStartPlugin(ctx context.Context, name string) (*Plugin, e
 	// (which might have updated the plugin's metadata/version).
 	ValidateCompatibility(target, m.rigVersion)
 	if target.Status == StatusIncompatible || target.Status == StatusError {
-		m.tokenStore.Unregister(target.secretToken)
+		m.tokenStore.UnregisterPlugin(name)
 		_ = m.executor.Stop(target)
 		if target.Error != nil {
 			return nil, errors.Wrapf(target.Error, "plugin %q is incompatible", name)
@@ -568,7 +568,7 @@ func (m *Manager) StopAll() {
 	defer m.mu.Unlock()
 
 	for _, p := range m.plugins {
-		m.tokenStore.Unregister(p.secretToken)
+		m.tokenStore.UnregisterPlugin(p.Name)
 		_ = m.executor.Stop(p)
 	}
 	m.plugins = make(map[string]*Plugin)
@@ -633,7 +633,7 @@ func (m *Manager) StopPluginIfIdle(name string, idleTimeout time.Duration) error
 			return nil
 		}
 
-		m.tokenStore.Unregister(p.secretToken)
+		m.tokenStore.UnregisterPlugin(p.Name)
 		delete(m.plugins, name)
 	}
 	m.mu.Unlock()

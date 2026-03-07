@@ -136,8 +136,10 @@ func (x *GetSecretRequest) GetToken() string {
 }
 
 type GetSecretResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Secret        *SecretValue           `protobuf:"bytes,2,opt,name=secret,proto3" json:"secret,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Deprecated: Marked as deprecated in pkg/api/v1/secret.proto.
+	Value         string       `protobuf:"bytes,1,opt,name=value,proto3" json:"value,omitempty"`
+	Secret        *SecretValue `protobuf:"bytes,2,opt,name=secret,proto3" json:"secret,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -170,6 +172,14 @@ func (x *GetSecretResponse) ProtoReflect() protoreflect.Message {
 // Deprecated: Use GetSecretResponse.ProtoReflect.Descriptor instead.
 func (*GetSecretResponse) Descriptor() ([]byte, []int) {
 	return file_pkg_api_v1_secret_proto_rawDescGZIP(), []int{2}
+}
+
+// Deprecated: Marked as deprecated in pkg/api/v1/secret.proto.
+func (x *GetSecretResponse) GetValue() string {
+	if x != nil {
+		return x.Value
+	}
+	return ""
 }
 
 func (x *GetSecretResponse) GetSecret() *SecretValue {
@@ -382,9 +392,10 @@ const file_pkg_api_v1_secret_proto_rawDesc = "" +
 	"\flast_updated\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\vlastUpdated\":\n" +
 	"\x10GetSecretRequest\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05token\x18\x02 \x01(\tR\x05token\"F\n" +
-	"\x11GetSecretResponse\x12+\n" +
-	"\x06secret\x18\x02 \x01(\v2\x13.rig.v1.SecretValueR\x06secretJ\x04\b\x01\x10\x02\"=\n" +
+	"\x05token\x18\x02 \x01(\tR\x05token\"Z\n" +
+	"\x11GetSecretResponse\x12\x18\n" +
+	"\x05value\x18\x01 \x01(\tB\x02\x18\x01R\x05value\x12+\n" +
+	"\x06secret\x18\x02 \x01(\v2\x13.rig.v1.SecretValueR\x06secret\"=\n" +
 	"\x11GetSecretsRequest\x12\x12\n" +
 	"\x04keys\x18\x01 \x03(\tR\x04keys\x12\x14\n" +
 	"\x05token\x18\x02 \x01(\tR\x05token\"\xa8\x01\n" +

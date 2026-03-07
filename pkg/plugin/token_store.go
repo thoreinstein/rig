@@ -31,6 +31,16 @@ func (s *tokenStore) Unregister(token string) {
 	delete(s.tokens, token)
 }
 
+func (s *tokenStore) UnregisterPlugin(name string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for token, pluginName := range s.tokens {
+		if pluginName == name {
+			delete(s.tokens, token)
+		}
+	}
+}
+
 func (s *tokenStore) Resolve(token string) (string, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
