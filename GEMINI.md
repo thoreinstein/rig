@@ -146,6 +146,10 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 
 ### Development Strategy
 - **SDK-First:** Prefer official Go SDKs (like Genkit for Google AI) over CLI wrappers for stability and robust streaming support.
+- **Consumer-Side Interface Pattern:** Domain packages (VCS, Ticket, Knowledge) MUST define their own local `PluginManager` interfaces containing only the methods they require. This ensures clean decoupling from `pkg/plugin` and enables surgical unit testing with hand-written mocks.
+
+### Defensive Programming Patterns
+- **Robust Nil Interface Check:** Always use `internal.IsNilInterface(v)` when guarding against nil values in constructors or providers that accept interfaces. This protects against Go's "typed-nil" pitfall where an interface wrapping a nil pointer is not itself `nil`.
 
 ### Persistence & State
 - **Transient State vs. Immutable Audit Trail:** Separate high-churn execution state (`rig_orchestration`) from versioned observability events (`rig_events`). Transient state is for logic; versioned events are for auditing. This prevents performance degradation from constant Dolt commits on high-churn data.
@@ -177,6 +181,7 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 - **Deferred Plugin Release Pattern:** Always call `defer Manager.ReleasePlugin(name)` immediately after successfully acquiring a plugin client. This ensures active session counts are correctly decremented even if subsequent logic fails, preventing "zombie" processes.
 
 ### Workflow Traps
+- **Ghost Interface Trap:** Passing a nil pointer of a concrete type to a function expecting an interface creates a non-nil interface value (`interface{ type: *T, value: nil } != nil`). Standard `if v == nil` checks will fail to catch this, leading to nil pointer dereferences.
 - **Embedded Database Ambiguity:** Distinguish between "embedded data" (local files accessed via protocol) and "embedded engine" (in-process executor). Conflating the two can lead to incorrect driver selection and unnecessary dependency on external processes. Truly embedded logic uses library-backed drivers like `github.com/dolthub/driver`.
 - **Ghost Event Ordering Trap:** Emitting observability events before authoritative state persistence creates a durable mismatch if the state update fails. **Mitigation:** Strictly follow the **State-First Persistence** pattern.
 - **Dolt Driver JSON Scan Error**: The embedded Dolt driver returns JSON columns as `string`. Standard `Scan` into `json.RawMessage` (a `[]byte` slice) fails. **Mitigation**: Scan into a temporary `[]byte` variable first, then assign to the struct field.
