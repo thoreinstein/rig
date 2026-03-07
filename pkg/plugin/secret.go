@@ -5,6 +5,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -81,5 +82,56 @@ func (s *HostSecretProxy) GetSecret(ctx context.Context, req *apiv1.GetSecretReq
 		Secret: &apiv1.SecretValue{
 			Value: val,
 		},
+	}, nil
+}
+
+// GetSecrets resolves multiple secret keys in a single request.
+// Missing keys are omitted from the response map (partial-failure semantics).
+func (s *HostSecretProxy) GetSecrets(ctx context.Context, req *apiv1.GetSecretsRequest) (*apiv1.GetSecretsResponse, error) {
+	s.mu.RLock()
+	pluginName, ok := s.tokens[req.Token]
+	s.mu.RUnlock()
+
+	if !ok || pluginName == "" {
+		return nil, status.Errorf(codes.Unauthenticated, "invalid secret token")
+	}
+
+	secrets := make(map[string]*apiv1.SecretValue, len(req.Keys))
+	for _, key := range req.Keys {
+		if key == "" || strings.ContainsAny(key, ".\x00/\\") {
+			continue // skip invalid keys silently per partial-failure semantics
+		}
+
+		val, err := s.resolver(pluginName, key)
+		if err != nil {
+			continue // omit missing/failed keys
+		}
+		secrets[key] = &apiv1.SecretValue{Value: val}
+	}
+
+	return &apiv1.GetSecretsResponse{Secrets: secrets}, nil
+}
+
+// RefreshToken rotates a plugin's session token.
+func (s *HostSecretProxy) RefreshToken(_ context.Context, req *apiv1.RefreshTokenRequest) (*apiv1.RefreshTokenResponse, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	pluginName, ok := s.tokens[req.CurrentToken]
+	if !ok || pluginName == "" {
+		return nil, status.Errorf(codes.Unauthenticated, "invalid secret token")
+	}
+
+	u, err := uuid.NewRandom()
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to generate new token")
+	}
+	newToken := u.String()
+
+	delete(s.tokens, req.CurrentToken)
+	s.tokens[newToken] = pluginName
+
+	return &apiv1.RefreshTokenResponse{
+		NewToken: newToken,
 	}, nil
 }

@@ -126,6 +126,53 @@ func (s *Secret) GetSecret(ctx context.Context, key string) (string, error) {
 	return resp.Secret.Value, nil
 }
 
+// GetSecrets retrieves multiple secret values by key from the host in a single request.
+// Missing or inaccessible keys are omitted from the returned map.
+func (s *Secret) GetSecrets(ctx context.Context, keys []string) (map[string]string, error) {
+	client, err := s.connect()
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := client.GetSecrets(ctx, &apiv1.GetSecretsRequest{
+		Keys:  keys,
+		Token: s.token,
+	})
+	if err != nil {
+		return nil, mapError(err)
+	}
+
+	result := make(map[string]string, len(resp.Secrets))
+	for k, sv := range resp.Secrets {
+		if sv != nil {
+			result[k] = sv.Value
+		}
+	}
+	return result, nil
+}
+
+// RefreshToken rotates the current session token and updates the client's
+// internal token for subsequent requests.
+func (s *Secret) RefreshToken(ctx context.Context) (string, error) {
+	client, err := s.connect()
+	if err != nil {
+		return "", err
+	}
+
+	resp, err := client.RefreshToken(ctx, &apiv1.RefreshTokenRequest{
+		CurrentToken: s.token,
+	})
+	if err != nil {
+		return "", mapError(err)
+	}
+
+	s.mu.Lock()
+	s.token = resp.NewToken
+	s.mu.Unlock()
+
+	return resp.NewToken, nil
+}
+
 // GetSecret is a convenience helper that uses a default Secret client.
 // It creates a new connection per call, so use the Secret type for multiple calls.
 func GetSecret(ctx context.Context, key string) (string, error) {
