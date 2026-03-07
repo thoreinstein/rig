@@ -1,6 +1,8 @@
 package vcs
 
 import (
+	"reflect"
+
 	"github.com/cockroachdb/errors"
 )
 
@@ -18,6 +20,13 @@ func NewProviderWithManager(manager PluginManager, providerName string, verbose 
 	// Default to local git provider
 	if providerName == "" || providerName == "git" {
 		return NewLocalProvider(verbose), nil
+	}
+
+	// Guard against typed-nil interface values (e.g., (*plugin.Manager)(nil) stored as PluginManager).
+	if manager != nil {
+		if v := reflect.ValueOf(manager); v.Kind() == reflect.Ptr && v.IsNil() {
+			manager = nil
+		}
 	}
 
 	// If manager is provided, use it for plugin provider

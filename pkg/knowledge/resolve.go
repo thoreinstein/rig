@@ -1,6 +1,8 @@
 package knowledge
 
 import (
+	"reflect"
+
 	"github.com/cockroachdb/errors"
 
 	"thoreinstein.com/rig/pkg/config"
@@ -11,6 +13,13 @@ func NewProviderWithManager(cfg *config.Config, manager PluginManager, verbose b
 	providerName := cfg.Notes.Provider
 	if providerName == "" || providerName == "local" {
 		return NewLocalProvider(cfg, verbose), nil
+	}
+
+	// Guard against typed-nil interface values (e.g., (*plugin.Manager)(nil) stored as PluginManager).
+	if manager != nil {
+		if v := reflect.ValueOf(manager); v.Kind() == reflect.Ptr && v.IsNil() {
+			manager = nil
+		}
 	}
 
 	if manager == nil {

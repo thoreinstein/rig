@@ -9,6 +9,7 @@ import (
 	"context"
 	"log/slog"
 	"os"
+	"reflect"
 
 	apiv1 "thoreinstein.com/rig/pkg/api/v1"
 	"thoreinstein.com/rig/pkg/config"
@@ -145,6 +146,12 @@ func NewProviderWithManager(mgr PluginManager, cfg *config.AIConfig, verbose boo
 		return NewGeminiProvider(apiKey, model, logger), nil
 
 	case ProviderPlugin:
+		// Guard against typed-nil interface values (e.g., (*plugin.Manager)(nil) stored as PluginManager).
+		if mgr != nil {
+			if v := reflect.ValueOf(mgr); v.Kind() == reflect.Ptr && v.IsNil() {
+				mgr = nil
+			}
+		}
 		if mgr == nil {
 			return nil, rigerrors.NewConfigError("ai.provider", "plugin provider requested but no plugin manager provided")
 		}
