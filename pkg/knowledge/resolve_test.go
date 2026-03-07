@@ -47,7 +47,7 @@ func TestNewProviderWithManager(t *testing.T) {
 				},
 			}
 
-			var mgr *plugin.Manager
+			var mgr PluginManager
 			if !tt.nilManager && tt.providerName != "" && tt.providerName != "local" {
 				mgr = &plugin.Manager{} // Non-nil dummy
 			}

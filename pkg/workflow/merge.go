@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"reflect"
 	"time"
 
 	"github.com/google/uuid"
@@ -15,6 +14,7 @@ import (
 	rigerrors "thoreinstein.com/rig/pkg/errors"
 	"thoreinstein.com/rig/pkg/events"
 	"thoreinstein.com/rig/pkg/github"
+	"thoreinstein.com/rig/pkg/internal"
 	"thoreinstein.com/rig/pkg/jira"
 )
 
@@ -38,11 +38,7 @@ type EngineOption func(*Engine)
 // Passing nil (including typed-nil pointers) retains the default NoopEventLogger.
 func WithEventLogger(el events.EventLogger) EngineOption {
 	return func(e *Engine) {
-		if el == nil {
-			return
-		}
-		v := reflect.ValueOf(el)
-		if v.Kind() == reflect.Ptr && v.IsNil() {
+		if internal.IsNilInterface(el) {
 			return
 		}
 		e.eventLogger = el

@@ -3,7 +3,7 @@ package vcs
 import (
 	"github.com/cockroachdb/errors"
 
-	"thoreinstein.com/rig/pkg/plugin"
+	"thoreinstein.com/rig/pkg/internal"
 )
 
 // NewProvider creates a new VCS provider based on the provider name.
@@ -16,14 +16,14 @@ func NewProvider(providerName string, verbose bool) (Provider, error) {
 // NewProviderWithManager creates a new VCS provider based on the provider name.
 // If providerName is "git" or empty, it returns a LocalProvider.
 // Otherwise, it returns a PluginProvider using the provided manager.
-func NewProviderWithManager(manager *plugin.Manager, providerName string, verbose bool) (Provider, error) {
+func NewProviderWithManager(manager PluginManager, providerName string, verbose bool) (Provider, error) {
 	// Default to local git provider
 	if providerName == "" || providerName == "git" {
 		return NewLocalProvider(verbose), nil
 	}
 
 	// If manager is provided, use it for plugin provider
-	if manager != nil {
+	if !internal.IsNilInterface(manager) {
 		return NewPluginProvider(manager, providerName), nil
 	}
 
