@@ -154,20 +154,26 @@ func (s *Secret) GetSecrets(ctx context.Context, keys []string) (map[string]stri
 // RefreshToken rotates the current session token and updates the client's
 // internal token for subsequent requests.
 func (s *Secret) RefreshToken(ctx context.Context) (string, error) {
+	s.mu.Lock()
+	currentToken := s.token
+	s.mu.Unlock()
+
 	client, err := s.connect()
 	if err != nil {
 		return "", err
 	}
 
 	resp, err := client.RefreshToken(ctx, &apiv1.RefreshTokenRequest{
-		CurrentToken: s.token,
+		CurrentToken: currentToken,
 	})
 	if err != nil {
 		return "", mapError(err)
 	}
 
 	s.mu.Lock()
-	s.token = resp.NewToken
+	if s.token == currentToken {
+		s.token = resp.NewToken
+	}
 	s.mu.Unlock()
 
 	return resp.NewToken, nil
