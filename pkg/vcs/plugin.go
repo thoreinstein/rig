@@ -5,8 +5,13 @@ import (
 	"time"
 
 	apiv1 "thoreinstein.com/rig/pkg/api/v1"
-	"thoreinstein.com/rig/pkg/plugin"
 )
+
+// PluginManager defines the interface for acquiring and releasing VCS plugins.
+type PluginManager interface {
+	GetVCSClient(ctx context.Context, name string) (apiv1.VCSServiceClient, error)
+	ReleasePlugin(name string)
+}
 
 // rpcTimeout is the default timeout for VCS plugin RPC calls.
 const rpcTimeout = 30 * time.Second
@@ -16,12 +21,12 @@ const rpcLongTimeout = 15 * time.Minute
 
 // PluginProvider implements the Provider interface by delegating to a Rig plugin.
 type PluginProvider struct {
-	Manager    *plugin.Manager
+	Manager    PluginManager
 	PluginName string
 }
 
 // NewPluginProvider creates a new PluginProvider.
-func NewPluginProvider(manager *plugin.Manager, pluginName string) *PluginProvider {
+func NewPluginProvider(manager PluginManager, pluginName string) *PluginProvider {
 	return &PluginProvider{
 		Manager:    manager,
 		PluginName: pluginName,
