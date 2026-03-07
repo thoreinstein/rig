@@ -1,9 +1,9 @@
 package vcs
 
 import (
-	"reflect"
-
 	"github.com/cockroachdb/errors"
+
+	"thoreinstein.com/rig/pkg/internal"
 )
 
 // NewProvider creates a new VCS provider based on the provider name.
@@ -22,15 +22,8 @@ func NewProviderWithManager(manager PluginManager, providerName string, verbose 
 		return NewLocalProvider(verbose), nil
 	}
 
-	// Guard against typed-nil interface values (e.g., (*plugin.Manager)(nil) stored as PluginManager).
-	if manager != nil {
-		if v := reflect.ValueOf(manager); v.Kind() == reflect.Ptr && v.IsNil() {
-			manager = nil
-		}
-	}
-
 	// If manager is provided, use it for plugin provider
-	if manager != nil {
+	if !internal.IsNilInterface(manager) {
 		return NewPluginProvider(manager, providerName), nil
 	}
 

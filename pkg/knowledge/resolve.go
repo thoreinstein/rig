@@ -1,11 +1,10 @@
 package knowledge
 
 import (
-	"reflect"
-
 	"github.com/cockroachdb/errors"
 
 	"thoreinstein.com/rig/pkg/config"
+	"thoreinstein.com/rig/pkg/internal"
 )
 
 // NewProviderWithManager returns a Knowledge Provider based on configuration.
@@ -15,14 +14,7 @@ func NewProviderWithManager(cfg *config.Config, manager PluginManager, verbose b
 		return NewLocalProvider(cfg, verbose), nil
 	}
 
-	// Guard against typed-nil interface values (e.g., (*plugin.Manager)(nil) stored as PluginManager).
-	if manager != nil {
-		if v := reflect.ValueOf(manager); v.Kind() == reflect.Ptr && v.IsNil() {
-			manager = nil
-		}
-	}
-
-	if manager == nil {
+	if internal.IsNilInterface(manager) {
 		return nil, errors.Newf("knowledge provider %q requires a plugin manager", providerName)
 	}
 
