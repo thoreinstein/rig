@@ -216,6 +216,12 @@ func TestGetSecrets(t *testing.T) {
 			token:    "wrong-token",
 			wantCode: codes.Unauthenticated,
 		},
+		{
+			name:     "too many keys returns InvalidArgument",
+			keys:     make([]string, maxBulkSecretKeys+1),
+			token:    jiraToken,
+			wantCode: codes.InvalidArgument,
+		},
 	}
 
 	for _, tc := range tests {

@@ -60,6 +60,13 @@ func TestBuildEnv(t *testing.T) {
 			wantContains: []string{"RIG_TEST_ALLOWED=", "RIG_PREFIX_MATCH_1=", "RIG_PREFIX_MATCH_2="},
 			wantExcludes: []string{"RIG_TEST_BLOCKED="},
 		},
+		{
+			name:         "Bare wildcard is ignored",
+			globalAllow:  []string{"*"},
+			pluginAllow:  nil,
+			wantContains: []string{"PATH="},
+			wantExcludes: []string{"RIG_TEST_ALLOWED=", "RIG_TEST_BLOCKED="},
+		},
 	}
 
 	for _, tc := range tests {

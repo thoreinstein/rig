@@ -36,8 +36,11 @@ func buildEnv(globalAllow, pluginAllow []string) []string {
 	exact := make(map[string]struct{}, len(allPatterns))
 	var prefixes []string
 	for _, p := range allPatterns {
-		if strings.HasSuffix(p, "*") {
-			prefixes = append(prefixes, strings.TrimSuffix(p, "*"))
+		if prefix, ok := strings.CutSuffix(p, "*"); ok {
+			if prefix == "" {
+				continue // bare "*" would expose entire environment
+			}
+			prefixes = append(prefixes, prefix)
 		} else {
 			exact[p] = struct{}{}
 		}
