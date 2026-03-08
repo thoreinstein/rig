@@ -45,7 +45,7 @@ type SecretServiceClient interface {
 	// RefreshToken rotates the current session token.
 	// Returns:
 	//   - UNAUTHENTICATED: Current token is invalid
-	//   - PERMISSION_DENIED: Token rotation is not allowed for this session
+	//   - INTERNAL: Token rotation failed due to an internal error
 	RefreshToken(ctx context.Context, in *RefreshTokenRequest, opts ...grpc.CallOption) (*RefreshTokenResponse, error)
 }
 
@@ -108,7 +108,7 @@ type SecretServiceServer interface {
 	// RefreshToken rotates the current session token.
 	// Returns:
 	//   - UNAUTHENTICATED: Current token is invalid
-	//   - PERMISSION_DENIED: Token rotation is not allowed for this session
+	//   - INTERNAL: Token rotation failed due to an internal error
 	RefreshToken(context.Context, *RefreshTokenRequest) (*RefreshTokenResponse, error)
 	mustEmbedUnimplementedSecretServiceServer()
 }

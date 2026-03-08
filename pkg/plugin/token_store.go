@@ -3,8 +3,12 @@ package plugin
 import (
 	"sync"
 
+	"github.com/cockroachdb/errors"
 	"github.com/google/uuid"
 )
+
+// ErrTokenNotFound is returned when a token cannot be resolved to a plugin.
+var ErrTokenNotFound = errors.New("token not found")
 
 // tokenStore manages session tokens and their mapping to plugin names.
 // It is shared across host-side proxy services (Secret, Context).
@@ -54,7 +58,7 @@ func (s *tokenStore) Rotate(currentToken string) (string, string, error) {
 
 	name, ok := s.tokens[currentToken]
 	if !ok {
-		return "", "", nil // not found
+		return "", "", ErrTokenNotFound
 	}
 
 	u, err := uuid.NewRandom()

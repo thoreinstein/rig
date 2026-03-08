@@ -94,11 +94,10 @@ func (s *HostSecretProxy) GetSecrets(ctx context.Context, req *apiv1.GetSecretsR
 func (s *HostSecretProxy) RefreshToken(_ context.Context, req *apiv1.RefreshTokenRequest) (*apiv1.RefreshTokenResponse, error) {
 	_, newToken, err := s.store.Rotate(req.CurrentToken)
 	if err != nil {
+		if rigerrors.Is(err, ErrTokenNotFound) {
+			return nil, status.Errorf(codes.Unauthenticated, "invalid secret token")
+		}
 		return nil, status.Errorf(codes.Internal, "failed to rotate token: %v", err)
-	}
-
-	if newToken == "" {
-		return nil, status.Errorf(codes.Unauthenticated, "invalid secret token")
 	}
 
 	return &apiv1.RefreshTokenResponse{

@@ -35,6 +35,9 @@ func NewHostContextProxy(store *tokenStore, ctx PluginContext) *HostContextProxy
 
 // GetContext returns the current environment context.
 func (p *HostContextProxy) GetContext(ctx context.Context, req *apiv1.GetContextRequest) (*apiv1.GetContextResponse, error) {
+	if p.store == nil {
+		return nil, status.Errorf(codes.Internal, "token store not initialized")
+	}
 	pluginName, ok := p.store.Resolve(req.Token)
 	if !ok || pluginName == "" {
 		return nil, status.Errorf(codes.Unauthenticated, "invalid secret token")

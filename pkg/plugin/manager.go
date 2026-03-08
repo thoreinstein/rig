@@ -48,6 +48,7 @@ func WithUIServer(srv apiv1.UIServiceServer) ManagerOption {
 }
 
 // WithPluginContext sets the environment context provided to plugins.
+// The tokenStore is injected later by NewManager; the proxy handles a nil store safely.
 func WithPluginContext(ctx PluginContext) ManagerOption {
 	return func(m *Manager) {
 		m.contextProxy = NewHostContextProxy(nil, ctx)
