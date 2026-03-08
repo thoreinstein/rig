@@ -3,6 +3,7 @@ package plugin
 import (
 	"context"
 	"log/slog"
+	"sync"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -22,11 +23,12 @@ type PluginContext struct {
 // HostContextProxy implements apiv1.ContextServiceServer.
 type HostContextProxy struct {
 	apiv1.UnimplementedContextServiceServer
-	store       *tokenStore
-	logger      *slog.Logger
-	pluginCtx   PluginContext
-	metadata    *structpb.Struct
-	metadataErr error
+	store           *tokenStore
+	logger          *slog.Logger
+	pluginCtx       PluginContext
+	metadata        *structpb.Struct
+	metadataErr     error
+	metadataLogOnce sync.Once
 }
 
 // NewHostContextProxy creates a new HostContextProxy.
@@ -56,9 +58,11 @@ func (p *HostContextProxy) GetContext(ctx context.Context, req *apiv1.GetContext
 	}
 
 	if p.metadataErr != nil {
-		if p.logger != nil {
-			p.logger.Error("failed to serialize plugin context metadata", "error", p.metadataErr)
-		}
+		p.metadataLogOnce.Do(func() {
+			if p.logger != nil {
+				p.logger.Error("failed to serialize plugin context metadata", "error", p.metadataErr)
+			}
+		})
 		return nil, status.Errorf(codes.Internal, "metadata unavailable")
 	}
 

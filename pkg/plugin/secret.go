@@ -84,7 +84,7 @@ func (s *HostSecretProxy) GetSecrets(ctx context.Context, req *apiv1.GetSecretsR
 	secrets := make(map[string]*apiv1.SecretValue, len(req.Keys))
 	for _, key := range req.Keys {
 		if key == "" || strings.ContainsAny(key, ".\x00/\\") {
-			return nil, status.Errorf(codes.InvalidArgument, "invalid secret key %q", key)
+			continue // omit malformed keys (partial-failure semantics)
 		}
 
 		val, err := s.resolver(pluginName, key)

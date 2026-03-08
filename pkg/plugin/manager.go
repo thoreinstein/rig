@@ -36,8 +36,9 @@ type pluginExecutor interface {
 }
 
 // ConfigProvider is a function that returns the JSON-serialized configuration for a plugin.
-// A nil ConfigProvider is safe: plugins receive an empty JSON object ("{}") as config
-// and secret resolution will return "no config provider available" errors.
+// A nil ConfigProvider is safe: plugins receive an empty JSON object ("{}") as config.
+// Secret resolution errors are surfaced through the host's secret-resolution mechanism
+// (for example as generic failures or omitted keys), and no specific error string is guaranteed.
 type ConfigProvider func(pluginName string) ([]byte, error)
 
 // Manager manages a pool of active plugins.
@@ -246,6 +247,8 @@ func NewManager(executor pluginExecutor, scanner *Scanner, rigVersion string, co
 		if err := srv.Serve(lis); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
 			if m.logger != nil {
 				m.logger.Error("host gRPC server failed", "error", err)
+			} else {
+				fmt.Fprintf(os.Stderr, "host gRPC server failed: %v\n", err)
 			}
 		}
 	}()
