@@ -303,7 +303,11 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 - **Integration Test Dependency**: Concurrency and locking tests are integration-tier and require a live Dolt environment via `RIG_TEST_DOLT_DSN`. They should be skipped in short mode.
 
 ### Plugin Security & Isolation
-- **Back-Channel Resource Proxy Pattern**: Plugins are executed as isolated processes stripped of their environment. Privileged operations (Filesystem, Network) are proxied back to the host via an ephemeral gRPC-over-UDS service (`ResourceService`). The host explicitly grants capabilities (allowed paths, network access) per execution.
+- **Deny-by-Default Plugin Environment Pattern:** Plugins are executed with a sanitized environment. Only an "essential" set of variables (PATH, TERM, etc.) plus explicit global and per-plugin allow-lists are passed. This enforces Secret Proxy usage and prevents host secret leakage.
+- **Strict Socket Isolation Decision:** Plugin UDS sockets MUST be created inside private directories (`MkdirTemp` + `0o700`) to prevent cross-user access on multi-user systems.
+- **Bare Wildcard Trap:** Prefix matching in env allow-lists MUST explicitly ignore/reject bare `*` patterns, as they would expose the entire host environment.
+- **Back-Channel Resource Proxy Pattern:** Plugins are executed as isolated processes stripped of their environment. Privileged operations (Filesystem, Network) are proxied back to the host via an ephemeral gRPC-over-UDS service (`ResourceService`). The host explicitly grants capabilities (allowed paths, network access) per execution.
+
 - **Parent-Recursive Symlink Defense**: Path validation must use recursive parent resolution (beyond `filepath.EvalSymlinks`) to prevent symlink escapes on non-existent files during write operations.
 - **Resource Boundary Enforcement**: Always apply hard constraints (e.g., 10MB `io.LimitReader`) at the proxy layer for file and network IO to protect the host from resource exhaustion attacks.
 
