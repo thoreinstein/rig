@@ -19,7 +19,9 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	SecretService_GetSecret_FullMethodName = "/rig.v1.SecretService/GetSecret"
+	SecretService_GetSecret_FullMethodName    = "/rig.v1.SecretService/GetSecret"
+	SecretService_GetSecrets_FullMethodName   = "/rig.v1.SecretService/GetSecrets"
+	SecretService_RefreshToken_FullMethodName = "/rig.v1.SecretService/RefreshToken"
 )
 
 // SecretServiceClient is the client API for SecretService service.
@@ -29,7 +31,22 @@ const (
 // SecretService is implemented by the host to provide sandboxed access to secrets.
 type SecretServiceClient interface {
 	// GetSecret retrieves a secret value by key from the host's configuration/keychain.
+	// Returns:
+	//   - NOT_FOUND: Key doesn't exist
+	//   - UNAUTHENTICATED: Invalid/expired/missing token
+	//   - INVALID_ARGUMENT: Malformed key
 	GetSecret(ctx context.Context, in *GetSecretRequest, opts ...grpc.CallOption) (*GetSecretResponse, error)
+	// GetSecrets retrieves multiple secret values by key in a single request.
+	// Returns:
+	//   - UNAUTHENTICATED: Invalid/expired/missing token
+	//
+	// Partial failures return available secrets with missing keys omitted from the map.
+	GetSecrets(ctx context.Context, in *GetSecretsRequest, opts ...grpc.CallOption) (*GetSecretsResponse, error)
+	// RefreshToken rotates the current session token.
+	// Returns:
+	//   - UNAUTHENTICATED: Current token is invalid
+	//   - INTERNAL: Token rotation failed due to an internal error
+	RefreshToken(ctx context.Context, in *RefreshTokenRequest, opts ...grpc.CallOption) (*RefreshTokenResponse, error)
 }
 
 type secretServiceClient struct {
@@ -50,6 +67,26 @@ func (c *secretServiceClient) GetSecret(ctx context.Context, in *GetSecretReques
 	return out, nil
 }
 
+func (c *secretServiceClient) GetSecrets(ctx context.Context, in *GetSecretsRequest, opts ...grpc.CallOption) (*GetSecretsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetSecretsResponse)
+	err := c.cc.Invoke(ctx, SecretService_GetSecrets_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *secretServiceClient) RefreshToken(ctx context.Context, in *RefreshTokenRequest, opts ...grpc.CallOption) (*RefreshTokenResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RefreshTokenResponse)
+	err := c.cc.Invoke(ctx, SecretService_RefreshToken_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SecretServiceServer is the server API for SecretService service.
 // All implementations must embed UnimplementedSecretServiceServer
 // for forward compatibility.
@@ -57,7 +94,22 @@ func (c *secretServiceClient) GetSecret(ctx context.Context, in *GetSecretReques
 // SecretService is implemented by the host to provide sandboxed access to secrets.
 type SecretServiceServer interface {
 	// GetSecret retrieves a secret value by key from the host's configuration/keychain.
+	// Returns:
+	//   - NOT_FOUND: Key doesn't exist
+	//   - UNAUTHENTICATED: Invalid/expired/missing token
+	//   - INVALID_ARGUMENT: Malformed key
 	GetSecret(context.Context, *GetSecretRequest) (*GetSecretResponse, error)
+	// GetSecrets retrieves multiple secret values by key in a single request.
+	// Returns:
+	//   - UNAUTHENTICATED: Invalid/expired/missing token
+	//
+	// Partial failures return available secrets with missing keys omitted from the map.
+	GetSecrets(context.Context, *GetSecretsRequest) (*GetSecretsResponse, error)
+	// RefreshToken rotates the current session token.
+	// Returns:
+	//   - UNAUTHENTICATED: Current token is invalid
+	//   - INTERNAL: Token rotation failed due to an internal error
+	RefreshToken(context.Context, *RefreshTokenRequest) (*RefreshTokenResponse, error)
 	mustEmbedUnimplementedSecretServiceServer()
 }
 
@@ -70,6 +122,12 @@ type UnimplementedSecretServiceServer struct{}
 
 func (UnimplementedSecretServiceServer) GetSecret(context.Context, *GetSecretRequest) (*GetSecretResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetSecret not implemented")
+}
+func (UnimplementedSecretServiceServer) GetSecrets(context.Context, *GetSecretsRequest) (*GetSecretsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetSecrets not implemented")
+}
+func (UnimplementedSecretServiceServer) RefreshToken(context.Context, *RefreshTokenRequest) (*RefreshTokenResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RefreshToken not implemented")
 }
 func (UnimplementedSecretServiceServer) mustEmbedUnimplementedSecretServiceServer() {}
 func (UnimplementedSecretServiceServer) testEmbeddedByValue()                       {}
@@ -110,6 +168,42 @@ func _SecretService_GetSecret_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SecretService_GetSecrets_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSecretsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SecretServiceServer).GetSecrets(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SecretService_GetSecrets_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SecretServiceServer).GetSecrets(ctx, req.(*GetSecretsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SecretService_RefreshToken_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RefreshTokenRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SecretServiceServer).RefreshToken(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SecretService_RefreshToken_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SecretServiceServer).RefreshToken(ctx, req.(*RefreshTokenRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SecretService_ServiceDesc is the grpc.ServiceDesc for SecretService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -120,6 +214,14 @@ var SecretService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetSecret",
 			Handler:    _SecretService_GetSecret_Handler,
+		},
+		{
+			MethodName: "GetSecrets",
+			Handler:    _SecretService_GetSecrets_Handler,
+		},
+		{
+			MethodName: "RefreshToken",
+			Handler:    _SecretService_RefreshToken_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

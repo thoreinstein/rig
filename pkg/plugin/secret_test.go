@@ -30,11 +30,12 @@ func TestGetSecret(t *testing.T) {
 		return val, nil
 	}
 
-	proxy := NewHostSecretProxy(resolver)
+	store := newTokenStore()
+	proxy := NewHostSecretProxy(store, resolver)
 	jiraToken := "jira-tok-123"
 	beadsToken := "beads-tok-456"
-	proxy.RegisterPlugin(jiraToken, "jira")
-	proxy.RegisterPlugin(beadsToken, "beads")
+	store.Register(jiraToken, "jira")
+	store.Register(beadsToken, "beads")
 
 	tests := []struct {
 		name     string
@@ -139,10 +140,194 @@ func TestGetSecret(t *testing.T) {
 				t.Fatalf("unexpected error: %v", err)
 			}
 
-			if resp.Value != tc.wantVal {
-				t.Errorf("value: got %q, want %q", resp.Value, tc.wantVal)
+			if resp.Secret == nil {
+				t.Fatal("secret is nil in response")
+			}
+
+			if resp.Secret.Value != tc.wantVal {
+				t.Errorf("value: got %q, want %q", resp.Secret.Value, tc.wantVal)
 			}
 		})
+	}
+}
+
+func TestGetSecrets(t *testing.T) {
+	mockSecrets := map[string]map[string]string{
+		"jira": {"token": "jira-secret", "url": "https://jira.example.com"},
+	}
+
+	resolver := func(pluginName, secretKey string) (string, error) {
+		secrets, ok := mockSecrets[pluginName]
+		if !ok {
+			return "", rigerrors.Wrap(ErrSecretNotFound, fmt.Sprintf("plugin %q not found", pluginName))
+		}
+		val, ok := secrets[secretKey]
+		if !ok {
+			return "", rigerrors.Wrap(ErrSecretNotFound, fmt.Sprintf("secret %q not found", secretKey))
+		}
+		return val, nil
+	}
+
+	store := newTokenStore()
+	proxy := NewHostSecretProxy(store, resolver)
+	jiraToken := "jira-tok-123"
+	store.Register(jiraToken, "jira")
+
+	tests := []struct {
+		name     string
+		keys     []string
+		token    string
+		wantKeys []string
+		wantCode codes.Code
+	}{
+		{
+			name:     "all keys found",
+			keys:     []string{"token", "url"},
+			token:    jiraToken,
+			wantKeys: []string{"token", "url"},
+		},
+		{
+			name:     "partial keys found",
+			keys:     []string{"token", "missing"},
+			token:    jiraToken,
+			wantKeys: []string{"token"},
+		},
+		{
+			name:     "no keys found",
+			keys:     []string{"missing1", "missing2"},
+			token:    jiraToken,
+			wantKeys: []string{},
+		},
+		{
+			name:     "invalid keys skipped",
+			keys:     []string{"token", "bad.key", "../path", "url"},
+			token:    jiraToken,
+			wantKeys: []string{"token", "url"},
+		},
+		{
+			name:     "empty keys list",
+			keys:     []string{},
+			token:    jiraToken,
+			wantKeys: []string{},
+		},
+		{
+			name:     "invalid token",
+			keys:     []string{"token"},
+			token:    "wrong-token",
+			wantCode: codes.Unauthenticated,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			resp, err := proxy.GetSecrets(t.Context(), &apiv1.GetSecretsRequest{
+				Keys:  tc.keys,
+				Token: tc.token,
+			})
+
+			if tc.wantCode != codes.OK {
+				if err == nil {
+					t.Fatalf("expected error with code %v, got nil", tc.wantCode)
+				}
+				st, ok := status.FromError(err)
+				if !ok {
+					t.Fatalf("expected gRPC status error, got %T: %v", err, err)
+				}
+				if st.Code() != tc.wantCode {
+					t.Errorf("code: got %v, want %v", st.Code(), tc.wantCode)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if len(resp.Secrets) != len(tc.wantKeys) {
+				t.Fatalf("secrets count: got %d, want %d", len(resp.Secrets), len(tc.wantKeys))
+			}
+
+			for _, key := range tc.wantKeys {
+				sv, ok := resp.Secrets[key]
+				if !ok {
+					t.Errorf("expected key %q in response", key)
+					continue
+				}
+				if sv.Value != mockSecrets["jira"][key] {
+					t.Errorf("key %q: got %q, want %q", key, sv.Value, mockSecrets["jira"][key])
+				}
+			}
+		})
+	}
+}
+
+func TestRefreshToken(t *testing.T) {
+	resolver := func(_, _ string) (string, error) { return "val", nil }
+	store := newTokenStore()
+	proxy := NewHostSecretProxy(store, resolver)
+	originalToken := "original-tok"
+	store.Register(originalToken, "myplugin")
+
+	t.Run("successful rotation", func(t *testing.T) {
+		resp, err := proxy.RefreshToken(t.Context(), &apiv1.RefreshTokenRequest{
+			CurrentToken: originalToken,
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if resp.NewToken == "" {
+			t.Fatal("new token is empty")
+		}
+		if resp.NewToken == originalToken {
+			t.Error("new token should differ from original")
+		}
+
+		// Old token should no longer work.
+		_, err = proxy.GetSecret(t.Context(), &apiv1.GetSecretRequest{Key: "k", Token: originalToken})
+		if status.Code(err) != codes.Unauthenticated {
+			t.Errorf("old token: expected Unauthenticated, got %v", err)
+		}
+
+		// New token should work.
+		_, err = proxy.GetSecret(t.Context(), &apiv1.GetSecretRequest{Key: "k", Token: resp.NewToken})
+		if err != nil {
+			t.Errorf("new token: unexpected error: %v", err)
+		}
+	})
+
+	t.Run("invalid token", func(t *testing.T) {
+		_, err := proxy.RefreshToken(t.Context(), &apiv1.RefreshTokenRequest{
+			CurrentToken: "nonexistent",
+		})
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if status.Code(err) != codes.Unauthenticated {
+			t.Errorf("code: got %v, want %v", status.Code(err), codes.Unauthenticated)
+		}
+	})
+}
+
+func TestTokenStore_UnregisterPlugin(t *testing.T) {
+	store := newTokenStore()
+	name := "my-plugin"
+	t1 := "token-1"
+	t2 := "token-2"
+
+	store.Register(t1, name)
+	store.Register(t2, name)
+	store.Register("other-token", "other-plugin")
+
+	store.UnregisterPlugin(name)
+
+	if _, ok := store.Resolve(t1); ok {
+		t.Errorf("token %s still exists after UnregisterPlugin", t1)
+	}
+	if _, ok := store.Resolve(t2); ok {
+		t.Errorf("token %s still exists after UnregisterPlugin", t2)
+	}
+	if _, ok := store.Resolve("other-token"); !ok {
+		t.Error("other-token was incorrectly removed")
 	}
 }
 
@@ -153,8 +338,9 @@ func TestGetSecret_InternalError(t *testing.T) {
 		return "", rigerrors.New("keychain access failed")
 	}
 
-	proxy := NewHostSecretProxy(resolver)
-	proxy.RegisterPlugin("tok", "myplugin")
+	store := newTokenStore()
+	proxy := NewHostSecretProxy(store, resolver)
+	store.Register("tok", "myplugin")
 
 	_, err := proxy.GetSecret(t.Context(), &apiv1.GetSecretRequest{Key: "k", Token: "tok"})
 	if err == nil {
@@ -175,16 +361,17 @@ func TestGetSecret_InternalError(t *testing.T) {
 
 func TestGetSecret_Unregister(t *testing.T) {
 	resolver := func(_, _ string) (string, error) { return "val", nil }
-	proxy := NewHostSecretProxy(resolver)
+	store := newTokenStore()
+	proxy := NewHostSecretProxy(store, resolver)
 	token := "tok"
-	proxy.RegisterPlugin(token, "p")
+	store.Register(token, "p")
 
 	_, err := proxy.GetSecret(t.Context(), &apiv1.GetSecretRequest{Key: "k", Token: token})
 	if err != nil {
 		t.Fatalf("expected success before unregister, got %v", err)
 	}
 
-	proxy.UnregisterPlugin(token)
+	store.Unregister(token)
 
 	_, err = proxy.GetSecret(t.Context(), &apiv1.GetSecretRequest{Key: "k", Token: token})
 	if status.Code(err) != codes.Unauthenticated {

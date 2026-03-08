@@ -113,14 +113,78 @@ func (s *Secret) GetSecret(ctx context.Context, key string) (string, error) {
 		return "", err
 	}
 
+	s.mu.Lock()
+	token := s.token
+	s.mu.Unlock()
+
 	resp, err := client.GetSecret(ctx, &apiv1.GetSecretRequest{
 		Key:   key,
-		Token: s.token,
+		Token: token,
 	})
 	if err != nil {
 		return "", mapError(err)
 	}
-	return resp.Value, nil
+	if resp.Secret != nil {
+		return resp.Secret.Value, nil
+	}
+	return resp.Value, nil //nolint:staticcheck // fallback for legacy hosts
+}
+
+// GetSecrets retrieves multiple secret values by key from the host in a single request.
+// Missing or inaccessible keys are omitted from the returned map.
+func (s *Secret) GetSecrets(ctx context.Context, keys []string) (map[string]string, error) {
+	client, err := s.connect()
+	if err != nil {
+		return nil, err
+	}
+
+	s.mu.Lock()
+	token := s.token
+	s.mu.Unlock()
+
+	resp, err := client.GetSecrets(ctx, &apiv1.GetSecretsRequest{
+		Keys:  keys,
+		Token: token,
+	})
+	if err != nil {
+		return nil, mapError(err)
+	}
+
+	result := make(map[string]string, len(resp.Secrets))
+	for k, sv := range resp.Secrets {
+		if sv != nil {
+			result[k] = sv.Value
+		}
+	}
+	return result, nil
+}
+
+// RefreshToken rotates the current session token and updates the client's
+// internal token for subsequent requests.
+func (s *Secret) RefreshToken(ctx context.Context) (string, error) {
+	s.mu.Lock()
+	currentToken := s.token
+	s.mu.Unlock()
+
+	client, err := s.connect()
+	if err != nil {
+		return "", err
+	}
+
+	resp, err := client.RefreshToken(ctx, &apiv1.RefreshTokenRequest{
+		CurrentToken: currentToken,
+	})
+	if err != nil {
+		return "", mapError(err)
+	}
+
+	s.mu.Lock()
+	if s.token == currentToken {
+		s.token = resp.NewToken
+	}
+	s.mu.Unlock()
+
+	return resp.NewToken, nil
 }
 
 // GetSecret is a convenience helper that uses a default Secret client.

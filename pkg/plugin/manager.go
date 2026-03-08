@@ -47,6 +47,14 @@ func WithUIServer(srv apiv1.UIServiceServer) ManagerOption {
 	}
 }
 
+// WithPluginContext sets the environment context provided to plugins.
+// The tokenStore is injected later by NewManager; the proxy handles a nil store safely.
+func WithPluginContext(ctx PluginContext) ManagerOption {
+	return func(m *Manager) {
+		m.contextProxy = NewHostContextProxy(nil, ctx)
+	}
+}
+
 // Manager manages a pool of active plugins.
 type Manager struct {
 	executor       pluginExecutor
@@ -56,12 +64,14 @@ type Manager struct {
 	logger         *slog.Logger
 
 	// Host-side Proxy Services
-	hostServer  *grpc.Server
-	hostUI      apiv1.UIServiceServer
-	secretProxy *HostSecretProxy
-	hostL       net.Listener
-	hostPath    string
-	hostDir     string
+	hostServer   *grpc.Server
+	hostUI       apiv1.UIServiceServer
+	tokenStore   *tokenStore
+	secretProxy  *HostSecretProxy
+	contextProxy *HostContextProxy
+	hostL        net.Listener
+	hostPath     string
+	hostDir      string
 
 	mu      sync.Mutex
 	plugins map[string]*Plugin
@@ -185,11 +195,19 @@ func NewManager(executor pluginExecutor, scanner *Scanner, rigVersion string, co
 		return strVal, nil
 	}
 
-	m.secretProxy = NewHostSecretProxy(resolver)
+	m.tokenStore = newTokenStore()
+	m.secretProxy = NewHostSecretProxy(m.tokenStore, resolver)
+	if m.contextProxy == nil {
+		m.contextProxy = NewHostContextProxy(m.tokenStore, PluginContext{})
+	} else {
+		// If provided via option, we need to ensure it uses the same tokenStore
+		m.contextProxy.store = m.tokenStore
+	}
 
 	srv := grpc.NewServer()
 	apiv1.RegisterUIServiceServer(srv, m.hostUI)
 	apiv1.RegisterSecretServiceServer(srv, m.secretProxy)
+	apiv1.RegisterContextServiceServer(srv, m.contextProxy)
 	m.hostServer = srv
 
 	go func() {
@@ -491,17 +509,17 @@ func (m *Manager) getOrStartPlugin(ctx context.Context, name string) (*Plugin, e
 		return nil, errors.Wrap(err, "failed to generate secret token")
 	}
 	target.secretToken = u.String()
-	m.secretProxy.RegisterPlugin(target.secretToken, name)
+	m.tokenStore.Register(target.secretToken, name)
 
 	// Start the plugin
 	if err := m.executor.Start(ctx, target); err != nil {
-		m.secretProxy.UnregisterPlugin(target.secretToken)
+		m.tokenStore.Unregister(target.secretToken)
 		return nil, errors.Wrapf(err, "failed to start plugin %q", name)
 	}
 
 	// Prepare the base client and handshake
 	if err := m.executor.PrepareClient(target); err != nil {
-		m.secretProxy.UnregisterPlugin(target.secretToken)
+		m.tokenStore.Unregister(target.secretToken)
 		_ = m.executor.Stop(target)
 		return nil, errors.Wrapf(err, "failed to prepare client for plugin %q", name)
 	}
@@ -521,7 +539,7 @@ func (m *Manager) getOrStartPlugin(ctx context.Context, name string) (*Plugin, e
 
 	// Perform handshake with host version and API contract version
 	if err := m.executor.Handshake(ctx, target, m.rigVersion, APIVersion, configJSON); err != nil {
-		m.secretProxy.UnregisterPlugin(target.secretToken)
+		m.tokenStore.Unregister(target.secretToken)
 		_ = m.executor.Stop(target)
 		return nil, errors.Wrapf(err, "handshake failed for plugin %q", name)
 	}
@@ -530,7 +548,7 @@ func (m *Manager) getOrStartPlugin(ctx context.Context, name string) (*Plugin, e
 	// (which might have updated the plugin's metadata/version).
 	ValidateCompatibility(target, m.rigVersion)
 	if target.Status == StatusIncompatible || target.Status == StatusError {
-		m.secretProxy.UnregisterPlugin(target.secretToken)
+		m.tokenStore.Unregister(target.secretToken)
 		_ = m.executor.Stop(target)
 		if target.Error != nil {
 			return nil, errors.Wrapf(target.Error, "plugin %q is incompatible", name)
@@ -551,7 +569,7 @@ func (m *Manager) StopAll() {
 	defer m.mu.Unlock()
 
 	for _, p := range m.plugins {
-		m.secretProxy.UnregisterPlugin(p.secretToken)
+		m.tokenStore.UnregisterPlugin(p.Name)
 		_ = m.executor.Stop(p)
 	}
 	m.plugins = make(map[string]*Plugin)
@@ -616,7 +634,7 @@ func (m *Manager) StopPluginIfIdle(name string, idleTimeout time.Duration) error
 			return nil
 		}
 
-		m.secretProxy.UnregisterPlugin(p.secretToken)
+		m.tokenStore.UnregisterPlugin(p.Name)
 		delete(m.plugins, name)
 	}
 	m.mu.Unlock()
