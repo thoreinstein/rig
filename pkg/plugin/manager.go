@@ -513,13 +513,13 @@ func (m *Manager) getOrStartPlugin(ctx context.Context, name string) (*Plugin, e
 
 	// Start the plugin
 	if err := m.executor.Start(ctx, target); err != nil {
-		m.tokenStore.UnregisterPlugin(name)
+		m.tokenStore.Unregister(target.secretToken)
 		return nil, errors.Wrapf(err, "failed to start plugin %q", name)
 	}
 
 	// Prepare the base client and handshake
 	if err := m.executor.PrepareClient(target); err != nil {
-		m.tokenStore.UnregisterPlugin(name)
+		m.tokenStore.Unregister(target.secretToken)
 		_ = m.executor.Stop(target)
 		return nil, errors.Wrapf(err, "failed to prepare client for plugin %q", name)
 	}
@@ -539,7 +539,7 @@ func (m *Manager) getOrStartPlugin(ctx context.Context, name string) (*Plugin, e
 
 	// Perform handshake with host version and API contract version
 	if err := m.executor.Handshake(ctx, target, m.rigVersion, APIVersion, configJSON); err != nil {
-		m.tokenStore.UnregisterPlugin(name)
+		m.tokenStore.Unregister(target.secretToken)
 		_ = m.executor.Stop(target)
 		return nil, errors.Wrapf(err, "handshake failed for plugin %q", name)
 	}
@@ -548,7 +548,7 @@ func (m *Manager) getOrStartPlugin(ctx context.Context, name string) (*Plugin, e
 	// (which might have updated the plugin's metadata/version).
 	ValidateCompatibility(target, m.rigVersion)
 	if target.Status == StatusIncompatible || target.Status == StatusError {
-		m.tokenStore.UnregisterPlugin(name)
+		m.tokenStore.Unregister(target.secretToken)
 		_ = m.executor.Stop(target)
 		if target.Error != nil {
 			return nil, errors.Wrapf(target.Error, "plugin %q is incompatible", name)
