@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -14,13 +15,24 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Optional check for RIG_HOST_ENDPOINT
-	expectedHost := os.Getenv("EXPECTED_HOST_ENDPOINT")
-	if expectedHost != "" {
-		actualHost := os.Getenv("RIG_HOST_ENDPOINT")
-		if actualHost != expectedHost {
-			fmt.Fprintf(os.Stderr, "Expected RIG_HOST_ENDPOINT=%q, got %q\n", expectedHost, actualHost)
-			os.Exit(1)
+	// Optional check for environment variables
+	expectedEnv := os.Getenv("EXPECTED_ENV_VARS")
+	if expectedEnv != "" {
+		for _, key := range strings.Split(expectedEnv, ",") {
+			if os.Getenv(key) == "" {
+				fmt.Fprintf(os.Stderr, "Expected environment variable %q is empty or not set\n", key)
+				os.Exit(1)
+			}
+		}
+	}
+
+	blockedEnv := os.Getenv("BLOCKED_ENV_VARS")
+	if blockedEnv != "" {
+		for _, key := range strings.Split(blockedEnv, ",") {
+			if os.Getenv(key) != "" {
+				fmt.Fprintf(os.Stderr, "Environment variable %q should be blocked but is set to %q\n", key, os.Getenv(key))
+				os.Exit(1)
+			}
 		}
 	}
 

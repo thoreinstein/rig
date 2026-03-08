@@ -83,6 +83,7 @@ type Plugin struct {
 	DiscoveryAt  time.Time
 	last_used    time.Time
 	Capabilities []*apiv1.Capability
+	EnvAllowList []string // rig-76a: sanitize environment
 
 	// Runtime state
 	mu              sync.Mutex

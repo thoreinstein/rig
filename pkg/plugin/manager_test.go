@@ -45,6 +45,8 @@ func (m *mockExecutor) Handshake(ctx context.Context, p *Plugin, rigVersion, api
 
 func (m *mockExecutor) SetHostEndpoint(path string) {}
 
+func (m *mockExecutor) SetGlobalEnvAllowList(list []string) {}
+
 func TestManager_GetOrStartPlugin_Compatibility(t *testing.T) {
 	// Setup a temporary plugin directory
 	tmpDir := t.TempDir()

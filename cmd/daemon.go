@@ -72,7 +72,7 @@ func newDaemonStartCmd() *cobra.Command {
 
 			// 2. Setup UI Proxy and Manager
 			uiProxy := daemon.NewDaemonUIProxy()
-			manager, err := plugin.NewManager(executor, scanner, rigVersion, appConfig.PluginConfig, slog.Default(), plugin.WithUIServer(uiProxy))
+			manager, err := plugin.NewManager(executor, scanner, rigVersion, appConfig.PluginConfig, slog.Default(), plugin.WithUIServer(uiProxy), plugin.WithGlobalEnvAllowList(cfg.PluginGlobal.EnvAllowList))
 			if err != nil {
 				return errors.Wrap(err, "failed to initialize plugin manager")
 			}

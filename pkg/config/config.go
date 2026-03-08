@@ -30,7 +30,13 @@ type Config struct {
 	Daemon        DaemonConfig                      `mapstructure:"daemon"`
 	VCS           VCSConfig                         `mapstructure:"vcs"`
 	Ticket        TicketConfig                      `mapstructure:"ticket"`
+	PluginGlobal  PluginGlobalConfig                `mapstructure:"plugin_global"`
 	Plugins       map[string]map[string]interface{} `mapstructure:"plugins"`
+}
+
+// PluginGlobalConfig holds global plugin configuration
+type PluginGlobalConfig struct {
+	EnvAllowList []string `mapstructure:"env_allow_list"`
 }
 
 // VCSConfig holds Version Control System configuration
@@ -369,6 +375,9 @@ func SetDefaults(v *viper.Viper) {
 	// Beads defaults
 	v.SetDefault("beads.enabled", true)
 	v.SetDefault("beads.cli_command", "bd")
+
+	// Plugin defaults
+	v.SetDefault("plugin_global.env_allow_list", []string{})
 
 	// Tmux defaults
 	v.SetDefault("tmux.session_prefix", "")

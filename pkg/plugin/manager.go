@@ -31,6 +31,7 @@ type pluginExecutor interface {
 	PrepareClient(p *Plugin) error
 	Handshake(ctx context.Context, p *Plugin, rigVersion, apiVersion string, configJSON []byte) error
 	SetHostEndpoint(path string)
+	SetGlobalEnvAllowList(list []string)
 }
 
 // ConfigProvider is a function that returns the JSON-serialized configuration for a plugin.
@@ -55,6 +56,13 @@ func WithPluginContext(ctx PluginContext) ManagerOption {
 	}
 }
 
+// WithGlobalEnvAllowList sets the global environment allow-list.
+func WithGlobalEnvAllowList(list []string) ManagerOption {
+	return func(m *Manager) {
+		m.globalEnvAllowList = list
+	}
+}
+
 // Manager manages a pool of active plugins.
 type Manager struct {
 	executor       pluginExecutor
@@ -64,14 +72,15 @@ type Manager struct {
 	logger         *slog.Logger
 
 	// Host-side Proxy Services
-	hostServer   *grpc.Server
-	hostUI       apiv1.UIServiceServer
-	tokenStore   *tokenStore
-	secretProxy  *HostSecretProxy
-	contextProxy *HostContextProxy
-	hostL        net.Listener
-	hostPath     string
-	hostDir      string
+	hostServer         *grpc.Server
+	hostUI             apiv1.UIServiceServer
+	tokenStore         *tokenStore
+	secretProxy        *HostSecretProxy
+	contextProxy       *HostContextProxy
+	hostL              net.Listener
+	hostPath           string
+	hostDir            string
+	globalEnvAllowList []string
 
 	mu      sync.Mutex
 	plugins map[string]*Plugin
@@ -128,6 +137,8 @@ func NewManager(executor pluginExecutor, scanner *Scanner, rigVersion string, co
 	if m.hostUI == nil {
 		m.hostUI = ui.NewUIServer()
 	}
+
+	m.executor.SetGlobalEnvAllowList(m.globalEnvAllowList)
 
 	// Host secret proxy uses the config provider to resolve secrets.
 	// The resolver receives pluginName and secretKey as separate, validated
@@ -511,6 +522,27 @@ func (m *Manager) getOrStartPlugin(ctx context.Context, name string) (*Plugin, e
 	target.secretToken = u.String()
 	m.tokenStore.Register(target.secretToken, name)
 
+	// Fetch plugin configuration if provider is available
+	configJSON := []byte("{}")
+	if m.configProvider != nil {
+		data, err := m.configProvider(name)
+		if err != nil {
+			if m.logger != nil {
+				m.logger.Debug("failed to get config for plugin", "plugin", name, "error", err)
+			}
+		} else if len(data) > 0 {
+			configJSON = data
+
+			// Extract EnvAllowList from config if present
+			var cfg map[string]interface{}
+			if err := json.Unmarshal(data, &cfg); err == nil {
+				if val, ok := cfg["env_allow_list"]; ok {
+					target.EnvAllowList = toStringSlice(val)
+				}
+			}
+		}
+	}
+
 	// Start the plugin
 	if err := m.executor.Start(ctx, target); err != nil {
 		m.tokenStore.Unregister(target.secretToken)
@@ -522,19 +554,6 @@ func (m *Manager) getOrStartPlugin(ctx context.Context, name string) (*Plugin, e
 		m.tokenStore.Unregister(target.secretToken)
 		_ = m.executor.Stop(target)
 		return nil, errors.Wrapf(err, "failed to prepare client for plugin %q", name)
-	}
-
-	// Fetch plugin configuration if provider is available
-	configJSON := []byte("{}")
-	if m.configProvider != nil {
-		data, err := m.configProvider(name)
-		if err != nil {
-			if m.logger != nil {
-				m.logger.Debug("failed to get config for plugin", "plugin", name, "error", err)
-			}
-		} else if len(data) > 0 {
-			configJSON = data
-		}
 	}
 
 	// Perform handshake with host version and API contract version
@@ -707,4 +726,23 @@ func (m *Manager) ListPlugins() []*Plugin {
 		plugins = append(plugins, pCopy)
 	}
 	return plugins
+}
+
+func toStringSlice(i interface{}) []string {
+	if i == nil {
+		return nil
+	}
+	if s, ok := i.([]string); ok {
+		return s
+	}
+	if slice, ok := i.([]interface{}); ok {
+		res := make([]string, 0, len(slice))
+		for _, v := range slice {
+			if s, ok := v.(string); ok {
+				res = append(res, s)
+			}
+		}
+		return res
+	}
+	return nil
 }

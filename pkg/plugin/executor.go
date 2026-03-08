@@ -24,8 +24,9 @@ const (
 
 // Executor manages the lifecycle of a plugin process.
 type Executor struct {
-	mu           sync.RWMutex
-	hostEndpoint string
+	mu                 sync.RWMutex
+	hostEndpoint       string
+	globalEnvAllowList []string
 }
 
 // NewExecutor creates a new plugin executor. If hostEndpoint is provided,
@@ -39,6 +40,13 @@ func (e *Executor) SetHostEndpoint(path string) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.hostEndpoint = path
+}
+
+// SetGlobalEnvAllowList sets the global environment allow-list.
+func (e *Executor) SetGlobalEnvAllowList(list []string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.globalEnvAllowList = list
 }
 
 // Start launches the plugin process and establishes the IPC handshake.
@@ -66,12 +74,15 @@ func (e *Executor) Start(ctx context.Context, p *Plugin) error {
 	// 3. Prepare the command
 	// #nosec G204
 	cmd := exec.CommandContext(procCtx, p.Path, p.Args...)
-	cmd.Env = os.Environ()
-	cmd.Env = append(cmd.Env, "RIG_PLUGIN_ENDPOINT="+p.socketPath)
 
 	e.mu.RLock()
+	globalAllow := e.globalEnvAllowList
 	hostEndpoint := e.hostEndpoint
 	e.mu.RUnlock()
+
+	cmd.Env = buildEnv(globalAllow, p.EnvAllowList)
+	cmd.Env = append(cmd.Env, "RIG_PLUGIN_ENDPOINT="+p.socketPath)
+
 	if hostEndpoint != "" {
 		cmd.Env = append(cmd.Env, "RIG_HOST_ENDPOINT="+hostEndpoint)
 	}

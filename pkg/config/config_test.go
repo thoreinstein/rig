@@ -101,6 +101,11 @@ func TestLoad_WithDefaults(t *testing.T) {
 		t.Errorf("Expected orchestration.retention_days to default to 0, got %d", config.Orchestration.RetentionDays)
 	}
 
+	// Verify plugin defaults
+	if len(config.PluginGlobal.EnvAllowList) != 0 {
+		t.Errorf("Expected plugin_global.env_allow_list to default to empty, got %v", config.PluginGlobal.EnvAllowList)
+	}
+
 	// Verify default tmux windows are properly loaded (regression test for type mismatch bug)
 	if len(config.Tmux.Windows) != 3 {
 		t.Errorf("Expected 3 default tmux windows, got %d", len(config.Tmux.Windows))
@@ -151,6 +156,9 @@ search_paths = [
     "~/projects"
 ]
 max_depth = 5
+
+[plugin_global]
+env_allow_list = ["CUSTOM_VAR", "ANOTHER_VAR"]
 `
 
 	configPath := filepath.Join(tmpDir, "config.toml")
@@ -192,6 +200,12 @@ max_depth = 5
 	}
 	if config.Tmux.SessionPrefix != "test-" {
 		t.Errorf("Tmux.SessionPrefix = %q, want %q", config.Tmux.SessionPrefix, "test-")
+	}
+
+	// Verify plugin global config
+	expectedAllowList := []string{"CUSTOM_VAR", "ANOTHER_VAR"}
+	if !reflect.DeepEqual(config.PluginGlobal.EnvAllowList, expectedAllowList) {
+		t.Errorf("PluginGlobal.EnvAllowList = %v, want %v", config.PluginGlobal.EnvAllowList, expectedAllowList)
 	}
 
 	// Verify discovery config

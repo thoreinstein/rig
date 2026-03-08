@@ -237,7 +237,7 @@ func RunPluginCommand(ctx context.Context, hostFlags *pflag.FlagSet, pluginName,
 	executor := plugin.NewExecutor("")
 
 	// Create manager with the config provider from the loaded config
-	manager, err := plugin.NewManager(executor, scanner, rigVersion, cfg.PluginConfig, slog.Default())
+	manager, err := plugin.NewManager(executor, scanner, rigVersion, cfg.PluginConfig, slog.Default(), plugin.WithGlobalEnvAllowList(cfg.PluginGlobal.EnvAllowList))
 	if err != nil {
 		return errors.Wrap(err, "failed to initialize plugin manager")
 	}
