@@ -127,10 +127,7 @@ func (s *Secret) GetSecret(ctx context.Context, key string) (string, error) {
 	if resp.Secret != nil {
 		return resp.Secret.Value, nil
 	}
-	if resp.Value != "" { //nolint:staticcheck // fallback for legacy hosts
-		return resp.Value, nil //nolint:staticcheck
-	}
-	return "", errors.New("secret not available")
+	return resp.Value, nil //nolint:staticcheck // fallback for legacy hosts
 }
 
 // GetSecrets retrieves multiple secret values by key from the host in a single request.
