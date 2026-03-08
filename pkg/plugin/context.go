@@ -21,9 +21,10 @@ type PluginContext struct {
 // HostContextProxy implements apiv1.ContextServiceServer.
 type HostContextProxy struct {
 	apiv1.UnimplementedContextServiceServer
-	store     *tokenStore
-	pluginCtx PluginContext
-	metadata  *structpb.Struct
+	store       *tokenStore
+	pluginCtx   PluginContext
+	metadata    *structpb.Struct
+	metadataErr error
 }
 
 // NewHostContextProxy creates a new HostContextProxy.
@@ -32,11 +33,12 @@ type HostContextProxy struct {
 // GetContext will return an Internal error.
 func NewHostContextProxy(store *tokenStore, ctx PluginContext) *HostContextProxy {
 	// Pre-build the protobuf struct once. Errors are deferred to GetContext.
-	md, _ := structpb.NewStruct(ctx.Metadata)
+	md, mdErr := structpb.NewStruct(ctx.Metadata)
 	return &HostContextProxy{
-		store:     store,
-		pluginCtx: ctx,
-		metadata:  md,
+		store:       store,
+		pluginCtx:   ctx,
+		metadata:    md,
+		metadataErr: mdErr,
 	}
 }
 
@@ -51,7 +53,7 @@ func (p *HostContextProxy) GetContext(ctx context.Context, req *apiv1.GetContext
 	}
 
 	if p.metadata == nil {
-		return nil, status.Errorf(codes.Internal, "failed to serialize metadata")
+		return nil, status.Errorf(codes.Internal, "failed to serialize metadata: %v", p.metadataErr)
 	}
 
 	return &apiv1.GetContextResponse{

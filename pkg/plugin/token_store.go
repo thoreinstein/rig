@@ -91,10 +91,13 @@ func (s *tokenStore) Rotate(currentToken string) (string, string, error) {
 	s.tokens[newToken] = name
 
 	// Update the reverse index.
-	if toks, ok := s.pluginTokens[name]; ok {
-		delete(toks, currentToken)
-		toks[newToken] = struct{}{}
+	toks, ok := s.pluginTokens[name]
+	if !ok || toks == nil {
+		toks = make(map[string]struct{})
+		s.pluginTokens[name] = toks
 	}
+	delete(toks, currentToken)
+	toks[newToken] = struct{}{}
 
 	return name, newToken, nil
 }

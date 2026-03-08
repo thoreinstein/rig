@@ -265,17 +265,15 @@ func TestRefreshToken(t *testing.T) {
 	resolver := func(_, _ string) (string, error) { return "val", nil }
 
 	tests := []struct {
-		name         string
-		token        string
-		registered   bool
-		wantCode     codes.Code
-		wantNewToken bool
+		name       string
+		token      string
+		registered bool
+		wantCode   codes.Code
 	}{
 		{
-			name:         "successful rotation returns new token",
-			token:        "original-tok",
-			registered:   true,
-			wantNewToken: true,
+			name:       "successful rotation returns new token",
+			token:      "original-tok",
+			registered: true,
 		},
 		{
 			name:     "invalid token returns Unauthenticated",

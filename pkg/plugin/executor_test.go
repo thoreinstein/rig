@@ -78,6 +78,46 @@ exit 1
 	}
 }
 
+func TestExecutor_Start_TimeoutRetry(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Compile the mock plugin binary
+	pluginBin := filepath.Join(tmpDir, "mock-plugin-bin-timeout")
+	cmd := exec.Command("go", "build", "-o", pluginBin, "testdata/mock_plugin.go")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("failed to compile mock plugin: %v\nOutput: %s", err, string(out))
+	}
+
+	p := &Plugin{
+		Name: "timeout-plugin",
+		Path: pluginBin,
+	}
+
+	e := NewExecutor("")
+
+	// First attempt: already-expired context should fail
+	expiredCtx, expiredCancel := context.WithTimeout(t.Context(), 0)
+	expiredCancel()
+
+	err := e.Start(expiredCtx, p)
+	if err == nil {
+		_ = e.Stop(p)
+		t.Fatal("expected Start to fail with expired context")
+	}
+
+	// Second attempt: normal timeout should succeed (no stale "already running" state)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+
+	if err := e.Start(ctx, p); err != nil {
+		t.Fatalf("second Start() failed: %v (stale state from first attempt?)", err)
+	}
+
+	if err := e.Stop(p); err != nil {
+		t.Errorf("Stop() failed: %v", err)
+	}
+}
+
 func TestExecutor_EnvSanitization(t *testing.T) {
 	tmpDir := t.TempDir()
 
@@ -94,9 +134,6 @@ func TestExecutor_EnvSanitization(t *testing.T) {
 	t.Setenv("RIG_ALLOWED_PLUGIN", "should-be-allowed")
 	t.Setenv("RIG_PREFIX_1", "prefix-1")
 	t.Setenv("RIG_PREFIX_2", "prefix-2")
-
-	// Essential env vars that should always be passed
-	t.Setenv("PATH", os.Getenv("PATH"))
 
 	p := &Plugin{
 		Name:         "env-plugin",
@@ -143,8 +180,9 @@ func TestExecutor_HostEndpoint(t *testing.T) {
 
 	// Tell the mock plugin what to expect
 	t.Setenv("EXPECTED_HOST_ENDPOINT", hostSocket)
+	t.Setenv("EXPECTED_ENV_VARS", "RIG_HOST_ENDPOINT")
 	// We need to allow these through sanitization for the test to work
-	p.EnvAllowList = []string{"EXPECTED_HOST_ENDPOINT"}
+	p.EnvAllowList = []string{"EXPECTED_HOST_ENDPOINT", "EXPECTED_ENV_VARS"}
 
 	e := NewExecutor(hostSocket)
 

@@ -737,12 +737,19 @@ func (m *Manager) ListPlugins() []*Plugin {
 			manifest = &mCopy
 		}
 
+		var envAllowList []string
+		if p.EnvAllowList != nil {
+			envAllowList = make([]string, len(p.EnvAllowList))
+			copy(envAllowList, p.EnvAllowList)
+		}
+
 		pCopy := &Plugin{
 			Name:         p.Name,
 			Version:      p.Version,
 			APIVersion:   p.APIVersion,
 			Path:         p.Path,
 			Args:         args,
+			EnvAllowList: envAllowList,
 			Source:       p.Source,
 			Status:       p.Status,
 			Description:  p.Description,

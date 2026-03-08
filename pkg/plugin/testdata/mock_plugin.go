@@ -36,6 +36,15 @@ func main() {
 		}
 	}
 
+	// Verify RIG_HOST_ENDPOINT matches expected value if specified
+	if expected := os.Getenv("EXPECTED_HOST_ENDPOINT"); expected != "" {
+		actual := os.Getenv("RIG_HOST_ENDPOINT")
+		if actual != expected {
+			fmt.Fprintf(os.Stderr, "RIG_HOST_ENDPOINT mismatch: got %q, want %q\n", actual, expected)
+			os.Exit(1)
+		}
+	}
+
 	lis, err := net.Listen("unix", endpoint)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to listen: %v\n", err)
