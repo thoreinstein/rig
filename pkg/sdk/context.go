@@ -76,16 +76,18 @@ func (c *Context) Close() error {
 	return nil
 }
 
-func (c *Context) connect() (apiv1.ContextServiceClient, error) {
+// connect returns the gRPC client and the current token under a single lock
+// acquisition, eliminating the acquire-release-acquire window.
+func (c *Context) connect() (apiv1.ContextServiceClient, string, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	if c.client != nil {
-		return c.client, nil
+		return c.client, c.token, nil
 	}
 
 	if c.endpoint == "" {
-		return nil, ErrNoEndpoint
+		return nil, "", ErrNoEndpoint
 	}
 
 	opts := append([]grpc.DialOption{
@@ -98,29 +100,25 @@ func (c *Context) connect() (apiv1.ContextServiceClient, error) {
 	}
 
 	if !strings.HasPrefix(endpoint, "unix://") {
-		return nil, errors.New("sdk: context service requires a unix:// endpoint for secure transport")
+		return nil, "", errors.New("sdk: context service requires a unix:// endpoint for secure transport")
 	}
 
 	conn, err := grpc.NewClient(endpoint, opts...)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	c.conn = conn
 	c.client = apiv1.NewContextServiceClient(conn)
-	return c.client, nil
+	return c.client, c.token, nil
 }
 
 // GetContext retrieves the current environment context from the host.
 func (c *Context) GetContext(ctx context.Context) (*ContextInfo, error) {
-	client, err := c.connect()
+	client, token, err := c.connect()
 	if err != nil {
 		return nil, err
 	}
-
-	c.mu.Lock()
-	token := c.token
-	c.mu.Unlock()
 
 	resp, err := client.GetContext(ctx, &apiv1.GetContextRequest{
 		Token: token,

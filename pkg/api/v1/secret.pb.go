@@ -330,8 +330,9 @@ func (x *RefreshTokenRequest) GetCurrentToken() string {
 }
 
 type RefreshTokenResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	NewToken      string                 `protobuf:"bytes,1,opt,name=new_token,json=newToken,proto3" json:"new_token,omitempty"`
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	NewToken string                 `protobuf:"bytes,1,opt,name=new_token,json=newToken,proto3" json:"new_token,omitempty"`
+	// expires_at is reserved for future use; currently not populated by the host.
 	ExpiresAt     *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

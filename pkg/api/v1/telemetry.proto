@@ -94,31 +94,38 @@ message TelemetryBatch {
 }
 
 // ReportEventRequest wraps a single telemetry event for transmission.
+// Exactly one of entry or error_report must be set.
 message ReportEventRequest {
   // token is the session-scoped authentication token provided by the host.
   string token = 1;
 
-  // entry is the log message to report.
-  LogEntry entry = 2;
+  oneof payload {
+    // entry is the log message to report.
+    LogEntry entry = 2;
 
-  // error is the error report to report.
-  ErrorReport error = 3;
+    // error_report is the structured error report to submit.
+    ErrorReport error_report = 3;
+  }
 }
 
 // ReportEventResponse is the acknowledgement of a successful event report.
 message ReportEventResponse {}
 
 // StreamEventsRequest wraps telemetry events for streaming transmission.
+// Exactly one of entry or error_report must be set per message.
 message StreamEventsRequest {
   // token is the session-scoped authentication token.
-  // Only required on the first message of the stream.
+  // Only required on the first message of the stream; the server binds the
+  // token to the stream on receipt and ignores it on subsequent messages.
   string token = 1;
 
-  // entry is an individual log message.
-  LogEntry entry = 2;
+  oneof payload {
+    // entry is an individual log message.
+    LogEntry entry = 2;
 
-  // error is an individual error report.
-  ErrorReport error = 3;
+    // error_report is an individual structured error report.
+    ErrorReport error_report = 3;
+  }
 }
 
 // StreamEventsResponse is sent by the host periodically or upon stream completion.

@@ -69,16 +69,19 @@ func (s *Secret) Close() error {
 	return nil
 }
 
-func (s *Secret) connect() (apiv1.SecretServiceClient, error) {
+// connect returns the gRPC client and the current token under a single lock
+// acquisition, eliminating the acquire-release-acquire window that would
+// allow a concurrent RefreshToken to change the token between connect and use.
+func (s *Secret) connect() (apiv1.SecretServiceClient, string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if s.client != nil {
-		return s.client, nil
+		return s.client, s.token, nil
 	}
 
 	if s.endpoint == "" {
-		return nil, ErrNoEndpoint
+		return nil, "", ErrNoEndpoint
 	}
 
 	opts := append([]grpc.DialOption{
@@ -94,29 +97,25 @@ func (s *Secret) connect() (apiv1.SecretServiceClient, error) {
 	// Reject non-UDS endpoints when using insecure credentials to prevent
 	// transmitting secrets over the network in plaintext.
 	if !strings.HasPrefix(endpoint, "unix://") {
-		return nil, errors.New("sdk: secret service requires a unix:// endpoint for secure transport")
+		return nil, "", errors.New("sdk: secret service requires a unix:// endpoint for secure transport")
 	}
 
 	conn, err := grpc.NewClient(endpoint, opts...)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	s.conn = conn
 	s.client = apiv1.NewSecretServiceClient(conn)
-	return s.client, nil
+	return s.client, s.token, nil
 }
 
 // GetSecret retrieves a secret value by key from the host.
 func (s *Secret) GetSecret(ctx context.Context, key string) (string, error) {
-	client, err := s.connect()
+	client, token, err := s.connect()
 	if err != nil {
 		return "", err
 	}
-
-	s.mu.Lock()
-	token := s.token
-	s.mu.Unlock()
 
 	resp, err := client.GetSecret(ctx, &apiv1.GetSecretRequest{
 		Key:   key,
@@ -134,14 +133,10 @@ func (s *Secret) GetSecret(ctx context.Context, key string) (string, error) {
 // GetSecrets retrieves multiple secret values by key from the host in a single request.
 // Missing or inaccessible keys are omitted from the returned map.
 func (s *Secret) GetSecrets(ctx context.Context, keys []string) (map[string]string, error) {
-	client, err := s.connect()
+	client, token, err := s.connect()
 	if err != nil {
 		return nil, err
 	}
-
-	s.mu.Lock()
-	token := s.token
-	s.mu.Unlock()
 
 	resp, err := client.GetSecrets(ctx, &apiv1.GetSecretsRequest{
 		Keys:  keys,
@@ -167,16 +162,18 @@ func (s *Secret) GetSecrets(ctx context.Context, keys []string) (map[string]stri
 // cannot both read the same currentToken, race to the host, and diverge on
 // which token is actually active. The general mu is only held briefly for
 // the token read and the compare-and-swap write.
+//
+// Recovery invariant: if the host accepts the rotation but the response is
+// lost (network error), the old token is already invalidated server-side.
+// The caller must establish a new plugin session to recover; there is no
+// automatic retry because the host's token store has already committed the
+// rotation atomically.
 func (s *Secret) RefreshToken(ctx context.Context) (string, error) {
 	// Serialize refresh operations to prevent duplicate rotations.
 	s.refreshMu.Lock()
 	defer s.refreshMu.Unlock()
 
-	s.mu.Lock()
-	currentToken := s.token
-	s.mu.Unlock()
-
-	client, err := s.connect()
+	client, currentToken, err := s.connect()
 	if err != nil {
 		return "", err
 	}

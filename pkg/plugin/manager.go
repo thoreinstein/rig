@@ -14,6 +14,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/zalando/go-keyring"
+	"golang.org/x/sync/singleflight"
 	"google.golang.org/grpc"
 
 	apiv1 "thoreinstein.com/rig/pkg/api/v1"
@@ -35,6 +36,8 @@ type pluginExecutor interface {
 }
 
 // ConfigProvider is a function that returns the JSON-serialized configuration for a plugin.
+// A nil ConfigProvider is safe: plugins receive an empty JSON object ("{}") as config
+// and secret resolution will return "no config provider available" errors.
 type ConfigProvider func(pluginName string) ([]byte, error)
 
 // Manager manages a pool of active plugins.
@@ -49,10 +52,10 @@ func WithUIServer(srv apiv1.UIServiceServer) ManagerOption {
 }
 
 // WithPluginContext sets the environment context provided to plugins.
-// The tokenStore is injected later by NewManager; the proxy handles a nil store safely.
+// The actual HostContextProxy is built once in NewManager with the canonical tokenStore.
 func WithPluginContext(ctx PluginContext) ManagerOption {
 	return func(m *Manager) {
-		m.contextProxy = NewHostContextProxy(nil, ctx)
+		m.pluginCtx = &ctx
 	}
 }
 
@@ -77,12 +80,14 @@ type Manager struct {
 	tokenStore         *tokenStore
 	secretProxy        *HostSecretProxy
 	contextProxy       *HostContextProxy
+	pluginCtx          *PluginContext // set by WithPluginContext, consumed once by NewManager
 	hostL              net.Listener
 	hostPath           string
 	hostDir            string
 	globalEnvAllowList []string
 
-	secretCache sync.Map // map[pluginName]map[string]interface{} — shared with resolver
+	secretCache   sync.Map           // map[pluginName]map[string]any — shared with resolver
+	secretCacheSF singleflight.Group // deduplicates concurrent cache-miss resolutions per plugin
 
 	mu      sync.Mutex
 	plugins map[string]*Plugin
@@ -153,31 +158,44 @@ func NewManager(executor pluginExecutor, scanner *Scanner, rigVersion string, co
 	// avoid a redundant parse on first GetSecret.
 	resolver := func(pluginName, secretKey string) (string, error) {
 		// 1. Look up or populate the per-plugin secrets map.
-		var secrets map[string]interface{}
+		// singleflight deduplicates concurrent cache-miss resolutions for
+		// the same plugin so only one goroutine parses the config.
+		var secrets map[string]any
 		if cached, ok := m.secretCache.Load(pluginName); ok {
-			secrets = cached.(map[string]interface{})
+			secrets = cached.(map[string]any)
 		} else {
-			if m.configProvider == nil {
-				return "", errors.New("no config provider available")
-			}
+			val, err, _ := m.secretCacheSF.Do(pluginName, func() (any, error) {
+				// Double-check after winning the flight.
+				if cached, ok := m.secretCache.Load(pluginName); ok {
+					return cached, nil
+				}
 
-			data, err := m.configProvider(pluginName)
+				if m.configProvider == nil {
+					return nil, errors.New("no config provider available")
+				}
+
+				data, err := m.configProvider(pluginName)
+				if err != nil {
+					return nil, err
+				}
+
+				var cfg map[string]any
+				if err := json.Unmarshal(data, &cfg); err != nil {
+					return nil, errors.Wrap(err, "failed to unmarshal plugin config")
+				}
+
+				sec, ok := cfg["secrets"].(map[string]any)
+				if !ok {
+					return nil, errors.Wrap(ErrSecretNotFound, fmt.Sprintf("no 'secrets' section found for plugin %q", pluginName))
+				}
+
+				m.secretCache.Store(pluginName, sec)
+				return sec, nil
+			})
 			if err != nil {
 				return "", err
 			}
-
-			var cfg map[string]interface{}
-			if err := json.Unmarshal(data, &cfg); err != nil {
-				return "", errors.Wrap(err, "failed to unmarshal plugin config")
-			}
-
-			sec, ok := cfg["secrets"].(map[string]interface{})
-			if !ok {
-				return "", errors.Wrap(ErrSecretNotFound, fmt.Sprintf("no 'secrets' section found for plugin %q", pluginName))
-			}
-
-			secrets = sec
-			m.secretCache.Store(pluginName, secrets)
+			secrets = val.(map[string]any)
 		}
 
 		// 2. Look up the requested key.
@@ -192,8 +210,7 @@ func NewManager(executor pluginExecutor, scanner *Scanner, rigVersion string, co
 			return "", errors.Newf("secret %q is not a string for plugin %q", secretKey, pluginName)
 		}
 
-		if strings.HasPrefix(strVal, config.KeychainPrefix) {
-			uri := strings.TrimPrefix(strVal, config.KeychainPrefix)
+		if uri, ok := strings.CutPrefix(strVal, config.KeychainPrefix); ok {
 			parts := strings.SplitN(uri, "/", 2)
 			if len(parts) != 2 {
 				return "", errors.Newf("invalid keychain URI for secret %q: expected keychain://service/account", secretKey)
@@ -210,12 +227,14 @@ func NewManager(executor pluginExecutor, scanner *Scanner, rigVersion string, co
 
 	m.tokenStore = newTokenStore()
 	m.secretProxy = NewHostSecretProxy(m.tokenStore, resolver)
-	if m.contextProxy == nil {
-		m.contextProxy = NewHostContextProxy(m.tokenStore, PluginContext{})
-	} else {
-		// Rebuild proxy with the same PluginContext but the canonical tokenStore.
-		m.contextProxy = NewHostContextProxy(m.tokenStore, m.contextProxy.pluginCtx)
+
+	// Build the context proxy once with the canonical tokenStore.
+	pCtx := PluginContext{}
+	if m.pluginCtx != nil {
+		pCtx = *m.pluginCtx
+		m.pluginCtx = nil // consumed; prevent stale references
 	}
+	m.contextProxy = NewHostContextProxy(m.tokenStore, pCtx, m.logger)
 
 	srv := grpc.NewServer()
 	apiv1.RegisterUIServiceServer(srv, m.hostUI)
@@ -225,8 +244,9 @@ func NewManager(executor pluginExecutor, scanner *Scanner, rigVersion string, co
 
 	go func() {
 		if err := srv.Serve(lis); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
-			// In a real CLI, we might log this or handle it more gracefully
-			fmt.Fprintf(os.Stderr, "Host UI server failed: %v\n", err)
+			if m.logger != nil {
+				m.logger.Error("host gRPC server failed", "error", err)
+			}
 		}
 	}()
 
@@ -561,12 +581,12 @@ func (m *Manager) getOrStartPlugin(ctx context.Context, name string) (*Plugin, e
 
 			// Unmarshal once; extract EnvAllowList and seed the resolver's
 			// secret cache to avoid a redundant parse on first GetSecret.
-			var cfg map[string]interface{}
+			var cfg map[string]any
 			if err := json.Unmarshal(data, &cfg); err == nil {
 				if val, ok := cfg["env_allow_list"]; ok {
 					target.EnvAllowList = toStringSlice(val)
 				}
-				if sec, ok := cfg["secrets"].(map[string]interface{}); ok {
+				if sec, ok := cfg["secrets"].(map[string]any); ok {
 					m.secretCache.Store(name, sec)
 				}
 			}
@@ -667,31 +687,30 @@ func (m *Manager) ReleasePlugin(name string) {
 func (m *Manager) StopPluginIfIdle(name string, idleTimeout time.Duration) error {
 	m.mu.Lock()
 	p, ok := m.plugins[name]
-	if ok {
-		p.mu.Lock()
-		busy := p.activeSessions > 0
-		lastUsed := p.lastUsed
-		p.mu.Unlock()
-
-		if busy {
-			m.mu.Unlock()
-			return nil
-		}
-
-		if idleTimeout > 0 && time.Since(lastUsed) <= idleTimeout {
-			m.mu.Unlock()
-			return nil
-		}
-
-		m.tokenStore.UnregisterPlugin(p.Name)
-		delete(m.plugins, name)
-	}
-	m.mu.Unlock()
-
 	if !ok {
+		m.mu.Unlock()
 		return nil
 	}
 
+	p.mu.Lock()
+	busy := p.activeSessions > 0
+	lastUsed := p.lastUsed
+	p.mu.Unlock()
+
+	if busy || (idleTimeout > 0 && time.Since(lastUsed) <= idleTimeout) {
+		m.mu.Unlock()
+		return nil
+	}
+
+	// Atomically unregister the token and remove from the map while
+	// still holding m.mu, so no concurrent caller can observe a
+	// half-detached plugin.
+	m.tokenStore.UnregisterPlugin(p.Name)
+	delete(m.plugins, name)
+	m.mu.Unlock()
+
+	// Stop the fully detached plugin outside the lock to avoid
+	// holding m.mu during a potentially slow process teardown.
 	return m.executor.Stop(p)
 }
 
@@ -765,14 +784,14 @@ func (m *Manager) ListPlugins() []*Plugin {
 	return plugins
 }
 
-func toStringSlice(i interface{}) []string {
+func toStringSlice(i any) []string {
 	if i == nil {
 		return nil
 	}
 	if s, ok := i.([]string); ok {
 		return s
 	}
-	if slice, ok := i.([]interface{}); ok {
+	if slice, ok := i.([]any); ok {
 		res := make([]string, 0, len(slice))
 		for _, v := range slice {
 			if s, ok := v.(string); ok {

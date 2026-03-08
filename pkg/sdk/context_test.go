@@ -106,7 +106,7 @@ func TestContext_connect(t *testing.T) {
 			t.Setenv("RIG_HOST_ENDPOINT", "")
 
 			c := NewContext(WithContextHostEndpoint(tt.endpoint))
-			client, err := c.connect()
+			client, _, err := c.connect()
 
 			if tt.wantErr {
 				if err == nil {
@@ -150,7 +150,7 @@ func TestContext_Close_clears_state(t *testing.T) {
 
 	c := NewContext(WithContextHostEndpoint("/tmp/test.sock"))
 
-	_, err := c.connect()
+	_, _, err := c.connect()
 	if err != nil {
 		t.Fatalf("connect() error: %v", err)
 	}

@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"context"
+	"log/slog"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -22,6 +23,7 @@ type PluginContext struct {
 type HostContextProxy struct {
 	apiv1.UnimplementedContextServiceServer
 	store       *tokenStore
+	logger      *slog.Logger
 	pluginCtx   PluginContext
 	metadata    *structpb.Struct
 	metadataErr error
@@ -31,11 +33,12 @@ type HostContextProxy struct {
 // Metadata is serialized once at construction time; if the map contains
 // values that structpb cannot represent, metadata will be nil and
 // GetContext will return an Internal error.
-func NewHostContextProxy(store *tokenStore, ctx PluginContext) *HostContextProxy {
+func NewHostContextProxy(store *tokenStore, ctx PluginContext, logger *slog.Logger) *HostContextProxy {
 	// Pre-build the protobuf struct once. Errors are deferred to GetContext.
 	md, mdErr := structpb.NewStruct(ctx.Metadata)
 	return &HostContextProxy{
 		store:       store,
+		logger:      logger,
 		pluginCtx:   ctx,
 		metadata:    md,
 		metadataErr: mdErr,
@@ -53,7 +56,10 @@ func (p *HostContextProxy) GetContext(ctx context.Context, req *apiv1.GetContext
 	}
 
 	if p.metadataErr != nil {
-		return nil, status.Errorf(codes.Internal, "failed to serialize metadata: %v", p.metadataErr)
+		if p.logger != nil {
+			p.logger.Error("failed to serialize plugin context metadata", "error", p.metadataErr)
+		}
+		return nil, status.Errorf(codes.Internal, "metadata unavailable")
 	}
 
 	return &apiv1.GetContextResponse{

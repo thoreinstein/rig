@@ -84,7 +84,7 @@ func (s *HostSecretProxy) GetSecrets(ctx context.Context, req *apiv1.GetSecretsR
 	secrets := make(map[string]*apiv1.SecretValue, len(req.Keys))
 	for _, key := range req.Keys {
 		if key == "" || strings.ContainsAny(key, ".\x00/\\") {
-			continue // skip invalid keys silently per partial-failure semantics
+			return nil, status.Errorf(codes.InvalidArgument, "invalid secret key %q", key)
 		}
 
 		val, err := s.resolver(pluginName, key)
@@ -98,6 +98,7 @@ func (s *HostSecretProxy) GetSecrets(ctx context.Context, req *apiv1.GetSecretsR
 }
 
 // RefreshToken rotates a plugin's session token.
+// Note: ExpiresAt is not currently populated in the response.
 func (s *HostSecretProxy) RefreshToken(_ context.Context, req *apiv1.RefreshTokenRequest) (*apiv1.RefreshTokenResponse, error) {
 	_, newToken, err := s.store.Rotate(req.CurrentToken)
 	if err != nil {

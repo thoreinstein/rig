@@ -414,14 +414,16 @@ func (x *TelemetryBatch) GetErrorReports() []*ErrorReport {
 }
 
 // ReportEventRequest wraps a single telemetry event for transmission.
+// Exactly one of entry or error_report must be set.
 type ReportEventRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// token is the session-scoped authentication token provided by the host.
 	Token string `protobuf:"bytes,1,opt,name=token,proto3" json:"token,omitempty"`
-	// entry is the log message to report.
-	Entry *LogEntry `protobuf:"bytes,2,opt,name=entry,proto3" json:"entry,omitempty"`
-	// error is the error report to report.
-	Error         *ErrorReport `protobuf:"bytes,3,opt,name=error,proto3" json:"error,omitempty"`
+	// Types that are valid to be assigned to Payload:
+	//
+	//	*ReportEventRequest_Entry
+	//	*ReportEventRequest_ErrorReport
+	Payload       isReportEventRequest_Payload `protobuf_oneof:"payload"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -463,19 +465,48 @@ func (x *ReportEventRequest) GetToken() string {
 	return ""
 }
 
-func (x *ReportEventRequest) GetEntry() *LogEntry {
+func (x *ReportEventRequest) GetPayload() isReportEventRequest_Payload {
 	if x != nil {
-		return x.Entry
+		return x.Payload
 	}
 	return nil
 }
 
-func (x *ReportEventRequest) GetError() *ErrorReport {
+func (x *ReportEventRequest) GetEntry() *LogEntry {
 	if x != nil {
-		return x.Error
+		if x, ok := x.Payload.(*ReportEventRequest_Entry); ok {
+			return x.Entry
+		}
 	}
 	return nil
 }
+
+func (x *ReportEventRequest) GetErrorReport() *ErrorReport {
+	if x != nil {
+		if x, ok := x.Payload.(*ReportEventRequest_ErrorReport); ok {
+			return x.ErrorReport
+		}
+	}
+	return nil
+}
+
+type isReportEventRequest_Payload interface {
+	isReportEventRequest_Payload()
+}
+
+type ReportEventRequest_Entry struct {
+	// entry is the log message to report.
+	Entry *LogEntry `protobuf:"bytes,2,opt,name=entry,proto3,oneof"`
+}
+
+type ReportEventRequest_ErrorReport struct {
+	// error_report is the structured error report to submit.
+	ErrorReport *ErrorReport `protobuf:"bytes,3,opt,name=error_report,json=errorReport,proto3,oneof"`
+}
+
+func (*ReportEventRequest_Entry) isReportEventRequest_Payload() {}
+
+func (*ReportEventRequest_ErrorReport) isReportEventRequest_Payload() {}
 
 // ReportEventResponse is the acknowledgement of a successful event report.
 type ReportEventResponse struct {
@@ -515,15 +546,18 @@ func (*ReportEventResponse) Descriptor() ([]byte, []int) {
 }
 
 // StreamEventsRequest wraps telemetry events for streaming transmission.
+// Exactly one of entry or error_report must be set per message.
 type StreamEventsRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// token is the session-scoped authentication token.
-	// Only required on the first message of the stream.
+	// Only required on the first message of the stream; the server binds the
+	// token to the stream on receipt and ignores it on subsequent messages.
 	Token string `protobuf:"bytes,1,opt,name=token,proto3" json:"token,omitempty"`
-	// entry is an individual log message.
-	Entry *LogEntry `protobuf:"bytes,2,opt,name=entry,proto3" json:"entry,omitempty"`
-	// error is an individual error report.
-	Error         *ErrorReport `protobuf:"bytes,3,opt,name=error,proto3" json:"error,omitempty"`
+	// Types that are valid to be assigned to Payload:
+	//
+	//	*StreamEventsRequest_Entry
+	//	*StreamEventsRequest_ErrorReport
+	Payload       isStreamEventsRequest_Payload `protobuf_oneof:"payload"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -565,19 +599,48 @@ func (x *StreamEventsRequest) GetToken() string {
 	return ""
 }
 
-func (x *StreamEventsRequest) GetEntry() *LogEntry {
+func (x *StreamEventsRequest) GetPayload() isStreamEventsRequest_Payload {
 	if x != nil {
-		return x.Entry
+		return x.Payload
 	}
 	return nil
 }
 
-func (x *StreamEventsRequest) GetError() *ErrorReport {
+func (x *StreamEventsRequest) GetEntry() *LogEntry {
 	if x != nil {
-		return x.Error
+		if x, ok := x.Payload.(*StreamEventsRequest_Entry); ok {
+			return x.Entry
+		}
 	}
 	return nil
 }
+
+func (x *StreamEventsRequest) GetErrorReport() *ErrorReport {
+	if x != nil {
+		if x, ok := x.Payload.(*StreamEventsRequest_ErrorReport); ok {
+			return x.ErrorReport
+		}
+	}
+	return nil
+}
+
+type isStreamEventsRequest_Payload interface {
+	isStreamEventsRequest_Payload()
+}
+
+type StreamEventsRequest_Entry struct {
+	// entry is an individual log message.
+	Entry *LogEntry `protobuf:"bytes,2,opt,name=entry,proto3,oneof"`
+}
+
+type StreamEventsRequest_ErrorReport struct {
+	// error_report is an individual structured error report.
+	ErrorReport *ErrorReport `protobuf:"bytes,3,opt,name=error_report,json=errorReport,proto3,oneof"`
+}
+
+func (*StreamEventsRequest_Entry) isStreamEventsRequest_Payload() {}
+
+func (*StreamEventsRequest_ErrorReport) isStreamEventsRequest_Payload() {}
 
 // StreamEventsResponse is sent by the host periodically or upon stream completion.
 type StreamEventsResponse struct {
@@ -733,16 +796,18 @@ const file_pkg_api_v1_telemetry_proto_rawDesc = "" +
 	"\x0eTelemetryBatch\x121\n" +
 	"\vlog_entries\x18\x01 \x03(\v2\x10.rig.v1.LogEntryR\n" +
 	"logEntries\x128\n" +
-	"\rerror_reports\x18\x02 \x03(\v2\x13.rig.v1.ErrorReportR\ferrorReports\"}\n" +
+	"\rerror_reports\x18\x02 \x03(\v2\x13.rig.v1.ErrorReportR\ferrorReports\"\x99\x01\n" +
 	"\x12ReportEventRequest\x12\x14\n" +
-	"\x05token\x18\x01 \x01(\tR\x05token\x12&\n" +
-	"\x05entry\x18\x02 \x01(\v2\x10.rig.v1.LogEntryR\x05entry\x12)\n" +
-	"\x05error\x18\x03 \x01(\v2\x13.rig.v1.ErrorReportR\x05error\"\x15\n" +
-	"\x13ReportEventResponse\"~\n" +
+	"\x05token\x18\x01 \x01(\tR\x05token\x12(\n" +
+	"\x05entry\x18\x02 \x01(\v2\x10.rig.v1.LogEntryH\x00R\x05entry\x128\n" +
+	"\ferror_report\x18\x03 \x01(\v2\x13.rig.v1.ErrorReportH\x00R\verrorReportB\t\n" +
+	"\apayload\"\x15\n" +
+	"\x13ReportEventResponse\"\x9a\x01\n" +
 	"\x13StreamEventsRequest\x12\x14\n" +
-	"\x05token\x18\x01 \x01(\tR\x05token\x12&\n" +
-	"\x05entry\x18\x02 \x01(\v2\x10.rig.v1.LogEntryR\x05entry\x12)\n" +
-	"\x05error\x18\x03 \x01(\v2\x13.rig.v1.ErrorReportR\x05error\"\x16\n" +
+	"\x05token\x18\x01 \x01(\tR\x05token\x12(\n" +
+	"\x05entry\x18\x02 \x01(\v2\x10.rig.v1.LogEntryH\x00R\x05entry\x128\n" +
+	"\ferror_report\x18\x03 \x01(\v2\x13.rig.v1.ErrorReportH\x00R\verrorReportB\t\n" +
+	"\apayload\"\x16\n" +
 	"\x14StreamEventsResponse\"X\n" +
 	"\x12BatchEventsRequest\x12\x14\n" +
 	"\x05token\x18\x01 \x01(\tR\x05token\x12,\n" +
@@ -811,9 +876,9 @@ var file_pkg_api_v1_telemetry_proto_depIdxs = []int32{
 	2,  // 6: rig.v1.TelemetryBatch.log_entries:type_name -> rig.v1.LogEntry
 	3,  // 7: rig.v1.TelemetryBatch.error_reports:type_name -> rig.v1.ErrorReport
 	2,  // 8: rig.v1.ReportEventRequest.entry:type_name -> rig.v1.LogEntry
-	3,  // 9: rig.v1.ReportEventRequest.error:type_name -> rig.v1.ErrorReport
+	3,  // 9: rig.v1.ReportEventRequest.error_report:type_name -> rig.v1.ErrorReport
 	2,  // 10: rig.v1.StreamEventsRequest.entry:type_name -> rig.v1.LogEntry
-	3,  // 11: rig.v1.StreamEventsRequest.error:type_name -> rig.v1.ErrorReport
+	3,  // 11: rig.v1.StreamEventsRequest.error_report:type_name -> rig.v1.ErrorReport
 	4,  // 12: rig.v1.BatchEventsRequest.batch:type_name -> rig.v1.TelemetryBatch
 	5,  // 13: rig.v1.TelemetryService.ReportEvent:input_type -> rig.v1.ReportEventRequest
 	7,  // 14: rig.v1.TelemetryService.StreamEvents:input_type -> rig.v1.StreamEventsRequest
@@ -832,6 +897,14 @@ func init() { file_pkg_api_v1_telemetry_proto_init() }
 func file_pkg_api_v1_telemetry_proto_init() {
 	if File_pkg_api_v1_telemetry_proto != nil {
 		return
+	}
+	file_pkg_api_v1_telemetry_proto_msgTypes[3].OneofWrappers = []any{
+		(*ReportEventRequest_Entry)(nil),
+		(*ReportEventRequest_ErrorReport)(nil),
+	}
+	file_pkg_api_v1_telemetry_proto_msgTypes[5].OneofWrappers = []any{
+		(*StreamEventsRequest_Entry)(nil),
+		(*StreamEventsRequest_ErrorReport)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{

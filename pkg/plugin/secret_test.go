@@ -199,10 +199,10 @@ func TestGetSecrets(t *testing.T) {
 			wantKeys: []string{},
 		},
 		{
-			name:     "invalid keys skipped",
+			name:     "invalid keys fail",
 			keys:     []string{"token", "bad.key", "../path", "url"},
 			token:    jiraToken,
-			wantKeys: []string{"token", "url"},
+			wantCode: codes.InvalidArgument,
 		},
 		{
 			name:     "empty keys list",

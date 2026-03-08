@@ -17,7 +17,7 @@ func TestHostContextProxy_GetContext(t *testing.T) {
 		TicketID:     "RIG-123",
 		Metadata:     map[string]any{"key": "value"},
 	}
-	proxy := NewHostContextProxy(store, pCtx)
+	proxy := NewHostContextProxy(store, pCtx, nil)
 
 	validToken := "valid-token"
 	store.Register(validToken, "test-plugin")

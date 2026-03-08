@@ -18,29 +18,33 @@ type MockKnowledgeServiceClient struct {
 func (m *MockKnowledgeServiceClient) CreateTicketNote(ctx context.Context, in *apiv1.CreateTicketNoteRequest, opts ...grpc.CallOption) (*apiv1.CreateTicketNoteResponse, error) {
 	args := m.expandArgs(ctx, in, opts)
 	ret := m.Called(args...)
-	return ret.Get(0).(*apiv1.CreateTicketNoteResponse), ret.Error(1)
+	val, _ := ret.Get(0).(*apiv1.CreateTicketNoteResponse)
+	return val, ret.Error(1)
 }
 
 func (m *MockKnowledgeServiceClient) UpdateDailyNote(ctx context.Context, in *apiv1.UpdateDailyNoteRequest, opts ...grpc.CallOption) (*apiv1.UpdateDailyNoteResponse, error) {
 	args := m.expandArgs(ctx, in, opts)
 	ret := m.Called(args...)
-	return ret.Get(0).(*apiv1.UpdateDailyNoteResponse), ret.Error(1)
+	val, _ := ret.Get(0).(*apiv1.UpdateDailyNoteResponse)
+	return val, ret.Error(1)
 }
 
 func (m *MockKnowledgeServiceClient) GetNotePath(ctx context.Context, in *apiv1.GetNotePathRequest, opts ...grpc.CallOption) (*apiv1.GetNotePathResponse, error) {
 	args := m.expandArgs(ctx, in, opts)
 	ret := m.Called(args...)
-	return ret.Get(0).(*apiv1.GetNotePathResponse), ret.Error(1)
+	val, _ := ret.Get(0).(*apiv1.GetNotePathResponse)
+	return val, ret.Error(1)
 }
 
 func (m *MockKnowledgeServiceClient) GetDailyNotePath(ctx context.Context, in *apiv1.GetDailyNotePathRequest, opts ...grpc.CallOption) (*apiv1.GetDailyNotePathResponse, error) {
 	args := m.expandArgs(ctx, in, opts)
 	ret := m.Called(args...)
-	return ret.Get(0).(*apiv1.GetDailyNotePathResponse), ret.Error(1)
+	val, _ := ret.Get(0).(*apiv1.GetDailyNotePathResponse)
+	return val, ret.Error(1)
 }
 
-func (m *MockKnowledgeServiceClient) expandArgs(ctx context.Context, in interface{}, opts []grpc.CallOption) []interface{} {
-	args := make([]interface{}, 0, 2+len(opts))
+func (m *MockKnowledgeServiceClient) expandArgs(ctx context.Context, in any, opts []grpc.CallOption) []any {
+	args := make([]any, 0, 2+len(opts))
 	args = append(args, ctx, in)
 	for _, opt := range opts {
 		args = append(args, opt)
@@ -57,18 +61,18 @@ type MockKnowledgeServiceClient_Expecter struct {
 	mock *mock.Mock
 }
 
-func (e *MockKnowledgeServiceClient_Expecter) CreateTicketNote(ctx, in interface{}, opts ...interface{}) *mock.Call {
-	return e.mock.On("CreateTicketNote", append([]interface{}{ctx, in}, opts...)...)
+func (e *MockKnowledgeServiceClient_Expecter) CreateTicketNote(ctx, in any, opts ...any) *mock.Call {
+	return e.mock.On("CreateTicketNote", append([]any{ctx, in}, opts...)...)
 }
 
-func (e *MockKnowledgeServiceClient_Expecter) UpdateDailyNote(ctx, in interface{}, opts ...interface{}) *mock.Call {
-	return e.mock.On("UpdateDailyNote", append([]interface{}{ctx, in}, opts...)...)
+func (e *MockKnowledgeServiceClient_Expecter) UpdateDailyNote(ctx, in any, opts ...any) *mock.Call {
+	return e.mock.On("UpdateDailyNote", append([]any{ctx, in}, opts...)...)
 }
 
-func (e *MockKnowledgeServiceClient_Expecter) GetNotePath(ctx, in interface{}, opts ...interface{}) *mock.Call {
-	return e.mock.On("GetNotePath", append([]interface{}{ctx, in}, opts...)...)
+func (e *MockKnowledgeServiceClient_Expecter) GetNotePath(ctx, in any, opts ...any) *mock.Call {
+	return e.mock.On("GetNotePath", append([]any{ctx, in}, opts...)...)
 }
 
-func (e *MockKnowledgeServiceClient_Expecter) GetDailyNotePath(ctx, in interface{}, opts ...interface{}) *mock.Call {
-	return e.mock.On("GetDailyNotePath", append([]interface{}{ctx, in}, opts...)...)
+func (e *MockKnowledgeServiceClient_Expecter) GetDailyNotePath(ctx, in any, opts ...any) *mock.Call {
+	return e.mock.On("GetDailyNotePath", append([]any{ctx, in}, opts...)...)
 }

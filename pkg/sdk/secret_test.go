@@ -119,7 +119,7 @@ func TestSecret_connect(t *testing.T) {
 			t.Setenv("RIG_HOST_ENDPOINT", "")
 
 			s := NewSecret(WithSecretHostEndpoint(tt.endpoint))
-			client, err := s.connect()
+			client, _, err := s.connect()
 
 			if tt.wantErr {
 				if err == nil {
@@ -157,12 +157,12 @@ func TestSecret_connect_returns_cached_client(t *testing.T) {
 
 	s := NewSecret(WithSecretHostEndpoint("/tmp/test.sock"))
 
-	first, err := s.connect()
+	first, _, err := s.connect()
 	if err != nil {
 		t.Fatalf("first connect() error: %v", err)
 	}
 
-	second, err := s.connect()
+	second, _, err := s.connect()
 	if err != nil {
 		t.Fatalf("second connect() error: %v", err)
 	}
@@ -190,7 +190,7 @@ func TestSecret_Close_clears_state(t *testing.T) {
 	s := NewSecret(WithSecretHostEndpoint("/tmp/test.sock"))
 
 	// Establish a connection.
-	_, err := s.connect()
+	_, _, err := s.connect()
 	if err != nil {
 		t.Fatalf("connect() error: %v", err)
 	}

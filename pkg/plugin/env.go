@@ -26,6 +26,10 @@ var defaultEnvAllowList = []string{
 // 3. A per-plugin allow-list from the plugin's own configuration.
 //
 // Supports prefix matching if a pattern ends with "*".
+//
+// Complexity: O(n*p) where n = len(os.Environ()) and p = number of prefix
+// patterns. Exact-match keys use a map for O(1) lookups. In practice both n
+// and p are small (tens of items), so this is effectively linear.
 func buildEnv(globalAllow, pluginAllow []string) []string {
 	allPatterns := make([]string, 0, len(defaultEnvAllowList)+len(globalAllow)+len(pluginAllow))
 	allPatterns = append(allPatterns, defaultEnvAllowList...)
