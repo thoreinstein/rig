@@ -1,0 +1,150 @@
+syntax = "proto3";
+
+package rig.v1;
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "thoreinstein.com/rig/pkg/api/v1;apiv1";
+
+// Severity defines the logging levels for telemetry events.
+// These align with Go's standard log/slog levels.
+enum Severity {
+  SEVERITY_UNSPECIFIED = 0;
+  SEVERITY_DEBUG = 1;
+  SEVERITY_INFO = 2;
+  SEVERITY_WARN = 3;
+  SEVERITY_ERROR = 4;
+}
+
+// ErrorDomain identifies the subsystem where an error originated.
+// This mirrors the domain error types in pkg/errors/types.go.
+enum ErrorDomain {
+  ERROR_DOMAIN_UNSPECIFIED = 0;
+  ERROR_DOMAIN_CONFIG = 1;
+  ERROR_DOMAIN_GITHUB = 2;
+  ERROR_DOMAIN_AI = 3;
+  ERROR_DOMAIN_JIRA = 4;
+  ERROR_DOMAIN_BEADS = 5;
+  ERROR_DOMAIN_WORKFLOW = 6;
+  ERROR_DOMAIN_CAPABILITY = 7;
+  ERROR_DOMAIN_PLUGIN = 8;
+  ERROR_DOMAIN_DAEMON = 9;
+  ERROR_DOMAIN_DATABASE = 10;
+}
+
+// LogEntry represents a single structured log message emitted by a component.
+message LogEntry {
+  // severity is the importance level of the log message.
+  Severity severity = 1;
+
+  // timestamp is when the log event occurred in UTC.
+  google.protobuf.Timestamp timestamp = 2;
+
+  // message is the human-readable description of the event.
+  string message = 3;
+
+  // context contains arbitrary structured metadata associated with the log.
+  // Sensitive data in context must be redacted before transmission to the host.
+  google.protobuf.Struct context = 4;
+
+  // source identifies the component or plugin that emitted the log.
+  string source = 5;
+
+  // correlation_id ties this log to a specific workflow or process for tracing.
+  // Matches pkg/events.WorkflowEvent.CorrelationID.
+  string correlation_id = 6;
+}
+
+// ErrorReport provides rich, domain-specific error details for cross-process troubleshooting.
+// It extends the basic gRPC status model with Rig-specific error fields.
+message ErrorReport {
+  // domain is the subsystem that encountered the error.
+  ErrorDomain domain = 1;
+
+  // operation describes what the component was doing when it failed (e.g., "CreateWorktree").
+  string operation = 2;
+
+  // message is a developer-facing description of the error.
+  string message = 3;
+
+  // status_code is an optional numeric error code (e.g., HTTP or gRPC status).
+  int32 status_code = 4;
+
+  // retryable indicates if the failure is transient and can be retried by the caller.
+  bool retryable = 5;
+
+  // metadata contains machine-readable structured details about the error.
+  google.protobuf.Struct metadata = 6;
+
+  // correlation_id ties this error to a specific workflow event for tracing.
+  string correlation_id = 7;
+
+  // severity indicates the impact of the error (WARN for degraded, ERROR for fatal).
+  Severity severity = 8;
+}
+
+// TelemetryBatch allows for efficient aggregation and transmission of multiple telemetry events.
+message TelemetryBatch {
+  // log_entries is a collection of log messages.
+  repeated LogEntry log_entries = 1;
+
+  // error_reports is a collection of structured error reports.
+  repeated ErrorReport error_reports = 2;
+}
+
+// ReportEventRequest wraps a single telemetry event for transmission.
+message ReportEventRequest {
+  // token is the session-scoped authentication token provided by the host.
+  string token = 1;
+
+  // entry is the log message to report.
+  LogEntry entry = 2;
+
+  // error is the error report to report.
+  ErrorReport error = 3;
+}
+
+// ReportEventResponse is the acknowledgement of a successful event report.
+message ReportEventResponse {}
+
+// StreamEventsRequest wraps telemetry events for streaming transmission.
+message StreamEventsRequest {
+  // token is the session-scoped authentication token.
+  // Only required on the first message of the stream.
+  string token = 1;
+
+  // entry is an individual log message.
+  LogEntry entry = 2;
+
+  // error is an individual error report.
+  ErrorReport error = 3;
+}
+
+// StreamEventsResponse is sent by the host periodically or upon stream completion.
+message StreamEventsResponse {}
+
+// BatchEventsRequest wraps a batch of telemetry events.
+message BatchEventsRequest {
+  // token is the session-scoped authentication token.
+  string token = 1;
+
+  // batch contains multiple telemetry events.
+  TelemetryBatch batch = 2;
+}
+
+// BatchEventsResponse acknowledges receipt of a telemetry batch.
+message BatchEventsResponse {}
+
+// TelemetryService (Host-as-server) provides a unified interface for plugins
+// to report observability data back to the Rig host.
+service TelemetryService {
+  // ReportEvent transmits a single log entry or error report.
+  rpc ReportEvent(ReportEventRequest) returns (ReportEventResponse);
+
+  // StreamEvents establishes a client-streaming connection for high-frequency telemetry.
+  rpc StreamEvents(stream StreamEventsRequest) returns (StreamEventsResponse);
+
+  // BatchEvents transmits a collection of pre-aggregated telemetry events.
+  rpc BatchEvents(BatchEventsRequest) returns (BatchEventsResponse);
+}
