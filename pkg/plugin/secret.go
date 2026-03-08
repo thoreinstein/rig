@@ -97,7 +97,7 @@ func (s *HostSecretProxy) RefreshToken(_ context.Context, req *apiv1.RefreshToke
 		if rigerrors.Is(err, ErrTokenNotFound) {
 			return nil, status.Errorf(codes.Unauthenticated, "invalid secret token")
 		}
-		return nil, status.Errorf(codes.Internal, "failed to rotate token: %v", err)
+		return nil, status.Errorf(codes.Internal, "failed to rotate token")
 	}
 
 	return &apiv1.RefreshTokenResponse{

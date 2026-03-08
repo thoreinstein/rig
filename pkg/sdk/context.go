@@ -118,8 +118,12 @@ func (c *Context) GetContext(ctx context.Context) (*ContextInfo, error) {
 		return nil, err
 	}
 
+	c.mu.Lock()
+	token := c.token
+	c.mu.Unlock()
+
 	resp, err := client.GetContext(ctx, &apiv1.GetContextRequest{
-		Token: c.token,
+		Token: token,
 	})
 	if err != nil {
 		return nil, mapError(err)
