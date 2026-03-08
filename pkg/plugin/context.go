@@ -52,7 +52,7 @@ func (p *HostContextProxy) GetContext(ctx context.Context, req *apiv1.GetContext
 		return nil, status.Errorf(codes.Unauthenticated, "invalid secret token")
 	}
 
-	if p.metadata == nil {
+	if p.metadataErr != nil {
 		return nil, status.Errorf(codes.Internal, "failed to serialize metadata: %v", p.metadataErr)
 	}
 
@@ -60,6 +60,6 @@ func (p *HostContextProxy) GetContext(ctx context.Context, req *apiv1.GetContext
 		ProjectRoot:  p.pluginCtx.ProjectRoot,
 		WorktreeRoot: p.pluginCtx.WorktreeRoot,
 		TicketId:     p.pluginCtx.TicketID,
-		Metadata:     p.metadata,
+		Metadata:     p.metadata, // nil when Metadata map is nil (no-op)
 	}, nil
 }
