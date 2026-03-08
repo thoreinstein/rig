@@ -147,6 +147,9 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 ### Development Strategy
 - **SDK-First:** Prefer official Go SDKs (like Genkit for Google AI) over CLI wrappers for stability and robust streaming support.
 - **Consumer-Side Interface Pattern:** Domain packages (VCS, Ticket, Knowledge) MUST define their own local `PluginManager` interfaces containing only the methods they require. This ensures clean decoupling from `pkg/plugin` and enables surgical unit testing with hand-written mocks.
+- **Shared Session Token Store Pattern:** When multiple host-side gRPC proxy services (e.g., Secret, Context) share a session-scoped identity, centralize token management into a single thread-safe `tokenStore`. This ensures unified rotation and atomic revocation of all tokens associated with a plugin instance.
+- **SDK Compare-and-Swap (CAS) Rotation Pattern:** SDK clients performing asynchronous token rotation MUST use a CAS approach. Capture the `baseline` token before the RPC, and only update the internal state if the current token still matches the baseline upon return. This prevents data races and ensures newer rotations aren't overwritten by stale ones.
+- **V1 Wire Compatibility Protocol:** Within a stable major version (V1), NEVER remove or re-tag fields. If a field must be refactored (e.g., into a nested message), restore the original tag as `deprecated`, have the host populate both fields, and have the SDK implement a prioritized fallback.
 
 ### Defensive Programming Patterns
 - **Robust Nil Interface Check:** Always use `internal.IsNilInterface(v)` when guarding against nil values in constructors or providers that accept interfaces. This protects against Go's "typed-nil" pitfall where an interface wrapping a nil pointer is not itself `nil`.
@@ -181,6 +184,7 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 - **Deferred Plugin Release Pattern:** Always call `defer Manager.ReleasePlugin(name)` immediately after successfully acquiring a plugin client. This ensures active session counts are correctly decremented even if subsequent logic fails, preventing "zombie" processes.
 
 ### Workflow Traps
+- **Darwin UDS Path Limit Trap:** macOS (Darwin) has a strict **104-character limit** for Unix Domain Socket paths. Standard `t.TempDir()` paths often exceed this. Use `os.TempDir()` or a shorter `/tmp` prefix for UDS-based integration tests to ensure cross-platform reliability.
 - **Ghost Interface Trap:** Passing a nil pointer of a concrete type to a function expecting an interface creates a non-nil interface value (`interface{ type: *T, value: nil } != nil`). Standard `if v == nil` checks will fail to catch this, leading to nil pointer dereferences.
 - **Embedded Database Ambiguity:** Distinguish between "embedded data" (local files accessed via protocol) and "embedded engine" (in-process executor). Conflating the two can lead to incorrect driver selection and unnecessary dependency on external processes. Truly embedded logic uses library-backed drivers like `github.com/dolthub/driver`.
 - **Ghost Event Ordering Trap:** Emitting observability events before authoritative state persistence creates a durable mismatch if the state update fails. **Mitigation:** Strictly follow the **State-First Persistence** pattern.
