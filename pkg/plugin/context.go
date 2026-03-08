@@ -21,15 +21,22 @@ type PluginContext struct {
 // HostContextProxy implements apiv1.ContextServiceServer.
 type HostContextProxy struct {
 	apiv1.UnimplementedContextServiceServer
-	store   *tokenStore
-	context PluginContext
+	store     *tokenStore
+	pluginCtx PluginContext
+	metadata  *structpb.Struct
 }
 
 // NewHostContextProxy creates a new HostContextProxy.
+// Metadata is serialized once at construction time; if the map contains
+// values that structpb cannot represent, metadata will be nil and
+// GetContext will return an Internal error.
 func NewHostContextProxy(store *tokenStore, ctx PluginContext) *HostContextProxy {
+	// Pre-build the protobuf struct once. Errors are deferred to GetContext.
+	md, _ := structpb.NewStruct(ctx.Metadata)
 	return &HostContextProxy{
-		store:   store,
-		context: ctx,
+		store:     store,
+		pluginCtx: ctx,
+		metadata:  md,
 	}
 }
 
@@ -43,15 +50,14 @@ func (p *HostContextProxy) GetContext(ctx context.Context, req *apiv1.GetContext
 		return nil, status.Errorf(codes.Unauthenticated, "invalid secret token")
 	}
 
-	metadata, err := structpb.NewStruct(p.context.Metadata)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to serialize metadata: %v", err)
+	if p.metadata == nil {
+		return nil, status.Errorf(codes.Internal, "failed to serialize metadata")
 	}
 
 	return &apiv1.GetContextResponse{
-		ProjectRoot:  p.context.ProjectRoot,
-		WorktreeRoot: p.context.WorktreeRoot,
-		TicketId:     p.context.TicketID,
-		Metadata:     metadata,
+		ProjectRoot:  p.pluginCtx.ProjectRoot,
+		WorktreeRoot: p.pluginCtx.WorktreeRoot,
+		TicketId:     p.pluginCtx.TicketID,
+		Metadata:     p.metadata,
 	}, nil
 }

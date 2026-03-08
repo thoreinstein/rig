@@ -27,37 +27,42 @@ var defaultEnvAllowList = []string{
 //
 // Supports prefix matching if a pattern ends with "*".
 func buildEnv(globalAllow, pluginAllow []string) []string {
-	allowedPatterns := make([]string, 0, len(defaultEnvAllowList)+len(globalAllow)+len(pluginAllow))
-	allowedPatterns = append(allowedPatterns, defaultEnvAllowList...)
-	allowedPatterns = append(allowedPatterns, globalAllow...)
-	allowedPatterns = append(allowedPatterns, pluginAllow...)
+	allPatterns := make([]string, 0, len(defaultEnvAllowList)+len(globalAllow)+len(pluginAllow))
+	allPatterns = append(allPatterns, defaultEnvAllowList...)
+	allPatterns = append(allPatterns, globalAllow...)
+	allPatterns = append(allPatterns, pluginAllow...)
 
-	var result []string
-	for _, env := range os.Environ() {
-		parts := strings.SplitN(env, "=", 2)
-		if len(parts) == 0 {
+	// Split into exact-match set and prefix slice for O(1) exact lookups.
+	exact := make(map[string]struct{}, len(allPatterns))
+	var prefixes []string
+	for _, p := range allPatterns {
+		if strings.HasSuffix(p, "*") {
+			prefixes = append(prefixes, strings.TrimSuffix(p, "*"))
+		} else {
+			exact[p] = struct{}{}
+		}
+	}
+
+	environ := os.Environ()
+	result := make([]string, 0, len(environ))
+	for _, env := range environ {
+		key, _, ok := strings.Cut(env, "=")
+		if !ok {
 			continue
 		}
-		key := parts[0]
 
-		if isAllowed(key, allowedPatterns) {
+		if _, ok := exact[key]; ok {
 			result = append(result, env)
+			continue
+		}
+
+		for _, prefix := range prefixes {
+			if strings.HasPrefix(key, prefix) {
+				result = append(result, env)
+				break
+			}
 		}
 	}
 
 	return result
-}
-
-func isAllowed(key string, patterns []string) bool {
-	for _, pattern := range patterns {
-		if strings.HasSuffix(pattern, "*") {
-			prefix := strings.TrimSuffix(pattern, "*")
-			if strings.HasPrefix(key, prefix) {
-				return true
-			}
-		} else if key == pattern {
-			return true
-		}
-	}
-	return false
 }

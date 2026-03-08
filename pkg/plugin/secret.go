@@ -66,12 +66,19 @@ func (s *HostSecretProxy) GetSecret(ctx context.Context, req *apiv1.GetSecretReq
 	}, nil
 }
 
+// maxBulkSecretKeys is the maximum number of keys allowed in a single GetSecrets request.
+const maxBulkSecretKeys = 64
+
 // GetSecrets resolves multiple secret keys in a single request.
 // Missing keys are omitted from the response map (partial-failure semantics).
 func (s *HostSecretProxy) GetSecrets(ctx context.Context, req *apiv1.GetSecretsRequest) (*apiv1.GetSecretsResponse, error) {
 	pluginName, ok := s.store.Resolve(req.Token)
 	if !ok || pluginName == "" {
 		return nil, status.Errorf(codes.Unauthenticated, "invalid secret token")
+	}
+
+	if len(req.Keys) > maxBulkSecretKeys {
+		return nil, status.Errorf(codes.InvalidArgument, "too many keys: maximum %d allowed", maxBulkSecretKeys)
 	}
 
 	secrets := make(map[string]*apiv1.SecretValue, len(req.Keys))

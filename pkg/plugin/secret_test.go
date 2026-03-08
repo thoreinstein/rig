@@ -263,49 +263,73 @@ func TestGetSecrets(t *testing.T) {
 
 func TestRefreshToken(t *testing.T) {
 	resolver := func(_, _ string) (string, error) { return "val", nil }
-	store := newTokenStore()
-	proxy := NewHostSecretProxy(store, resolver)
-	originalToken := "original-tok"
-	store.Register(originalToken, "myplugin")
 
-	t.Run("successful rotation", func(t *testing.T) {
-		resp, err := proxy.RefreshToken(t.Context(), &apiv1.RefreshTokenRequest{
-			CurrentToken: originalToken,
+	tests := []struct {
+		name         string
+		token        string
+		registered   bool
+		wantCode     codes.Code
+		wantNewToken bool
+	}{
+		{
+			name:         "successful rotation returns new token",
+			token:        "original-tok",
+			registered:   true,
+			wantNewToken: true,
+		},
+		{
+			name:     "invalid token returns Unauthenticated",
+			token:    "nonexistent",
+			wantCode: codes.Unauthenticated,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			store := newTokenStore()
+			proxy := NewHostSecretProxy(store, resolver)
+
+			if tc.registered {
+				store.Register(tc.token, "myplugin")
+			}
+
+			resp, err := proxy.RefreshToken(t.Context(), &apiv1.RefreshTokenRequest{
+				CurrentToken: tc.token,
+			})
+
+			if tc.wantCode != codes.OK {
+				if err == nil {
+					t.Fatalf("expected error with code %v, got nil", tc.wantCode)
+				}
+				if status.Code(err) != tc.wantCode {
+					t.Errorf("code: got %v, want %v", status.Code(err), tc.wantCode)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if resp.NewToken == "" {
+				t.Fatal("new token is empty")
+			}
+			if resp.NewToken == tc.token {
+				t.Error("new token should differ from original")
+			}
+
+			// Old token should no longer resolve.
+			_, getErr := proxy.GetSecret(t.Context(), &apiv1.GetSecretRequest{Key: "k", Token: tc.token})
+			if status.Code(getErr) != codes.Unauthenticated {
+				t.Errorf("old token: expected Unauthenticated, got %v", getErr)
+			}
+
+			// New token should resolve.
+			_, getErr = proxy.GetSecret(t.Context(), &apiv1.GetSecretRequest{Key: "k", Token: resp.NewToken})
+			if getErr != nil {
+				t.Errorf("new token: unexpected error: %v", getErr)
+			}
 		})
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if resp.NewToken == "" {
-			t.Fatal("new token is empty")
-		}
-		if resp.NewToken == originalToken {
-			t.Error("new token should differ from original")
-		}
-
-		// Old token should no longer work.
-		_, err = proxy.GetSecret(t.Context(), &apiv1.GetSecretRequest{Key: "k", Token: originalToken})
-		if status.Code(err) != codes.Unauthenticated {
-			t.Errorf("old token: expected Unauthenticated, got %v", err)
-		}
-
-		// New token should work.
-		_, err = proxy.GetSecret(t.Context(), &apiv1.GetSecretRequest{Key: "k", Token: resp.NewToken})
-		if err != nil {
-			t.Errorf("new token: unexpected error: %v", err)
-		}
-	})
-
-	t.Run("invalid token", func(t *testing.T) {
-		_, err := proxy.RefreshToken(t.Context(), &apiv1.RefreshTokenRequest{
-			CurrentToken: "nonexistent",
-		})
-		if err == nil {
-			t.Fatal("expected error, got nil")
-		}
-		if status.Code(err) != codes.Unauthenticated {
-			t.Errorf("code: got %v, want %v", status.Code(err), codes.Unauthenticated)
-		}
-	})
+	}
 }
 
 func TestTokenStore_UnregisterPlugin(t *testing.T) {

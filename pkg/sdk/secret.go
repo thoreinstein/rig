@@ -15,12 +15,13 @@ import (
 
 // Secret is a high-level client for interacting with the Rig host's SecretService.
 type Secret struct {
-	mu       sync.Mutex
-	endpoint string
-	token    string
-	conn     *grpc.ClientConn
-	client   apiv1.SecretServiceClient
-	dialOpts []grpc.DialOption
+	mu        sync.Mutex
+	refreshMu sync.Mutex // serializes RefreshToken calls to prevent duplicate rotations
+	endpoint  string
+	token     string
+	conn      *grpc.ClientConn
+	client    apiv1.SecretServiceClient
+	dialOpts  []grpc.DialOption
 }
 
 // SecretOption is a functional option for configuring the Secret client.
@@ -161,7 +162,16 @@ func (s *Secret) GetSecrets(ctx context.Context, keys []string) (map[string]stri
 
 // RefreshToken rotates the current session token and updates the client's
 // internal token for subsequent requests.
+//
+// A dedicated refreshMu serializes concurrent callers so that two goroutines
+// cannot both read the same currentToken, race to the host, and diverge on
+// which token is actually active. The general mu is only held briefly for
+// the token read and the compare-and-swap write.
 func (s *Secret) RefreshToken(ctx context.Context) (string, error) {
+	// Serialize refresh operations to prevent duplicate rotations.
+	s.refreshMu.Lock()
+	defer s.refreshMu.Unlock()
+
 	s.mu.Lock()
 	currentToken := s.token
 	s.mu.Unlock()

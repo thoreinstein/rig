@@ -82,6 +82,8 @@ type Manager struct {
 	hostDir            string
 	globalEnvAllowList []string
 
+	secretCache sync.Map // map[pluginName]map[string]interface{} — shared with resolver
+
 	mu      sync.Mutex
 	plugins map[string]*Plugin
 }
@@ -144,15 +146,15 @@ func NewManager(executor pluginExecutor, scanner *Scanner, rigVersion string, co
 	// The resolver receives pluginName and secretKey as separate, validated
 	// parameters — no dot-delimited key parsing required.
 	//
-	// A sync.Map caches the parsed secrets map per plugin to avoid calling
-	// configProvider and json.Unmarshal on every GetSecret request. Plugin
-	// configs are immutable at runtime, so the cache never needs invalidation.
-	var secretCache sync.Map // map[pluginName]map[string]interface{}
-
+	// The secretCache (on Manager) caches the parsed secrets map per plugin
+	// to avoid calling configProvider and json.Unmarshal on every GetSecret
+	// request. Plugin configs are immutable at runtime, so the cache never
+	// needs invalidation. The cache is also seeded by getOrStartPlugin to
+	// avoid a redundant parse on first GetSecret.
 	resolver := func(pluginName, secretKey string) (string, error) {
 		// 1. Look up or populate the per-plugin secrets map.
 		var secrets map[string]interface{}
-		if cached, ok := secretCache.Load(pluginName); ok {
+		if cached, ok := m.secretCache.Load(pluginName); ok {
 			secrets = cached.(map[string]interface{})
 		} else {
 			if m.configProvider == nil {
@@ -166,7 +168,7 @@ func NewManager(executor pluginExecutor, scanner *Scanner, rigVersion string, co
 
 			var cfg map[string]interface{}
 			if err := json.Unmarshal(data, &cfg); err != nil {
-				return "", fmt.Errorf("failed to unmarshal plugin config: %w", err)
+				return "", errors.Wrap(err, "failed to unmarshal plugin config")
 			}
 
 			sec, ok := cfg["secrets"].(map[string]interface{})
@@ -175,7 +177,7 @@ func NewManager(executor pluginExecutor, scanner *Scanner, rigVersion string, co
 			}
 
 			secrets = sec
-			secretCache.Store(pluginName, secrets)
+			m.secretCache.Store(pluginName, secrets)
 		}
 
 		// 2. Look up the requested key.
@@ -187,18 +189,18 @@ func NewManager(executor pluginExecutor, scanner *Scanner, rigVersion string, co
 		// 3. Resolve keychain:// URI if present, otherwise return as-is.
 		strVal, ok := val.(string)
 		if !ok {
-			return "", fmt.Errorf("secret %q is not a string for plugin %q", secretKey, pluginName)
+			return "", errors.Newf("secret %q is not a string for plugin %q", secretKey, pluginName)
 		}
 
 		if strings.HasPrefix(strVal, config.KeychainPrefix) {
 			uri := strings.TrimPrefix(strVal, config.KeychainPrefix)
 			parts := strings.SplitN(uri, "/", 2)
 			if len(parts) != 2 {
-				return "", fmt.Errorf("invalid keychain URI for secret %q: expected keychain://service/account", secretKey)
+				return "", errors.Newf("invalid keychain URI for secret %q: expected keychain://service/account", secretKey)
 			}
 			secret, err := keyring.Get(parts[0], parts[1])
 			if err != nil {
-				return "", fmt.Errorf("failed to resolve keychain secret %q (%s/%s): %w", secretKey, parts[0], parts[1], err)
+				return "", errors.Wrapf(err, "failed to resolve keychain secret %q (%s/%s)", secretKey, parts[0], parts[1])
 			}
 			return secret, nil
 		}
@@ -211,8 +213,8 @@ func NewManager(executor pluginExecutor, scanner *Scanner, rigVersion string, co
 	if m.contextProxy == nil {
 		m.contextProxy = NewHostContextProxy(m.tokenStore, PluginContext{})
 	} else {
-		// If provided via option, we need to ensure it uses the same tokenStore
-		m.contextProxy.store = m.tokenStore
+		// Rebuild proxy with the same PluginContext but the canonical tokenStore.
+		m.contextProxy = NewHostContextProxy(m.tokenStore, m.contextProxy.pluginCtx)
 	}
 
 	srv := grpc.NewServer()
@@ -222,7 +224,7 @@ func NewManager(executor pluginExecutor, scanner *Scanner, rigVersion string, co
 	m.hostServer = srv
 
 	go func() {
-		if err := srv.Serve(lis); err != nil && err != grpc.ErrServerStopped {
+		if err := srv.Serve(lis); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
 			// In a real CLI, we might log this or handle it more gracefully
 			fmt.Fprintf(os.Stderr, "Host UI server failed: %v\n", err)
 		}
@@ -253,6 +255,10 @@ func (m *Manager) GetAssistantClient(ctx context.Context, name string) (client a
 
 	p.mu.Lock()
 	defer p.mu.Unlock()
+
+	if p.process == nil {
+		return nil, errors.NewPluginError(name, "GetAssistantClient", "plugin process is no longer running")
+	}
 
 	// Verify the plugin has the assistant capability
 	hasAssistant := false
@@ -295,6 +301,10 @@ func (m *Manager) GetCommandClient(ctx context.Context, name string) (client api
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
+	if p.process == nil {
+		return nil, errors.NewPluginError(name, "GetCommandClient", "plugin process is no longer running")
+	}
+
 	// Verify the plugin has the command capability
 	hasCommand := false
 	for _, cap := range p.Capabilities {
@@ -335,6 +345,10 @@ func (m *Manager) GetNodeClient(ctx context.Context, name string) (client apiv1.
 
 	p.mu.Lock()
 	defer p.mu.Unlock()
+
+	if p.process == nil {
+		return nil, errors.NewPluginError(name, "GetNodeClient", "plugin process is no longer running")
+	}
 
 	// Verify the plugin has the node capability
 	hasNode := false
@@ -377,6 +391,10 @@ func (m *Manager) GetVCSClient(ctx context.Context, name string) (client apiv1.V
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
+	if p.process == nil {
+		return nil, errors.NewPluginError(name, "GetVCSClient", "plugin process is no longer running")
+	}
+
 	// Verify the plugin has the vcs capability
 	hasVCS := false
 	for _, cap := range p.Capabilities {
@@ -418,6 +436,10 @@ func (m *Manager) GetTicketClient(ctx context.Context, name string) (client apiv
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
+	if p.process == nil {
+		return nil, errors.NewPluginError(name, "GetTicketClient", "plugin process is no longer running")
+	}
+
 	// Verify the plugin has the ticket capability
 	hasTicket := false
 	for _, cap := range p.Capabilities {
@@ -458,6 +480,10 @@ func (m *Manager) GetKnowledgeClient(ctx context.Context, name string) (client a
 
 	p.mu.Lock()
 	defer p.mu.Unlock()
+
+	if p.process == nil {
+		return nil, errors.NewPluginError(name, "GetKnowledgeClient", "plugin process is no longer running")
+	}
 
 	// Verify the plugin has the knowledge capability
 	hasKnowledge := false
@@ -533,11 +559,15 @@ func (m *Manager) getOrStartPlugin(ctx context.Context, name string) (*Plugin, e
 		} else if len(data) > 0 {
 			configJSON = data
 
-			// Extract EnvAllowList from config if present
+			// Unmarshal once; extract EnvAllowList and seed the resolver's
+			// secret cache to avoid a redundant parse on first GetSecret.
 			var cfg map[string]interface{}
 			if err := json.Unmarshal(data, &cfg); err == nil {
 				if val, ok := cfg["env_allow_list"]; ok {
 					target.EnvAllowList = toStringSlice(val)
+				}
+				if sec, ok := cfg["secrets"].(map[string]interface{}); ok {
+					m.secretCache.Store(name, sec)
 				}
 			}
 		}
@@ -576,7 +606,7 @@ func (m *Manager) getOrStartPlugin(ctx context.Context, name string) (*Plugin, e
 	}
 
 	m.mu.Lock()
-	target.last_used = time.Now()
+	target.lastUsed = time.Now()
 	m.plugins[name] = target
 	m.mu.Unlock()
 	return target, nil
@@ -639,8 +669,8 @@ func (m *Manager) StopPluginIfIdle(name string, idleTimeout time.Duration) error
 	p, ok := m.plugins[name]
 	if ok {
 		p.mu.Lock()
-		busy := p.active_sessions > 0
-		lastUsed := p.last_used
+		busy := p.activeSessions > 0
+		lastUsed := p.lastUsed
 		p.mu.Unlock()
 
 		if busy {
@@ -719,7 +749,7 @@ func (m *Manager) ListPlugins() []*Plugin {
 			Manifest:     manifest,
 			Error:        p.Error, // Error is an interface, effectively immutable
 			DiscoveryAt:  p.DiscoveryAt,
-			last_used:    p.last_used,
+			lastUsed:     p.lastUsed,
 			Capabilities: caps,
 		}
 		p.mu.Unlock()

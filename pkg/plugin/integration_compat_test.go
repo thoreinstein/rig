@@ -86,7 +86,7 @@ func TestIntegration_TokenCleanup(t *testing.T) {
 		t.Fatalf("failed to rotate token: %v", err)
 	}
 
-	// Verify both existed (t1 should be gone, t2 should exist)
+	// After rotation: t1 is replaced by t2 (only t2 should resolve)
 	if _, ok := mgr.tokenStore.Resolve(t1); ok {
 		t.Error("initial token should have been removed by rotation")
 	}

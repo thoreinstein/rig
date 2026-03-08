@@ -63,8 +63,18 @@ func (e *Executor) Start(ctx context.Context, p *Plugin) error {
 	if err != nil {
 		return errors.NewPluginError(p.Name, "Start", "failed to generate unique identifier for plugin socket").WithCause(err)
 	}
-	// Use shorter name to avoid AF_UNIX path length limits (typically 104-108 chars)
-	p.socketPath = filepath.Join(os.TempDir(), fmt.Sprintf("rig-p-%s.sock", u.String()[:8]))
+	// Use a private temporary directory to restrict socket access to the current user,
+	// mirroring the host-side pattern (MkdirTemp + 0o700).
+	sockDir, err := os.MkdirTemp("", "rig-p-")
+	if err != nil {
+		return errors.NewPluginError(p.Name, "Start", "failed to create temporary directory for plugin socket").WithCause(err)
+	}
+	if err := os.Chmod(sockDir, 0o700); err != nil {
+		_ = os.RemoveAll(sockDir)
+		return errors.NewPluginError(p.Name, "Start", "failed to set permissions on plugin socket directory").WithCause(err)
+	}
+	p.socketDir = sockDir
+	p.socketPath = filepath.Join(sockDir, fmt.Sprintf("rig-p-%s.sock", u.String()[:8]))
 
 	// 2. Setup internal context for the process lifecycle
 	// We don't shadow the incoming ctx so waitForSocket can respect its deadline.
@@ -138,7 +148,11 @@ func (p *Plugin) cleanup() error {
 		p.process = nil
 	}
 
-	if p.socketPath != "" {
+	if p.socketDir != "" {
+		_ = os.RemoveAll(p.socketDir)
+		p.socketDir = ""
+		p.socketPath = ""
+	} else if p.socketPath != "" {
 		_ = os.Remove(p.socketPath)
 		p.socketPath = ""
 	}

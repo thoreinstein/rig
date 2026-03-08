@@ -81,14 +81,15 @@ type Plugin struct {
 	Manifest     *Manifest
 	Error        error
 	DiscoveryAt  time.Time
-	last_used    time.Time
+	lastUsed     time.Time
 	Capabilities []*apiv1.Capability
-	EnvAllowList []string // rig-76a: sanitize environment
+	EnvAllowList []string // Per-plugin environment variable allow-list
 
 	// Runtime state
 	mu              sync.Mutex
-	active_sessions int
+	activeSessions  int
 	process         *os.Process
+	socketDir       string
 	socketPath      string
 	secretToken     string
 	client          apiv1.PluginServiceClient
@@ -106,39 +107,39 @@ type Plugin struct {
 func (p *Plugin) LastUsedTime() time.Time {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	return p.last_used
+	return p.lastUsed
 }
 
 // SetLastUsed updates the time the plugin was last used.
 func (p *Plugin) SetLastUsed(t time.Time) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.last_used = t
+	p.lastUsed = t
 }
 
 // AcquireSession increments the active session count.
 func (p *Plugin) AcquireSession() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.active_sessions++
-	p.last_used = time.Now()
+	p.activeSessions++
+	p.lastUsed = time.Now()
 }
 
-// ReleaseSession decrements the active session count and updates last_used.
+// ReleaseSession decrements the active session count and updates lastUsed.
 func (p *Plugin) ReleaseSession() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if p.active_sessions > 0 {
-		p.active_sessions--
+	if p.activeSessions > 0 {
+		p.activeSessions--
 	}
-	p.last_used = time.Now()
+	p.lastUsed = time.Now()
 }
 
 // IsBusy returns true if the plugin has active sessions.
 func (p *Plugin) IsBusy() bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	return p.active_sessions > 0
+	return p.activeSessions > 0
 }
 
 // Result contains the outcome of a discovery scan, including found plugins and metadata.
