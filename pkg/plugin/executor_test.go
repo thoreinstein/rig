@@ -38,7 +38,7 @@ exit 1
 		Path: pluginPath,
 	}
 
-	e := NewExecutor("")
+	e := NewExecutor()
 
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
@@ -93,7 +93,7 @@ func TestExecutor_Start_TimeoutRetry(t *testing.T) {
 		Path: pluginBin,
 	}
 
-	e := NewExecutor("")
+	e := NewExecutor()
 
 	// First attempt: already-expired context should fail
 	expiredCtx, expiredCancel := context.WithTimeout(t.Context(), 0)
@@ -141,7 +141,7 @@ func TestExecutor_EnvSanitization(t *testing.T) {
 		EnvAllowList: []string{"RIG_ALLOWED_PLUGIN", "RIG_PREFIX_*"},
 	}
 
-	e := NewExecutor("")
+	e := NewExecutor()
 	e.SetGlobalEnvAllowList([]string{"RIG_ALLOWED_GLOBAL"})
 
 	// Tell the mock plugin what to expect via special env vars that WE pass during Start
@@ -174,8 +174,9 @@ func TestExecutor_HostEndpoint(t *testing.T) {
 	}
 
 	p := &Plugin{
-		Name: "env-plugin",
-		Path: pluginBin,
+		Name:     "env-plugin",
+		Path:     pluginBin,
+		hostPath: hostSocket,
 	}
 
 	// Tell the mock plugin what to expect
@@ -184,7 +185,7 @@ func TestExecutor_HostEndpoint(t *testing.T) {
 	// We need to allow these through sanitization for the test to work
 	p.EnvAllowList = []string{"EXPECTED_HOST_ENDPOINT", "EXPECTED_ENV_VARS"}
 
-	e := NewExecutor(hostSocket)
+	e := NewExecutor()
 
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()

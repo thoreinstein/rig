@@ -25,21 +25,12 @@ const (
 // Executor manages the lifecycle of a plugin process.
 type Executor struct {
 	mu                 sync.RWMutex
-	hostEndpoint       string
 	globalEnvAllowList []string
 }
 
-// NewExecutor creates a new plugin executor. If hostEndpoint is provided,
-// it will be passed to plugins via the RIG_HOST_ENDPOINT environment variable.
-func NewExecutor(hostEndpoint string) *Executor {
-	return &Executor{hostEndpoint: hostEndpoint}
-}
-
-// SetHostEndpoint sets the host gRPC server endpoint path.
-func (e *Executor) SetHostEndpoint(path string) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	e.hostEndpoint = path
+// NewExecutor creates a new plugin executor.
+func NewExecutor() *Executor {
+	return &Executor{}
 }
 
 // SetGlobalEnvAllowList sets the global environment allow-list.
@@ -87,18 +78,13 @@ func (e *Executor) Start(ctx context.Context, p *Plugin) error {
 
 	e.mu.RLock()
 	globalAllow := e.globalEnvAllowList
-	hostEndpoint := e.hostEndpoint
 	e.mu.RUnlock()
 
 	cmd.Env = buildEnv(globalAllow, p.EnvAllowList)
 	cmd.Env = append(cmd.Env, "RIG_PLUGIN_ENDPOINT="+p.socketPath)
 
-	if hostEndpoint != "" {
-		cmd.Env = append(cmd.Env, "RIG_HOST_ENDPOINT="+hostEndpoint)
-	}
-
-	if p.secretToken != "" {
-		cmd.Env = append(cmd.Env, "RIG_HOST_SECRET_TOKEN="+p.secretToken)
+	if p.hostPath != "" {
+		cmd.Env = append(cmd.Env, "RIG_HOST_ENDPOINT="+p.hostPath)
 	}
 
 	// Ensure we can capture some output if needed for debugging

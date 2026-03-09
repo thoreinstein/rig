@@ -23,8 +23,9 @@ const (
 )
 
 type GetContextRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Token         string                 `protobuf:"bytes,1,opt,name=token,proto3" json:"token,omitempty"` // Secret token provided to the plugin via RIG_HOST_SECRET_TOKEN
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Deprecated: Marked as deprecated in pkg/api/v1/context.proto.
+	Token         string `protobuf:"bytes,1,opt,name=token,proto3" json:"token,omitempty"` // Deprecated: token-based auth is replaced by connection-bound identity.
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -59,6 +60,7 @@ func (*GetContextRequest) Descriptor() ([]byte, []int) {
 	return file_pkg_api_v1_context_proto_rawDescGZIP(), []int{0}
 }
 
+// Deprecated: Marked as deprecated in pkg/api/v1/context.proto.
 func (x *GetContextRequest) GetToken() string {
 	if x != nil {
 		return x.Token
@@ -138,9 +140,9 @@ var File_pkg_api_v1_context_proto protoreflect.FileDescriptor
 
 const file_pkg_api_v1_context_proto_rawDesc = "" +
 	"\n" +
-	"\x18pkg/api/v1/context.proto\x12\x06rig.v1\x1a\x1cgoogle/protobuf/struct.proto\")\n" +
-	"\x11GetContextRequest\x12\x14\n" +
-	"\x05token\x18\x01 \x01(\tR\x05token\"\xae\x01\n" +
+	"\x18pkg/api/v1/context.proto\x12\x06rig.v1\x1a\x1cgoogle/protobuf/struct.proto\"-\n" +
+	"\x11GetContextRequest\x12\x18\n" +
+	"\x05token\x18\x01 \x01(\tB\x02\x18\x01R\x05token\"\xae\x01\n" +
 	"\x12GetContextResponse\x12!\n" +
 	"\fproject_root\x18\x01 \x01(\tR\vprojectRoot\x12#\n" +
 	"\rworktree_root\x18\x02 \x01(\tR\fworktreeRoot\x12\x1b\n" +

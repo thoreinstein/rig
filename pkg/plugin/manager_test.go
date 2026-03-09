@@ -43,8 +43,6 @@ func (m *mockExecutor) Handshake(ctx context.Context, p *Plugin, rigVersion, api
 	return nil
 }
 
-func (m *mockExecutor) SetHostEndpoint(path string) {}
-
 func (m *mockExecutor) SetGlobalEnvAllowList(list []string) {}
 
 func TestManager_GetOrStartPlugin_Compatibility(t *testing.T) {
@@ -107,7 +105,7 @@ requirements:
 				},
 			}
 
-			m, err := NewManager(NewExecutor(""), scanner, tc.rigVersion, nil, nil)
+			m, err := NewManager(NewExecutor(), scanner, tc.rigVersion, nil, nil)
 			if err != nil {
 				t.Fatalf("NewManager() failed: %v", err)
 			}
@@ -199,7 +197,7 @@ func TestManager_ConfigDefaulting(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			capturedConfig = nil // Reset capture
-			m, err := NewManager(NewExecutor(""), scanner, "1.0.0", tc.provider, nil)
+			m, err := NewManager(NewExecutor(), scanner, "1.0.0", tc.provider, nil)
 			if err != nil {
 				t.Fatalf("NewManager() failed: %v", err)
 			}

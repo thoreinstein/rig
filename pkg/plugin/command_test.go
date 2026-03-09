@@ -74,7 +74,7 @@ func TestCommandExecution(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			scanner := &Scanner{Paths: []string{pluginDir}}
-			executor := NewExecutor("")
+			executor := NewExecutor()
 
 			configProvider := func(name string) ([]byte, error) {
 				return []byte(`{"test":"config"}`), nil
@@ -182,7 +182,7 @@ func TestCommandExecution_SecretLookupSmoke(t *testing.T) {
 	}
 
 	scanner := &Scanner{Paths: []string{pluginDir}}
-	executor := NewExecutor("")
+	executor := NewExecutor()
 	configProvider := func(name string) ([]byte, error) {
 		return []byte(`{"secrets":{"api_key":"super-secret-value"}}`), nil
 	}

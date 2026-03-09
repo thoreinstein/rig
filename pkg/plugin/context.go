@@ -23,7 +23,6 @@ type PluginContext struct {
 // HostContextProxy implements apiv1.ContextServiceServer.
 type HostContextProxy struct {
 	apiv1.UnimplementedContextServiceServer
-	store           *tokenStore
 	logger          *slog.Logger
 	pluginCtx       PluginContext
 	metadata        *structpb.Struct
@@ -35,11 +34,10 @@ type HostContextProxy struct {
 // Metadata is serialized once at construction time; if the map contains
 // values that structpb cannot represent, metadata will be nil and
 // GetContext will return an Internal error.
-func NewHostContextProxy(store *tokenStore, ctx PluginContext, logger *slog.Logger) *HostContextProxy {
+func NewHostContextProxy(ctx PluginContext, logger *slog.Logger) *HostContextProxy {
 	// Pre-build the protobuf struct once. Errors are deferred to GetContext.
 	md, mdErr := structpb.NewStruct(ctx.Metadata)
 	return &HostContextProxy{
-		store:       store,
 		logger:      logger,
 		pluginCtx:   ctx,
 		metadata:    md,
@@ -49,12 +47,9 @@ func NewHostContextProxy(store *tokenStore, ctx PluginContext, logger *slog.Logg
 
 // GetContext returns the current environment context.
 func (p *HostContextProxy) GetContext(ctx context.Context, req *apiv1.GetContextRequest) (*apiv1.GetContextResponse, error) {
-	if p.store == nil {
-		return nil, status.Errorf(codes.Internal, "token store not initialized")
-	}
-	pluginName, ok := p.store.Resolve(req.Token)
+	pluginName, ok := pluginNameFromContext(ctx)
 	if !ok || pluginName == "" {
-		return nil, status.Errorf(codes.Unauthenticated, "invalid secret token")
+		return nil, status.Errorf(codes.Unauthenticated, "missing plugin identity")
 	}
 
 	if p.metadataErr != nil {

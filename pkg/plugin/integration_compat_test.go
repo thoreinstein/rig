@@ -30,13 +30,19 @@ func TestIntegration_WireCompatibility(t *testing.T) {
 	}
 	defer mgr.StopAll()
 
-	// 2. Simulate a plugin "session" by registering a token manually
-	token := "legacy-plugin-token"
-	mgr.tokenStore.Register(token, "legacy-plugin")
+	// 2. Simulate a plugin session by creating a host server manually
+	p := &Plugin{Name: "legacy-plugin"}
+	srv, lis, path, err := mgr.newPluginHostServer(p)
+	if err != nil {
+		t.Fatalf("failed to create host server: %v", err)
+	}
+	go func() { _ = srv.Serve(lis) }()
+	defer srv.Stop()
+	defer lis.Close()
 
 	// 3. Connect a raw gRPC client to the host's UDS endpoint
 	// We'll use the generated client but explicitly only read the legacy field.
-	conn, err := grpc.NewClient("unix://"+mgr.hostPath, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient("unix://"+path, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("failed to connect to host: %v", err)
 	}
@@ -46,8 +52,7 @@ func TestIntegration_WireCompatibility(t *testing.T) {
 
 	t.Run("GetSecret populates legacy value field", func(t *testing.T) {
 		resp, err := client.GetSecret(t.Context(), &apiv1.GetSecretRequest{
-			Key:   "API_KEY",
-			Token: token,
+			Key: "API_KEY",
 		})
 		if err != nil {
 			t.Fatalf("GetSecret failed: %v", err)
@@ -63,50 +68,4 @@ func TestIntegration_WireCompatibility(t *testing.T) {
 			t.Errorf("new Secret field not correctly populated: %+v", resp.Secret)
 		}
 	})
-}
-
-// TestIntegration_MultipleRotatedTokensCleanup proves that all tokens (original and rotated)
-// are correctly purged from the host when a plugin session ends.
-func TestIntegration_TokenCleanup(t *testing.T) {
-	tmpDir := t.TempDir()
-	scanner := &Scanner{Paths: []string{tmpDir}}
-	mgr, err := NewManager(&mockExecutor{}, scanner, "1.0.0", nil, slog.Default())
-	if err != nil {
-		t.Fatalf("failed to create manager: %v", err)
-	}
-	defer mgr.StopAll()
-
-	name := "rotating-plugin"
-	t1 := "initial-token"
-	mgr.tokenStore.Register(t1, name)
-
-	// Simulate rotation
-	_, t2, err := mgr.tokenStore.Rotate(t1)
-	if err != nil {
-		t.Fatalf("failed to rotate token: %v", err)
-	}
-
-	// After rotation: t1 is replaced by t2 (only t2 should resolve)
-	if _, ok := mgr.tokenStore.Resolve(t1); ok {
-		t.Error("initial token should have been removed by rotation")
-	}
-	if _, ok := mgr.tokenStore.Resolve(t2); !ok {
-		t.Error("rotated token should exist")
-	}
-
-	// Simulate one more rotation
-	_, t3, err := mgr.tokenStore.Rotate(t2)
-	if err != nil {
-		t.Fatalf("failed to rotate token again: %v", err)
-	}
-
-	// Now stop the plugin (simulate via name cleanup as StopAll/StopPluginIfIdle does)
-	mgr.tokenStore.UnregisterPlugin(name)
-
-	// ASSERT: All tokens associated with the plugin MUST be gone.
-	for _, tok := range []string{t1, t2, t3} {
-		if _, ok := mgr.tokenStore.Resolve(tok); ok {
-			t.Errorf("token %s still exists after plugin cleanup", tok)
-		}
-	}
 }

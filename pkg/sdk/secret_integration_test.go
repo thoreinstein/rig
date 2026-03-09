@@ -24,9 +24,6 @@ type stubSecretServer struct {
 
 	// getSecretsFunc, if set, handles GetSecrets RPCs.
 	getSecretsFunc func(ctx context.Context, req *apiv1.GetSecretsRequest) (*apiv1.GetSecretsResponse, error)
-
-	// refreshTokenFunc, if set, handles RefreshToken RPCs.
-	refreshTokenFunc func(ctx context.Context, req *apiv1.RefreshTokenRequest) (*apiv1.RefreshTokenResponse, error)
 }
 
 func (s *stubSecretServer) GetSecret(ctx context.Context, req *apiv1.GetSecretRequest) (*apiv1.GetSecretResponse, error) {
@@ -39,13 +36,6 @@ func (s *stubSecretServer) GetSecret(ctx context.Context, req *apiv1.GetSecretRe
 func (s *stubSecretServer) GetSecrets(ctx context.Context, req *apiv1.GetSecretsRequest) (*apiv1.GetSecretsResponse, error) {
 	if s.getSecretsFunc != nil {
 		return s.getSecretsFunc(ctx, req)
-	}
-	return nil, status.Errorf(codes.Unimplemented, "not configured")
-}
-
-func (s *stubSecretServer) RefreshToken(ctx context.Context, req *apiv1.RefreshTokenRequest) (*apiv1.RefreshTokenResponse, error) {
-	if s.refreshTokenFunc != nil {
-		return s.refreshTokenFunc(ctx, req)
 	}
 	return nil, status.Errorf(codes.Unimplemented, "not configured")
 }
@@ -76,9 +66,6 @@ func startStubServer(t *testing.T, stub *stubSecretServer) string {
 func TestSecret_GetSecret_with_SecretValue(t *testing.T) {
 	stub := &stubSecretServer{
 		getSecretFunc: func(_ context.Context, req *apiv1.GetSecretRequest) (*apiv1.GetSecretResponse, error) {
-			if req.Token != "tok-1" {
-				return nil, status.Errorf(codes.Unauthenticated, "bad token")
-			}
 			return &apiv1.GetSecretResponse{
 				Secret: &apiv1.SecretValue{Value: "modern-value"},
 			}, nil
@@ -86,7 +73,7 @@ func TestSecret_GetSecret_with_SecretValue(t *testing.T) {
 	}
 	sock := startStubServer(t, stub)
 
-	s := NewSecret(WithSecretHostEndpoint(sock), WithSecretToken("tok-1"))
+	s := NewSecret(WithSecretHostEndpoint(sock))
 	defer s.Close()
 
 	val, err := s.GetSecret(t.Context(), "my-key")
@@ -105,7 +92,7 @@ func TestSecret_GetSecret_legacy_fallback(t *testing.T) {
 	}
 	sock := startStubServer(t, stub)
 
-	s := NewSecret(WithSecretHostEndpoint(sock), WithSecretToken("tok-1"))
+	s := NewSecret(WithSecretHostEndpoint(sock))
 	defer s.Close()
 
 	val, err := s.GetSecret(t.Context(), "key")
@@ -124,7 +111,7 @@ func TestSecret_GetSecret_legacy_empty_string(t *testing.T) {
 	}
 	sock := startStubServer(t, stub)
 
-	s := NewSecret(WithSecretHostEndpoint(sock), WithSecretToken("tok-1"))
+	s := NewSecret(WithSecretHostEndpoint(sock))
 	defer s.Close()
 
 	val, err := s.GetSecret(t.Context(), "key")
@@ -191,7 +178,7 @@ func TestSecret_GetSecrets(t *testing.T) {
 			}
 			sock := startStubServer(t, stub)
 
-			s := NewSecret(WithSecretHostEndpoint(sock), WithSecretToken("tok"))
+			s := NewSecret(WithSecretHostEndpoint(sock))
 			defer s.Close()
 
 			got, err := s.GetSecrets(t.Context(), tt.keys)
@@ -201,70 +188,15 @@ func TestSecret_GetSecrets(t *testing.T) {
 	}
 }
 
-func TestSecret_RefreshToken_updates_stored_token(t *testing.T) {
-	stub := &stubSecretServer{
-		refreshTokenFunc: func(_ context.Context, req *apiv1.RefreshTokenRequest) (*apiv1.RefreshTokenResponse, error) {
-			if req.CurrentToken != "old-token" {
-				return nil, status.Errorf(codes.Unauthenticated, "bad token")
-			}
-			return &apiv1.RefreshTokenResponse{NewToken: "new-token"}, nil
-		},
-	}
-	sock := startStubServer(t, stub)
-
-	s := NewSecret(WithSecretHostEndpoint(sock), WithSecretToken("old-token"))
-	defer s.Close()
-
-	newTok, err := s.RefreshToken(t.Context())
-	require.NoError(t, err)
-	require.Equal(t, "new-token", newTok)
-
-	// Verify the internal token was updated.
-	s.mu.Lock()
-	storedToken := s.token
-	s.mu.Unlock()
-	require.Equal(t, "new-token", storedToken)
-}
-
-func TestSecret_RefreshToken_concurrent_no_overwrite(t *testing.T) {
-	// Simulate a scenario where another goroutine rotates the token while our
-	// RPC is in flight. The compare-and-swap should preserve the newer token.
-	var s *Secret
-	stub := &stubSecretServer{
-		refreshTokenFunc: func(_ context.Context, _ *apiv1.RefreshTokenRequest) (*apiv1.RefreshTokenResponse, error) {
-			// While the RPC is in flight, simulate another goroutine rotating the token.
-			s.mu.Lock()
-			s.token = "already-rotated"
-			s.mu.Unlock()
-			return &apiv1.RefreshTokenResponse{NewToken: "stale-new-token"}, nil
-		},
-	}
-	sock := startStubServer(t, stub)
-
-	s = NewSecret(WithSecretHostEndpoint(sock), WithSecretToken("original"))
-	defer s.Close()
-
-	newTok, err := s.RefreshToken(t.Context())
-	require.NoError(t, err)
-	require.Equal(t, "stale-new-token", newTok, "return value should be the RPC response")
-
-	// The stored token should NOT have been overwritten because compare-and-swap
-	// detects that s.token ("already-rotated") != currentToken ("original").
-	s.mu.Lock()
-	storedToken := s.token
-	s.mu.Unlock()
-	require.Equal(t, "already-rotated", storedToken, "compare-and-swap should preserve newer token")
-}
-
 func TestSecret_GetSecret_unauthenticated_error(t *testing.T) {
 	stub := &stubSecretServer{
 		getSecretFunc: func(_ context.Context, _ *apiv1.GetSecretRequest) (*apiv1.GetSecretResponse, error) {
-			return nil, status.Errorf(codes.Unauthenticated, "invalid token")
+			return nil, status.Errorf(codes.Unauthenticated, "missing plugin identity")
 		},
 	}
 	sock := startStubServer(t, stub)
 
-	s := NewSecret(WithSecretHostEndpoint(sock), WithSecretToken("bad"))
+	s := NewSecret(WithSecretHostEndpoint(sock))
 	defer s.Close()
 
 	_, err := s.GetSecret(t.Context(), "key")

@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"context"
 	"testing"
 
 	"google.golang.org/grpc/codes"
@@ -10,21 +11,17 @@ import (
 )
 
 func TestHostContextProxy_GetContext(t *testing.T) {
-	store := newTokenStore()
 	pCtx := PluginContext{
 		ProjectRoot:  "/project",
 		WorktreeRoot: "/worktree",
 		TicketID:     "RIG-123",
 		Metadata:     map[string]any{"key": "value"},
 	}
-	proxy := NewHostContextProxy(store, pCtx, nil)
-
-	validToken := "valid-token"
-	store.Register(validToken, "test-plugin")
+	proxy := NewHostContextProxy(pCtx, nil)
 
 	tests := []struct {
 		name             string
-		token            string
+		pluginName       string
 		wantCode         codes.Code
 		wantProjectRoot  string
 		wantWorktreeRoot string
@@ -33,8 +30,8 @@ func TestHostContextProxy_GetContext(t *testing.T) {
 		wantMetadataVal  any
 	}{
 		{
-			name:             "valid token returns context",
-			token:            validToken,
+			name:             "valid identity returns context",
+			pluginName:       "test-plugin",
 			wantProjectRoot:  "/project",
 			wantWorktreeRoot: "/worktree",
 			wantTicketID:     "RIG-123",
@@ -42,22 +39,20 @@ func TestHostContextProxy_GetContext(t *testing.T) {
 			wantMetadataVal:  "value",
 		},
 		{
-			name:     "invalid token returns Unauthenticated",
-			token:    "invalid-token",
-			wantCode: codes.Unauthenticated,
-		},
-		{
-			name:     "empty token returns Unauthenticated",
-			token:    "",
-			wantCode: codes.Unauthenticated,
+			name:       "missing identity returns Unauthenticated",
+			pluginName: "",
+			wantCode:   codes.Unauthenticated,
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			resp, err := proxy.GetContext(t.Context(), &apiv1.GetContextRequest{
-				Token: tc.token,
-			})
+			ctx := t.Context()
+			if tc.pluginName != "" {
+				ctx = context.WithValue(ctx, pluginNameKey, tc.pluginName)
+			}
+
+			resp, err := proxy.GetContext(ctx, &apiv1.GetContextRequest{})
 
 			if tc.wantCode != codes.OK {
 				if err == nil {

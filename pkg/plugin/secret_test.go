@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
@@ -10,6 +11,10 @@ import (
 	apiv1 "thoreinstein.com/rig/pkg/api/v1"
 	rigerrors "thoreinstein.com/rig/pkg/errors"
 )
+
+func withPlugin(ctx context.Context, name string) context.Context {
+	return context.WithValue(ctx, pluginNameKey, name)
+}
 
 func TestGetSecret(t *testing.T) {
 	// Mock secrets indexed by pluginName -> secretKey -> value.
@@ -30,89 +35,87 @@ func TestGetSecret(t *testing.T) {
 		return val, nil
 	}
 
-	store := newTokenStore()
-	proxy := NewHostSecretProxy(store, resolver)
-	jiraToken := "jira-tok-123"
-	beadsToken := "beads-tok-456"
-	store.Register(jiraToken, "jira")
-	store.Register(beadsToken, "beads")
+	proxy := NewHostSecretProxy(resolver)
 
 	tests := []struct {
-		name     string
-		key      string
-		token    string
-		wantVal  string
-		wantCode codes.Code
-		wantMsg  string
+		name       string
+		key        string
+		pluginName string
+		wantVal    string
+		wantCode   codes.Code
+		wantMsg    string
 	}{
 		{
-			name:    "valid token and allowed key returns value",
-			key:     "token",
-			token:   jiraToken,
-			wantVal: "jira-secret",
+			name:       "valid plugin and allowed key returns value",
+			key:        "token",
+			pluginName: "jira",
+			wantVal:    "jira-secret",
 		},
 		{
-			name:    "valid token for another plugin returns its own value",
-			key:     "api",
-			token:   beadsToken,
-			wantVal: "beads-secret",
+			name:       "another valid plugin returns its own value",
+			key:        "api",
+			pluginName: "beads",
+			wantVal:    "beads-secret",
 		},
 		{
-			name:     "invalid token returns Unauthenticated",
+			name:     "missing plugin identity returns Unauthenticated",
 			key:      "token",
-			token:    "wrong-token",
 			wantCode: codes.Unauthenticated,
-			wantMsg:  "invalid secret token",
+			wantMsg:  "missing plugin identity",
 		},
 		{
-			name:     "valid token but missing key returns NotFound",
-			key:      "wrong-key",
-			token:    jiraToken,
-			wantCode: codes.NotFound,
-			wantMsg:  "secret not available",
+			name:       "valid plugin but missing key returns NotFound",
+			key:        "wrong-key",
+			pluginName: "jira",
+			wantCode:   codes.NotFound,
+			wantMsg:    "secret not available",
 		},
 		{
-			name:     "plugin cannot access another plugin's secret",
-			key:      "api", // jira doesn't have 'api' secret, only beads does
-			token:    jiraToken,
-			wantCode: codes.NotFound,
-			wantMsg:  "secret not available",
+			name:       "plugin cannot access another plugin's secret",
+			key:        "api", // jira doesn't have 'api' secret, only beads does
+			pluginName: "jira",
+			wantCode:   codes.NotFound,
+			wantMsg:    "secret not available",
 		},
 		{
-			name:     "dotted key is rejected",
-			key:      "beads.secrets.api",
-			token:    jiraToken,
-			wantCode: codes.InvalidArgument,
-			wantMsg:  "invalid secret key",
+			name:       "dotted key is rejected",
+			key:        "beads.secrets.api",
+			pluginName: "jira",
+			wantCode:   codes.InvalidArgument,
+			wantMsg:    "invalid secret key",
 		},
 		{
-			name:     "empty key is rejected",
-			key:      "",
-			token:    jiraToken,
-			wantCode: codes.InvalidArgument,
-			wantMsg:  "invalid secret key",
+			name:       "empty key is rejected",
+			key:        "",
+			pluginName: "jira",
+			wantCode:   codes.InvalidArgument,
+			wantMsg:    "invalid secret key",
 		},
 		{
-			name:     "null byte in key is rejected",
-			key:      "token\x00other",
-			token:    jiraToken,
-			wantCode: codes.InvalidArgument,
-			wantMsg:  "invalid secret key",
+			name:       "null byte in key is rejected",
+			key:        "token\x00other",
+			pluginName: "jira",
+			wantCode:   codes.InvalidArgument,
+			wantMsg:    "invalid secret key",
 		},
 		{
-			name:     "path separator in key is rejected",
-			key:      "../etc/passwd",
-			token:    jiraToken,
-			wantCode: codes.InvalidArgument,
-			wantMsg:  "invalid secret key",
+			name:       "path separator in key is rejected",
+			key:        "../etc/passwd",
+			pluginName: "jira",
+			wantCode:   codes.InvalidArgument,
+			wantMsg:    "invalid secret key",
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			resp, err := proxy.GetSecret(t.Context(), &apiv1.GetSecretRequest{
-				Key:   tc.key,
-				Token: tc.token,
+			ctx := t.Context()
+			if tc.pluginName != "" {
+				ctx = withPlugin(ctx, tc.pluginName)
+			}
+
+			resp, err := proxy.GetSecret(ctx, &apiv1.GetSecretRequest{
+				Key: tc.key,
 			})
 
 			if tc.wantCode != codes.OK {
@@ -168,67 +171,67 @@ func TestGetSecrets(t *testing.T) {
 		return val, nil
 	}
 
-	store := newTokenStore()
-	proxy := NewHostSecretProxy(store, resolver)
-	jiraToken := "jira-tok-123"
-	store.Register(jiraToken, "jira")
+	proxy := NewHostSecretProxy(resolver)
 
 	tests := []struct {
-		name     string
-		keys     []string
-		token    string
-		wantKeys []string
-		wantCode codes.Code
+		name       string
+		keys       []string
+		pluginName string
+		wantKeys   []string
+		wantCode   codes.Code
 	}{
 		{
-			name:     "all keys found",
-			keys:     []string{"token", "url"},
-			token:    jiraToken,
-			wantKeys: []string{"token", "url"},
+			name:       "all keys found",
+			keys:       []string{"token", "url"},
+			pluginName: "jira",
+			wantKeys:   []string{"token", "url"},
 		},
 		{
-			name:     "partial keys found",
-			keys:     []string{"token", "missing"},
-			token:    jiraToken,
-			wantKeys: []string{"token"},
+			name:       "partial keys found",
+			keys:       []string{"token", "missing"},
+			pluginName: "jira",
+			wantKeys:   []string{"token"},
 		},
 		{
-			name:     "no keys found",
-			keys:     []string{"missing1", "missing2"},
-			token:    jiraToken,
-			wantKeys: []string{},
+			name:       "no keys found",
+			keys:       []string{"missing1", "missing2"},
+			pluginName: "jira",
+			wantKeys:   []string{},
 		},
 		{
-			name:     "invalid keys are omitted",
-			keys:     []string{"token", "bad.key", "../path", "url"},
-			token:    jiraToken,
-			wantKeys: []string{"token", "url"},
+			name:       "invalid keys are omitted",
+			keys:       []string{"token", "bad.key", "../path", "url"},
+			pluginName: "jira",
+			wantKeys:   []string{"token", "url"},
 		},
 		{
-			name:     "empty keys list",
-			keys:     []string{},
-			token:    jiraToken,
-			wantKeys: []string{},
+			name:       "empty keys list",
+			keys:       []string{},
+			pluginName: "jira",
+			wantKeys:   []string{},
 		},
 		{
-			name:     "invalid token",
+			name:     "missing plugin identity",
 			keys:     []string{"token"},
-			token:    "wrong-token",
 			wantCode: codes.Unauthenticated,
 		},
 		{
-			name:     "too many keys returns InvalidArgument",
-			keys:     make([]string, maxBulkSecretKeys+1),
-			token:    jiraToken,
-			wantCode: codes.InvalidArgument,
+			name:       "too many keys returns InvalidArgument",
+			keys:       make([]string, maxBulkSecretKeys+1),
+			pluginName: "jira",
+			wantCode:   codes.InvalidArgument,
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			resp, err := proxy.GetSecrets(t.Context(), &apiv1.GetSecretsRequest{
-				Keys:  tc.keys,
-				Token: tc.token,
+			ctx := t.Context()
+			if tc.pluginName != "" {
+				ctx = withPlugin(ctx, tc.pluginName)
+			}
+
+			resp, err := proxy.GetSecrets(ctx, &apiv1.GetSecretsRequest{
+				Keys: tc.keys,
 			})
 
 			if tc.wantCode != codes.OK {
@@ -267,95 +270,27 @@ func TestGetSecrets(t *testing.T) {
 	}
 }
 
-func TestRefreshToken(t *testing.T) {
+func TestRefreshToken_Unimplemented(t *testing.T) {
 	resolver := func(_, _ string) (string, error) { return "val", nil }
+	proxy := NewHostSecretProxy(resolver)
 
-	tests := []struct {
-		name       string
-		token      string
-		registered bool
-		wantCode   codes.Code
-	}{
-		{
-			name:       "successful rotation returns new token",
-			token:      "original-tok",
-			registered: true,
-		},
-		{
-			name:     "invalid token returns Unauthenticated",
-			token:    "nonexistent",
-			wantCode: codes.Unauthenticated,
-		},
+	resp, err := proxy.RefreshToken(t.Context(), &apiv1.RefreshTokenRequest{
+		CurrentToken: "some-token",
+	})
+
+	if resp != nil {
+		t.Errorf("expected nil response, got %v", resp)
+	}
+	if err == nil {
+		t.Fatal("expected error, got nil")
 	}
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			store := newTokenStore()
-			proxy := NewHostSecretProxy(store, resolver)
-
-			if tc.registered {
-				store.Register(tc.token, "myplugin")
-			}
-
-			resp, err := proxy.RefreshToken(t.Context(), &apiv1.RefreshTokenRequest{
-				CurrentToken: tc.token,
-			})
-
-			if tc.wantCode != codes.OK {
-				if err == nil {
-					t.Fatalf("expected error with code %v, got nil", tc.wantCode)
-				}
-				if status.Code(err) != tc.wantCode {
-					t.Errorf("code: got %v, want %v", status.Code(err), tc.wantCode)
-				}
-				return
-			}
-
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if resp.NewToken == "" {
-				t.Fatal("new token is empty")
-			}
-			if resp.NewToken == tc.token {
-				t.Error("new token should differ from original")
-			}
-
-			// Old token should no longer resolve.
-			_, getErr := proxy.GetSecret(t.Context(), &apiv1.GetSecretRequest{Key: "k", Token: tc.token})
-			if status.Code(getErr) != codes.Unauthenticated {
-				t.Errorf("old token: expected Unauthenticated, got %v", getErr)
-			}
-
-			// New token should resolve.
-			_, getErr = proxy.GetSecret(t.Context(), &apiv1.GetSecretRequest{Key: "k", Token: resp.NewToken})
-			if getErr != nil {
-				t.Errorf("new token: unexpected error: %v", getErr)
-			}
-		})
+	st, ok := status.FromError(err)
+	if !ok {
+		t.Fatalf("expected gRPC status error, got %v", err)
 	}
-}
-
-func TestTokenStore_UnregisterPlugin(t *testing.T) {
-	store := newTokenStore()
-	name := "my-plugin"
-	t1 := "token-1"
-	t2 := "token-2"
-
-	store.Register(t1, name)
-	store.Register(t2, name)
-	store.Register("other-token", "other-plugin")
-
-	store.UnregisterPlugin(name)
-
-	if _, ok := store.Resolve(t1); ok {
-		t.Errorf("token %s still exists after UnregisterPlugin", t1)
-	}
-	if _, ok := store.Resolve(t2); ok {
-		t.Errorf("token %s still exists after UnregisterPlugin", t2)
-	}
-	if _, ok := store.Resolve("other-token"); !ok {
-		t.Error("other-token was incorrectly removed")
+	if st.Code() != codes.Unimplemented {
+		t.Errorf("expected Unimplemented, got %v", st.Code())
 	}
 }
 
@@ -366,11 +301,10 @@ func TestGetSecret_InternalError(t *testing.T) {
 		return "", rigerrors.New("keychain access failed")
 	}
 
-	store := newTokenStore()
-	proxy := NewHostSecretProxy(store, resolver)
-	store.Register("tok", "myplugin")
+	proxy := NewHostSecretProxy(resolver)
+	ctx := withPlugin(t.Context(), "myplugin")
 
-	_, err := proxy.GetSecret(t.Context(), &apiv1.GetSecretRequest{Key: "k", Token: "tok"})
+	_, err := proxy.GetSecret(ctx, &apiv1.GetSecretRequest{Key: "k"})
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -384,25 +318,5 @@ func TestGetSecret_InternalError(t *testing.T) {
 	}
 	if st.Message() != "secret resolution failed" {
 		t.Errorf("message: got %q, want %q", st.Message(), "secret resolution failed")
-	}
-}
-
-func TestGetSecret_Unregister(t *testing.T) {
-	resolver := func(_, _ string) (string, error) { return "val", nil }
-	store := newTokenStore()
-	proxy := NewHostSecretProxy(store, resolver)
-	token := "tok"
-	store.Register(token, "p")
-
-	_, err := proxy.GetSecret(t.Context(), &apiv1.GetSecretRequest{Key: "k", Token: token})
-	if err != nil {
-		t.Fatalf("expected success before unregister, got %v", err)
-	}
-
-	store.Unregister(token)
-
-	_, err = proxy.GetSecret(t.Context(), &apiv1.GetSecretRequest{Key: "k", Token: token})
-	if status.Code(err) != codes.Unauthenticated {
-		t.Errorf("expected Unauthenticated after unregister, got %v", err)
 	}
 }

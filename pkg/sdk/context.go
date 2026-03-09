@@ -25,7 +25,6 @@ type ContextInfo struct {
 type Context struct {
 	mu       sync.Mutex
 	endpoint string
-	token    string
 	conn     *grpc.ClientConn
 	client   apiv1.ContextServiceClient
 	dialOpts []grpc.DialOption
@@ -41,20 +40,11 @@ func WithContextHostEndpoint(endpoint string) ContextOption {
 	}
 }
 
-// WithContextToken overrides the host's secret token.
-func WithContextToken(token string) ContextOption {
-	return func(c *Context) {
-		c.token = token
-	}
-}
-
 // NewContext creates a new Context client.
-// It reads the host's endpoint from the RIG_HOST_ENDPOINT environment variable and
-// the secret token from RIG_HOST_SECRET_TOKEN by default.
+// It reads the host's endpoint from the RIG_HOST_ENDPOINT environment variable by default.
 func NewContext(opts ...ContextOption) *Context {
 	c := &Context{
 		endpoint: os.Getenv("RIG_HOST_ENDPOINT"),
-		token:    os.Getenv("RIG_HOST_SECRET_TOKEN"),
 	}
 	for _, opt := range opts {
 		opt(c)
@@ -76,18 +66,17 @@ func (c *Context) Close() error {
 	return nil
 }
 
-// connect returns the gRPC client and the current token under a single lock
-// acquisition, eliminating the acquire-release-acquire window.
-func (c *Context) connect() (apiv1.ContextServiceClient, string, error) {
+// connect returns the gRPC client.
+func (c *Context) connect() (apiv1.ContextServiceClient, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	if c.client != nil {
-		return c.client, c.token, nil
+		return c.client, nil
 	}
 
 	if c.endpoint == "" {
-		return nil, "", ErrNoEndpoint
+		return nil, ErrNoEndpoint
 	}
 
 	opts := append([]grpc.DialOption{
@@ -100,29 +89,27 @@ func (c *Context) connect() (apiv1.ContextServiceClient, string, error) {
 	}
 
 	if !strings.HasPrefix(endpoint, "unix://") {
-		return nil, "", errors.New("sdk: context service requires a unix:// endpoint for secure transport")
+		return nil, errors.New("sdk: context service requires a unix:// endpoint for secure transport")
 	}
 
 	conn, err := grpc.NewClient(endpoint, opts...)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
 	c.conn = conn
 	c.client = apiv1.NewContextServiceClient(conn)
-	return c.client, c.token, nil
+	return c.client, nil
 }
 
 // GetContext retrieves the current environment context from the host.
 func (c *Context) GetContext(ctx context.Context) (*ContextInfo, error) {
-	client, token, err := c.connect()
+	client, err := c.connect()
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := client.GetContext(ctx, &apiv1.GetContextRequest{
-		Token: token,
-	})
+	resp, err := client.GetContext(ctx, &apiv1.GetContextRequest{})
 	if err != nil {
 		return nil, mapError(err)
 	}

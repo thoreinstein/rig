@@ -33,19 +33,17 @@ type SecretServiceClient interface {
 	// GetSecret retrieves a secret value by key from the host's configuration/keychain.
 	// Returns:
 	//   - NOT_FOUND: Key doesn't exist
-	//   - UNAUTHENTICATED: Invalid/expired/missing token
+	//   - UNAUTHENTICATED: Missing plugin identity
 	//   - INVALID_ARGUMENT: Malformed key
 	GetSecret(ctx context.Context, in *GetSecretRequest, opts ...grpc.CallOption) (*GetSecretResponse, error)
 	// GetSecrets retrieves multiple secret values by key in a single request.
 	// Returns:
-	//   - UNAUTHENTICATED: Invalid/expired/missing token
+	//   - UNAUTHENTICATED: Missing plugin identity
 	//
 	// Partial failures return available secrets with missing keys omitted from the map.
 	GetSecrets(ctx context.Context, in *GetSecretsRequest, opts ...grpc.CallOption) (*GetSecretsResponse, error)
-	// RefreshToken rotates the current session token.
-	// Returns:
-	//   - UNAUTHENTICATED: Current token is invalid
-	//   - INTERNAL: Token rotation failed due to an internal error
+	// Deprecated: Do not use.
+	// RefreshToken is deprecated and no-op. Session tokens are no longer used.
 	RefreshToken(ctx context.Context, in *RefreshTokenRequest, opts ...grpc.CallOption) (*RefreshTokenResponse, error)
 }
 
@@ -77,6 +75,7 @@ func (c *secretServiceClient) GetSecrets(ctx context.Context, in *GetSecretsRequ
 	return out, nil
 }
 
+// Deprecated: Do not use.
 func (c *secretServiceClient) RefreshToken(ctx context.Context, in *RefreshTokenRequest, opts ...grpc.CallOption) (*RefreshTokenResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RefreshTokenResponse)
@@ -96,19 +95,17 @@ type SecretServiceServer interface {
 	// GetSecret retrieves a secret value by key from the host's configuration/keychain.
 	// Returns:
 	//   - NOT_FOUND: Key doesn't exist
-	//   - UNAUTHENTICATED: Invalid/expired/missing token
+	//   - UNAUTHENTICATED: Missing plugin identity
 	//   - INVALID_ARGUMENT: Malformed key
 	GetSecret(context.Context, *GetSecretRequest) (*GetSecretResponse, error)
 	// GetSecrets retrieves multiple secret values by key in a single request.
 	// Returns:
-	//   - UNAUTHENTICATED: Invalid/expired/missing token
+	//   - UNAUTHENTICATED: Missing plugin identity
 	//
 	// Partial failures return available secrets with missing keys omitted from the map.
 	GetSecrets(context.Context, *GetSecretsRequest) (*GetSecretsResponse, error)
-	// RefreshToken rotates the current session token.
-	// Returns:
-	//   - UNAUTHENTICATED: Current token is invalid
-	//   - INTERNAL: Token rotation failed due to an internal error
+	// Deprecated: Do not use.
+	// RefreshToken is deprecated and no-op. Session tokens are no longer used.
 	RefreshToken(context.Context, *RefreshTokenRequest) (*RefreshTokenResponse, error)
 	mustEmbedUnimplementedSecretServiceServer()
 }

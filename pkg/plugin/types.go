@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"context"
+	"net"
 	"os"
 	"sync"
 	"time"
@@ -10,6 +11,14 @@ import (
 	"google.golang.org/grpc"
 
 	apiv1 "thoreinstein.com/rig/pkg/api/v1"
+)
+
+// contextKey is a private type for context value keys used across the plugin package.
+type contextKey string
+
+const (
+	// pluginNameKey is the context key for the plugin name injected by the interceptor.
+	pluginNameKey contextKey = "pluginName"
 )
 
 // Status represents the compatibility status of a plugin
@@ -91,7 +100,9 @@ type Plugin struct {
 	process         *os.Process
 	socketDir       string
 	socketPath      string
-	secretToken     string
+	hostPath        string
+	hostListener    net.Listener
+	hostServer      *grpc.Server
 	client          apiv1.PluginServiceClient
 	AssistantClient apiv1.AssistantServiceClient
 	CommandClient   apiv1.CommandServiceClient

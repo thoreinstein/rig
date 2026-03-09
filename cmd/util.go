@@ -34,7 +34,7 @@ func newPluginManager(cfg *config.Config, projectPath string) (*plugin.Manager, 
 		return nil, nil, errors.Wrap(err, "failed to initialize plugin scanner")
 	}
 
-	executor := plugin.NewExecutor("")
+	executor := plugin.NewExecutor()
 
 	manager, err := plugin.NewManager(executor, scanner, GetVersion(), cfg.PluginConfig, slog.Default(), plugin.WithGlobalEnvAllowList(cfg.PluginGlobal.EnvAllowList))
 	if err != nil {

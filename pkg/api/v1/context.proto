@@ -10,13 +10,14 @@ option go_package = "thoreinstein.com/rig/pkg/api/v1;apiv1";
 service ContextService {
   // GetContext retrieves current environment metadata including paths and ticket IDs.
   // Returns:
-  //   - UNAUTHENTICATED: Invalid/expired/missing token
+  //   - UNAUTHENTICATED: Missing plugin identity
   rpc GetContext(GetContextRequest) returns (GetContextResponse);
 }
 
 message GetContextRequest {
-  string token = 1; // Secret token provided to the plugin via RIG_HOST_SECRET_TOKEN
+  string token = 1 [deprecated = true]; // Deprecated: token-based auth is replaced by connection-bound identity.
 }
+
 
 message GetContextResponse {
   string project_root = 1;

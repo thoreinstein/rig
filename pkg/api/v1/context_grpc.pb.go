@@ -30,7 +30,7 @@ const (
 type ContextServiceClient interface {
 	// GetContext retrieves current environment metadata including paths and ticket IDs.
 	// Returns:
-	//   - UNAUTHENTICATED: Invalid/expired/missing token
+	//   - UNAUTHENTICATED: Missing plugin identity
 	GetContext(ctx context.Context, in *GetContextRequest, opts ...grpc.CallOption) (*GetContextResponse, error)
 }
 
@@ -60,7 +60,7 @@ func (c *contextServiceClient) GetContext(ctx context.Context, in *GetContextReq
 type ContextServiceServer interface {
 	// GetContext retrieves current environment metadata including paths and ticket IDs.
 	// Returns:
-	//   - UNAUTHENTICATED: Invalid/expired/missing token
+	//   - UNAUTHENTICATED: Missing plugin identity
 	GetContext(context.Context, *GetContextRequest) (*GetContextResponse, error)
 	mustEmbedUnimplementedContextServiceServer()
 }

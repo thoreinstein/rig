@@ -59,7 +59,7 @@ func newDaemonStartCmd() *cobra.Command {
 				return err
 			}
 
-			executor := plugin.NewExecutor("")
+			executor := plugin.NewExecutor()
 
 			// Load configuration to get daemon settings
 			if err := initConfig(); err != nil {

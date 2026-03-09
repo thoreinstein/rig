@@ -24,23 +24,21 @@ type SecretResolver func(pluginName, secretKey string) (string, error)
 // HostSecretProxy implements apiv1.SecretServiceServer.
 type HostSecretProxy struct {
 	apiv1.UnimplementedSecretServiceServer
-	store    *tokenStore
 	resolver SecretResolver
 }
 
 // NewHostSecretProxy creates a new HostSecretProxy.
-func NewHostSecretProxy(store *tokenStore, resolver SecretResolver) *HostSecretProxy {
+func NewHostSecretProxy(resolver SecretResolver) *HostSecretProxy {
 	return &HostSecretProxy{
-		store:    store,
 		resolver: resolver,
 	}
 }
 
 // GetSecret resolves a secret key from the host's configuration.
 func (s *HostSecretProxy) GetSecret(ctx context.Context, req *apiv1.GetSecretRequest) (*apiv1.GetSecretResponse, error) {
-	pluginName, ok := s.store.Resolve(req.Token)
+	pluginName, ok := pluginNameFromContext(ctx)
 	if !ok || pluginName == "" {
-		return nil, status.Errorf(codes.Unauthenticated, "invalid secret token")
+		return nil, status.Errorf(codes.Unauthenticated, "missing plugin identity")
 	}
 
 	// Validate the requested key to prevent dot-injection, null bytes, and
@@ -72,9 +70,9 @@ const maxBulkSecretKeys = 64
 // GetSecrets resolves multiple secret keys in a single request.
 // Missing keys are omitted from the response map (partial-failure semantics).
 func (s *HostSecretProxy) GetSecrets(ctx context.Context, req *apiv1.GetSecretsRequest) (*apiv1.GetSecretsResponse, error) {
-	pluginName, ok := s.store.Resolve(req.Token)
+	pluginName, ok := pluginNameFromContext(ctx)
 	if !ok || pluginName == "" {
-		return nil, status.Errorf(codes.Unauthenticated, "invalid secret token")
+		return nil, status.Errorf(codes.Unauthenticated, "missing plugin identity")
 	}
 
 	if len(req.Keys) > maxBulkSecretKeys {
@@ -97,18 +95,7 @@ func (s *HostSecretProxy) GetSecrets(ctx context.Context, req *apiv1.GetSecretsR
 	return &apiv1.GetSecretsResponse{Secrets: secrets}, nil
 }
 
-// RefreshToken rotates a plugin's session token.
-// Note: ExpiresAt is not currently populated in the response.
-func (s *HostSecretProxy) RefreshToken(_ context.Context, req *apiv1.RefreshTokenRequest) (*apiv1.RefreshTokenResponse, error) {
-	_, newToken, err := s.store.Rotate(req.CurrentToken)
-	if err != nil {
-		if rigerrors.Is(err, ErrTokenNotFound) {
-			return nil, status.Errorf(codes.Unauthenticated, "invalid secret token")
-		}
-		return nil, status.Errorf(codes.Internal, "failed to rotate token")
-	}
-
-	return &apiv1.RefreshTokenResponse{
-		NewToken: newToken,
-	}, nil
+// RefreshToken is deprecated; session tokens are no longer used.
+func (s *HostSecretProxy) RefreshToken(_ context.Context, _ *apiv1.RefreshTokenRequest) (*apiv1.RefreshTokenResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "RefreshToken is deprecated; session tokens are no longer used")
 }

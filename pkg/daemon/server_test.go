@@ -31,8 +31,6 @@ func (m *mockPluginExecutor) Handshake(ctx context.Context, p *plugin.Plugin, ri
 	p.Capabilities = []*apiv1.Capability{{Name: plugin.CommandCapability}}
 	return nil
 }
-func (m *mockPluginExecutor) SetHostEndpoint(path string) {}
-
 func TestDaemonServer_Execute(t *testing.T) {
 	lis := bufconn.Listen(1024 * 1024)
 	s := grpc.NewServer()

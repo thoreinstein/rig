@@ -84,9 +84,10 @@ func (x *SecretValue) GetLastUpdated() *timestamppb.Timestamp {
 }
 
 type GetSecretRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Key           string                 `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
-	Token         string                 `protobuf:"bytes,2,opt,name=token,proto3" json:"token,omitempty"` // Secret token provided to the plugin via RIG_HOST_SECRET_TOKEN
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Key   string                 `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
+	// Deprecated: Marked as deprecated in pkg/api/v1/secret.proto.
+	Token         string `protobuf:"bytes,2,opt,name=token,proto3" json:"token,omitempty"` // Deprecated: token-based auth is replaced by connection-bound identity.
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -128,6 +129,7 @@ func (x *GetSecretRequest) GetKey() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in pkg/api/v1/secret.proto.
 func (x *GetSecretRequest) GetToken() string {
 	if x != nil {
 		return x.Token
@@ -190,9 +192,10 @@ func (x *GetSecretResponse) GetSecret() *SecretValue {
 }
 
 type GetSecretsRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Keys          []string               `protobuf:"bytes,1,rep,name=keys,proto3" json:"keys,omitempty"`
-	Token         string                 `protobuf:"bytes,2,opt,name=token,proto3" json:"token,omitempty"` // Secret token provided to the plugin via RIG_HOST_SECRET_TOKEN
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Keys  []string               `protobuf:"bytes,1,rep,name=keys,proto3" json:"keys,omitempty"`
+	// Deprecated: Marked as deprecated in pkg/api/v1/secret.proto.
+	Token         string `protobuf:"bytes,2,opt,name=token,proto3" json:"token,omitempty"` // Deprecated: token-based auth is replaced by connection-bound identity.
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -234,6 +237,7 @@ func (x *GetSecretsRequest) GetKeys() []string {
 	return nil
 }
 
+// Deprecated: Marked as deprecated in pkg/api/v1/secret.proto.
 func (x *GetSecretsRequest) GetToken() string {
 	if x != nil {
 		return x.Token
@@ -390,16 +394,16 @@ const file_pkg_api_v1_secret_proto_rawDesc = "" +
 	"\vSecretValue\x12\x14\n" +
 	"\x05value\x18\x01 \x01(\tR\x05value\x12+\n" +
 	"\x03ttl\x18\x02 \x01(\v2\x19.google.protobuf.DurationR\x03ttl\x12=\n" +
-	"\flast_updated\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\vlastUpdated\":\n" +
+	"\flast_updated\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\vlastUpdated\">\n" +
 	"\x10GetSecretRequest\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05token\x18\x02 \x01(\tR\x05token\"Z\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x18\n" +
+	"\x05token\x18\x02 \x01(\tB\x02\x18\x01R\x05token\"Z\n" +
 	"\x11GetSecretResponse\x12\x18\n" +
 	"\x05value\x18\x01 \x01(\tB\x02\x18\x01R\x05value\x12+\n" +
-	"\x06secret\x18\x02 \x01(\v2\x13.rig.v1.SecretValueR\x06secret\"=\n" +
+	"\x06secret\x18\x02 \x01(\v2\x13.rig.v1.SecretValueR\x06secret\"A\n" +
 	"\x11GetSecretsRequest\x12\x12\n" +
-	"\x04keys\x18\x01 \x03(\tR\x04keys\x12\x14\n" +
-	"\x05token\x18\x02 \x01(\tR\x05token\"\xa8\x01\n" +
+	"\x04keys\x18\x01 \x03(\tR\x04keys\x12\x18\n" +
+	"\x05token\x18\x02 \x01(\tB\x02\x18\x01R\x05token\"\xa8\x01\n" +
 	"\x12GetSecretsResponse\x12A\n" +
 	"\asecrets\x18\x01 \x03(\v2'.rig.v1.GetSecretsResponse.SecretsEntryR\asecrets\x1aO\n" +
 	"\fSecretsEntry\x12\x10\n" +
@@ -410,12 +414,12 @@ const file_pkg_api_v1_secret_proto_rawDesc = "" +
 	"\x14RefreshTokenResponse\x12\x1b\n" +
 	"\tnew_token\x18\x01 \x01(\tR\bnewToken\x129\n" +
 	"\n" +
-	"expires_at\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt2\xe1\x01\n" +
+	"expires_at\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt2\xe6\x01\n" +
 	"\rSecretService\x12@\n" +
 	"\tGetSecret\x12\x18.rig.v1.GetSecretRequest\x1a\x19.rig.v1.GetSecretResponse\x12C\n" +
 	"\n" +
-	"GetSecrets\x12\x19.rig.v1.GetSecretsRequest\x1a\x1a.rig.v1.GetSecretsResponse\x12I\n" +
-	"\fRefreshToken\x12\x1b.rig.v1.RefreshTokenRequest\x1a\x1c.rig.v1.RefreshTokenResponseB'Z%thoreinstein.com/rig/pkg/api/v1;apiv1b\x06proto3"
+	"GetSecrets\x12\x19.rig.v1.GetSecretsRequest\x1a\x1a.rig.v1.GetSecretsResponse\x12N\n" +
+	"\fRefreshToken\x12\x1b.rig.v1.RefreshTokenRequest\x1a\x1c.rig.v1.RefreshTokenResponse\"\x03\x88\x02\x01B'Z%thoreinstein.com/rig/pkg/api/v1;apiv1b\x06proto3"
 
 var (
 	file_pkg_api_v1_secret_proto_rawDescOnce sync.Once

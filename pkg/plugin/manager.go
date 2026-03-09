@@ -31,7 +31,6 @@ type pluginExecutor interface {
 	Stop(p *Plugin) error
 	PrepareClient(p *Plugin) error
 	Handshake(ctx context.Context, p *Plugin, rigVersion, apiVersion string, configJSON []byte) error
-	SetHostEndpoint(path string)
 	SetGlobalEnvAllowList(list []string)
 }
 
@@ -53,7 +52,7 @@ func WithUIServer(srv apiv1.UIServiceServer) ManagerOption {
 }
 
 // WithPluginContext sets the environment context provided to plugins.
-// The actual HostContextProxy is built once in NewManager with the canonical tokenStore.
+// The actual HostContextProxy is built once in NewManager.
 func WithPluginContext(ctx PluginContext) ManagerOption {
 	return func(m *Manager) {
 		m.pluginCtx = &ctx
@@ -76,15 +75,10 @@ type Manager struct {
 	logger         *slog.Logger
 
 	// Host-side Proxy Services
-	hostServer         *grpc.Server
 	hostUI             apiv1.UIServiceServer
-	tokenStore         *tokenStore
 	secretProxy        *HostSecretProxy
 	contextProxy       *HostContextProxy
 	pluginCtx          *PluginContext // set by WithPluginContext, consumed once by NewManager
-	hostL              net.Listener
-	hostPath           string
-	hostDir            string
 	globalEnvAllowList []string
 
 	secretCache   sync.Map           // map[pluginName]map[string]any — shared with resolver
@@ -94,47 +88,14 @@ type Manager struct {
 	plugins map[string]*Plugin
 }
 
-// NewManager creates a new plugin manager and starts the host-side UI Proxy Service.
+// NewManager creates a new plugin manager.
 func NewManager(executor pluginExecutor, scanner *Scanner, rigVersion string, configProvider ConfigProvider, logger *slog.Logger, opts ...ManagerOption) (*Manager, error) {
-	// 1. Create a private directory and generate unique UDS path for the host server
-	hostDir, err := os.MkdirTemp("", "rig-h-")
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to create temporary directory for host socket")
-	}
-	if err := os.Chmod(hostDir, 0o700); err != nil {
-		_ = os.RemoveAll(hostDir)
-		return nil, errors.Wrap(err, "failed to set permissions on temporary directory for host socket")
-	}
-
-	u, err := uuid.NewRandom()
-	if err != nil {
-		_ = os.RemoveAll(hostDir)
-		return nil, errors.Wrap(err, "failed to generate unique identifier for host socket")
-	}
-	hostPath := filepath.Join(hostDir, fmt.Sprintf("rig-h-%s.sock", u.String()[:8]))
-
-	// 2. Start host gRPC server
-	lis, err := net.Listen("unix", hostPath)
-	if err != nil {
-		_ = os.RemoveAll(hostDir)
-		return nil, errors.Wrapf(err, "failed to listen on host socket %q", hostPath)
-	}
-	// Restrict socket permissions to the current user only.
-	if err := os.Chmod(hostPath, 0o600); err != nil {
-		lis.Close()
-		_ = os.RemoveAll(hostDir)
-		return nil, errors.Wrapf(err, "failed to set permissions on host socket %q", hostPath)
-	}
-
 	m := &Manager{
 		executor:       executor,
 		scanner:        scanner,
 		rigVersion:     rigVersion,
 		configProvider: configProvider,
 		logger:         logger,
-		hostL:          lis,
-		hostPath:       hostPath,
-		hostDir:        hostDir,
 		plugins:        make(map[string]*Plugin),
 	}
 
@@ -149,24 +110,13 @@ func NewManager(executor pluginExecutor, scanner *Scanner, rigVersion string, co
 	m.executor.SetGlobalEnvAllowList(m.globalEnvAllowList)
 
 	// Host secret proxy uses the config provider to resolve secrets.
-	// The resolver receives pluginName and secretKey as separate, validated
-	// parameters — no dot-delimited key parsing required.
-	//
-	// The secretCache (on Manager) caches the parsed secrets map per plugin
-	// to avoid calling configProvider and json.Unmarshal on every GetSecret
-	// request. Plugin configs are immutable at runtime, so the cache never
-	// needs invalidation. The cache is also seeded by getOrStartPlugin to
-	// avoid a redundant parse on first GetSecret.
 	resolver := func(pluginName, secretKey string) (string, error) {
 		// 1. Look up or populate the per-plugin secrets map.
-		// singleflight deduplicates concurrent cache-miss resolutions for
-		// the same plugin so only one goroutine parses the config.
 		var secrets map[string]any
 		if cached, ok := m.secretCache.Load(pluginName); ok {
 			secrets = cached.(map[string]any)
 		} else {
 			val, err, _ := m.secretCacheSF.Do(pluginName, func() (any, error) {
-				// Double-check after winning the flight.
 				if cached, ok := m.secretCache.Load(pluginName); ok {
 					return cached, nil
 				}
@@ -225,40 +175,60 @@ func NewManager(executor pluginExecutor, scanner *Scanner, rigVersion string, co
 
 		return strVal, nil
 	}
+	m.secretProxy = NewHostSecretProxy(resolver)
 
-	m.tokenStore = newTokenStore()
-	m.secretProxy = NewHostSecretProxy(m.tokenStore, resolver)
-
-	// Build the context proxy once with the canonical tokenStore.
+	// Build the context proxy once with the canonical metadata.
 	pCtx := PluginContext{}
 	if m.pluginCtx != nil {
 		pCtx = *m.pluginCtx
 		m.pluginCtx = nil // consumed; prevent stale references
 	}
-	m.contextProxy = NewHostContextProxy(m.tokenStore, pCtx, m.logger)
+	m.contextProxy = NewHostContextProxy(pCtx, m.logger)
 
-	srv := grpc.NewServer()
+	return m, nil
+}
+
+// newPluginHostServer creates a unique gRPC server and UDS listener for a single plugin.
+func (m *Manager) newPluginHostServer(p *Plugin) (*grpc.Server, net.Listener, string, error) {
+	// 1. Create a private directory for the host socket
+	hostDir, err := os.MkdirTemp("", "rig-ph-")
+	if err != nil {
+		return nil, nil, "", errors.Wrap(err, "failed to create temporary directory for plugin host socket")
+	}
+	if err := os.Chmod(hostDir, 0o700); err != nil {
+		_ = os.RemoveAll(hostDir)
+		return nil, nil, "", errors.Wrap(err, "failed to set permissions on temporary directory for plugin host socket")
+	}
+
+	u, err := uuid.NewRandom()
+	if err != nil {
+		_ = os.RemoveAll(hostDir)
+		return nil, nil, "", errors.Wrap(err, "failed to generate unique identifier for plugin host socket")
+	}
+	// Use truncated UUID to keep path under 104 characters (Darwin limit)
+	hostPath := filepath.Join(hostDir, fmt.Sprintf("rig-ph-%s.sock", u.String()[:8]))
+	if len(hostPath) >= 104 {
+		_ = os.RemoveAll(hostDir)
+		return nil, nil, "", errors.Newf("plugin host socket path too long: %d characters (max 103)", len(hostPath))
+	}
+
+	// 2. Start host gRPC server for this plugin.
+	// Set restrictive umask so the socket is created with 0o600 from the start,
+	// closing the brief permission window between Listen and Chmod.
+	oldMask := setUmask(0o177)
+	lis, err := net.Listen("unix", hostPath)
+	setUmask(oldMask)
+	if err != nil {
+		_ = os.RemoveAll(hostDir)
+		return nil, nil, "", errors.Wrapf(err, "failed to listen on plugin host socket %q", hostPath)
+	}
+
+	srv := grpc.NewServer(grpc.UnaryInterceptor(pluginIdentityInterceptor(p)))
 	apiv1.RegisterUIServiceServer(srv, m.hostUI)
 	apiv1.RegisterSecretServiceServer(srv, m.secretProxy)
 	apiv1.RegisterContextServiceServer(srv, m.contextProxy)
-	m.hostServer = srv
 
-	go func() {
-		if err := srv.Serve(lis); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
-			if m.logger != nil {
-				m.logger.Error("host gRPC server failed", "error", err)
-			} else {
-				fmt.Fprintf(os.Stderr, "host gRPC server failed: %v\n", err)
-			}
-		}
-	}()
-
-	// 3. Configure executor with host endpoint.
-	// This works despite the interface being passed by value because the
-	// implementation is expected to be a mutable pointer type.
-	executor.SetHostEndpoint(hostPath)
-
-	return m, nil
+	return srv, lis, hostPath, nil
 }
 
 // GetAssistantClient returns a gRPC client for the specified assistant plugin.
@@ -563,14 +533,6 @@ func (m *Manager) getOrStartPlugin(ctx context.Context, name string) (*Plugin, e
 		return nil, ErrPluginNotFound
 	}
 
-	// Generate a unique secret token for this plugin instance
-	u, err := uuid.NewRandom()
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to generate secret token")
-	}
-	target.secretToken = u.String()
-	m.tokenStore.Register(target.secretToken, name)
-
 	// Fetch plugin configuration if provider is available
 	configJSON := []byte("{}")
 	if m.configProvider != nil {
@@ -596,23 +558,51 @@ func (m *Manager) getOrStartPlugin(ctx context.Context, name string) (*Plugin, e
 		}
 	}
 
+	// Start the host server for this plugin
+	hostServer, hostLis, hostPath, err := m.newPluginHostServer(target)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to create host server for plugin %q", name)
+	}
+	target.mu.Lock()
+	target.hostServer = hostServer
+	target.hostListener = hostLis
+	target.hostPath = hostPath
+	target.mu.Unlock()
+
+	// cleanupHost tears down the per-plugin host server in safe order:
+	// stop server (blocks until Serve returns) → close listener → remove directory.
+	cleanupHost := func(stopPlugin bool) {
+		if stopPlugin {
+			_ = m.executor.Stop(target)
+		}
+		hostServer.Stop()
+		_ = hostLis.Close()
+		_ = os.RemoveAll(filepath.Dir(hostPath))
+	}
+
+	go func() {
+		if err := hostServer.Serve(hostLis); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
+			if m.logger != nil {
+				m.logger.Error("plugin host gRPC server failed", "plugin", name, "error", err)
+			}
+		}
+	}()
+
 	// Start the plugin
 	if err := m.executor.Start(ctx, target); err != nil {
-		m.tokenStore.Unregister(target.secretToken)
+		cleanupHost(false)
 		return nil, errors.Wrapf(err, "failed to start plugin %q", name)
 	}
 
 	// Prepare the base client and handshake
 	if err := m.executor.PrepareClient(target); err != nil {
-		m.tokenStore.Unregister(target.secretToken)
-		_ = m.executor.Stop(target)
+		cleanupHost(true)
 		return nil, errors.Wrapf(err, "failed to prepare client for plugin %q", name)
 	}
 
 	// Perform handshake with host version and API contract version
 	if err := m.executor.Handshake(ctx, target, m.rigVersion, APIVersion, configJSON); err != nil {
-		m.tokenStore.Unregister(target.secretToken)
-		_ = m.executor.Stop(target)
+		cleanupHost(true)
 		return nil, errors.Wrapf(err, "handshake failed for plugin %q", name)
 	}
 
@@ -620,8 +610,7 @@ func (m *Manager) getOrStartPlugin(ctx context.Context, name string) (*Plugin, e
 	// (which might have updated the plugin's metadata/version).
 	ValidateCompatibility(target, m.rigVersion)
 	if target.Status == StatusIncompatible || target.Status == StatusError {
-		m.tokenStore.Unregister(target.secretToken)
-		_ = m.executor.Stop(target)
+		cleanupHost(true)
 		if target.Error != nil {
 			return nil, errors.Wrapf(target.Error, "plugin %q is incompatible", name)
 		}
@@ -641,15 +630,18 @@ func (m *Manager) StopAll() {
 	defer m.mu.Unlock()
 
 	for _, p := range m.plugins {
-		m.tokenStore.UnregisterPlugin(p.Name)
 		_ = m.executor.Stop(p)
+		if p.hostServer != nil {
+			p.hostServer.GracefulStop()
+		}
+		if p.hostListener != nil {
+			_ = p.hostListener.Close()
+		}
+		if p.hostPath != "" {
+			_ = os.RemoveAll(filepath.Dir(p.hostPath))
+		}
 	}
 	m.plugins = make(map[string]*Plugin)
-
-	if m.hostServer != nil {
-		m.hostServer.GracefulStop()
-		m.hostServer = nil
-	}
 
 	if m.hostUI != nil {
 		if s, ok := m.hostUI.(interface{ Stop() }); ok {
@@ -657,20 +649,6 @@ func (m *Manager) StopAll() {
 		}
 		m.hostUI = nil
 	}
-
-	if m.hostL != nil {
-		_ = m.hostL.Close()
-		m.hostL = nil
-	}
-
-	if m.hostDir != "" {
-		_ = os.RemoveAll(m.hostDir)
-		m.hostDir = ""
-		m.hostPath = ""
-	}
-
-	// Reset host endpoint in executor to avoid stale environment variables
-	m.executor.SetHostEndpoint("")
 }
 
 // ReleasePlugin signals that a session with the plugin has finished.
@@ -705,16 +683,29 @@ func (m *Manager) StopPluginIfIdle(name string, idleTimeout time.Duration) error
 		return nil
 	}
 
-	// Atomically unregister the token and remove from the map while
+	// Remove from the map while
 	// still holding m.mu, so no concurrent caller can observe a
 	// half-detached plugin.
-	m.tokenStore.UnregisterPlugin(p.Name)
 	delete(m.plugins, name)
 	m.mu.Unlock()
 
 	// Stop the fully detached plugin outside the lock to avoid
 	// holding m.mu during a potentially slow process teardown.
-	return m.executor.Stop(p)
+	// Tear down the per-plugin host server and socket directory to prevent
+	// leaking gRPC goroutines, file descriptors, and temp directories.
+	if err := m.executor.Stop(p); err != nil {
+		return err
+	}
+	if p.hostServer != nil {
+		p.hostServer.GracefulStop()
+	}
+	if p.hostListener != nil {
+		_ = p.hostListener.Close()
+	}
+	if p.hostPath != "" {
+		_ = os.RemoveAll(filepath.Dir(p.hostPath))
+	}
+	return nil
 }
 
 // ListPlugins returns a list of all currently managed plugins.

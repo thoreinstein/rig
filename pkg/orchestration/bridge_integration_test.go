@@ -24,7 +24,7 @@ func TestBridgeIntegration(t *testing.T) {
 
 	// Setup Rig Plugin Manager
 	scanner := &plugin.Scanner{Paths: []string{tmpDir}}
-	mgr, err := plugin.NewManager(plugin.NewExecutor(""), scanner, "dev", nil, nil)
+	mgr, err := plugin.NewManager(plugin.NewExecutor(), scanner, "dev", nil, nil)
 	if err != nil {
 		t.Fatalf("failed to create manager: %v", err)
 	}
