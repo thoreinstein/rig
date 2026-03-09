@@ -5,7 +5,6 @@ import (
 
 	"github.com/cockroachdb/errors"
 	"github.com/spf13/cobra"
-	"github.com/zalando/go-keyring"
 
 	"thoreinstein.com/rig/pkg/config"
 )
@@ -38,7 +37,7 @@ Use --keychain to store the value in the system keychain and save a reference UR
 			// Only treat ErrNotFound as "new entry"; other errors (locked keychain, timeout)
 			// leave isNewEntry false so we don't accidentally delete an existing secret.
 			_, err := config.GetKeychainSecret("rig", key)
-			isNewEntry = errors.Is(err, keyring.ErrNotFound)
+			isNewEntry = config.IsKeychainNotFound(err)
 
 			// Use 'rig' as service and the key as account
 			uri, err := config.StoreKeychainSecret("rig", key, value)

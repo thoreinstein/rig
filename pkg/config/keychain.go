@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/cockroachdb/errors"
 	"github.com/zalando/go-keyring"
 )
 
@@ -29,6 +30,11 @@ func resolveRecursive(m map[string]interface{}, sources SourceMap, prefix string
 		m[k] = resolved
 	}
 	return nil
+}
+
+// IsKeychainNotFound reports whether the error indicates a missing keychain entry.
+func IsKeychainNotFound(err error) bool {
+	return errors.Is(err, keyring.ErrNotFound)
 }
 
 // GetKeychainSecret retrieves a secret from the system keychain.

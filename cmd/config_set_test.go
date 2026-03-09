@@ -55,10 +55,9 @@ func TestConfigSet(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			buf := new(bytes.Buffer)
 			prevOut := rootCmd.OutOrStdout()
-			prevArgs := rootCmd.Flags().Args()
 			t.Cleanup(func() {
 				rootCmd.SetOut(prevOut)
-				rootCmd.SetArgs(prevArgs)
+				rootCmd.SetArgs(nil)
 			})
 			rootCmd.SetOut(buf)
 			rootCmd.SetArgs(tt.args)
@@ -118,10 +117,9 @@ func TestConfigSetRollback(t *testing.T) {
 
 	// Save and restore rootCmd state to prevent cross-test contamination.
 	prevOut := rootCmd.OutOrStdout()
-	prevArgs := rootCmd.Flags().Args()
 	t.Cleanup(func() {
 		rootCmd.SetOut(prevOut)
-		rootCmd.SetArgs(prevArgs)
+		rootCmd.SetArgs(nil)
 	})
 
 	// 2. Try to set keychain value
