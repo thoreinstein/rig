@@ -270,7 +270,7 @@ func TestGetSecrets(t *testing.T) {
 	}
 }
 
-func TestRefreshToken_Unimplemented(t *testing.T) {
+func TestRefreshToken_DeprecatedNoOp(t *testing.T) {
 	resolver := func(_, _ string) (string, error) { return "val", nil }
 	proxy := NewHostSecretProxy(resolver)
 
@@ -278,19 +278,11 @@ func TestRefreshToken_Unimplemented(t *testing.T) {
 		CurrentToken: "some-token",
 	})
 
-	if resp != nil {
-		t.Errorf("expected nil response, got %v", resp)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
 	}
-	if err == nil {
-		t.Fatal("expected error, got nil")
-	}
-
-	st, ok := status.FromError(err)
-	if !ok {
-		t.Fatalf("expected gRPC status error, got %v", err)
-	}
-	if st.Code() != codes.Unimplemented {
-		t.Errorf("expected Unimplemented, got %v", st.Code())
+	if resp == nil {
+		t.Fatal("expected non-nil response")
 	}
 }
 

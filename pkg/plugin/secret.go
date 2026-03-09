@@ -96,6 +96,7 @@ func (s *HostSecretProxy) GetSecrets(ctx context.Context, req *apiv1.GetSecretsR
 }
 
 // RefreshToken is deprecated; session tokens are no longer used.
+// Returns an empty success response for backward compatibility with older plugins.
 func (s *HostSecretProxy) RefreshToken(_ context.Context, _ *apiv1.RefreshTokenRequest) (*apiv1.RefreshTokenResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "RefreshToken is deprecated; session tokens are no longer used")
+	return &apiv1.RefreshTokenResponse{}, nil
 }

@@ -213,14 +213,17 @@ func (m *Manager) newPluginHostServer(p *Plugin) (*grpc.Server, net.Listener, st
 	}
 
 	// 2. Start host gRPC server for this plugin.
-	// Set restrictive umask so the socket is created with 0o600 from the start,
-	// closing the brief permission window between Listen and Chmod.
-	oldMask := setUmask(0o177)
 	lis, err := net.Listen("unix", hostPath)
-	setUmask(oldMask)
 	if err != nil {
 		_ = os.RemoveAll(hostDir)
 		return nil, nil, "", errors.Wrapf(err, "failed to listen on plugin host socket %q", hostPath)
+	}
+	// Restrict socket permissions to owner-only after creation.
+	// This avoids the process-global umask race that would affect concurrent plugin starts.
+	if err := os.Chmod(hostPath, 0o600); err != nil {
+		lis.Close()
+		_ = os.RemoveAll(hostDir)
+		return nil, nil, "", errors.Wrapf(err, "failed to restrict permissions on plugin host socket %q", hostPath)
 	}
 
 	srv := grpc.NewServer(grpc.UnaryInterceptor(pluginIdentityInterceptor(p)))
