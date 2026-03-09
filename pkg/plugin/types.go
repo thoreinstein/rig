@@ -143,7 +143,7 @@ func (p *Plugin) cleanupHost() {
 	p.mu.Unlock()
 
 	if srv != nil {
-		srv.GracefulStop()
+		srv.Stop()
 	}
 	if lis != nil {
 		_ = lis.Close()
