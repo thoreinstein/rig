@@ -110,11 +110,19 @@ func TestConfigSetRollback(t *testing.T) {
 		t.Fatalf("failed to create config file: %v", err)
 	}
 
-	// 1. Make config DIRECTORY read-only to force failure of Rename
+	// 1. Make config DIRECTORY non-writable so config update fails (at CreateTemp)
 	if err := os.Chmod(configDir, 0500); err != nil {
 		t.Fatalf("failed to chmod config dir: %v", err)
 	}
 	t.Cleanup(func() { _ = os.Chmod(configDir, 0755) })
+
+	// Save and restore rootCmd state to prevent cross-test contamination.
+	prevOut := rootCmd.OutOrStdout()
+	prevArgs := rootCmd.Flags().Args()
+	t.Cleanup(func() {
+		rootCmd.SetOut(prevOut)
+		rootCmd.SetArgs(prevArgs)
+	})
 
 	// 2. Try to set keychain value
 	args := []string{"config", "set", "fail.key", "fail-val", "--keychain"}
