@@ -70,8 +70,45 @@ func StoreConfigValue(key, value string) error {
 		return errors.Wrap(err, "failed to marshal config")
 	}
 
-	if err := os.WriteFile(configFile, data, 0600); err != nil {
-		return errors.Wrapf(err, "failed to write config file %q", configFile)
+	// Atomic write using temp-file-and-rename pattern
+	dir := filepath.Dir(configFile)
+	tmpFile, err := os.CreateTemp(dir, "config.*.toml.tmp")
+	if err != nil {
+		return errors.Wrapf(err, "failed to create temp config file in %q", dir)
+	}
+	tmpPath := tmpFile.Name()
+	closed := false
+	defer func() {
+		if !closed {
+			_ = tmpFile.Close()
+		}
+		_ = os.Remove(tmpPath) // No-op if rename succeeded
+	}()
+
+	// Get original file permissions (default to 0600)
+	perm := os.FileMode(0600)
+	if info, err := os.Stat(configFile); err == nil {
+		perm = info.Mode().Perm()
+	}
+
+	// Set permissions before writing data so content is never on disk with wrong mode
+	if err := os.Chmod(tmpPath, perm); err != nil {
+		return errors.Wrapf(err, "failed to chmod temp config file %q", tmpPath)
+	}
+
+	if _, err := tmpFile.Write(data); err != nil {
+		return errors.Wrapf(err, "failed to write to temp config file %q", tmpPath)
+	}
+	if err := tmpFile.Sync(); err != nil {
+		return errors.Wrapf(err, "failed to sync temp config file %q", tmpPath)
+	}
+	if err := tmpFile.Close(); err != nil {
+		return errors.Wrapf(err, "failed to close temp config file %q", tmpPath)
+	}
+	closed = true
+
+	if err := os.Rename(tmpPath, configFile); err != nil {
+		return errors.Wrapf(err, "failed to rename temp config file %q to %q", tmpPath, configFile)
 	}
 
 	return nil

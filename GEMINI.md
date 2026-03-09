@@ -185,6 +185,8 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 
 ### Workflow Traps
 - **Darwin UDS Path Limit Trap:** macOS (Darwin) has a strict **104-character limit** for Unix Domain Socket paths. Standard `t.TempDir()` paths often exceed this. Use `os.TempDir()` or a shorter `/tmp` prefix for UDS-based integration tests to ensure cross-platform reliability.
+- **Process-Global Umask Race:** Avoid using `syscall.Umask` to set restrictive permissions for individual file/socket creations in concurrent applications. `umask` is process-global; setting it in one goroutine affects all others. **Mitigation:** Create the resource first, then use explicit `os.Chmod` on the individual path.
+- **Workflow Serialization and Delayed Staging:** In the `implement` skill, failing to commit after each phase creates interdependent staging issues and risks accidental reversions of user fixes. **Mandate:** Always commit at the end of EVERY phase.
 - **Ghost Interface Trap:** Passing a nil pointer of a concrete type to a function expecting an interface creates a non-nil interface value (`interface{ type: *T, value: nil } != nil`). Standard `if v == nil` checks will fail to catch this, leading to nil pointer dereferences.
 - **Embedded Database Ambiguity:** Distinguish between "embedded data" (local files accessed via protocol) and "embedded engine" (in-process executor). Conflating the two can lead to incorrect driver selection and unnecessary dependency on external processes. Truly embedded logic uses library-backed drivers like `github.com/dolthub/driver`.
 - **Ghost Event Ordering Trap:** Emitting observability events before authoritative state persistence creates a durable mismatch if the state update fails. **Mitigation:** Strictly follow the **State-First Persistence** pattern.
@@ -217,6 +219,7 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 - **Readiness Polling:** The host must poll for the socket file and verify readiness with a `net.Dial` before attempting the gRPC `Handshake` RPC.
 - **Insecure Local Transport:** Use `insecure.NewCredentials()` for gRPC over UDS, as communication is restricted to the local host.
 - **Total State Reset Pattern:** Handshake logic must explicitly clear all internal state (capabilities, versions) if corresponding response fields are absent. This prevents "ghost state" where Rig retains stale information from previous sessions.
+- **Per-Plugin Host Servers:** Instead of a shared host server, the manager instantiates a dedicated `grpc.Server` and `net.Listener` for each plugin. This allows binding a fixed identity to the server's interceptor at construction time, ensuring reliable connection-bound authentication without the need for tokens.
 - **Anti-Enumeration Secret Error Pattern:** The `SecretService` MUST return identical error responses (`codes.NotFound`) for both "missing" keys and "access denied" keys. This prevents malicious or buggy plugins from enumerating the host's secret keys. Distinguish between these states internally via structured errors (e.g. `ErrSecretNotFound`) for diagnostic clarity in host logs.
 - **Stale Client Reference Trap:** Cached gRPC clients (e.g., `TicketClient`) in the `Plugin` struct MUST be explicitly nil-ed out in the `cleanup()` method during plugin stops or restarts. Failing to do so causes "connection closed" errors when the host attempts to use a stale client reference from a previous process execution.
 - **Compatibility Translation Layer:** The host client should act as a translation shim, prioritizing modern structured fields (e.g., `plugin_semver`) but providing fallbacks/translation for legacy tags (e.g., `plugin_version`) to maintain wire compatibility during V1 migration.
@@ -336,6 +339,11 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 
 ## Architectural Patterns
 
+### Atomic Resource Management
+- **Temp-File-and-Rename Pattern:** Configuration file updates MUST use a temp-file-and-rename pattern to ensure atomicity. Create a temp file in the same directory, write content, sync/close, and then rename to the target path. This prevents file corruption during partial writes and preserves file integrity.
+- **Permission Preservation:** When using the temp-file-and-rename pattern, always `os.Stat` the original file to capture its permissions and apply them to the temp file via `os.Chmod` before the rename. Default to `0600` for new files.
+- **Keychain Rollback Strategy:** Commands that modify both the system keychain and the configuration file MUST implement a rollback mechanism. For new keychain entries, verify existence before creation, and if the subsequent configuration update fails, delete the orphaned keychain entry to maintain system consistency.
+
 ### Metadata & Observability
 - **State-First Persistence Pattern:** Always update the authoritative state store (e.g., orchestration DB) before emitting observability events or creating versioned history snapshots. This ensures the event history remains a truthful reflection of the system state.
 - **Recursive Redaction Pattern:** Protect versioned history by implementing a centralized redaction layer that handles both unstructured strings (regex scrubbing) and structured JSON (recursive walking and key-based redaction) before data is persisted.
@@ -359,8 +367,9 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 - **Mockery Variadic Option Trap:** Mockery v3's `testify` template currently mishandles variadic arguments (like `...grpc.CallOption`), causing mismatches between the generated `Called()` slice and the `EXPECT()` variadic expansion. gRPC client interfaces must use hand-written mocks that manually expand the slice before calling testify's `Called()` method.
 
 ### Plugin SDK Connection Hardening
-- **Atomic Connection Pinning:** SDK clients managing session tokens must retrieve both the gRPC client and the current token under a single mutex acquisition in `connect()`. This eliminates the "Ghost Race" where a token rotates between client acquisition and RPC execution.
-- **Idempotent Refresh Recovery:** If a token rotation request is accepted by the host but the response is lost, the old token is invalidated. SDKs should not automatically retry rotation; instead, the higher-level process must establish a new session to recover.
+- **Connection-Bound Identity:** Replaces bearer tokens (`RIG_HOST_SECRET_TOKEN`) with identity bound to the underlying transport (private, randomized UDS paths). This eliminates token exfiltration risks via process environment inspection.
+- **Idempotent No-Op Refresh:** To maintain backward compatibility with older plugins, the `RefreshToken` RPC is preserved as a no-op that returns an empty success response. Modern SDKs should avoid using it.
+- **Fail-Open PID Validation:** PID validation in host interceptors serves as defense-in-depth. It must fail-open (allow connection) on platforms where PID extraction is unsupported, relying on UDS path isolation as the primary security boundary.
 
 ### Maintenance & Storage
 - **Maintenance Connection Pinning:** Maintenance operations in Dolt (e.g., `USE database`, `dolt_gc`, multi-table pruning) MUST use a pinned `*sql.Conn` to ensure session affinity. Using the general pool can lead to commands running against the wrong database context.

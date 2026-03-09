@@ -99,3 +99,33 @@ func TestStoreConfigValue(t *testing.T) {
 		t.Errorf("expected foo.bar = baz, got %v", parsed2)
 	}
 }
+
+func TestStoreConfigValuePermissions(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	configDir := filepath.Join(tmpDir, ".config", "rig")
+	if err := os.MkdirAll(configDir, 0700); err != nil {
+		t.Fatalf("failed to create config dir: %v", err)
+	}
+	configFile := filepath.Join(configDir, "config.toml")
+
+	// 1. Pre-create file with specific permissions (e.g. 0644)
+	if err := os.WriteFile(configFile, []byte("key = \"initial\"\n"), 0644); err != nil {
+		t.Fatalf("failed to create config file: %v", err)
+	}
+
+	// 2. Update config
+	if err := StoreConfigValue("key", "updated"); err != nil {
+		t.Fatalf("StoreConfigValue failed: %v", err)
+	}
+
+	// 3. Verify permissions are still 0644
+	info, err := os.Stat(configFile)
+	if err != nil {
+		t.Fatalf("failed to stat config file: %v", err)
+	}
+	if info.Mode().Perm() != 0644 {
+		t.Errorf("expected permissions 0644, got %04o", info.Mode().Perm())
+	}
+}

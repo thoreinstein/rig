@@ -31,6 +31,16 @@ func resolveRecursive(m map[string]interface{}, sources SourceMap, prefix string
 	return nil
 }
 
+// GetKeychainSecret retrieves a secret from the system keychain.
+func GetKeychainSecret(service, account string) (string, error) {
+	return keyring.Get(service, account)
+}
+
+// DeleteKeychainSecret removes a secret from the system keychain.
+func DeleteKeychainSecret(service, account string) error {
+	return keyring.Delete(service, account)
+}
+
 // ResolveValue resolves a single value, handling keychain:// URIs if present.
 func ResolveValue(v interface{}, sources SourceMap, key string, verbose bool) (interface{}, error) {
 	switch val := v.(type) {
