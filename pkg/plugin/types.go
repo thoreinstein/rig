@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -126,6 +127,30 @@ func (p *Plugin) SetLastUsed(t time.Time) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.lastUsed = t
+}
+
+// cleanupHost tears down the per-plugin host server, listener, and socket
+// directory. It snapshots the host fields under p.mu to avoid racing with
+// concurrent getOrStartPlugin calls.
+func (p *Plugin) cleanupHost() {
+	p.mu.Lock()
+	srv := p.hostServer
+	lis := p.hostListener
+	path := p.hostPath
+	p.hostServer = nil
+	p.hostListener = nil
+	p.hostPath = ""
+	p.mu.Unlock()
+
+	if srv != nil {
+		srv.GracefulStop()
+	}
+	if lis != nil {
+		_ = lis.Close()
+	}
+	if path != "" {
+		_ = os.RemoveAll(filepath.Dir(path))
+	}
 }
 
 // AcquireSession increments the active session count.

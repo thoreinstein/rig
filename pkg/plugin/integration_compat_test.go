@@ -2,6 +2,8 @@ package plugin
 
 import (
 	"log/slog"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"google.golang.org/grpc"
@@ -39,6 +41,7 @@ func TestIntegration_WireCompatibility(t *testing.T) {
 	go func() { _ = srv.Serve(lis) }()
 	defer srv.Stop()
 	defer lis.Close()
+	t.Cleanup(func() { _ = os.RemoveAll(filepath.Dir(path)) })
 
 	// 3. Connect a raw gRPC client to the host's UDS endpoint
 	// We'll use the generated client but explicitly only read the legacy field.

@@ -634,15 +634,7 @@ func (m *Manager) StopAll() {
 
 	for _, p := range m.plugins {
 		_ = m.executor.Stop(p)
-		if p.hostServer != nil {
-			p.hostServer.GracefulStop()
-		}
-		if p.hostListener != nil {
-			_ = p.hostListener.Close()
-		}
-		if p.hostPath != "" {
-			_ = os.RemoveAll(filepath.Dir(p.hostPath))
-		}
+		p.cleanupHost()
 	}
 	m.plugins = make(map[string]*Plugin)
 
@@ -699,15 +691,7 @@ func (m *Manager) StopPluginIfIdle(name string, idleTimeout time.Duration) error
 	if err := m.executor.Stop(p); err != nil {
 		return err
 	}
-	if p.hostServer != nil {
-		p.hostServer.GracefulStop()
-	}
-	if p.hostListener != nil {
-		_ = p.hostListener.Close()
-	}
-	if p.hostPath != "" {
-		_ = os.RemoveAll(filepath.Dir(p.hostPath))
-	}
+	p.cleanupHost()
 	return nil
 }
 
