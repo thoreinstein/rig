@@ -149,7 +149,7 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 - **Consumer-Side Interface Pattern:** Domain packages (VCS, Ticket, Knowledge) MUST define their own local `PluginManager` interfaces containing only the methods they require. This ensures clean decoupling from `pkg/plugin` and enables surgical unit testing with hand-written mocks.
 - **Shared Session Token Store Pattern:** When multiple host-side gRPC proxy services (e.g., Secret, Context) share a session-scoped identity, centralize token management into a single thread-safe `tokenStore`. This ensures unified rotation and atomic revocation of all tokens associated with a plugin instance.
 - **SDK Compare-and-Swap (CAS) Rotation Pattern:** SDK clients performing asynchronous token rotation MUST use a CAS approach. Capture the `baseline` token before the RPC, and only update the internal state if the current token still matches the baseline upon return. This prevents data races and ensures newer rotations aren't overwritten by stale ones.
-- **V1 Wire Compatibility Protocol:** Within a stable major version (V1), NEVER remove or re-tag fields. If a field must be refactored (e.g., into a nested message), restore the original tag as `deprecated`, have the host populate both fields, and have the SDK implement a prioritized fallback.
+- **V1 Wire Compatibility Protocol:** Within a stable major version ((V1), NEVER remove or re-tag fields. If a field must be refactored (e.g., into a nested message), restore the original tag as `deprecated`, have the host populate both fields, and have the SDK implement a prioritized fallback.
 
 ### Defensive Programming Patterns
 - **Robust Nil Interface Check:** Always use `internal.IsNilInterface(v)` when guarding against nil values in constructors or providers that accept interfaces. This protects against Go's "typed-nil" pitfall where an interface wrapping a nil pointer is not itself `nil`.
@@ -192,10 +192,10 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 - **Sparse-Checkout Staging:** In a `git sparse-checkout` environment, new files must be staged using `git add --sparse <path>` if they fall outside the current sparse index definition.
 - **Surfacing Metadata Errors:** If a plugin's manifest file exists but is malformed, report an error rather than silently ignoring it. This prevents bypassing version checks due to configuration errors. Ensure consistent error reporting across all discovery paths (e.g., both single-binary and directory-based plugins).
 - **Automated Reviewer Naming Conflicts**: Conflicting bot suggestions (e.g., snake_case vs. camelCase) should be resolved by prioritizing Go idioms and established codebase patterns over generic bot rules.
-- **Stale Git Context in Hooks Trap**: Environment variables injected by `pre-commit` (e.g., `GIT_INDEX_FILE`) can interfere with unit tests that create temporary git repositories. Always unset `GIT_*` variables in test hooks.
+- **Stale Git Context in Hooks Trap:** Environment variables injected by `pre-commit` (e.g., `GIT_INDEX_FILE`) can interfere with unit tests that create temporary git repositories. Always unset `GIT_*` variables in test hooks.
 - **Host Flag Shadowing**: In dynamic CLIs, bootstrap parsers MUST stop scanning at the first non-flag token or `--` to avoid "stealing" arguments from subcommands. Host-only flags must be strictly filtered before forwarding to sub-processes.
 - **Circular Dependency Migration Trap:** Extracting existing logic (e.g., `pkg/git`) into abstractions (e.g., `pkg/vcs`) often triggers import cycles if shared types remain in the core. **Mitigation:** Extract shared DTOs, regexes, and utility functions into a dedicated "Leaf Package" (e.g., `pkg/vcs/url`) with zero dependencies on either side.
-- **Package Shadowing in CLI Commands Trap:** Moving shared logic into a package with a common name (e.g., `pkg/ticket`) can lead to package shadowing if local variables in `cmd` use the same name (e.g., `ticket := "PROJ-123"`). This makes package-level functions inaccessible. **Mitigation:** Rename local CLI variables to be more specific (e.g., `ticketID`).
+- **Package Shadowing in CLI Commands Trap:** Moving shared logic into a package with a common name (e.g., `pkg/ticket`) can lead to package shadowing if local variables in `cmd` use the same name (e.g., `ticketID`). This makes package-level functions inaccessible. **Mitigation:** Rename local CLI variables to be more specific (e.g., `ticketID`).
 - **Empty TOML Unmarshal Nil Map Trap:** Programmatic TOML mutation (e.g., in `rig config set`) must account for the fact that unmarshalling comment-only or empty files can return a `nil` map. Always check and initialize the map before assignment to avoid panics.
 - **The `sed` Multi-line Replacement Trap**: Avoid using `sed` for complex, multi-line regex replacements, especially across platforms (Darwin vs. Linux). It is finicky and prone to file corruption or silent failure. Prefer surgical `replace` calls with ample context or full-file `write_file` for predictable results.
 
@@ -345,6 +345,10 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 - **Deterministic Sort Ordering**: Always use a unique tie-breaker (e.g., `id ASC`) in SQL queries and `sort.SliceStable` in Go when rendering chronological lists. This prevents nondeterministic output churn in persistent artifacts like Markdown notes.
 - **Hot-Path Core Isolation Decision:** Maintain high-frequency, low-latency filesystem predicates (like `IsGitRepo`) in the core `rig` binary rather than offloading them to plugins. This avoids IPC overhead for "snappy" CLI discovery while still decoupling semantic VCS logic into plugins.
 
+### Telemetry & Observability Patterns
+- **Oneof Event Payloads:** Use `oneof payload` in gRPC streaming requests (e.g., `StreamEventsRequest`) to ensure a type-safe, extensible interface for heterogeneous event streams (logs, errors, metrics). This simplifies server-side dispatch logic using Go type switches.
+- **Partial-Failure Bulk Secrets:** plural "Get" operations (like `GetSecrets`) should follow partial-failure semantics—skipping malformed or missing keys while returning valid ones—to maximize plugin resiliency. Server-side logging (using `sync.Once`) should surface these omissions for debugging.
+
 ### VCS & URL Patterns
 - **Discriminatory Shorthand Processing**: When supporting both full URLs and shorthands (e.g., `owner/repo`), explicitly flag the input as a shorthand during initial parsing (e.g., `IsShorthand: true`). This allows for safe, conditional application of user preferences (like protocol selection) without mangling explicit, well-formed URLs.
 
@@ -353,6 +357,10 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 - **Package-Centric Mocking:** Generate mocks using Mockery v3's package-centric configuration (`.mockery.yaml`). Place mocks in a dedicated `mocks/` subdirectory adjacent to the target interface, assigning them the package name `mocks` and standard `.go` extensions (e.g. `mock_*.go`). This ensures mocks are importable by external test packages without compilation errors.
 - **Mocking Auto-Generated Interfaces:** Interfaces defined in packages with generated code (like gRPC clients) require `include-auto-generated: true` in the mockery configuration to be discovered.
 - **Mockery Variadic Option Trap:** Mockery v3's `testify` template currently mishandles variadic arguments (like `...grpc.CallOption`), causing mismatches between the generated `Called()` slice and the `EXPECT()` variadic expansion. gRPC client interfaces must use hand-written mocks that manually expand the slice before calling testify's `Called()` method.
+
+### Plugin SDK Connection Hardening
+- **Atomic Connection Pinning:** SDK clients managing session tokens must retrieve both the gRPC client and the current token under a single mutex acquisition in `connect()`. This eliminates the "Ghost Race" where a token rotates between client acquisition and RPC execution.
+- **Idempotent Refresh Recovery:** If a token rotation request is accepted by the host but the response is lost, the old token is invalidated. SDKs should not automatically retry rotation; instead, the higher-level process must establish a new session to recover.
 
 ### Maintenance & Storage
 - **Maintenance Connection Pinning:** Maintenance operations in Dolt (e.g., `USE database`, `dolt_gc`, multi-table pruning) MUST use a pinned `*sql.Conn` to ensure session affinity. Using the general pool can lead to commands running against the wrong database context.
