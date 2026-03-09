@@ -573,7 +573,7 @@ func (m *Manager) getOrStartPlugin(ctx context.Context, name string) (*Plugin, e
 	target.mu.Unlock()
 
 	// cleanupHost tears down the per-plugin host server in safe order:
-	// stop server (blocks until Serve returns) → close listener → remove directory.
+	// stop server (immediate) → close listener → remove directory.
 	cleanupHost := func(stopPlugin bool) {
 		if stopPlugin {
 			_ = m.executor.Stop(target)
@@ -684,15 +684,13 @@ func (m *Manager) StopPluginIfIdle(name string, idleTimeout time.Duration) error
 	delete(m.plugins, name)
 	m.mu.Unlock()
 
+	// Always tear down host resources, even if stopping the plugin process fails,
+	// since the plugin is already detached from the manager map.
+	defer p.cleanupHost()
+
 	// Stop the fully detached plugin outside the lock to avoid
 	// holding m.mu during a potentially slow process teardown.
-	// Tear down the per-plugin host server and socket directory to prevent
-	// leaking gRPC goroutines, file descriptors, and temp directories.
-	if err := m.executor.Stop(p); err != nil {
-		return err
-	}
-	p.cleanupHost()
-	return nil
+	return m.executor.Stop(p)
 }
 
 // ListPlugins returns a list of all currently managed plugins.
