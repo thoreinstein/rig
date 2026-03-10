@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/cockroachdb/errors"
 )
@@ -48,6 +49,11 @@ type WorktreeManager struct {
 	RepoPath         string // Optional explicit repository path
 	runner           CommandRunner
 	getwd            func() (string, error) // For testing; defaults to os.Getwd
+
+	// Cached repo root to avoid repeated subprocess forks (especially for bare repos).
+	repoRootOnce sync.Once
+	repoRoot     string
+	repoRootErr  error
 }
 
 // NewWorktreeManager creates a new WorktreeManager
@@ -84,7 +90,15 @@ func NewWorktreeManagerWithRunner(baseBranchConfig string, verbose bool, runner 
 // GetRepoRoot returns the worktree root (top-level source directory) for the repository.
 // For standard repos and worktrees, this returns the top-level directory.
 // For bare repositories, it falls back to the git common directory.
+// The result is cached after the first call to avoid repeated subprocess forks.
 func (wm *WorktreeManager) GetRepoRoot() (string, error) {
+	wm.repoRootOnce.Do(func() {
+		wm.repoRoot, wm.repoRootErr = wm.getRepoRoot()
+	})
+	return wm.repoRoot, wm.repoRootErr
+}
+
+func (wm *WorktreeManager) getRepoRoot() (string, error) {
 	dir := "."
 	if wm.RepoPath != "" {
 		dir = wm.RepoPath

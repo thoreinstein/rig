@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"context"
+	"log/slog"
 	"strings"
 
 	"google.golang.org/grpc/codes"
@@ -25,12 +26,14 @@ type SecretResolver func(pluginName, secretKey string) (string, error)
 type HostSecretProxy struct {
 	apiv1.UnimplementedSecretServiceServer
 	resolver SecretResolver
+	logger   *slog.Logger
 }
 
 // NewHostSecretProxy creates a new HostSecretProxy.
-func NewHostSecretProxy(resolver SecretResolver) *HostSecretProxy {
+func NewHostSecretProxy(resolver SecretResolver, logger *slog.Logger) *HostSecretProxy {
 	return &HostSecretProxy{
 		resolver: resolver,
+		logger:   logger,
 	}
 }
 
@@ -87,7 +90,13 @@ func (s *HostSecretProxy) GetSecrets(ctx context.Context, req *apiv1.GetSecretsR
 
 		val, err := s.resolver(pluginName, key)
 		if err != nil {
-			continue // omit missing/failed keys
+			// Log host-side resolution failures (e.g. locked keychain) so operators
+			// can diagnose issues. Missing keys are expected and not logged.
+			if !rigerrors.Is(err, ErrSecretNotFound) && s.logger != nil {
+				s.logger.Warn("secret resolution failed in bulk request",
+					"plugin", pluginName, "key", key, "error", err)
+			}
+			continue
 		}
 		secrets[key] = &apiv1.SecretValue{Value: val}
 	}

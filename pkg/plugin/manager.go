@@ -84,6 +84,9 @@ type Manager struct {
 	secretCache   sync.Map           // map[pluginName]map[string]any — shared with resolver
 	secretCacheSF singleflight.Group // deduplicates concurrent cache-miss resolutions per plugin
 
+	serveWG sync.WaitGroup     // tracks in-flight host gRPC Serve goroutines
+	startSF singleflight.Group // prevents concurrent starts of the same plugin
+
 	mu      sync.Mutex
 	plugins map[string]*Plugin
 }
@@ -137,7 +140,7 @@ func NewManager(executor pluginExecutor, scanner *Scanner, rigVersion string, co
 
 				sec, ok := cfg["secrets"].(map[string]any)
 				if !ok {
-					return nil, errors.Wrap(ErrSecretNotFound, fmt.Sprintf("no 'secrets' section found for plugin %q", pluginName))
+					return nil, errors.Wrapf(ErrSecretNotFound, "no 'secrets' section found for plugin %q", pluginName)
 				}
 
 				m.secretCache.Store(pluginName, sec)
@@ -152,7 +155,7 @@ func NewManager(executor pluginExecutor, scanner *Scanner, rigVersion string, co
 		// 2. Look up the requested key.
 		val, ok := secrets[secretKey]
 		if !ok {
-			return "", errors.Wrap(ErrSecretNotFound, fmt.Sprintf("secret %q not found for plugin %q", secretKey, pluginName))
+			return "", errors.Wrapf(ErrSecretNotFound, "secret %q not found for plugin %q", secretKey, pluginName)
 		}
 
 		// 3. Resolve keychain:// URI if present, otherwise return as-is.
@@ -175,7 +178,7 @@ func NewManager(executor pluginExecutor, scanner *Scanner, rigVersion string, co
 
 		return strVal, nil
 	}
-	m.secretProxy = NewHostSecretProxy(resolver)
+	m.secretProxy = NewHostSecretProxy(resolver, m.logger)
 
 	// Build the context proxy once with the canonical metadata.
 	pCtx := PluginContext{}
@@ -505,20 +508,45 @@ func (m *Manager) GetKnowledgeClient(ctx context.Context, name string) (client a
 }
 
 func (m *Manager) getOrStartPlugin(ctx context.Context, name string) (*Plugin, error) {
+	// Quick check under lock: if the plugin is already running, return it.
 	m.mu.Lock()
 	p, ok := m.plugins[name]
-	m.mu.Unlock()
-
 	if ok {
 		p.mu.Lock()
 		running := p.process != nil
 		p.mu.Unlock()
 		if running {
+			m.mu.Unlock()
 			return p, nil
 		}
 	}
+	m.mu.Unlock()
 
-	// Not running or not found, try to discover it
+	// Use singleflight to prevent concurrent starts of the same plugin.
+	val, err, _ := m.startSF.Do(name, func() (any, error) {
+		// Double-check: another caller may have started it while we waited.
+		m.mu.Lock()
+		if p, ok := m.plugins[name]; ok {
+			p.mu.Lock()
+			running := p.process != nil
+			p.mu.Unlock()
+			if running {
+				m.mu.Unlock()
+				return p, nil
+			}
+		}
+		m.mu.Unlock()
+
+		return m.startPlugin(ctx, name)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return val.(*Plugin), nil
+}
+
+// startPlugin discovers, configures, and starts a plugin. Called within singleflight.
+func (m *Manager) startPlugin(ctx context.Context, name string) (*Plugin, error) {
 	result, err := m.scanner.Scan()
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to scan plugins")
@@ -583,11 +611,16 @@ func (m *Manager) getOrStartPlugin(ctx context.Context, name string) (*Plugin, e
 		_ = os.RemoveAll(filepath.Dir(hostPath))
 	}
 
+	// Track the Serve goroutine so StopAll can wait for it to exit.
+	m.serveWG.Add(1)
 	go func() {
+		defer m.serveWG.Done()
 		if err := hostServer.Serve(hostLis); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
 			if m.logger != nil {
 				m.logger.Error("plugin host gRPC server failed", "plugin", name, "error", err)
 			}
+			// Clean up host resources when Serve fails independently.
+			cleanupHost(false)
 		}
 	}()
 
@@ -630,20 +663,27 @@ func (m *Manager) getOrStartPlugin(ctx context.Context, name string) (*Plugin, e
 // StopAll stops all managed plugins and the host UI server.
 func (m *Manager) StopAll() {
 	m.mu.Lock()
-	defer m.mu.Unlock()
-
 	for _, p := range m.plugins {
 		_ = m.executor.Stop(p)
 		p.cleanupHost()
 	}
 	m.plugins = make(map[string]*Plugin)
+	m.mu.Unlock()
 
+	// Wait for all Serve goroutines to exit before tearing down shared state.
+	m.serveWG.Wait()
+
+	// Invalidate secret cache so restarted plugins don't inherit stale values.
+	m.secretCache = sync.Map{}
+
+	m.mu.Lock()
 	if m.hostUI != nil {
 		if s, ok := m.hostUI.(interface{ Stop() }); ok {
 			s.Stop()
 		}
 		m.hostUI = nil
 	}
+	m.mu.Unlock()
 }
 
 // ReleasePlugin signals that a session with the plugin has finished.
@@ -683,6 +723,9 @@ func (m *Manager) StopPluginIfIdle(name string, idleTimeout time.Duration) error
 	// half-detached plugin.
 	delete(m.plugins, name)
 	m.mu.Unlock()
+
+	// Invalidate cached secrets for this plugin.
+	m.secretCache.Delete(name)
 
 	// Always tear down host resources, even if stopping the plugin process fails,
 	// since the plugin is already detached from the manager map.

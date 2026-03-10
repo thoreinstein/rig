@@ -19,6 +19,20 @@ var defaultEnvAllowList = []string{
 	"SHELL",
 }
 
+// envDenyList contains environment variables that must never be passed to plugins,
+// regardless of allow-list configuration. Prevents accidental credential leakage.
+var envDenyList = map[string]struct{}{
+	"AWS_SECRET_ACCESS_KEY":     {},
+	"AWS_SESSION_TOKEN":         {},
+	"GITHUB_TOKEN":              {},
+	"GH_TOKEN":                  {},
+	"GITLAB_TOKEN":              {},
+	"SSH_AUTH_SOCK":             {},
+	"GPG_AGENT_INFO":            {},
+	"NPM_TOKEN":                 {},
+	"HOMEBREW_GITHUB_API_TOKEN": {},
+}
+
 // buildEnv constructs a sanitized environment for a plugin process.
 // It filters os.Environ() against a combined set of allowed variables:
 // 1. A hardcoded default "essential" list.
@@ -55,6 +69,11 @@ func buildEnv(globalAllow, pluginAllow []string) []string {
 	for _, env := range environ {
 		key, _, ok := strings.Cut(env, "=")
 		if !ok {
+			continue
+		}
+
+		// Deny-list takes precedence over all allow-lists.
+		if _, denied := envDenyList[key]; denied {
 			continue
 		}
 

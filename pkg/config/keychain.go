@@ -66,7 +66,11 @@ func ResolveValue(v interface{}, sources SourceMap, key string, verbose bool) (i
 
 			secret, err := keyring.Get(service, account)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Warning: failed to resolve keychain secret for key %q (%s/%s): %v\n", key, service, account, err)
+				if verbose {
+					fmt.Fprintf(os.Stderr, "Warning: failed to resolve keychain secret for key %q (%s/%s): %v\n", key, service, account, err)
+				} else {
+					fmt.Fprintf(os.Stderr, "Warning: failed to resolve keychain secret for key %q\n", key)
+				}
 				return val, nil
 			}
 

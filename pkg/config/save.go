@@ -77,11 +77,8 @@ func StoreConfigValue(key, value string) error {
 		return errors.Wrapf(err, "failed to create temp config file in %q", dir)
 	}
 	tmpPath := tmpFile.Name()
-	closed := false
 	defer func() {
-		if !closed {
-			_ = tmpFile.Close()
-		}
+		_ = tmpFile.Close()    // Benign double-close after successful path
 		_ = os.Remove(tmpPath) // No-op if rename succeeded
 	}()
 
@@ -105,7 +102,6 @@ func StoreConfigValue(key, value string) error {
 	if err := tmpFile.Close(); err != nil {
 		return errors.Wrapf(err, "failed to close temp config file %q", tmpPath)
 	}
-	closed = true
 
 	if err := os.Rename(tmpPath, configFile); err != nil {
 		return errors.Wrapf(err, "failed to rename temp config file %q to %q", tmpPath, configFile)

@@ -32,12 +32,17 @@ Use --keychain to store the value in the system keychain and save a reference UR
 
 		finalValue := value
 		isNewEntry := false
+		var oldSecret string
 		if setKeychain {
-			// Check if the secret already exists to determine if we should roll back on failure.
-			// Only treat ErrNotFound as "new entry"; other errors (locked keychain, timeout)
-			// leave isNewEntry false so we don't accidentally delete an existing secret.
-			_, err := config.GetKeychainSecret("rig", key)
-			isNewEntry = config.IsKeychainNotFound(err)
+			// Read existing value for rollback. Only treat ErrNotFound as "new entry";
+			// other errors (locked keychain, timeout) leave isNewEntry false and
+			// oldSecret empty, so rollback is best-effort.
+			existing, probeErr := config.GetKeychainSecret("rig", key)
+			if config.IsKeychainNotFound(probeErr) {
+				isNewEntry = true
+			} else if probeErr == nil {
+				oldSecret = existing
+			}
 
 			// Use 'rig' as service and the key as account
 			uri, err := config.StoreKeychainSecret("rig", key, value)
@@ -48,10 +53,16 @@ Use --keychain to store the value in the system keychain and save a reference UR
 		}
 
 		if err := config.StoreConfigValue(key, finalValue); err != nil {
-			// Roll back new keychain entry if config update fails
-			if setKeychain && isNewEntry {
-				if rollbackErr := config.DeleteKeychainSecret("rig", key); rollbackErr != nil {
-					fmt.Fprintf(cmd.ErrOrStderr(), "Warning: failed to clean up keychain entry for %q during rollback: %v\n", key, rollbackErr)
+			// Roll back keychain entry if config update fails.
+			if setKeychain {
+				if isNewEntry {
+					if rollbackErr := config.DeleteKeychainSecret("rig", key); rollbackErr != nil {
+						fmt.Fprintf(cmd.ErrOrStderr(), "Warning: failed to clean up keychain entry for %q during rollback: %v\n", key, rollbackErr)
+					}
+				} else if oldSecret != "" {
+					if _, rollbackErr := config.StoreKeychainSecret("rig", key, oldSecret); rollbackErr != nil {
+						fmt.Fprintf(cmd.ErrOrStderr(), "Warning: failed to restore keychain entry for %q during rollback: %v\n", key, rollbackErr)
+					}
 				}
 			}
 			return errors.Wrap(err, "failed to update configuration")

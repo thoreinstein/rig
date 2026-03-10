@@ -166,15 +166,12 @@ func TestConfigSetRollback(t *testing.T) {
 		t.Fatal("expected update Execute to fail")
 	}
 
-	// Verify old value still exists in keychain (it shouldn't have been deleted by rollback)
+	// Verify existing keychain entry was restored to its original value on rollback.
 	got, err := keyring.Get("rig", "existing.key")
 	if err != nil {
 		t.Fatalf("expected existing keychain entry to persist, got error: %v", err)
 	}
-	// Note: StoreKeychainSecret updates the value in keyring before StoreConfigValue is called.
-	// For existing entries, the keychain value is overwritten even if config write fails.
-	// This is a known data-loss edge case scoped for Phase 2 (rig-hka.2: save-and-restore).
-	if got != "new-val" {
-		t.Errorf("expected keychain to contain updated value %q, got %q", "new-val", got)
+	if got != "existing-val" {
+		t.Errorf("expected keychain to contain original value %q after rollback, got %q", "existing-val", got)
 	}
 }

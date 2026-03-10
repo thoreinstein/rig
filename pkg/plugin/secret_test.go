@@ -35,7 +35,7 @@ func TestGetSecret(t *testing.T) {
 		return val, nil
 	}
 
-	proxy := NewHostSecretProxy(resolver)
+	proxy := NewHostSecretProxy(resolver, nil)
 
 	tests := []struct {
 		name       string
@@ -171,7 +171,7 @@ func TestGetSecrets(t *testing.T) {
 		return val, nil
 	}
 
-	proxy := NewHostSecretProxy(resolver)
+	proxy := NewHostSecretProxy(resolver, nil)
 
 	tests := []struct {
 		name       string
@@ -272,7 +272,7 @@ func TestGetSecrets(t *testing.T) {
 
 func TestRefreshToken_DeprecatedNoOp(t *testing.T) {
 	resolver := func(_, _ string) (string, error) { return "val", nil }
-	proxy := NewHostSecretProxy(resolver)
+	proxy := NewHostSecretProxy(resolver, nil)
 
 	resp, err := proxy.RefreshToken(t.Context(), &apiv1.RefreshTokenRequest{
 		CurrentToken: "some-token",
@@ -293,7 +293,7 @@ func TestGetSecret_InternalError(t *testing.T) {
 		return "", rigerrors.New("keychain access failed")
 	}
 
-	proxy := NewHostSecretProxy(resolver)
+	proxy := NewHostSecretProxy(resolver, nil)
 	ctx := withPlugin(t.Context(), "myplugin")
 
 	_, err := proxy.GetSecret(ctx, &apiv1.GetSecretRequest{Key: "k"})
