@@ -8,12 +8,11 @@ import (
 
 	"github.com/cockroachdb/errors"
 	"github.com/pelletier/go-toml/v2"
-	"github.com/zalando/go-keyring"
 )
 
 // StoreKeychainSecret stores a value in the system keychain and returns the URI.
 func StoreKeychainSecret(service, account, value string) (string, error) {
-	if err := keyring.Set(service, account, value); err != nil {
+	if err := keyringImpl.Set(service, account, value); err != nil {
 		return "", errors.Wrapf(err, "failed to store secret in keychain (%s/%s)", service, account)
 	}
 	return fmt.Sprintf("%s%s/%s", KeychainPrefix, service, account), nil

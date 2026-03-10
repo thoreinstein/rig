@@ -11,6 +11,79 @@ import (
 
 const KeychainPrefix = "keychain://"
 
+// ErrorClass categorizes keychain errors for higher-level decision making.
+type ErrorClass int
+
+const (
+	ErrorClassUnknown ErrorClass = iota
+	ErrorClassTransient
+	ErrorClassPermission
+	ErrorClassSystem
+	ErrorClassNotFound
+)
+
+// KeyringProvider defines the interface for interacting with the system keychain.
+type KeyringProvider interface {
+	Get(service, account string) (string, error)
+	Set(service, account, value string) error
+	Delete(service, account string) error
+}
+
+type defaultKeyringProvider struct{}
+
+func (p *defaultKeyringProvider) Get(service, account string) (string, error) {
+	return keyring.Get(service, account)
+}
+
+func (p *defaultKeyringProvider) Set(service, account, value string) error {
+	return keyring.Set(service, account, value)
+}
+
+func (p *defaultKeyringProvider) Delete(service, account string) error {
+	return keyring.Delete(service, account)
+}
+
+var keyringImpl KeyringProvider = &defaultKeyringProvider{}
+
+// SetKeyringProvider allows injecting a mock provider for testing.
+func SetKeyringProvider(p KeyringProvider) {
+	keyringImpl = p
+}
+
+// ClassifyKeyringError maps OS-specific keychain errors to internal ErrorClass.
+func ClassifyKeyringError(err error) ErrorClass {
+	if err == nil {
+		return ErrorClassUnknown
+	}
+
+	if errors.Is(err, keyring.ErrNotFound) {
+		return ErrorClassNotFound
+	}
+
+	msg := err.Error()
+
+	// macOS Security framework errors
+	// errSecAuthFailed (-25293), errSecInteractionNotAllowed (-25308)
+	if strings.Contains(msg, "-25293") || strings.Contains(msg, "-25308") || strings.Contains(msg, "auth failed") {
+		return ErrorClassPermission
+	}
+	if strings.Contains(msg, "-25300") { // errSecItemNotFound
+		return ErrorClassNotFound
+	}
+
+	// Linux Secret Service (libsecret/dbus) errors
+	if strings.Contains(msg, "org.freedesktop.Secret.Error.IsLocked") || strings.Contains(msg, "access denied") {
+		return ErrorClassPermission
+	}
+
+	// Windows Credential Manager errors
+	if strings.Contains(msg, "The specified item could not be found") {
+		return ErrorClassNotFound
+	}
+
+	return ErrorClassSystem
+}
+
 // ResolveKeychainValues recursively walks the settings map and resolves keychain:// URIs
 func ResolveKeychainValues(settings map[string]interface{}, sources SourceMap, verbose bool) error {
 	return resolveRecursive(settings, sources, "", verbose)
@@ -34,17 +107,17 @@ func resolveRecursive(m map[string]interface{}, sources SourceMap, prefix string
 
 // IsKeychainNotFound reports whether the error indicates a missing keychain entry.
 func IsKeychainNotFound(err error) bool {
-	return errors.Is(err, keyring.ErrNotFound)
+	return ClassifyKeyringError(err) == ErrorClassNotFound
 }
 
 // GetKeychainSecret retrieves a secret from the system keychain.
 func GetKeychainSecret(service, account string) (string, error) {
-	return keyring.Get(service, account)
+	return keyringImpl.Get(service, account)
 }
 
 // DeleteKeychainSecret removes a secret from the system keychain.
 func DeleteKeychainSecret(service, account string) error {
-	return keyring.Delete(service, account)
+	return keyringImpl.Delete(service, account)
 }
 
 // ResolveValue resolves a single value, handling keychain:// URIs if present.
@@ -64,7 +137,7 @@ func ResolveValue(v interface{}, sources SourceMap, key string, verbose bool) (i
 			service := parts[0]
 			account := parts[1]
 
-			secret, err := keyring.Get(service, account)
+			secret, err := keyringImpl.Get(service, account)
 			if err != nil {
 				if verbose {
 					fmt.Fprintf(os.Stderr, "Warning: failed to resolve keychain secret for key %q (%s/%s): %v\n", key, service, account, err)
