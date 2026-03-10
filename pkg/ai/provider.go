@@ -72,11 +72,12 @@ type PluginManager interface {
 // Environment variables take precedence over config file values for API keys.
 // When model is empty, provider-specific default models from config are used.
 func NewProvider(cfg *config.AIConfig, verbose bool) (Provider, error) {
-	return NewProviderWithManager(nil, cfg, verbose)
+	return NewProviderWithManager(context.Background(), nil, cfg, verbose)
 }
 
 // NewProviderWithManager creates an AI provider with an optional PluginManager for plugin-based providers.
-func NewProviderWithManager(mgr PluginManager, cfg *config.AIConfig, verbose bool) (Provider, error) {
+// The context is used for plugin client acquisition and should carry an appropriate deadline.
+func NewProviderWithManager(ctx context.Context, mgr PluginManager, cfg *config.AIConfig, verbose bool) (Provider, error) {
 	if cfg == nil {
 		return nil, rigerrors.NewConfigError("ai", "config is nil")
 	}
@@ -154,7 +155,7 @@ func NewProviderWithManager(mgr PluginManager, cfg *config.AIConfig, verbose boo
 		if pluginName == "" {
 			return nil, rigerrors.NewConfigError("ai.model", "plugin provider requires the plugin name to be specified in the 'model' field")
 		}
-		client, err := mgr.GetAssistantClient(context.Background(), pluginName)
+		client, err := mgr.GetAssistantClient(ctx, pluginName)
 		if err != nil {
 			return nil, rigerrors.NewAIErrorWithCause(ProviderPlugin, "GetAssistantClient", "failed to get assistant client from plugin", err)
 		}

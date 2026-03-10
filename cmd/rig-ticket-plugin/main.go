@@ -101,12 +101,10 @@ func (p *TicketPlugin) UpdateTicketStatus(ctx context.Context, req *apiv1.Update
 		}
 		// Basic mapping for "in_progress"
 		if req.Status == "in_progress" {
-			err := client.TransitionTicketByName(req.TicketId, "In Progress")
-			if err != nil {
-				err = client.TransitionTicketByName(req.TicketId, "Start Progress")
-			}
-			if err != nil {
-				return nil, err
+			if err := client.TransitionTicketByName(req.TicketId, "In Progress"); err != nil {
+				if err = client.TransitionTicketByName(req.TicketId, "Start Progress"); err != nil {
+					return nil, err
+				}
 			}
 		} else {
 			return nil, errors.Newf("status transition %q not supported for Jira in this plugin", req.Status)

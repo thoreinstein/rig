@@ -87,9 +87,9 @@ func listCurrentRepoWorktrees(cfg *config.Config) error {
 	defer cleanup()
 
 	// Use current directory to find repo
-	cwd, _ := config.UserHomeDir() // Fallback
-	if c, err := os.Getwd(); err == nil {
-		cwd = c
+	cwd, err := os.Getwd()
+	if err != nil {
+		return errors.Wrap(err, "failed to determine current working directory")
 	}
 
 	repoRoot, err := provider.GetRepoRoot(cwd)

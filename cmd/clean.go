@@ -139,9 +139,9 @@ func runCleanCommand() error {
 
 func findCleanupCandidates(cfg *config.Config, provider vcs.Provider) ([]CleanupCandidate, error) {
 	// Use current directory to find repo
-	cwd, _ := config.UserHomeDir() // Fallback
-	if c, err := os.Getwd(); err == nil {
-		cwd = c
+	cwd, err := os.Getwd()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to determine current working directory")
 	}
 
 	repoRoot, err := provider.GetRepoRoot(cwd)
