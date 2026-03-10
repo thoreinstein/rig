@@ -408,6 +408,15 @@ func TestFetchAndPull_FetchError(t *testing.T) {
 	if err == nil {
 		t.Fatal("fetchAndPull() expected error, got nil")
 	}
+
+	if !strings.Contains(err.Error(), "git fetch failed") {
+		t.Errorf("Error = %q, want to contain 'git fetch failed'", err.Error())
+	}
+
+	// Should have called: config check, then fetch (which failed before pull)
+	if len(mock.Calls) != 2 {
+		t.Errorf("Expected 2 calls (config check + fetch), got %d", len(mock.Calls))
+	}
 }
 
 func TestFetchAndPull_PullError(t *testing.T) {
@@ -430,6 +439,43 @@ func TestFetchAndPull_PullError(t *testing.T) {
 	err := wm.fetchAndPull("/repo", "main")
 	if err == nil {
 		t.Fatal("fetchAndPull() expected error, got nil")
+	}
+
+	if !strings.Contains(err.Error(), "git pull failed") {
+		t.Errorf("Error = %q, want to contain 'git pull failed'", err.Error())
+	}
+
+	// Should have called: config check, fetch, then pull (which failed)
+	if len(mock.Calls) != 3 {
+		t.Errorf("Expected 3 calls, got %d", len(mock.Calls))
+	}
+}
+
+func TestFetchAndPull_DifferentBranch(t *testing.T) {
+	mock := &MockCommandRunner{
+		OutputFunc: func(dir string, name string, args ...string) ([]byte, error) {
+			if len(args) >= 3 && args[0] == "config" && args[1] == "--get" && args[2] == "remote.origin.fetch" {
+				return []byte("+refs/heads/*:refs/remotes/origin/*\n"), nil
+			}
+			return []byte{}, nil
+		},
+	}
+	wm := NewWorktreeManagerWithRunner("develop", false, mock)
+
+	err := wm.fetchAndPull("/repo", "develop")
+	if err != nil {
+		t.Fatalf("fetchAndPull() error = %v, want nil", err)
+	}
+
+	// Verify pull uses correct branch
+	// Calls: config check, fetch, pull
+	if len(mock.Calls) < 3 {
+		t.Fatalf("Expected at least 3 calls, got %d", len(mock.Calls))
+	}
+
+	// Third call should be pull with develop branch
+	if mock.Calls[2].Args[2] != "develop" {
+		t.Errorf("Pull branch = %q, want %q", mock.Calls[2].Args[2], "develop")
 	}
 }
 
@@ -475,6 +521,56 @@ func TestEnsureFetchRefspec_MissingRefspec(t *testing.T) {
 	}
 }
 
+func TestEnsureFetchRefspec_EmptyRefspec(t *testing.T) {
+	mock := &MockCommandRunner{
+		OutputFunc: func(dir string, name string, args ...string) ([]byte, error) {
+			if len(args) >= 3 && args[0] == "config" && args[1] == "--get" && args[2] == "remote.origin.fetch" {
+				// Returns empty string (config key exists but empty)
+				return []byte("   \n"), nil
+			}
+			return []byte{}, nil
+		},
+	}
+	wm := NewWorktreeManagerWithRunner("main", false, mock)
+
+	err := wm.ensureFetchRefspec("/repo")
+	if err != nil {
+		t.Fatalf("ensureFetchRefspec() error = %v, want nil", err)
+	}
+
+	// Should check config then set it since it's empty
+	if len(mock.Calls) != 2 {
+		t.Fatalf("Expected 2 calls (config check + config set), got %d", len(mock.Calls))
+	}
+}
+
+func TestEnsureFetchRefspec_SetError(t *testing.T) {
+	mock := &MockCommandRunner{
+		OutputFunc: func(dir string, name string, args ...string) ([]byte, error) {
+			if len(args) >= 3 && args[0] == "config" && args[1] == "--get" {
+				return []byte{}, errors.New("exit status 1")
+			}
+			return []byte{}, nil
+		},
+		RunFunc: func(dir string, name string, args ...string) error {
+			if len(args) > 0 && args[0] == "config" {
+				return errors.New("permission denied")
+			}
+			return nil
+		},
+	}
+	wm := NewWorktreeManagerWithRunner("main", false, mock)
+
+	err := wm.ensureFetchRefspec("/repo")
+	if err == nil {
+		t.Fatal("ensureFetchRefspec() expected error, got nil")
+	}
+
+	if !strings.Contains(err.Error(), "failed to configure fetch refspec") {
+		t.Errorf("Error = %q, want to contain 'failed to configure fetch refspec'", err.Error())
+	}
+}
+
 func TestBranchExists_True(t *testing.T) {
 	mock := &MockCommandRunner{
 		RunFunc: func(dir string, name string, args ...string) error {
@@ -503,6 +599,36 @@ func TestBranchExists_False(t *testing.T) {
 	}
 }
 
+func TestBranchExists_DifferentBranches(t *testing.T) {
+	tests := []struct {
+		name   string
+		branch string
+	}{
+		{"main branch", "main"},
+		{"master branch", "master"},
+		{"feature branch", "feature/test"},
+		{"release branch", "release-1.0"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mock := &MockCommandRunner{}
+			wm := NewWorktreeManagerWithRunner("main", false, mock)
+
+			wm.branchExists("/repo", tt.branch)
+
+			if len(mock.Calls) != 1 {
+				t.Fatalf("Expected 1 call, got %d", len(mock.Calls))
+			}
+
+			expectedRef := "refs/heads/" + tt.branch
+			if !strings.Contains(mock.Calls[0].Args[3], expectedRef) {
+				t.Errorf("Branch ref = %q, want to contain %q", mock.Calls[0].Args[3], expectedRef)
+			}
+		})
+	}
+}
+
 func TestGetFirstRemoteBranch_Success(t *testing.T) {
 	mock := &MockCommandRunner{
 		OutputFunc: func(dir string, name string, args ...string) ([]byte, error) {
@@ -521,6 +647,72 @@ func TestGetFirstRemoteBranch_Success(t *testing.T) {
 	}
 }
 
+func TestGetFirstRemoteBranch_SkipsHEAD(t *testing.T) {
+	mock := &MockCommandRunner{
+		OutputFunc: func(dir string, name string, args ...string) ([]byte, error) {
+			// HEAD -> line should be skipped
+			return []byte("  origin/HEAD -> origin/main\n  origin/develop\n"), nil
+		},
+	}
+	wm := NewWorktreeManagerWithRunner("main", false, mock)
+
+	branch, err := wm.getFirstRemoteBranch("/repo")
+	if err != nil {
+		t.Fatalf("getFirstRemoteBranch() error = %v, want nil", err)
+	}
+
+	if branch != "develop" {
+		t.Errorf("getFirstRemoteBranch() = %q, want %q", branch, "develop")
+	}
+}
+
+func TestGetFirstRemoteBranch_NoBranches(t *testing.T) {
+	mock := &MockCommandRunner{
+		OutputFunc: func(dir string, name string, args ...string) ([]byte, error) {
+			return []byte(""), nil
+		},
+	}
+	wm := NewWorktreeManagerWithRunner("main", false, mock)
+
+	_, err := wm.getFirstRemoteBranch("/repo")
+	if err == nil {
+		t.Fatal("getFirstRemoteBranch() expected error for empty branches, got nil")
+	}
+
+	if !strings.Contains(err.Error(), "no branches found") {
+		t.Errorf("Error = %q, want to contain 'no branches found'", err.Error())
+	}
+}
+
+func TestGetFirstRemoteBranch_GitError(t *testing.T) {
+	mock := &MockCommandRunner{
+		OutputFunc: func(dir string, name string, args ...string) ([]byte, error) {
+			return nil, errors.New("fatal: not a git repository")
+		},
+	}
+	wm := NewWorktreeManagerWithRunner("main", false, mock)
+
+	_, err := wm.getFirstRemoteBranch("/repo")
+	if err == nil {
+		t.Fatal("getFirstRemoteBranch() expected error, got nil")
+	}
+}
+
+func TestGetFirstRemoteBranch_OnlyHEAD(t *testing.T) {
+	mock := &MockCommandRunner{
+		OutputFunc: func(dir string, name string, args ...string) ([]byte, error) {
+			// Only HEAD line, no actual branches
+			return []byte("  origin/HEAD -> origin/main\n"), nil
+		},
+	}
+	wm := NewWorktreeManagerWithRunner("main", false, mock)
+
+	_, err := wm.getFirstRemoteBranch("/repo")
+	if err == nil {
+		t.Fatal("getFirstRemoteBranch() expected error when only HEAD exists, got nil")
+	}
+}
+
 func TestCreateInitialBranch_Success(t *testing.T) {
 	mock := &MockCommandRunner{}
 	wm := NewWorktreeManagerWithRunner("main", false, mock)
@@ -536,6 +728,48 @@ func TestCreateInitialBranch_Success(t *testing.T) {
 
 	if len(mock.Calls) != 2 {
 		t.Fatalf("Expected 2 calls, got %d", len(mock.Calls))
+	}
+}
+
+func TestCreateInitialBranch_SwitchError(t *testing.T) {
+	mock := &MockCommandRunner{
+		RunFunc: func(dir string, name string, args ...string) error {
+			if len(args) > 0 && args[0] == "switch" {
+				return errors.New("branch already exists")
+			}
+			return nil
+		},
+	}
+	wm := NewWorktreeManagerWithRunner("main", false, mock)
+
+	_, err := wm.createInitialBranch("/repo")
+	if err == nil {
+		t.Fatal("createInitialBranch() expected error, got nil")
+	}
+
+	if !strings.Contains(err.Error(), "failed to create main branch") {
+		t.Errorf("Error = %q, want to contain 'failed to create main branch'", err.Error())
+	}
+}
+
+func TestCreateInitialBranch_CommitError(t *testing.T) {
+	mock := &MockCommandRunner{
+		RunFunc: func(dir string, name string, args ...string) error {
+			if len(args) > 0 && args[0] == "commit" {
+				return errors.New("commit failed")
+			}
+			return nil
+		},
+	}
+	wm := NewWorktreeManagerWithRunner("main", false, mock)
+
+	_, err := wm.createInitialBranch("/repo")
+	if err == nil {
+		t.Fatal("createInitialBranch() expected error, got nil")
+	}
+
+	if !strings.Contains(err.Error(), "failed to create initial commit") {
+		t.Errorf("Error = %q, want to contain 'failed to create initial commit'", err.Error())
 	}
 }
 
@@ -584,6 +818,27 @@ func TestListWorktrees_Error(t *testing.T) {
 	_, err := wm.ListWorktrees()
 	if err == nil {
 		t.Fatal("ListWorktrees() expected error, got nil")
+	}
+}
+
+func TestListWorktrees_Empty(t *testing.T) {
+	mock := &MockCommandRunner{
+		OutputFunc: func(dir string, name string, args ...string) ([]byte, error) {
+			if len(args) > 1 && args[0] == "rev-parse" && args[1] == "--git-common-dir" {
+				return []byte("/home/user/repo/.git\n"), nil
+			}
+			return []byte(""), nil
+		},
+	}
+	wm := NewWorktreeManagerWithRunner("main", false, mock)
+
+	worktrees, err := wm.ListWorktrees()
+	if err != nil {
+		t.Fatalf("ListWorktrees() error = %v, want nil", err)
+	}
+
+	if len(worktrees) != 0 {
+		t.Errorf("ListWorktrees() returned %d worktrees, want 0", len(worktrees))
 	}
 }
 
