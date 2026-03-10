@@ -104,37 +104,39 @@ func (wm *WorktreeManager) getRepoRoot() (string, error) {
 		dir = wm.RepoPath
 	}
 
-	// Try --show-toplevel first (standard/worktree root)
-	output, err := wm.runner.Output(dir, "git", "rev-parse", "--show-toplevel")
-	if err == nil {
-		return filepath.Clean(strings.TrimSpace(string(output))), nil
+	// Use --git-common-dir to get the shared git directory.
+	// This works correctly from both bare repos and worktrees, returning
+	// the common repository root where worktrees should be anchored.
+	output, err := wm.runner.Output(dir, "git", "rev-parse", "--git-common-dir")
+	if err != nil {
+		return "", errors.New("not inside a git repository. Run this command from within your repo or specify a valid repo path")
 	}
 
-	// If --show-toplevel fails, check if it's a bare repository
-	bareOutput, bareErr := wm.runner.Output(dir, "git", "rev-parse", "--is-bare-repository")
-	if bareErr == nil && strings.TrimSpace(string(bareOutput)) == "true" {
-		// For bare repositories, use --git-common-dir as the fallback
-		commonOutput, commonErr := wm.runner.Output(dir, "git", "rev-parse", "--git-common-dir")
-		if commonErr == nil {
-			commonDir := strings.TrimSpace(string(commonOutput))
+	commonDir := strings.TrimSpace(string(output))
 
-			// If it's a relative path (like "." in bare repos), resolve to absolute
-			if !filepath.IsAbs(commonDir) {
-				absDir := dir
-				if !filepath.IsAbs(absDir) {
-					cwd, err := wm.getwd()
-					if err != nil {
-						return "", errors.Wrap(err, "failed to get working directory")
-					}
-					absDir = filepath.Join(cwd, dir)
-				}
-				commonDir = filepath.Join(absDir, commonDir)
+	// If it's a relative path (like "." in bare repos), resolve to absolute
+	if !filepath.IsAbs(commonDir) {
+		absDir := dir
+		if !filepath.IsAbs(absDir) {
+			cwd, err := wm.getwd()
+			if err != nil {
+				return "", errors.Wrap(err, "failed to get working directory")
 			}
-			return filepath.Clean(commonDir), nil
+			absDir = filepath.Join(cwd, dir)
 		}
+		commonDir = filepath.Join(absDir, commonDir)
 	}
 
-	return "", errors.New("not inside a git repository. Run this command from within your repo or specify a valid repo path")
+	// Clean the path to resolve any .. or . components
+	commonDir = filepath.Clean(commonDir)
+
+	// If commonDir is a .git directory (e.g., /path/to/repo/.git), take the parent
+	// to get the actual worktree root where tools expect to run.
+	if filepath.Base(commonDir) == ".git" {
+		return filepath.Dir(commonDir), nil
+	}
+
+	return commonDir, nil
 }
 
 // GetRepoName returns the repository name (basename of repo root).

@@ -43,8 +43,8 @@ func (m *MockCommandRunner) Output(dir string, name string, args ...string) ([]b
 func TestGetRepoRoot_Success(t *testing.T) {
 	mock := &MockCommandRunner{
 		OutputFunc: func(dir string, name string, args ...string) ([]byte, error) {
-			if len(args) > 1 && args[0] == "rev-parse" && args[1] == "--show-toplevel" {
-				return []byte("/home/user/src/myorg/myrepo\n"), nil
+			if len(args) > 1 && args[0] == "rev-parse" && args[1] == "--git-common-dir" {
+				return []byte("/home/user/src/myorg/myrepo/.git\n"), nil
 			}
 			return []byte{}, nil
 		},
@@ -64,10 +64,8 @@ func TestGetRepoRoot_Success(t *testing.T) {
 func TestGetRepoRoot_NotGitRepo(t *testing.T) {
 	mock := &MockCommandRunner{
 		OutputFunc: func(dir string, name string, args ...string) ([]byte, error) {
-			if len(args) > 1 && args[0] == "rev-parse" {
-				if args[1] == "--show-toplevel" || args[1] == "--is-bare-repository" {
-					return nil, errors.New("fatal: not a git repository")
-				}
+			if len(args) > 1 && args[0] == "rev-parse" && args[1] == "--git-common-dir" {
+				return nil, errors.New("fatal: not a git repository")
 			}
 			return []byte{}, nil
 		},
@@ -112,8 +110,8 @@ func TestGetRepoRoot_ExplicitPath(t *testing.T) {
 			if dir != "/custom/path/to/repo" {
 				return nil, errors.New("called with wrong directory")
 			}
-			if len(args) > 1 && args[0] == "rev-parse" && args[1] == "--show-toplevel" {
-				return []byte("/custom/path/to/repo\n"), nil
+			if len(args) > 1 && args[0] == "rev-parse" && args[1] == "--git-common-dir" {
+				return []byte("/custom/path/to/repo/.git\n"), nil
 			}
 			return []byte{}, nil
 		},
@@ -134,15 +132,8 @@ func TestGetRepoRoot_ExplicitPath(t *testing.T) {
 func TestGetRepoRoot_BareRepoRelativePath(t *testing.T) {
 	mock := &MockCommandRunner{
 		OutputFunc: func(dir string, name string, args ...string) ([]byte, error) {
-			if len(args) > 1 && args[0] == "rev-parse" {
-				switch args[1] {
-				case "--show-toplevel":
-					return nil, errors.New("fatal: this operation must be run in a work tree")
-				case "--is-bare-repository":
-					return []byte("true\n"), nil
-				case "--git-common-dir":
-					return []byte(".\n"), nil
-				}
+			if len(args) > 1 && args[0] == "rev-parse" && args[1] == "--git-common-dir" {
+				return []byte(".\n"), nil
 			}
 			return []byte{}, nil
 		},
@@ -165,15 +156,8 @@ func TestGetRepoRoot_BareRepoRelativePath(t *testing.T) {
 func TestGetRepoRoot_GetwdError(t *testing.T) {
 	mock := &MockCommandRunner{
 		OutputFunc: func(dir string, name string, args ...string) ([]byte, error) {
-			if len(args) > 1 && args[0] == "rev-parse" {
-				switch args[1] {
-				case "--show-toplevel":
-					return nil, errors.New("fatal: this operation must be run in a work tree")
-				case "--is-bare-repository":
-					return []byte("true\n"), nil
-				case "--git-common-dir":
-					return []byte(".\n"), nil
-				}
+			if len(args) > 1 && args[0] == "rev-parse" && args[1] == "--git-common-dir" {
+				return []byte(".\n"), nil
 			}
 			return []byte{}, nil
 		},
@@ -196,8 +180,8 @@ func TestGetRepoRoot_GetwdError(t *testing.T) {
 func TestGetRepoRoot_PathCleaning(t *testing.T) {
 	mock := &MockCommandRunner{
 		OutputFunc: func(dir string, name string, args ...string) ([]byte, error) {
-			if len(args) > 1 && args[0] == "rev-parse" && args[1] == "--show-toplevel" {
-				return []byte("/home/user/src/myorg/myrepo/../myrepo\n"), nil
+			if len(args) > 1 && args[0] == "rev-parse" && args[1] == "--git-common-dir" {
+				return []byte("/home/user/src/myorg/myrepo/../myrepo/.git\n"), nil
 			}
 			return []byte{}, nil
 		},
@@ -558,8 +542,8 @@ func TestCreateInitialBranch_Success(t *testing.T) {
 func TestListWorktrees_Success(t *testing.T) {
 	mock := &MockCommandRunner{
 		OutputFunc: func(dir string, name string, args ...string) ([]byte, error) {
-			if len(args) > 1 && args[0] == "rev-parse" && args[1] == "--show-toplevel" {
-				return []byte("/home/user/repo\n"), nil
+			if len(args) > 1 && args[0] == "rev-parse" && args[1] == "--git-common-dir" {
+				return []byte("/home/user/repo/.git\n"), nil
 			}
 			if len(args) > 0 && args[0] == "worktree" {
 				return []byte("worktree /home/user/repo\nHEAD abc123\nbranch refs/heads/main\n\nworktree /home/user/repo/fraas/FRAAS-123\nHEAD def456\nbranch refs/heads/FRAAS-123\n"), nil
@@ -577,18 +561,22 @@ func TestListWorktrees_Success(t *testing.T) {
 	if len(worktrees) != 2 {
 		t.Fatalf("ListWorktrees() returned %d worktrees, want 2", len(worktrees))
 	}
+
+	if worktrees[0] != "/home/user/repo" {
+		t.Errorf("worktrees[0] = %q, want %q", worktrees[0], "/home/user/repo")
+	}
+	if worktrees[1] != "/home/user/repo/fraas/FRAAS-123" {
+		t.Errorf("worktrees[1] = %q, want %q", worktrees[1], "/home/user/repo/fraas/FRAAS-123")
+	}
 }
 
 func TestListWorktrees_Error(t *testing.T) {
 	mock := &MockCommandRunner{
 		OutputFunc: func(dir string, name string, args ...string) ([]byte, error) {
-			if len(args) > 1 && args[0] == "rev-parse" && args[1] == "--show-toplevel" {
-				return []byte("/home/user/repo\n"), nil
+			if len(args) > 1 && args[0] == "rev-parse" && args[1] == "--git-common-dir" {
+				return []byte("/home/user/repo/.git\n"), nil
 			}
-			if len(args) > 0 && args[0] == "worktree" && args[1] == "list" {
-				return nil, errors.New("failed to list worktrees")
-			}
-			return []byte{}, nil
+			return nil, errors.New("not a git repository")
 		},
 	}
 	wm := NewWorktreeManagerWithRunner("main", false, mock)
@@ -690,9 +678,6 @@ func TestCreateWorktreeWithBranch_PathTraversal(t *testing.T) {
 			mock := &MockCommandRunner{
 				OutputFunc: func(dir string, name string, args ...string) ([]byte, error) {
 					if len(args) > 1 && args[0] == "rev-parse" {
-						if args[1] == "--show-toplevel" {
-							return []byte("/home/user/repo\n"), nil
-						}
 						if args[1] == "--git-common-dir" {
 							return []byte("/home/user/repo/.git\n"), nil
 						}
@@ -738,8 +723,8 @@ func TestCreateWorktree_PathTraversal(t *testing.T) {
 
 	mock := &MockCommandRunner{
 		OutputFunc: func(dir string, name string, args ...string) ([]byte, error) {
-			if len(args) > 1 && args[0] == "rev-parse" && args[1] == "--show-toplevel" {
-				return []byte("/home/user/repo\n"), nil
+			if len(args) > 1 && args[0] == "rev-parse" && args[1] == "--git-common-dir" {
+				return []byte("/home/user/repo/.git\n"), nil
 			}
 			return []byte{}, nil
 		},
@@ -804,8 +789,8 @@ func TestRemoveWorktree_PathTraversal(t *testing.T) {
 
 			mock := &MockCommandRunner{
 				OutputFunc: func(dir string, name string, args ...string) ([]byte, error) {
-					if len(args) > 1 && args[0] == "rev-parse" && args[1] == "--show-toplevel" {
-						return []byte("/home/user/repo\n"), nil
+					if len(args) > 1 && args[0] == "rev-parse" && args[1] == "--git-common-dir" {
+						return []byte("/home/user/repo/.git\n"), nil
 					}
 					return []byte{}, nil
 				},
@@ -858,9 +843,6 @@ func TestPathTraversalEdgeCases(t *testing.T) {
 			mock := &MockCommandRunner{
 				OutputFunc: func(dir string, name string, args ...string) ([]byte, error) {
 					if len(args) > 1 && args[0] == "rev-parse" {
-						if args[1] == "--show-toplevel" {
-							return []byte("/home/user/repo\n"), nil
-						}
 						if args[1] == "--git-common-dir" {
 							return []byte("/home/user/repo/.git\n"), nil
 						}
