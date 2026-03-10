@@ -81,25 +81,63 @@ func NewWorktreeManagerWithRunner(baseBranchConfig string, verbose bool, runner 
 	}
 }
 
-// GetRepoRoot returns the bare repository root.
-// This works correctly from both bare repositories and worktrees by using
-// --git-common-dir which returns the shared git directory across all worktrees.
+// GetRepoRoot returns the worktree root (top-level source directory) for the repository.
+// For standard repos and worktrees, this returns the top-level directory.
+// For bare repositories, it falls back to the git common directory.
 func (wm *WorktreeManager) GetRepoRoot() (string, error) {
 	dir := "."
 	if wm.RepoPath != "" {
 		dir = wm.RepoPath
 	}
 
-	// Use --git-common-dir to get the shared git directory
-	// This works from both bare repos and worktrees
+	// Try --show-toplevel first (standard/worktree root)
+	output, err := wm.runner.Output(dir, "git", "rev-parse", "--show-toplevel")
+	if err == nil {
+		return filepath.Clean(strings.TrimSpace(string(output))), nil
+	}
+
+	// If --show-toplevel fails, check if it's a bare repository
+	bareOutput, bareErr := wm.runner.Output(dir, "git", "rev-parse", "--is-bare-repository")
+	if bareErr == nil && strings.TrimSpace(string(bareOutput)) == "true" {
+		// For bare repositories, use --git-common-dir as the fallback
+		commonOutput, commonErr := wm.runner.Output(dir, "git", "rev-parse", "--git-common-dir")
+		if commonErr == nil {
+			commonDir := strings.TrimSpace(string(commonOutput))
+
+			// If it's a relative path (like "." in bare repos), resolve to absolute
+			if !filepath.IsAbs(commonDir) {
+				absDir := dir
+				if !filepath.IsAbs(absDir) {
+					cwd, err := wm.getwd()
+					if err != nil {
+						return "", errors.Wrap(err, "failed to get working directory")
+					}
+					absDir = filepath.Join(cwd, dir)
+				}
+				commonDir = filepath.Join(absDir, commonDir)
+			}
+			return filepath.Clean(commonDir), nil
+		}
+	}
+
+	return "", errors.New("not inside a git repository. Run this command from within your repo or specify a valid repo path")
+}
+
+// GetRepoName returns the repository name (basename of repo root).
+// For worktrees, it resolves to the main repository name.
+func (wm *WorktreeManager) GetRepoName() (string, error) {
+	dir := "."
+	if wm.RepoPath != "" {
+		dir = wm.RepoPath
+	}
+
+	// Resolve the shared git directory to get the main repo name consistently
 	output, err := wm.runner.Output(dir, "git", "rev-parse", "--git-common-dir")
 	if err != nil {
-		return "", errors.New("not inside a git repository. Run this command from within your repo or specify a valid repo path")
+		return "", errors.New("not inside a git repository")
 	}
 
 	commonDir := strings.TrimSpace(string(output))
-
-	// If it's a relative path (like "." in bare repos), resolve to absolute
 	if !filepath.IsAbs(commonDir) {
 		absDir := dir
 		if !filepath.IsAbs(absDir) {
@@ -112,17 +150,16 @@ func (wm *WorktreeManager) GetRepoRoot() (string, error) {
 		commonDir = filepath.Join(absDir, commonDir)
 	}
 
-	// Clean the path to resolve any .. or . components
-	return filepath.Clean(commonDir), nil
-}
+	commonDir = filepath.Clean(commonDir)
+	name := filepath.Base(commonDir)
 
-// GetRepoName returns the repository name (basename of repo root)
-func (wm *WorktreeManager) GetRepoName() (string, error) {
-	root, err := wm.GetRepoRoot()
-	if err != nil {
-		return "", err
+	// If commonDir is a .git directory (e.g., /path/to/repo/.git), take the parent
+	if name == ".git" {
+		name = filepath.Base(filepath.Dir(commonDir))
 	}
-	return filepath.Base(root), nil
+
+	// Strip .git suffix if present (common in bare repos)
+	return strings.TrimSuffix(name, ".git"), nil
 }
 
 // GetDefaultBranch determines the default branch to use for new worktrees

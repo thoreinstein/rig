@@ -37,7 +37,7 @@ func TestLocalProvider_GetRepoRoot(t *testing.T) {
 
 	realRoot, _ := filepath.EvalSymlinks(root)
 	realRepoDir, _ := filepath.EvalSymlinks(repoDir)
-	expectedRoot := filepath.Join(realRepoDir, ".git")
+	expectedRoot := realRepoDir
 	if realRoot != expectedRoot {
 		t.Errorf("GetRepoRoot = %q, want %q", realRoot, expectedRoot)
 	}
