@@ -523,30 +523,35 @@ func (m *Manager) getOrStartPlugin(ctx context.Context, name string) (*Plugin, e
 	m.mu.Unlock()
 
 	// Use singleflight to prevent concurrent starts of the same plugin.
-	val, err, _ := m.startSF.Do(name, func() (any, error) {
-		// Double-check: another caller may have started it while we waited.
-		m.mu.Lock()
-		if p, ok := m.plugins[name]; ok {
-			p.mu.Lock()
-			running := p.process != nil
-			p.mu.Unlock()
-			if running {
-				m.mu.Unlock()
-				return p, nil
-			}
-		}
-		m.mu.Unlock()
-
-		return m.startPlugin(ctx, name)
+	// We use DoChan to ensure each caller respects its own context deadline
+	// while waiting for the shared startup process to complete.
+	ch := m.startSF.DoChan(name, func() (any, error) {
+		// Use a background context for the actual startup logic so that if the
+		// first caller times out, the plugin continues to start for subsequent callers.
+		return m.startPlugin(context.Background(), name)
 	})
-	if err != nil {
-		return nil, err
+
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case res := <-ch:
+		if res.Err != nil {
+			return nil, res.Err
+		}
+		return res.Val.(*Plugin), nil
 	}
-	return val.(*Plugin), nil
 }
 
 // startPlugin discovers, configures, and starts a plugin. Called within singleflight.
-func (m *Manager) startPlugin(ctx context.Context, name string) (*Plugin, error) {
+func (m *Manager) startPlugin(ctx context.Context, name string) (p *Plugin, err error) {
+	// If startup fails, ensure any partial secret cache entries are purged
+	// so a subsequent retry re-reads the configuration.
+	defer func() {
+		if err != nil {
+			m.secretCache.Delete(name)
+		}
+	}()
+
 	result, err := m.scanner.Scan()
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to scan plugins")

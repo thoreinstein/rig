@@ -640,8 +640,8 @@ func TestDaemonFallback(t *testing.T) {
 		}
 		appConfig.Daemon.Enabled = true
 
-		// Use a short deadline so the daemon+handshake timeouts don't burn 15s
-		ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+		// Use a sufficient deadline so the handshake timeout can hit.
+		ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 		defer cancel()
 		err = runPluginCommand(ctx, "local-plugin", "local-cmd", []string{})
 		// We expect failure because the dummy plugin doesn't implement gRPC,
@@ -682,8 +682,8 @@ func TestDaemonFallback(t *testing.T) {
 		}
 		appConfig.Daemon.Enabled = true
 
-		// Use a short deadline so the handshake timeout doesn't burn 10s
-		ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+		// Use a sufficient deadline so the handshake timeout can hit.
+		ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 		defer cancel()
 		err = runPluginCommand(ctx, "local-plugin", "local-cmd", []string{})
 		// We expect failure because the dummy plugin doesn't implement gRPC,
