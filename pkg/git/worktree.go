@@ -140,42 +140,14 @@ func (wm *WorktreeManager) getRepoRoot() (string, error) {
 }
 
 // GetRepoName returns the repository name (basename of repo root).
-// For worktrees, it resolves to the main repository name.
+// For worktrees, it resolves to the main repository name via GetRepoRoot.
 func (wm *WorktreeManager) GetRepoName() (string, error) {
-	dir := "."
-	if wm.RepoPath != "" {
-		dir = wm.RepoPath
-	}
-
-	// Resolve the shared git directory to get the main repo name consistently
-	output, err := wm.runner.Output(dir, "git", "rev-parse", "--git-common-dir")
+	root, err := wm.GetRepoRoot()
 	if err != nil {
-		return "", errors.New("not inside a git repository")
+		return "", err
 	}
-
-	commonDir := strings.TrimSpace(string(output))
-	if !filepath.IsAbs(commonDir) {
-		absDir := dir
-		if !filepath.IsAbs(absDir) {
-			cwd, err := wm.getwd()
-			if err != nil {
-				return "", errors.Wrap(err, "failed to get working directory")
-			}
-			absDir = filepath.Join(cwd, dir)
-		}
-		commonDir = filepath.Join(absDir, commonDir)
-	}
-
-	commonDir = filepath.Clean(commonDir)
-	name := filepath.Base(commonDir)
-
-	// If commonDir is a .git directory (e.g., /path/to/repo/.git), take the parent
-	if name == ".git" {
-		name = filepath.Base(filepath.Dir(commonDir))
-	}
-
-	// Strip .git suffix if present (common in bare repos)
-	return strings.TrimSuffix(name, ".git"), nil
+	// Strip .git suffix for bare repos (e.g. /path/to/myrepo.git → myrepo)
+	return strings.TrimSuffix(filepath.Base(root), ".git"), nil
 }
 
 // GetDefaultBranch determines the default branch to use for new worktrees

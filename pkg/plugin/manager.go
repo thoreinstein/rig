@@ -626,7 +626,12 @@ func (m *Manager) startPlugin(ctx context.Context, name string) (p *Plugin, err 
 	}
 
 	// Track the Serve goroutine so StopAll can wait for it to exit.
+	// Hold m.mu during Add(1) to guarantee ordering with StopAll's Wait():
+	// StopAll holds m.mu while stopping plugins, then releases it before
+	// calling serveWG.Wait(). This ensures Add happens-before Wait.
+	m.mu.Lock()
 	m.serveWG.Add(1)
+	m.mu.Unlock()
 	go func() {
 		defer m.serveWG.Done()
 		if err := hostServer.Serve(hostLis); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
