@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"thoreinstein.com/rig/pkg/config"
+	rigerrors "thoreinstein.com/rig/pkg/errors"
 )
 
 var (
@@ -45,7 +46,7 @@ Use --keychain to store the value in the system keychain and save a reference UR
 			// Roll back keychain entry if config update fails.
 			if rollback != nil {
 				if rollbackErr := rollback(); rollbackErr != nil {
-					fmt.Fprintf(cmd.ErrOrStderr(), "Warning: failed to clean up keychain entry for %q during rollback: %v\n", key, rollbackErr)
+					return rigerrors.NewSplitBrainError(key, "rig", key, err, rollbackErr)
 				}
 			}
 			return errors.Wrap(err, "failed to update configuration")

@@ -1,6 +1,7 @@
 package errors
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/cockroachdb/errors"
@@ -563,4 +564,64 @@ func TestIsRetryable_DatabaseError(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestSplitBrainError(t *testing.T) {
+	primaryErr := errors.New("config write failed")
+	rollbackErr := errors.New("keychain delete failed")
+	key := "jira.token"
+	service := "rig"
+	account := "jira.token"
+
+	err := NewSplitBrainError(key, service, account, primaryErr, rollbackErr)
+
+	t.Run("Error message content", func(t *testing.T) {
+		msg := err.Error()
+		if !strings.Contains(msg, "CRITICAL INCONSISTENCY") {
+			t.Error("Error() should contain CRITICAL INCONSISTENCY")
+		}
+		if !strings.Contains(msg, "Config Key: jira.token") {
+			t.Error("Error() should contain Config Key: jira.token")
+		}
+		if !strings.Contains(msg, "Primary Failure: config write failed") {
+			t.Error("Error() should contain Primary Failure: config write failed")
+		}
+		if !strings.Contains(msg, "Rollback Failure: keychain delete failed") {
+			t.Error("Error() should contain Rollback Failure: keychain delete failed")
+		}
+		if !strings.Contains(msg, "MANUAL RECOVERY REQUIRED") {
+			t.Error("Error() should contain MANUAL RECOVERY REQUIRED")
+		}
+		if !strings.Contains(msg, "security delete-generic-password -s \"rig\" -a \"jira.token\"") {
+			t.Error("Error() should contain macOS command")
+		}
+		if !strings.Contains(msg, "secret-tool clear service rig account jira.token") {
+			t.Error("Error() should contain Linux command")
+		}
+		if !strings.Contains(msg, "cmdkey /delete:rig:jira.token") {
+			t.Error("Error() should contain Windows command")
+		}
+	})
+
+	t.Run("Unwrap", func(t *testing.T) {
+		unwrapped := err.Unwrap()
+		if unwrapped != primaryErr {
+			t.Errorf("Unwrap() = %v, want %v", unwrapped, primaryErr)
+		}
+		if !errors.Is(err, primaryErr) {
+			t.Error("errors.Is() should find primaryErr in SplitBrainError chain")
+		}
+	})
+
+	t.Run("IsSplitBrainError", func(t *testing.T) {
+		if !IsSplitBrainError(err) {
+			t.Error("IsSplitBrainError should return true for direct SplitBrainError")
+		}
+		if !IsSplitBrainError(errors.Wrap(err, "wrapped")) {
+			t.Error("IsSplitBrainError should return true for wrapped SplitBrainError")
+		}
+		if IsSplitBrainError(primaryErr) {
+			t.Error("IsSplitBrainError should return false for unrelated error")
+		}
+	})
 }

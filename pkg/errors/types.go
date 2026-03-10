@@ -542,6 +542,59 @@ func IsDatabaseError(err error) bool {
 	return errors.As(err, &dbErr)
 }
 
+// SplitBrainError represents an inconsistent state where the keychain was updated
+// but the configuration write failed, and the subsequent rollback also failed.
+type SplitBrainError struct {
+	Key           string // Config key (e.g., "jira.token")
+	Service       string // Keychain service (e.g., "rig")
+	Account       string // Keychain account (e.g., "jira.token")
+	PrimaryErr    error  // Why the config write failed
+	RollbackErr   error  // Why the rollback failed
+	KeychainState string // "new_value_persisted" or "unknown"
+}
+
+// Error implements the error interface and provides manual recovery instructions.
+func (e *SplitBrainError) Error() string {
+	var sb strings.Builder
+	sb.WriteString("CRITICAL INCONSISTENCY: keychain updated but config write failed, and rollback also failed.\n")
+	fmt.Fprintf(&sb, "Config Key: %s\n", e.Key)
+	fmt.Fprintf(&sb, "Primary Failure: %v\n", e.PrimaryErr)
+	fmt.Fprintf(&sb, "Rollback Failure: %v\n", e.RollbackErr)
+	sb.WriteString("\nMANUAL RECOVERY REQUIRED:\n")
+	sb.WriteString("The keychain entry for this key may contain the NEW secret, but your config file does not reference it.\n")
+	sb.WriteString("To resolve this, you should manually delete the keychain entry and try again:\n\n")
+
+	// OS-specific instructions
+	sb.WriteString("  macOS: security delete-generic-password -s \"" + e.Service + "\" -a \"" + e.Account + "\"\n")
+	sb.WriteString("  Linux: secret-tool clear service " + e.Service + " account " + e.Account + "\n")
+	sb.WriteString("  Windows: cmdkey /delete:rig:" + e.Account + "\n")
+
+	return sb.String()
+}
+
+// Unwrap returns the primary error that triggered the failure.
+func (e *SplitBrainError) Unwrap() error {
+	return e.PrimaryErr
+}
+
+// NewSplitBrainError creates a new SplitBrainError.
+func NewSplitBrainError(key, service, account string, primaryErr, rollbackErr error) *SplitBrainError {
+	return &SplitBrainError{
+		Key:           key,
+		Service:       service,
+		Account:       account,
+		PrimaryErr:    primaryErr,
+		RollbackErr:   rollbackErr,
+		KeychainState: "new_value_persisted",
+	}
+}
+
+// IsSplitBrainError checks if an error or any error in its chain is a SplitBrainError.
+func IsSplitBrainError(err error) bool {
+	var sbErr *SplitBrainError
+	return errors.As(err, &sbErr)
+}
+
 // isRetryableHTTPStatus returns true for HTTP status codes that are typically retryable.
 func isRetryableHTTPStatus(statusCode int) bool {
 	switch statusCode {
