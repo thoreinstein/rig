@@ -640,7 +640,9 @@ func TestDaemonFallback(t *testing.T) {
 		}
 		appConfig.Daemon.Enabled = true
 
-		// Use a sufficient deadline so the handshake timeout can hit.
+		// The inner singleflight uses pluginStartTimeout (30s); waitForSocket
+		// caps at HandshakeTimeout (10s). Allow enough headroom for plugin
+		// scanning, host server setup, and the socket-wait to complete.
 		ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 		defer cancel()
 		err = runPluginCommand(ctx, "local-plugin", "local-cmd", []string{})
@@ -682,7 +684,7 @@ func TestDaemonFallback(t *testing.T) {
 		}
 		appConfig.Daemon.Enabled = true
 
-		// Use a sufficient deadline so the handshake timeout can hit.
+		// Same as above — allow headroom for startup overhead + HandshakeTimeout.
 		ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 		defer cancel()
 		err = runPluginCommand(ctx, "local-plugin", "local-cmd", []string{})

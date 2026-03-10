@@ -35,12 +35,9 @@ type HostContextProxy struct {
 // values that structpb cannot represent, metadata will be nil and
 // GetContext will return an Internal error.
 func NewHostContextProxy(ctx PluginContext, logger *slog.Logger) *HostContextProxy {
-	// Pre-build the protobuf struct once. Errors are deferred to GetContext.
+	// Pre-build the protobuf struct once. Errors are deferred to GetContext
+	// where they are logged at Error level via metadataLogOnce.
 	md, mdErr := structpb.NewStruct(ctx.Metadata)
-	if mdErr != nil && logger != nil {
-		logger.Warn("failed to serialize plugin context metadata; GetContext will return Internal",
-			"error", mdErr)
-	}
 	return &HostContextProxy{
 		logger:      logger,
 		pluginCtx:   ctx,

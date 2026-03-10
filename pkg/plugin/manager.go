@@ -693,7 +693,12 @@ func (m *Manager) StopAll() {
 	m.serveWG.Wait()
 
 	// Invalidate secret cache so restarted plugins don't inherit stale values.
-	m.secretCache = sync.Map{}
+	// Clear in-place rather than replacing the struct field, which would race
+	// with concurrent Load/Store calls from the resolver closure.
+	m.secretCache.Range(func(k, _ any) bool {
+		m.secretCache.Delete(k)
+		return true
+	})
 
 	m.mu.Lock()
 	if m.hostUI != nil {
