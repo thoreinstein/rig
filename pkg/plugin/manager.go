@@ -23,6 +23,11 @@ import (
 	"thoreinstein.com/rig/pkg/ui"
 )
 
+// pluginStartTimeout is the hard upper bound on the entire plugin startup
+// sequence (process launch + socket wait + gRPC handshake). It caps the
+// singleflight slot so a misbehaving plugin cannot block all future callers.
+const pluginStartTimeout = 30 * time.Second
+
 // pluginExecutor defines the interface for starting and stopping plugin processes.
 // Implementations MUST be mutable types (e.g., pointers) if they maintain state
 // across method calls, such as the host endpoint path.
@@ -528,7 +533,11 @@ func (m *Manager) getOrStartPlugin(ctx context.Context, name string) (*Plugin, e
 	ch := m.startSF.DoChan(name, func() (any, error) {
 		// Use a background context for the actual startup logic so that if the
 		// first caller times out, the plugin continues to start for subsequent callers.
-		return m.startPlugin(context.Background(), name)
+		// Apply a hard timeout so a misbehaving plugin cannot block the shared
+		// singleflight slot indefinitely (e.g. socket created but Handshake never responds).
+		startCtx, cancel := context.WithTimeout(context.Background(), pluginStartTimeout)
+		defer cancel()
+		return m.startPlugin(startCtx, name)
 	})
 
 	select {

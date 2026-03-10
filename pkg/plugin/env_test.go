@@ -17,6 +17,8 @@ func TestBuildEnv(t *testing.T) {
 	if os.Getenv("PATH") == "" {
 		t.Setenv("PATH", "/usr/bin")
 	}
+	// Set a deny-listed var so we can test override behavior.
+	t.Setenv("SSH_AUTH_SOCK", "/tmp/ssh-test-agent")
 
 	tests := []struct {
 		name         string
@@ -66,6 +68,20 @@ func TestBuildEnv(t *testing.T) {
 			pluginAllow:  nil,
 			wantContains: []string{"PATH="},
 			wantExcludes: []string{"RIG_TEST_ALLOWED=", "RIG_TEST_BLOCKED="},
+		},
+		{
+			name:         "Deny-list blocks global allow-list",
+			globalAllow:  []string{"SSH_AUTH_SOCK"},
+			pluginAllow:  nil,
+			wantContains: []string{"PATH="},
+			wantExcludes: []string{"SSH_AUTH_SOCK="},
+		},
+		{
+			name:         "Per-plugin allow-list overrides deny-list",
+			globalAllow:  nil,
+			pluginAllow:  []string{"SSH_AUTH_SOCK"},
+			wantContains: []string{"PATH=", "SSH_AUTH_SOCK="},
+			wantExcludes: nil,
 		},
 	}
 

@@ -87,10 +87,10 @@ func NewWorktreeManagerWithRunner(baseBranchConfig string, verbose bool, runner 
 	}
 }
 
-// GetRepoRoot returns the worktree root (top-level source directory) for the repository.
-// For standard repos and worktrees, this returns the top-level directory.
-// For bare repositories, it falls back to the git common directory.
-// The result is cached after the first call to avoid repeated subprocess forks.
+// GetRepoRoot returns the shared repository root via git rev-parse --git-common-dir.
+// For linked worktrees this resolves to the parent repository's root directory,
+// not the worktree's own checkout path. For bare repos it returns the bare
+// repository directory. The result is cached after the first call.
 func (wm *WorktreeManager) GetRepoRoot() (string, error) {
 	wm.repoRootOnce.Do(func() {
 		wm.repoRoot, wm.repoRootErr = wm.getRepoRoot()

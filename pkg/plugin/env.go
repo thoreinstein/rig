@@ -50,6 +50,15 @@ func buildEnv(globalAllow, pluginAllow []string) []string {
 	allPatterns = append(allPatterns, globalAllow...)
 	allPatterns = append(allPatterns, pluginAllow...)
 
+	// Build a set of per-plugin exact overrides. These represent an explicit
+	// trust decision by an operator and are allowed to override the deny-list.
+	pluginExact := make(map[string]struct{}, len(pluginAllow))
+	for _, p := range pluginAllow {
+		if _, ok := strings.CutSuffix(p, "*"); !ok {
+			pluginExact[p] = struct{}{}
+		}
+	}
+
 	// Split into exact-match set and prefix slice for O(1) exact lookups.
 	exact := make(map[string]struct{}, len(allPatterns))
 	var prefixes []string
@@ -72,9 +81,12 @@ func buildEnv(globalAllow, pluginAllow []string) []string {
 			continue
 		}
 
-		// Deny-list takes precedence over all allow-lists.
+		// Deny-list takes precedence over global and default allow-lists,
+		// but per-plugin exact matches can override it (explicit operator trust).
 		if _, denied := envDenyList[key]; denied {
-			continue
+			if _, overridden := pluginExact[key]; !overridden {
+				continue
+			}
 		}
 
 		if _, ok := exact[key]; ok {
