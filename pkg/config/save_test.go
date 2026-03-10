@@ -1,11 +1,13 @@
 package config
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 
 	toml "github.com/pelletier/go-toml/v2"
+	"github.com/stretchr/testify/require"
 	"github.com/zalando/go-keyring"
 )
 
@@ -33,6 +35,51 @@ func TestStoreKeychainSecret(t *testing.T) {
 	if got != value {
 		t.Errorf("expected value %q, got %q", value, got)
 	}
+}
+
+func TestUpdateKeychainSecret(t *testing.T) {
+	oldImpl := keyringImpl
+	defer func() { keyringImpl = oldImpl }()
+
+	mock := newMockKeyringProvider()
+	SetKeyringProvider(mock)
+
+	service, account := "rig", "jira.token"
+
+	t.Run("new secret update and rollback", func(t *testing.T) {
+		mock.storage = make(map[string]string) // Ensure empty
+		uri, rollback, err := UpdateKeychainSecret(service, account, "new-token")
+		require.NoError(t, err)
+		require.Equal(t, "keychain://rig/jira.token", uri)
+		require.Equal(t, "new-token", mock.storage[service+":"+account])
+
+		// Rollback should delete it
+		err = rollback()
+		require.NoError(t, err)
+		require.Empty(t, mock.storage)
+	})
+
+	t.Run("existing secret update and rollback", func(t *testing.T) {
+		mock.storage = map[string]string{service + ":" + account: "old-token"}
+		uri, rollback, err := UpdateKeychainSecret(service, account, "new-token")
+		require.NoError(t, err)
+		require.Equal(t, "keychain://rig/jira.token", uri)
+		require.Equal(t, "new-token", mock.storage[service+":"+account])
+
+		// Rollback should restore it
+		err = rollback()
+		require.NoError(t, err)
+		require.Equal(t, "old-token", mock.storage[service+":"+account])
+	})
+
+	t.Run("pre-flight failure", func(t *testing.T) {
+		mock.storage = make(map[string]string)
+		mock.getErr = errors.New("unauthorized (-25293)") // Permission error
+		_, _, err := UpdateKeychainSecret(service, account, "new-token")
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "pre-flight check failed")
+		mock.getErr = nil
+	})
 }
 
 func TestStoreConfigValue(t *testing.T) {

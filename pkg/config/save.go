@@ -18,6 +18,43 @@ func StoreKeychainSecret(service, account, value string) (string, error) {
 	return fmt.Sprintf("%s%s/%s", KeychainPrefix, service, account), nil
 }
 
+// UpdateKeychainSecret updates a secret in the keychain and returns a rollback function.
+// The rollback function will either restore the previous value or delete the new entry
+// if it didn't exist before. The rollback function is only intended to be called once.
+func UpdateKeychainSecret(service, account, newValue string) (string, func() error, error) {
+	// 1. Pre-flight: Read old value (if any)
+	oldValue, err := keyringImpl.Get(service, account)
+	exists := true
+	if err != nil {
+		if ClassifyKeyringError(err) == ErrorClassNotFound {
+			exists = false
+		} else {
+			return "", nil, errors.Wrapf(err, "pre-flight check failed for keychain (%s/%s)", service, account)
+		}
+	}
+
+	// 2. Set new value
+	uri, err := StoreKeychainSecret(service, account, newValue)
+	if err != nil {
+		return "", nil, err
+	}
+
+	// 3. Construct rollback closure
+	rollback := func() error {
+		if !exists {
+			// It was a new entry, so delete it to rollback
+			return keyringImpl.Delete(service, account)
+		}
+		// It was an update, so restore the old value
+		err := keyringImpl.Set(service, account, oldValue)
+		// Zero out the old value after restoration attempt to prevent leakage
+		oldValue = ""
+		return err
+	}
+
+	return uri, rollback, nil
+}
+
 // StoreConfigValue updates a key-value pair in the user's config file.
 // If the key is already present, it's updated. If not, it's added.
 func StoreConfigValue(key, value string) error {
