@@ -129,9 +129,9 @@ func listCurrentRepoWorktrees(cfg *config.Config) error {
 			}
 		}
 
-		// Get relative path from repo
+		// Get relative path from repo (only when inside repo root)
 		relPath, err := filepath.Rel(repoRoot, wt.Path)
-		if err != nil {
+		if err != nil || relPath == ".." || strings.HasPrefix(relPath, ".."+string(filepath.Separator)) {
 			relPath = wt.Path
 		}
 

@@ -416,7 +416,8 @@ func (wm *WorktreeManager) GetWorktreePath(ticketType, ticket string) (string, e
 		return "", err
 	}
 	worktreePath := filepath.Join(repoRoot, ticketType, ticket)
-	if !strings.HasPrefix(worktreePath, repoRoot+string(filepath.Separator)) {
+	rel, err := filepath.Rel(repoRoot, worktreePath)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return "", errors.New("invalid path: worktree path escapes repository root")
 	}
 	return worktreePath, nil
