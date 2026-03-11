@@ -590,7 +590,7 @@ func (e *SplitBrainError) RecoveryInstructions() string {
 		}
 
 		sb.WriteString("To resolve this, either:\n")
-		sb.WriteString("1. Manually update your user config file to reference the new secret (set to: " + uri + ").\n")
+		fmt.Fprintf(&sb, "1. Manually update your user config file to reference the new secret (set to: %q).\n", uri)
 		sb.WriteString("2. Manually restore the OLD secret to the keychain using your system tools.\n")
 	}
 

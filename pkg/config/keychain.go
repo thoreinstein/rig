@@ -19,7 +19,6 @@ const (
 	ErrorClassNone       ErrorClass = iota // Zero value: nil input
 	ErrorClassUnknown                      // Non-nil error that doesn't match any known pattern
 	ErrorClassPermission                   // Access denied or auth failure
-	ErrorClassSystem                       // Confirmed system-level failure
 	ErrorClassNotFound                     // Entry not found in keychain
 )
 
