@@ -613,3 +613,42 @@ func TestLayeredLoader_DiscoveryLog(t *testing.T) {
 		t.Error("discovery log missing env override message for git.base_branch")
 	}
 }
+
+func TestLayeredLoader_ExplicitDefaultMatches(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// default for ai.enabled is true (from SetDefaults)
+	userConfig := `
+[ai]
+enabled = true
+`
+	userFile := filepath.Join(tmpDir, "user.toml")
+	if err := os.WriteFile(userFile, []byte(userConfig), 0644); err != nil {
+		t.Fatalf("failed to write user config: %v", err)
+	}
+
+	l := &LayeredLoader{
+		sources:        make(SourceMap),
+		SkipGlobalSync: true,
+		userFile:       userFile,
+		cwd:            tmpDir,
+	}
+
+	_, err := l.Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+
+	// ai.enabled matches default (true), but it IS in the user file.
+	// It must be recorded as SourceUser.
+	entry, ok := l.sources["ai.enabled"]
+	if !ok {
+		t.Fatal("ai.enabled should be in sources map")
+	}
+	if entry.Source != SourceUser {
+		t.Errorf("ai.enabled source = %v, want %v", entry.Source, SourceUser)
+	}
+	if entry.File != userFile {
+		t.Errorf("ai.enabled file = %q, want %q", entry.File, userFile)
+	}
+}

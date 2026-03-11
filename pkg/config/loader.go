@@ -88,19 +88,29 @@ func (l *LayeredLoader) Load() (*Config, error) {
 	// Tier 2: User File
 	l.logDiscovery("user", "Looking for user config: "+l.userFile)
 	if _, err := os.Stat(l.userFile); err == nil {
-		v.SetConfigFile(l.userFile)
-		v.SetConfigType("toml")
-		if err := v.ReadInConfig(); err != nil {
+		// Use a dedicated viper instance to read the user file in isolation.
+		// This ensures we capture keys that match defaults but are explicitly set.
+		userViper := viper.New()
+		userViper.SetConfigFile(l.userFile)
+		userViper.SetConfigType("toml")
+		if err := userViper.ReadInConfig(); err != nil {
 			return nil, errors.Wrapf(err, "failed to read user config file %q", l.userFile)
 		}
-		userSettings := v.AllSettings()
-		diffs := DiffSettings(defaultSettings, userSettings, "")
-		l.logDiscovery("user", fmt.Sprintf("Loaded user config: %s (%d keys overridden)", l.userFile, len(diffs)), l.userFile)
-		for _, k := range diffs {
-			val := v.Get(k)
+
+		userSettings := userViper.AllSettings()
+		explicitKeys := flattenSettings(userSettings, "")
+		l.logDiscovery("user", fmt.Sprintf("Loaded user config: %s (%d keys explicitly set)", l.userFile, len(explicitKeys)), l.userFile)
+
+		for k := range explicitKeys {
+			val := userViper.Get(k)
 			l.sources[k] = SourceEntry{Source: SourceUser, File: l.userFile, Value: val, RawValue: val}
 		}
-		defaultSettings = userSettings
+
+		// Merge user settings into the primary viper
+		if err := v.MergeConfigMap(userSettings); err != nil {
+			return nil, errors.Wrapf(err, "failed to merge user config %q", l.userFile)
+		}
+		defaultSettings = v.AllSettings()
 	} else {
 		l.logDiscovery("user", "User config not found: "+l.userFile)
 	}
@@ -135,6 +145,7 @@ func (l *LayeredLoader) Load() (*Config, error) {
 			}
 
 			projectSettings := localViper.AllSettings()
+			explicitProjectKeys := flattenSettings(projectSettings, "")
 			diffs := DiffSettings(defaultSettings, projectSettings, "")
 
 			// Catch immutable keys even when their value matches the current default
@@ -156,6 +167,8 @@ func (l *LayeredLoader) Load() (*Config, error) {
 						AttemptedValue: localViper.Get(key),
 					})
 					deleteFlatKey(projectSettings, key)
+					// If it was immutable and blocked, it's not "explicitly set" in a usable way
+					delete(explicitProjectKeys, key)
 					continue
 				}
 
@@ -175,16 +188,14 @@ func (l *LayeredLoader) Load() (*Config, error) {
 				return nil, errors.Wrapf(err, "failed to merge project config %q", pc)
 			}
 
-			// Track provenance
-			currentSettings := v.AllSettings()
-			newDiffs := DiffSettings(defaultSettings, currentSettings, "")
-			l.logDiscovery("project", fmt.Sprintf("Using project config: %s (%d keys overridden, %d immutable blocked)", pc, len(newDiffs), immutableBlocked), pc)
+			// Track provenance for all keys explicitly in this project file
+			l.logDiscovery("project", fmt.Sprintf("Using project config: %s (%d keys explicitly set, %d immutable blocked)", pc, len(explicitProjectKeys), immutableBlocked), pc)
 
-			for _, k := range newDiffs {
-				val := v.Get(k)
+			for k := range explicitProjectKeys {
+				val := localViper.Get(k)
 				l.sources[k] = SourceEntry{Source: SourceProject, File: pc, Value: val, RawValue: val}
 			}
-			defaultSettings = currentSettings
+			defaultSettings = v.AllSettings()
 		} else {
 			l.logDiscovery("project", "Not found: "+pc)
 		}
@@ -201,6 +212,7 @@ func (l *LayeredLoader) Load() (*Config, error) {
 	// Check each known key for an env override.
 	// We use os.LookupEnv (not os.Getenv) so that explicitly-set-but-empty
 	// env vars (e.g. RIG_GITHUB_TOKEN="") are correctly attributed to Env.
+	// We check against the full set of known keys (including defaults and user/project file keys).
 	knownKeys := flattenSettings(v.AllSettings(), "")
 	for key := range knownKeys {
 		envKey := "RIG_" + strings.ToUpper(strings.ReplaceAll(key, ".", "_"))
