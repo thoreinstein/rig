@@ -96,11 +96,6 @@ func ClassifyKeyringError(err error) ErrorClass {
 		return ErrorClassPermission
 	}
 
-	// Windows Credential Manager errors
-	if strings.Contains(msg, "the specified item could not be found") {
-		return ErrorClassNotFound
-	}
-
 	return ErrorClassSystem
 }
 

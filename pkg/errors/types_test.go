@@ -606,9 +606,6 @@ func TestSplitBrainError(t *testing.T) {
 		if !strings.Contains(instructions, "secret-tool clear service rig account jira.token") {
 			t.Error("RecoveryInstructions() should contain Linux command")
 		}
-		if !strings.Contains(instructions, "cmdkey /delete:rig:jira.token") {
-			t.Error("RecoveryInstructions() should contain Windows command")
-		}
 	})
 
 	t.Run("Unwrap", func(t *testing.T) {

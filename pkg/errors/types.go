@@ -566,7 +566,6 @@ func (e *SplitBrainError) RecoveryInstructions() string {
 
 	sb.WriteString("  macOS: security delete-generic-password -s \"" + e.Service + "\" -a \"" + e.Account + "\"\n")
 	sb.WriteString("  Linux: secret-tool clear service " + e.Service + " account " + e.Account + "\n")
-	sb.WriteString("  Windows: cmdkey /delete:rig:" + e.Account + "\n")
 
 	return sb.String()
 }
