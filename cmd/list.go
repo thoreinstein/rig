@@ -114,19 +114,25 @@ func listCurrentRepoWorktrees(cfg *config.Config) error {
 
 	fmt.Printf("[%s]\n", repoName)
 
+	// Resolve repoRoot symlinks once outside the loop.
+	realRepoRoot, repoRootErr := filepath.EvalSymlinks(repoRoot)
+
 	totalWorktrees := 0
 	for _, wt := range worktrees {
 		// Skip the main repo path itself
-		realWt, _ := filepath.EvalSymlinks(wt.Path)
-		realRepoRoot, _ := filepath.EvalSymlinks(repoRoot)
-		if wt.Path == repoRoot || realWt == realRepoRoot {
+		if wt.Path == repoRoot {
 			continue
+		}
+		if repoRootErr == nil {
+			if realWt, err := filepath.EvalSymlinks(wt.Path); err == nil && realWt == realRepoRoot {
+				continue
+			}
 		}
 
 		// Get relative path from repo
-		relPath := strings.TrimPrefix(wt.Path, repoRoot+"/")
-		if relPath == wt.Path {
-			relPath = wt.Path // Couldn't make relative, use full path
+		relPath, err := filepath.Rel(repoRoot, wt.Path)
+		if err != nil {
+			relPath = wt.Path
 		}
 
 		if wt.Branch != "" {

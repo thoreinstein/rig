@@ -174,13 +174,19 @@ func findCleanupCandidates(cfg *config.Config, provider vcs.Provider) ([]Cleanup
 		baseBranch = "main" // fallback
 	}
 
+	// Resolve repoRoot symlinks once outside the loop.
+	realRepoRoot, repoRootErr := filepath.EvalSymlinks(repoRoot)
+
 	candidates := make([]CleanupCandidate, 0, len(worktrees))
 	for _, wt := range worktrees {
 		// Skip the main repo path (handle symlink resolution for comparison)
-		realWt, _ := filepath.EvalSymlinks(wt.Path)
-		realRepoRoot, _ := filepath.EvalSymlinks(repoRoot)
-		if wt.Path == repoRoot || realWt == realRepoRoot {
+		if wt.Path == repoRoot {
 			continue
+		}
+		if repoRootErr == nil {
+			if realWt, err := filepath.EvalSymlinks(wt.Path); err == nil && realWt == realRepoRoot {
+				continue
+			}
 		}
 
 		// Determine session name from worktree path

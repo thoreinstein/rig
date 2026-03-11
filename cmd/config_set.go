@@ -64,14 +64,15 @@ Use --keychain to store the value in the system keychain and save a reference UR
 		}
 
 		if err := config.StoreConfigValue(key, finalValue); err != nil {
+			wrappedErr := errors.Wrap(err, "failed to update configuration")
 			if rollback != nil {
 				if rollbackErr := rollback(); rollbackErr != nil {
-					sbErr := rigerrors.NewSplitBrainError(key, "rig", key, err, rollbackErr, wasNew, priorConfig)
+					sbErr := rigerrors.NewSplitBrainError(key, "rig", key, wrappedErr, rollbackErr, wasNew, priorConfig)
 					fmt.Fprint(cmd.ErrOrStderr(), sbErr.RecoveryInstructions())
 					return sbErr
 				}
 			}
-			return errors.Wrap(err, "failed to update configuration")
+			return wrappedErr
 		}
 
 		if setKeychain {

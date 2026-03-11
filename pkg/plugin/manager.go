@@ -264,16 +264,7 @@ func (m *Manager) GetAssistantClient(ctx context.Context, name string) (client a
 		return nil, errors.NewPluginError(name, "GetAssistantClient", "plugin process is no longer running")
 	}
 
-	// Verify the plugin has the assistant capability
-	hasAssistant := false
-	for _, cap := range p.Capabilities {
-		if cap.Name == AssistantCapability {
-			hasAssistant = true
-			break
-		}
-	}
-
-	if !hasAssistant {
+	if !hasCapability(p, AssistantCapability) {
 		return nil, errors.NewPluginError(name, "GetAssistantClient", "plugin does not support assistant capability")
 	}
 
@@ -309,16 +300,7 @@ func (m *Manager) GetCommandClient(ctx context.Context, name string) (client api
 		return nil, errors.NewPluginError(name, "GetCommandClient", "plugin process is no longer running")
 	}
 
-	// Verify the plugin has the command capability
-	hasCommand := false
-	for _, cap := range p.Capabilities {
-		if cap.Name == CommandCapability {
-			hasCommand = true
-			break
-		}
-	}
-
-	if !hasCommand {
+	if !hasCapability(p, CommandCapability) {
 		return nil, errors.NewPluginError(name, "GetCommandClient", "plugin does not support command capability")
 	}
 
@@ -354,16 +336,7 @@ func (m *Manager) GetNodeClient(ctx context.Context, name string) (client apiv1.
 		return nil, errors.NewPluginError(name, "GetNodeClient", "plugin process is no longer running")
 	}
 
-	// Verify the plugin has the node capability
-	hasNode := false
-	for _, cap := range p.Capabilities {
-		if cap.Name == NodeCapability {
-			hasNode = true
-			break
-		}
-	}
-
-	if !hasNode {
+	if !hasCapability(p, NodeCapability) {
 		return nil, errors.NewPluginError(name, "GetNodeClient", "plugin does not support node capability")
 	}
 
@@ -399,16 +372,7 @@ func (m *Manager) GetVCSClient(ctx context.Context, name string) (client apiv1.V
 		return nil, errors.NewPluginError(name, "GetVCSClient", "plugin process is no longer running")
 	}
 
-	// Verify the plugin has the vcs capability
-	hasVCS := false
-	for _, cap := range p.Capabilities {
-		if cap.Name == VCSCapability {
-			hasVCS = true
-			break
-		}
-	}
-
-	if !hasVCS {
+	if !hasCapability(p, VCSCapability) {
 		return nil, errors.NewPluginError(name, "GetVCSClient", "plugin does not support vcs capability")
 	}
 
@@ -444,16 +408,7 @@ func (m *Manager) GetTicketClient(ctx context.Context, name string) (client apiv
 		return nil, errors.NewPluginError(name, "GetTicketClient", "plugin process is no longer running")
 	}
 
-	// Verify the plugin has the ticket capability
-	hasTicket := false
-	for _, cap := range p.Capabilities {
-		if cap.Name == TicketCapability {
-			hasTicket = true
-			break
-		}
-	}
-
-	if !hasTicket {
+	if !hasCapability(p, TicketCapability) {
 		return nil, errors.NewPluginError(name, "GetTicketClient", "plugin does not support ticket capability")
 	}
 
@@ -489,16 +444,7 @@ func (m *Manager) GetKnowledgeClient(ctx context.Context, name string) (client a
 		return nil, errors.NewPluginError(name, "GetKnowledgeClient", "plugin process is no longer running")
 	}
 
-	// Verify the plugin has the knowledge capability
-	hasKnowledge := false
-	for _, cap := range p.Capabilities {
-		if cap.Name == KnowledgeCapability {
-			hasKnowledge = true
-			break
-		}
-	}
-
-	if !hasKnowledge {
+	if !hasCapability(p, KnowledgeCapability) {
 		return nil, errors.NewPluginError(name, "GetKnowledgeClient", "plugin does not support knowledge capability")
 	}
 
@@ -828,6 +774,17 @@ func (m *Manager) ListPlugins() []*Plugin {
 		plugins = append(plugins, pCopy)
 	}
 	return plugins
+}
+
+// hasCapability returns true if the plugin advertises the given capability name.
+// Caller must hold p.mu.
+func hasCapability(p *Plugin, name string) bool {
+	for _, cap := range p.Capabilities {
+		if cap.Name == name {
+			return true
+		}
+	}
+	return false
 }
 
 func toStringSlice(i any) []string {

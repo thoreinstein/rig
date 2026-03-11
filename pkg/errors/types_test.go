@@ -621,8 +621,8 @@ func TestSplitBrainError(t *testing.T) {
 	t.Run("Unwrap", func(t *testing.T) {
 		err := NewSplitBrainError(key, service, account, primaryErr, rollbackErr, true, "")
 		unwrapped := err.Unwrap()
-		if unwrapped != primaryErr {
-			t.Errorf("Unwrap() = %v, want %v", unwrapped, primaryErr)
+		if len(unwrapped) != 2 || unwrapped[0] != primaryErr || unwrapped[1] != rollbackErr {
+			t.Errorf("Unwrap() = %v, want [%v, %v]", unwrapped, primaryErr, rollbackErr)
 		}
 	})
 

@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"log/slog"
 	"os"
 	"strings"
 )
@@ -87,6 +88,7 @@ func buildEnv(globalAllow, pluginAllow []string) []string {
 			if _, overridden := pluginExact[key]; !overridden {
 				continue
 			}
+			slog.Warn("plugin allow-list overrides deny-listed env var", "var", key)
 		}
 
 		if _, ok := exact[key]; ok {

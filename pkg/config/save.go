@@ -60,7 +60,8 @@ func UpdateKeychainSecret(service, account, newValue string) (string, func() err
 		}
 		called = true
 
-		defer func() { oldValue = "" }() // Zero sensitive data
+		// oldValue is reclaimed by GC when the closure returns; Go strings are
+		// immutable backing arrays and cannot be securely zeroed in-process.
 		if !exists {
 			rollbackErr = impl.Delete(service, account)
 		} else {

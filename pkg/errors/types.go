@@ -597,9 +597,9 @@ func (e *SplitBrainError) RecoveryInstructions() string {
 	return sb.String()
 }
 
-// Unwrap returns the primary error that triggered the failure.
-func (e *SplitBrainError) Unwrap() error {
-	return e.PrimaryErr
+// Unwrap returns both the primary and rollback errors for errors.Is/As traversal.
+func (e *SplitBrainError) Unwrap() []error {
+	return []error{e.PrimaryErr, e.RollbackErr}
 }
 
 // NewSplitBrainError creates a new SplitBrainError.

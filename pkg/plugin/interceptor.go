@@ -9,6 +9,10 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// noPID is used when the plugin process hasn't been started yet or its PID
+// is unknown. A real PID is always > 0 on all supported platforms.
+const noPID = 0
+
 // pluginIdentityInterceptor injects the plugin name into the gRPC context.
 //
 // Security model: UDS directory isolation (0o700 parent, 0o600 socket) is
@@ -25,13 +29,13 @@ func pluginIdentityInterceptor(p *Plugin) grpc.UnaryServerInterceptor {
 		// Defense-in-depth: validate PID when platform supports extraction.
 		if callerPID, err := extractPID(pe); err == nil {
 			p.mu.Lock()
-			expectedPID := 0
+			expectedPID := noPID
 			if p.process != nil {
 				expectedPID = p.process.Pid
 			}
 			p.mu.Unlock()
 
-			if expectedPID > 0 && callerPID != expectedPID {
+			if expectedPID != noPID && callerPID != expectedPID {
 				return nil, status.Errorf(codes.PermissionDenied, "connection identity validation failed")
 			}
 		}
