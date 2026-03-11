@@ -166,10 +166,14 @@ func ResolveValue(v interface{}, sources SourceMap, key string, verbose bool) (i
 			}
 
 			if sources != nil {
+				// Update provenance to indicate it came from Keychain, but preserve the
+				// original File and RawValue (the URI) if they exist.
+				oldEntry := sources[key]
 				sources[key] = SourceEntry{
-					Value:  secret,
-					Source: SourceKeychain,
-					File:   fmt.Sprintf("%s/%s", service, account),
+					Source:   SourceKeychain,
+					Value:    secret,
+					File:     oldEntry.File,
+					RawValue: oldEntry.RawValue,
 				}
 			}
 			return secret, nil

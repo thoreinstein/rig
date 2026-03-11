@@ -81,7 +81,8 @@ func (l *LayeredLoader) Load() (*Config, error) {
 	flatDefaults := flattenSettings(defaultSettings, "")
 	l.logDiscovery("default", fmt.Sprintf("Populated %d default keys", len(flatDefaults)))
 	for k := range flatDefaults {
-		l.sources[k] = SourceEntry{Source: SourceDefault, Value: v.Get(k)}
+		val := v.Get(k)
+		l.sources[k] = SourceEntry{Source: SourceDefault, Value: val, RawValue: val}
 	}
 
 	// Tier 2: User File
@@ -96,7 +97,8 @@ func (l *LayeredLoader) Load() (*Config, error) {
 		diffs := DiffSettings(defaultSettings, userSettings, "")
 		l.logDiscovery("user", fmt.Sprintf("Loaded user config: %s (%d keys overridden)", l.userFile, len(diffs)), l.userFile)
 		for _, k := range diffs {
-			l.sources[k] = SourceEntry{Source: SourceUser, File: l.userFile, Value: v.Get(k)}
+			val := v.Get(k)
+			l.sources[k] = SourceEntry{Source: SourceUser, File: l.userFile, Value: val, RawValue: val}
 		}
 		defaultSettings = userSettings
 	} else {
@@ -179,7 +181,8 @@ func (l *LayeredLoader) Load() (*Config, error) {
 			l.logDiscovery("project", fmt.Sprintf("Using project config: %s (%d keys overridden, %d immutable blocked)", pc, len(newDiffs), immutableBlocked), pc)
 
 			for _, k := range newDiffs {
-				l.sources[k] = SourceEntry{Source: SourceProject, File: pc, Value: v.Get(k)}
+				val := v.Get(k)
+				l.sources[k] = SourceEntry{Source: SourceProject, File: pc, Value: val, RawValue: val}
 			}
 			defaultSettings = currentSettings
 		} else {
@@ -203,7 +206,8 @@ func (l *LayeredLoader) Load() (*Config, error) {
 		envKey := "RIG_" + strings.ToUpper(strings.ReplaceAll(key, ".", "_"))
 		if _, ok := os.LookupEnv(envKey); ok {
 			l.logDiscovery("env", fmt.Sprintf("Env override: %s → %s", key, envKey))
-			l.sources[key] = SourceEntry{Source: SourceEnv, Value: v.Get(key)}
+			val := v.Get(key)
+			l.sources[key] = SourceEntry{Source: SourceEnv, Value: val, RawValue: val}
 		}
 	}
 

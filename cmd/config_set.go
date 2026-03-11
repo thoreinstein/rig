@@ -36,8 +36,12 @@ Use --keychain to store the value in the system keychain and save a reference UR
 		// If the key is not in the user file, priorConfig remains empty.
 		var priorConfig string
 		if appLoader != nil {
-			if entry, ok := appLoader.Sources()[key]; ok && entry.Source == config.SourceUser {
-				priorConfig = fmt.Sprint(entry.Value)
+			if entry, ok := appLoader.Sources()[key]; ok {
+				// We check if the entry's File matches the user config file path.
+				// This catches keys that were SourceUser then promoted to SourceKeychain.
+				if entry.File == appLoader.UserFile() {
+					priorConfig = fmt.Sprint(entry.RawValue)
+				}
 			}
 		}
 

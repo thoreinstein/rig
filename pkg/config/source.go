@@ -35,9 +35,10 @@ func (s ConfigSource) String() string {
 
 // SourceEntry records a value and its origin
 type SourceEntry struct {
-	Value  interface{}
-	Source ConfigSource
-	File   string // Optional: specific file path for User/Project sources
+	Value    interface{} // The final resolved/hydrated value
+	Source   ConfigSource
+	File     string      // Optional: specific file path for User/Project sources
+	RawValue interface{} // The raw value before any resolution or hydration (e.g. keychain:// URI)
 }
 
 // SourceMap maps dotted config keys to their provenance
