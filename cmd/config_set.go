@@ -5,6 +5,7 @@ import (
 
 	"github.com/cockroachdb/errors"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 
 	"thoreinstein.com/rig/pkg/config"
 	rigerrors "thoreinstein.com/rig/pkg/errors"
@@ -31,6 +32,10 @@ Use --keychain to store the value in the system keychain and save a reference UR
 			fmt.Fprintf(cmd.OutOrStdout(), "Warning: Storing sensitive key %q in plaintext. Consider using --keychain.\n", key)
 		}
 
+		// Capture the prior configuration value for accurate split-brain reporting.
+		// We use fmt.Sprint to handle any underlying type (string, int, etc).
+		priorConfig := fmt.Sprint(viper.Get(key))
+
 		finalValue := value
 		var rollback func() error
 		var wasNew bool
@@ -47,7 +52,7 @@ Use --keychain to store the value in the system keychain and save a reference UR
 		if err := config.StoreConfigValue(key, finalValue); err != nil {
 			if rollback != nil {
 				if rollbackErr := rollback(); rollbackErr != nil {
-					sbErr := rigerrors.NewSplitBrainError(key, "rig", key, err, rollbackErr, wasNew)
+					sbErr := rigerrors.NewSplitBrainError(key, "rig", key, err, rollbackErr, wasNew, priorConfig)
 					fmt.Fprint(cmd.ErrOrStderr(), sbErr.RecoveryInstructions())
 					return sbErr
 				}

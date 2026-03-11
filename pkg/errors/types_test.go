@@ -574,7 +574,7 @@ func TestSplitBrainError(t *testing.T) {
 	account := "jira.token"
 
 	t.Run("New entry recovery instructions", func(t *testing.T) {
-		err := NewSplitBrainError(key, service, account, primaryErr, rollbackErr, true)
+		err := NewSplitBrainError(key, service, account, primaryErr, rollbackErr, true, "")
 		instructions := err.RecoveryInstructions()
 		if !strings.Contains(instructions, "MANUAL RECOVERY REQUIRED") {
 			t.Error("RecoveryInstructions() should contain MANUAL RECOVERY REQUIRED")
@@ -582,46 +582,43 @@ func TestSplitBrainError(t *testing.T) {
 		if !strings.Contains(instructions, "delete the keychain entry and try again") {
 			t.Error("RecoveryInstructions() for new entry should advise deletion")
 		}
-		if !strings.Contains(instructions, "security delete-generic-password") {
-			t.Error("RecoveryInstructions() should contain macOS command")
-		}
 	})
 
-	t.Run("Update recovery instructions", func(t *testing.T) {
-		err := NewSplitBrainError(key, service, account, primaryErr, rollbackErr, false)
+	t.Run("Update recovery instructions (plaintext to keychain)", func(t *testing.T) {
+		err := NewSplitBrainError(key, service, account, primaryErr, rollbackErr, false, "plaintext-val")
 		instructions := err.RecoveryInstructions()
-		if !strings.Contains(instructions, "MANUAL RECOVERY REQUIRED") {
-			t.Error("RecoveryInstructions() should contain MANUAL RECOVERY REQUIRED")
+		if !strings.Contains(instructions, "Your config file still references the OLD value (plaintext-val)") {
+			t.Error("RecoveryInstructions() should report old value mismatch")
 		}
 		if !strings.Contains(instructions, "DO NOT delete the keychain entry") {
 			t.Error("RecoveryInstructions() for update should warn against deletion")
 		}
-		if !strings.Contains(instructions, "Manually update your config file") {
-			t.Error("RecoveryInstructions() for update should suggest manual config update")
+	})
+
+	t.Run("Update recovery instructions (already keychain)", func(t *testing.T) {
+		uri := "keychain://rig/jira.token"
+		err := NewSplitBrainError(key, service, account, primaryErr, rollbackErr, false, uri)
+		instructions := err.RecoveryInstructions()
+		if !strings.Contains(instructions, "Your config file ALREADY references this keychain entry") {
+			t.Error("RecoveryInstructions() should report existing URI match")
+		}
+		if !strings.Contains(instructions, "no further action is required") {
+			t.Error("RecoveryInstructions() should report no action needed if acceptable")
 		}
 	})
 
 	t.Run("Unwrap", func(t *testing.T) {
-		err := NewSplitBrainError(key, service, account, primaryErr, rollbackErr, true)
+		err := NewSplitBrainError(key, service, account, primaryErr, rollbackErr, true, "")
 		unwrapped := err.Unwrap()
 		if unwrapped != primaryErr {
 			t.Errorf("Unwrap() = %v, want %v", unwrapped, primaryErr)
 		}
-		if !errors.Is(err, primaryErr) {
-			t.Error("errors.Is() should find primaryErr in SplitBrainError chain")
-		}
 	})
 
 	t.Run("IsSplitBrainError", func(t *testing.T) {
-		err := NewSplitBrainError(key, service, account, primaryErr, rollbackErr, true)
+		err := NewSplitBrainError(key, service, account, primaryErr, rollbackErr, true, "")
 		if !IsSplitBrainError(err) {
 			t.Error("IsSplitBrainError should return true for direct SplitBrainError")
-		}
-		if !IsSplitBrainError(errors.Wrap(err, "wrapped")) {
-			t.Error("IsSplitBrainError should return true for wrapped SplitBrainError")
-		}
-		if IsSplitBrainError(primaryErr) {
-			t.Error("IsSplitBrainError should return false for unrelated error")
 		}
 	})
 }

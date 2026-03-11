@@ -551,6 +551,7 @@ type SplitBrainError struct {
 	PrimaryErr  error  // Why the config write failed
 	RollbackErr error  // Why the rollback failed
 	IsNew       bool   // Whether the keychain entry was newly created
+	PriorConfig string // The config value before the failed write
 }
 
 // Error implements the error interface with a concise single-line message.
@@ -571,10 +572,19 @@ func (e *SplitBrainError) RecoveryInstructions() string {
 	} else {
 		sb.WriteString("The keychain entry for this key was updated, but the configuration write failed.\n")
 		sb.WriteString("The attempt to restore the previous value ALSO failed.\n\n")
-		sb.WriteString("CRITICAL: The keychain entry now contains the NEW secret, but your config file still points to the OLD one.\n")
-		sb.WriteString("DO NOT delete the keychain entry unless you have a backup of the credential.\n\n")
+		sb.WriteString("CRITICAL: The keychain entry now contains the NEW secret.\n")
+
+		uri := "keychain://" + e.Service + "/" + e.Account
+		if e.PriorConfig == uri {
+			sb.WriteString("Your config file ALREADY references this keychain entry, so it is now using the NEW secret.\n")
+			sb.WriteString("If this is acceptable, no further action is required.\n\n")
+		} else {
+			sb.WriteString("Your config file still references the OLD value (" + e.PriorConfig + ").\n")
+			sb.WriteString("DO NOT delete the keychain entry unless you have a backup of the credential.\n\n")
+		}
+
 		sb.WriteString("To resolve this, either:\n")
-		sb.WriteString("1. Manually update your config file to correctly reference the new secret.\n")
+		sb.WriteString("1. Manually update your config file to correctly reference the new secret (set to: " + uri + ").\n")
 		sb.WriteString("2. Manually restore the OLD secret to the keychain using your system tools.\n")
 	}
 
@@ -587,7 +597,7 @@ func (e *SplitBrainError) Unwrap() error {
 }
 
 // NewSplitBrainError creates a new SplitBrainError.
-func NewSplitBrainError(key, service, account string, primaryErr, rollbackErr error, isNew bool) *SplitBrainError {
+func NewSplitBrainError(key, service, account string, primaryErr, rollbackErr error, isNew bool, priorConfig string) *SplitBrainError {
 	return &SplitBrainError{
 		Key:         key,
 		Service:     service,
@@ -595,6 +605,7 @@ func NewSplitBrainError(key, service, account string, primaryErr, rollbackErr er
 		PrimaryErr:  primaryErr,
 		RollbackErr: rollbackErr,
 		IsNew:       isNew,
+		PriorConfig: priorConfig,
 	}
 }
 
