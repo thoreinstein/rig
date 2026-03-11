@@ -158,7 +158,7 @@ func TestClassifyKeyringError(t *testing.T) {
 		{
 			name:     "system error (unknown)",
 			err:      errors.New("something went wrong with dbus"),
-			expected: ErrorClassSystem,
+			expected: ErrorClassUnknown,
 		},
 	}
 

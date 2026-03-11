@@ -16,12 +16,11 @@ const KeychainPrefix = "keychain://"
 type ErrorClass int
 
 const (
-	ErrorClassNone    ErrorClass = iota // Zero value: nil input
-	ErrorClassUnknown                   // Non-nil error that doesn't match any known pattern
-	ErrorClassTransient
-	ErrorClassPermission
-	ErrorClassSystem
-	ErrorClassNotFound
+	ErrorClassNone       ErrorClass = iota // Zero value: nil input
+	ErrorClassUnknown                      // Non-nil error that doesn't match any known pattern
+	ErrorClassPermission                   // Access denied or auth failure
+	ErrorClassSystem                       // Confirmed system-level failure
+	ErrorClassNotFound                     // Entry not found in keychain
 )
 
 // KeyringProvider defines the interface for interacting with the system keychain.
@@ -96,7 +95,7 @@ func ClassifyKeyringError(err error) ErrorClass {
 		return ErrorClassPermission
 	}
 
-	return ErrorClassSystem
+	return ErrorClassUnknown
 }
 
 // ResolveKeychainValues recursively walks the settings map and resolves keychain:// URIs

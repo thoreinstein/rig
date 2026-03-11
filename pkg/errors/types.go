@@ -569,8 +569,8 @@ func (e *SplitBrainError) RecoveryInstructions() string {
 		sb.WriteString("The attempt to delete the new entry ALSO failed.\n\n")
 		sb.WriteString("CRITICAL: The keychain entry may now contain the NEW secret, but your config does not reference it.\n")
 		sb.WriteString("To resolve this, manually delete the keychain entry and try again:\n\n")
-		sb.WriteString("  macOS: security delete-generic-password -s \"" + e.Service + "\" -a \"" + e.Account + "\"\n")
-		sb.WriteString("  Linux: secret-tool clear service " + e.Service + " account " + e.Account + "\n")
+		fmt.Fprintf(&sb, "  macOS: security delete-generic-password -s %q -a %q\n", e.Service, e.Account)
+		fmt.Fprintf(&sb, "  Linux: secret-tool clear service %q account %q\n", e.Service, e.Account)
 	} else {
 		sb.WriteString("The keychain entry for this key was updated, but the configuration write failed.\n")
 		sb.WriteString("The attempt to restore the previous value ALSO failed.\n\n")

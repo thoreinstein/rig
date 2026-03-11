@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/cockroachdb/errors"
 	"github.com/pelletier/go-toml/v2"
@@ -20,10 +21,11 @@ func StoreKeychainSecret(service, account, value string) (string, error) {
 
 // UpdateKeychainSecret updates a secret in the keychain and returns a rollback function.
 // The rollback function will either restore the previous value or delete the new entry
-// if it didn't exist before. The rollback function is only intended to be called once.
-// It returns the URI, the rollback function, and a boolean indicating if it was a new entry.
+// if it didn't exist before. The rollback function is safe to call at most once; subsequent
+// calls return an error. It returns the URI, the rollback function, and a boolean indicating
+// if it was a new entry.
 func UpdateKeychainSecret(service, account, newValue string) (string, func() error, bool, error) {
-	// Capture provider at closure creation time so rollback uses the same impl.
+	// Capture provider at closure creation time so all stages use the same impl.
 	impl := getKeyringImpl()
 
 	// 1. Pre-flight: Read old value (if any)
@@ -37,19 +39,28 @@ func UpdateKeychainSecret(service, account, newValue string) (string, func() err
 		}
 	}
 
-	// 2. Set new value
-	uri, err := StoreKeychainSecret(service, account, newValue)
-	if err != nil {
-		return "", nil, false, err
+	// 2. Set new value using captured impl (not StoreKeychainSecret, which re-reads the provider)
+	if err := impl.Set(service, account, newValue); err != nil {
+		return "", nil, false, errors.Wrapf(err, "failed to store secret in keychain (%s/%s)", service, account)
 	}
+	uri := fmt.Sprintf("%s%s/%s", KeychainPrefix, service, account)
 
-	// 3. Construct rollback closure
+	// 3. Construct single-use rollback closure
+	var once sync.Once
 	rollback := func() error {
-		defer func() { oldValue = "" }() // Zero sensitive data in all paths
-		if !exists {
-			return impl.Delete(service, account)
+		var rollbackErr error
+		once.Do(func() {
+			defer func() { oldValue = "" }() // Zero sensitive data
+			if !exists {
+				rollbackErr = impl.Delete(service, account)
+			} else {
+				rollbackErr = impl.Set(service, account, oldValue)
+			}
+		})
+		if rollbackErr != nil {
+			return rollbackErr
 		}
-		return impl.Set(service, account, oldValue)
+		return nil
 	}
 
 	return uri, rollback, !exists, nil

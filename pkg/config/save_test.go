@@ -38,11 +38,9 @@ func TestStoreKeychainSecret(t *testing.T) {
 }
 
 func TestUpdateKeychainSecret(t *testing.T) {
-	oldImpl := keyringImpl
-	defer func() { keyringImpl = oldImpl }()
-
 	mock := newMockKeyringProvider()
 	SetKeyringProvider(mock)
+	t.Cleanup(func() { SetKeyringProvider(nil) })
 
 	service, account := "rig", "jira.token"
 

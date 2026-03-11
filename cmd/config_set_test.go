@@ -241,12 +241,10 @@ func TestConfigSetFailureModes(t *testing.T) {
 	mock := &mockKeyringProvider{storage: make(map[string]string)}
 	config.SetKeyringProvider(mock)
 	t.Cleanup(func() { config.SetKeyringProvider(nil) })
-
 	tests := []struct {
 		name               string
 		args               []string
 		setupKeyring       map[string]string
-		setupConfig        string
 		makeDirRead        bool // if true, make configDir read-only (0500)
 		mockGetErr         error
 		mockSetErr         error
@@ -256,6 +254,7 @@ func TestConfigSetFailureModes(t *testing.T) {
 		expectSplit        bool
 		expectKeyring      map[string]string
 	}{
+
 		{
 			name:          "initial update failure (no rollback needed)",
 			args:          []string{"config", "set", "new.key", "val", "--keychain"},
