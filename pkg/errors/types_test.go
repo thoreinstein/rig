@@ -577,29 +577,37 @@ func TestSplitBrainError(t *testing.T) {
 
 	t.Run("Error message content", func(t *testing.T) {
 		msg := err.Error()
-		if !strings.Contains(msg, "CRITICAL INCONSISTENCY") {
-			t.Error("Error() should contain CRITICAL INCONSISTENCY")
+		if !strings.Contains(msg, "split-brain") {
+			t.Error("Error() should contain split-brain")
 		}
-		if !strings.Contains(msg, "Config Key: jira.token") {
-			t.Error("Error() should contain Config Key: jira.token")
+		if !strings.Contains(msg, "jira.token") {
+			t.Error("Error() should contain the config key")
 		}
-		if !strings.Contains(msg, "Primary Failure: config write failed") {
-			t.Error("Error() should contain Primary Failure: config write failed")
+		if !strings.Contains(msg, "config write failed") {
+			t.Error("Error() should contain the primary error")
 		}
-		if !strings.Contains(msg, "Rollback Failure: keychain delete failed") {
-			t.Error("Error() should contain Rollback Failure: keychain delete failed")
+		if !strings.Contains(msg, "keychain delete failed") {
+			t.Error("Error() should contain the rollback error")
 		}
-		if !strings.Contains(msg, "MANUAL RECOVERY REQUIRED") {
-			t.Error("Error() should contain MANUAL RECOVERY REQUIRED")
+		// Error() should be a single concise line (no newlines)
+		if strings.Contains(msg, "\n") {
+			t.Error("Error() should be a single line without newlines")
 		}
-		if !strings.Contains(msg, "security delete-generic-password -s \"rig\" -a \"jira.token\"") {
-			t.Error("Error() should contain macOS command")
+	})
+
+	t.Run("RecoveryInstructions", func(t *testing.T) {
+		instructions := err.RecoveryInstructions()
+		if !strings.Contains(instructions, "MANUAL RECOVERY REQUIRED") {
+			t.Error("RecoveryInstructions() should contain MANUAL RECOVERY REQUIRED")
 		}
-		if !strings.Contains(msg, "secret-tool clear service rig account jira.token") {
-			t.Error("Error() should contain Linux command")
+		if !strings.Contains(instructions, "security delete-generic-password -s \"rig\" -a \"jira.token\"") {
+			t.Error("RecoveryInstructions() should contain macOS command")
 		}
-		if !strings.Contains(msg, "cmdkey /delete:rig:jira.token") {
-			t.Error("Error() should contain Windows command")
+		if !strings.Contains(instructions, "secret-tool clear service rig account jira.token") {
+			t.Error("RecoveryInstructions() should contain Linux command")
+		}
+		if !strings.Contains(instructions, "cmdkey /delete:rig:jira.token") {
+			t.Error("RecoveryInstructions() should contain Windows command")
 		}
 	})
 

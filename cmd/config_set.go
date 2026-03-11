@@ -43,10 +43,11 @@ Use --keychain to store the value in the system keychain and save a reference UR
 		}
 
 		if err := config.StoreConfigValue(key, finalValue); err != nil {
-			// Roll back keychain entry if config update fails.
 			if rollback != nil {
 				if rollbackErr := rollback(); rollbackErr != nil {
-					return rigerrors.NewSplitBrainError(key, "rig", key, err, rollbackErr)
+					sbErr := rigerrors.NewSplitBrainError(key, "rig", key, err, rollbackErr)
+					fmt.Fprint(cmd.ErrOrStderr(), sbErr.RecoveryInstructions())
+					return sbErr
 				}
 			}
 			return errors.Wrap(err, "failed to update configuration")

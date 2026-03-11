@@ -187,9 +187,9 @@ type mockKeyringProvider struct {
 	storage        map[string]string
 	getErr         error
 	setErr         error
-	setRollbackErr error // Error to return on Set calls during rollback
+	setRollbackErr error // Error to return on the second Set call (rollback)
 	delErr         error
-	inRollback     bool // Simple flag to toggle which Set error to return
+	setCalls       int // Tracks Set call count for rollback detection
 }
 
 func (m *mockKeyringProvider) Get(service, account string) (string, error) {
@@ -204,18 +204,15 @@ func (m *mockKeyringProvider) Get(service, account string) (string, error) {
 }
 
 func (m *mockKeyringProvider) Set(service, account, value string) error {
-	if m.inRollback && m.setRollbackErr != nil {
-		return m.setRollbackErr
-	}
-	if !m.inRollback && m.setErr != nil {
+	m.setCalls++
+	// First Set is the forward write; second Set is rollback (restore).
+	if m.setCalls == 1 && m.setErr != nil {
 		return m.setErr
 	}
-	m.storage[service+":"+account] = value
-	// If we just successfully set a value, and we weren't in rollback,
-	// the NEXT Set call will be the rollback (restoration).
-	if !m.inRollback {
-		m.inRollback = true
+	if m.setCalls > 1 && m.setRollbackErr != nil {
+		return m.setRollbackErr
 	}
+	m.storage[service+":"+account] = value
 	return nil
 }
 
@@ -243,7 +240,7 @@ func TestConfigSetFailureModes(t *testing.T) {
 	// Use our mock provider for fine-grained failure control
 	mock := &mockKeyringProvider{storage: make(map[string]string)}
 	config.SetKeyringProvider(mock)
-	defer func() { config.SetKeyringProvider(nil) }() // Restore default wrapper
+	t.Cleanup(func() { config.SetKeyringProvider(nil) })
 
 	tests := []struct {
 		name               string
@@ -278,7 +275,7 @@ func TestConfigSetFailureModes(t *testing.T) {
 			args:          []string{"config", "set", "new.key", "val", "--keychain"},
 			makeDirRead:   true,
 			mockDelErr:    errors.New("delete failed"),
-			expectErr:     "CRITICAL INCONSISTENCY",
+			expectErr:     "split-brain",
 			expectSplit:   true,
 			expectKeyring: map[string]string{"rig:new.key": "val"}, // orphaned
 		},
@@ -296,7 +293,7 @@ func TestConfigSetFailureModes(t *testing.T) {
 			setupKeyring:       map[string]string{"rig:old.key": "old-val"},
 			makeDirRead:        true,
 			mockSetRollbackErr: errors.New("restore failed"), // second set (rollback) fails
-			expectErr:          "CRITICAL INCONSISTENCY",
+			expectErr:          "split-brain",
 			expectSplit:        true,
 			expectKeyring:      map[string]string{"rig:old.key": "new-val"}, // inconsistent
 		},
@@ -310,8 +307,8 @@ func TestConfigSetFailureModes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Reset state
-			mock.storage = make(map[string]string)
+			// Fresh mock per subtest to avoid state leakage
+			mock = &mockKeyringProvider{storage: make(map[string]string)}
 			for k, v := range tt.setupKeyring {
 				mock.storage[k] = v
 			}
@@ -319,7 +316,7 @@ func TestConfigSetFailureModes(t *testing.T) {
 			mock.setErr = tt.mockSetErr
 			mock.setRollbackErr = tt.mockSetRollbackErr
 			mock.delErr = tt.mockDelErr
-			mock.inRollback = false
+			config.SetKeyringProvider(mock)
 
 			if tt.makeDirRead {
 				require.NoError(t, os.Chmod(configDir, 0500))

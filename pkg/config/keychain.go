@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/cockroachdb/errors"
 	"github.com/zalando/go-keyring"
@@ -15,7 +16,8 @@ const KeychainPrefix = "keychain://"
 type ErrorClass int
 
 const (
-	ErrorClassUnknown ErrorClass = iota
+	ErrorClassNone    ErrorClass = iota // Zero value: nil input
+	ErrorClassUnknown                   // Non-nil error that doesn't match any known pattern
 	ErrorClassTransient
 	ErrorClassPermission
 	ErrorClassSystem
@@ -29,38 +31,56 @@ type KeyringProvider interface {
 	Delete(service, account string) error
 }
 
-type defaultKeyringProvider struct{}
+// DefaultKeyringProvider delegates to the zalando/go-keyring package.
+type DefaultKeyringProvider struct{}
 
-func (p *defaultKeyringProvider) Get(service, account string) (string, error) {
+func (p *DefaultKeyringProvider) Get(service, account string) (string, error) {
 	return keyring.Get(service, account)
 }
 
-func (p *defaultKeyringProvider) Set(service, account, value string) error {
+func (p *DefaultKeyringProvider) Set(service, account, value string) error {
 	return keyring.Set(service, account, value)
 }
 
-func (p *defaultKeyringProvider) Delete(service, account string) error {
+func (p *DefaultKeyringProvider) Delete(service, account string) error {
 	return keyring.Delete(service, account)
 }
 
-var keyringImpl KeyringProvider = &defaultKeyringProvider{}
+var (
+	keyringMu   sync.RWMutex
+	keyringImpl KeyringProvider = &DefaultKeyringProvider{}
+)
+
+// getKeyringImpl returns the current keyring provider under a read lock.
+func getKeyringImpl() KeyringProvider {
+	keyringMu.RLock()
+	defer keyringMu.RUnlock()
+	return keyringImpl
+}
 
 // SetKeyringProvider allows injecting a mock provider for testing.
+// Passing nil resets to the default provider.
 func SetKeyringProvider(p KeyringProvider) {
+	keyringMu.Lock()
+	defer keyringMu.Unlock()
+	if p == nil {
+		keyringImpl = &DefaultKeyringProvider{}
+		return
+	}
 	keyringImpl = p
 }
 
 // ClassifyKeyringError maps OS-specific keychain errors to internal ErrorClass.
 func ClassifyKeyringError(err error) ErrorClass {
 	if err == nil {
-		return ErrorClassUnknown
+		return ErrorClassNone
 	}
 
 	if errors.Is(err, keyring.ErrNotFound) {
 		return ErrorClassNotFound
 	}
 
-	msg := err.Error()
+	msg := strings.ToLower(err.Error())
 
 	// macOS Security framework errors
 	// errSecAuthFailed (-25293), errSecInteractionNotAllowed (-25308)
@@ -72,12 +92,12 @@ func ClassifyKeyringError(err error) ErrorClass {
 	}
 
 	// Linux Secret Service (libsecret/dbus) errors
-	if strings.Contains(msg, "org.freedesktop.Secret.Error.IsLocked") || strings.Contains(msg, "access denied") {
+	if strings.Contains(msg, "org.freedesktop.secret.error.islocked") || strings.Contains(msg, "access denied") {
 		return ErrorClassPermission
 	}
 
 	// Windows Credential Manager errors
-	if strings.Contains(msg, "The specified item could not be found") {
+	if strings.Contains(msg, "the specified item could not be found") {
 		return ErrorClassNotFound
 	}
 
@@ -107,17 +127,20 @@ func resolveRecursive(m map[string]interface{}, sources SourceMap, prefix string
 
 // IsKeychainNotFound reports whether the error indicates a missing keychain entry.
 func IsKeychainNotFound(err error) bool {
+	if errors.Is(err, keyring.ErrNotFound) {
+		return true
+	}
 	return ClassifyKeyringError(err) == ErrorClassNotFound
 }
 
 // GetKeychainSecret retrieves a secret from the system keychain.
 func GetKeychainSecret(service, account string) (string, error) {
-	return keyringImpl.Get(service, account)
+	return getKeyringImpl().Get(service, account)
 }
 
 // DeleteKeychainSecret removes a secret from the system keychain.
 func DeleteKeychainSecret(service, account string) error {
-	return keyringImpl.Delete(service, account)
+	return getKeyringImpl().Delete(service, account)
 }
 
 // ResolveValue resolves a single value, handling keychain:// URIs if present.
@@ -137,7 +160,7 @@ func ResolveValue(v interface{}, sources SourceMap, key string, verbose bool) (i
 			service := parts[0]
 			account := parts[1]
 
-			secret, err := keyringImpl.Get(service, account)
+			secret, err := getKeyringImpl().Get(service, account)
 			if err != nil {
 				if verbose {
 					fmt.Fprintf(os.Stderr, "Warning: failed to resolve keychain secret for key %q (%s/%s): %v\n", key, service, account, err)

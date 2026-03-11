@@ -12,7 +12,7 @@ import (
 
 // StoreKeychainSecret stores a value in the system keychain and returns the URI.
 func StoreKeychainSecret(service, account, value string) (string, error) {
-	if err := keyringImpl.Set(service, account, value); err != nil {
+	if err := getKeyringImpl().Set(service, account, value); err != nil {
 		return "", errors.Wrapf(err, "failed to store secret in keychain (%s/%s)", service, account)
 	}
 	return fmt.Sprintf("%s%s/%s", KeychainPrefix, service, account), nil
@@ -22,8 +22,11 @@ func StoreKeychainSecret(service, account, value string) (string, error) {
 // The rollback function will either restore the previous value or delete the new entry
 // if it didn't exist before. The rollback function is only intended to be called once.
 func UpdateKeychainSecret(service, account, newValue string) (string, func() error, error) {
+	// Capture provider at closure creation time so rollback uses the same impl.
+	impl := getKeyringImpl()
+
 	// 1. Pre-flight: Read old value (if any)
-	oldValue, err := keyringImpl.Get(service, account)
+	oldValue, err := impl.Get(service, account)
 	exists := true
 	if err != nil {
 		if ClassifyKeyringError(err) == ErrorClassNotFound {
@@ -41,15 +44,11 @@ func UpdateKeychainSecret(service, account, newValue string) (string, func() err
 
 	// 3. Construct rollback closure
 	rollback := func() error {
+		defer func() { oldValue = "" }() // Zero sensitive data in all paths
 		if !exists {
-			// It was a new entry, so delete it to rollback
-			return keyringImpl.Delete(service, account)
+			return impl.Delete(service, account)
 		}
-		// It was an update, so restore the old value
-		err := keyringImpl.Set(service, account, oldValue)
-		// Zero out the old value after restoration attempt to prevent leakage
-		oldValue = ""
-		return err
+		return impl.Set(service, account, oldValue)
 	}
 
 	return uri, rollback, nil

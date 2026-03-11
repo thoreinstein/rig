@@ -100,11 +100,9 @@ func TestKeychainSecrets(t *testing.T) {
 }
 
 func TestKeyringProviderInjection(t *testing.T) {
-	oldImpl := keyringImpl
-	defer func() { keyringImpl = oldImpl }()
-
 	mock := newMockKeyringProvider()
 	SetKeyringProvider(mock)
+	t.Cleanup(func() { SetKeyringProvider(nil) })
 
 	service, account, value := "svc", "acc", "pwd"
 
@@ -130,7 +128,7 @@ func TestClassifyKeyringError(t *testing.T) {
 		{
 			name:     "nil error",
 			err:      nil,
-			expected: ErrorClassUnknown,
+			expected: ErrorClassNone,
 		},
 		{
 			name:     "not found (standard)",

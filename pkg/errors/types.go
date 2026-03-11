@@ -545,26 +545,25 @@ func IsDatabaseError(err error) bool {
 // SplitBrainError represents an inconsistent state where the keychain was updated
 // but the configuration write failed, and the subsequent rollback also failed.
 type SplitBrainError struct {
-	Key           string // Config key (e.g., "jira.token")
-	Service       string // Keychain service (e.g., "rig")
-	Account       string // Keychain account (e.g., "jira.token")
-	PrimaryErr    error  // Why the config write failed
-	RollbackErr   error  // Why the rollback failed
-	KeychainState string // "new_value_persisted" or "unknown"
+	Key         string // Config key (e.g., "jira.token")
+	Service     string // Keychain service (e.g., "rig")
+	Account     string // Keychain account (e.g., "jira.token")
+	PrimaryErr  error  // Why the config write failed
+	RollbackErr error  // Why the rollback failed
 }
 
-// Error implements the error interface and provides manual recovery instructions.
+// Error implements the error interface with a concise single-line message.
 func (e *SplitBrainError) Error() string {
-	var sb strings.Builder
-	sb.WriteString("CRITICAL INCONSISTENCY: keychain updated but config write failed, and rollback also failed.\n")
-	fmt.Fprintf(&sb, "Config Key: %s\n", e.Key)
-	fmt.Fprintf(&sb, "Primary Failure: %v\n", e.PrimaryErr)
-	fmt.Fprintf(&sb, "Rollback Failure: %v\n", e.RollbackErr)
-	sb.WriteString("\nMANUAL RECOVERY REQUIRED:\n")
-	sb.WriteString("The keychain entry for this key may contain the NEW secret, but your config file does not reference it.\n")
-	sb.WriteString("To resolve this, you should manually delete the keychain entry and try again:\n\n")
+	return fmt.Sprintf("split-brain: config key %q inconsistent (write failed: %v, rollback failed: %v)", e.Key, e.PrimaryErr, e.RollbackErr)
+}
 
-	// OS-specific instructions
+// RecoveryInstructions returns multi-line manual recovery instructions for the user.
+func (e *SplitBrainError) RecoveryInstructions() string {
+	var sb strings.Builder
+	sb.WriteString("MANUAL RECOVERY REQUIRED:\n")
+	sb.WriteString("The keychain entry for this key may contain the NEW secret, but your config file does not reference it.\n")
+	sb.WriteString("To resolve this, manually delete the keychain entry and try again:\n\n")
+
 	sb.WriteString("  macOS: security delete-generic-password -s \"" + e.Service + "\" -a \"" + e.Account + "\"\n")
 	sb.WriteString("  Linux: secret-tool clear service " + e.Service + " account " + e.Account + "\n")
 	sb.WriteString("  Windows: cmdkey /delete:rig:" + e.Account + "\n")
@@ -580,12 +579,11 @@ func (e *SplitBrainError) Unwrap() error {
 // NewSplitBrainError creates a new SplitBrainError.
 func NewSplitBrainError(key, service, account string, primaryErr, rollbackErr error) *SplitBrainError {
 	return &SplitBrainError{
-		Key:           key,
-		Service:       service,
-		Account:       account,
-		PrimaryErr:    primaryErr,
-		RollbackErr:   rollbackErr,
-		KeychainState: "new_value_persisted",
+		Key:         key,
+		Service:     service,
+		Account:     account,
+		PrimaryErr:  primaryErr,
+		RollbackErr: rollbackErr,
 	}
 }
 
