@@ -168,6 +168,8 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 - **Safe Deprecation:** Use non-blocking configuration warnings (via `CheckSecurityWarnings`) instead of silent removal when deprecating keys to ensure a smooth user migration.
 - **Bootstrap Package:** All early CLI orchestration (flag pre-parsing, configuration initialization, dynamic registration) belongs in `pkg/bootstrap` to keep `Execute()` paths delegative and testable.
 - **Convention-Over-Collision:** Use uppercase shorthands for global host flags (e.g., `-C` for config) to minimize collisions with subcommand-specific shorthands.
+- **Hydration-Aware Provenance Pattern:** Configuration systems that hydrate values (e.g. resolving `keychain://` URIs) MUST track both `Value` (hydrated) and `RawValue` (un-hydrated) in the provenance map. This ensures split-brain reporting can accurately identify whether a key was explicitly set in a user file or inherited, even after transformation.
+- **Captured-Provider Transaction Pattern:** Transactional operations (Read -> Write -> Rollback) that depend on injectable global providers MUST capture the provider instance *exactly once* at the start of the transaction. This guarantees all stages, including rollback closures, use the same implementation and backend, preventing inconsistency in concurrent or race-detecting environments.
 
 ### Documentation Conventions
 - **Historical Accuracy:** Never modify old release notes or historical documentation to reflect current state. Always treat past records as immutable snapshots.
@@ -200,6 +202,8 @@ api_key = "your-api-key" # Or use ANTHROPIC_API_KEY / GROQ_API_KEY
 - **Package Shadowing in CLI Commands Trap:** Moving shared logic into a package with a common name (e.g., `pkg/ticket`) can lead to package shadowing if local variables in `cmd` use the same name (e.g., `ticketID`). This makes package-level functions inaccessible. **Mitigation:** Rename local CLI variables to be more specific (e.g., `ticketID`).
 - **Empty TOML Unmarshal Nil Map Trap:** Programmatic TOML mutation (e.g., in `rig config set`) must account for the fact that unmarshalling comment-only or empty files can return a `nil` map. Always check and initialize the map before assignment to avoid panics.
 - **The `sed` Multi-line Replacement Trap**: Avoid using `sed` for complex, multi-line regex replacements, especially across platforms (Darwin vs. Linux). It is finicky and prone to file corruption or silent failure. Prefer surgical `replace` calls with ample context or full-file `write_file` for predictable results.
+- **Speculative Portability Trap (The Windows Indulgence):** Implementing support for platforms explicitly excluded from the project scope (e.g., Windows) leads to over-engineering, maintenance bloat, and confusing recovery instructions. Stick to Darwin/Linux and fail fast on unsupported OSes.
+- **Idempotent Rollback Pattern:** Rollback closures returned by transactional operations MUST be idempotent and thread-safe (e.g. using `sync.Mutex` and a `called` flag). They must reliably return the first error encountered and immediately zero out any captured sensitive data (`oldValue = ""`) after use to prevent memory leakage.
 
 ## API & Plugin Architecture (gRPC)
 
