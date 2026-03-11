@@ -2,6 +2,7 @@ package git
 
 import (
 	"errors"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -1124,6 +1125,88 @@ func TestPathTraversalEdgeCases(t *testing.T) {
 			}
 			if tt.shouldFail && err != nil && !strings.Contains(err.Error(), "escapes repository root") {
 				t.Errorf("Error = %q, want to contain 'escapes repository root'", err.Error())
+			}
+		})
+	}
+}
+
+func TestGetWorktreePath_PathTraversal(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		ticketType string
+		ticketName string
+		wantErr    bool
+		errContain string
+	}{
+		{
+			name:       "dotdot in ticket name",
+			ticketType: "fraas",
+			ticketName: "../../../etc/passwd",
+			wantErr:    true,
+			errContain: "escapes repository root",
+		},
+		{
+			name:       "dotdot in ticket type",
+			ticketType: "../../../tmp",
+			ticketName: "exploit",
+			wantErr:    true,
+			errContain: "escapes repository root",
+		},
+		{
+			name:       "simple parent escape",
+			ticketType: "..",
+			ticketName: "escape",
+			wantErr:    true,
+			errContain: "escapes repository root",
+		},
+		{
+			name:       "hidden dotdot with dots",
+			ticketType: "fraas",
+			ticketName: "foo/../../../etc",
+			wantErr:    true,
+			errContain: "escapes repository root",
+		},
+		{
+			name:       "valid path",
+			ticketType: "fraas",
+			ticketName: "FRAAS-123",
+			wantErr:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			mock := &MockCommandRunner{
+				OutputFunc: func(dir string, name string, args ...string) ([]byte, error) {
+					if len(args) > 1 && args[0] == "rev-parse" && args[1] == "--git-common-dir" {
+						return []byte("/home/user/repo/.git\n"), nil
+					}
+					return []byte{}, nil
+				},
+			}
+
+			wm := NewWorktreeManagerWithRunner("main", false, mock)
+
+			path, err := wm.GetWorktreePath(tt.ticketType, tt.ticketName)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("GetWorktreePath() should have returned error for path traversal attempt")
+				} else if tt.errContain != "" && !strings.Contains(err.Error(), tt.errContain) {
+					t.Errorf("Error = %q, want to contain %q", err.Error(), tt.errContain)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("GetWorktreePath() unexpected error = %v", err)
+				}
+				expected := filepath.Join("/home/user/repo", tt.ticketType, tt.ticketName)
+				if path != expected {
+					t.Errorf("GetWorktreePath() = %q, want %q", path, expected)
+				}
 			}
 		})
 	}

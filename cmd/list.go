@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/cockroachdb/errors"
@@ -116,7 +117,9 @@ func listCurrentRepoWorktrees(cfg *config.Config) error {
 	totalWorktrees := 0
 	for _, wt := range worktrees {
 		// Skip the main repo path itself
-		if wt.Path == repoRoot {
+		realWt, _ := filepath.EvalSymlinks(wt.Path)
+		realRepoRoot, _ := filepath.EvalSymlinks(repoRoot)
+		if wt.Path == repoRoot || realWt == realRepoRoot {
 			continue
 		}
 

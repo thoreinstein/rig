@@ -415,7 +415,11 @@ func (wm *WorktreeManager) GetWorktreePath(ticketType, ticket string) (string, e
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(repoRoot, ticketType, ticket), nil
+	worktreePath := filepath.Join(repoRoot, ticketType, ticket)
+	if !strings.HasPrefix(worktreePath, repoRoot+string(filepath.Separator)) {
+		return "", errors.New("invalid path: worktree path escapes repository root")
+	}
+	return worktreePath, nil
 }
 
 // WorktreeInfo contains information about a git worktree
