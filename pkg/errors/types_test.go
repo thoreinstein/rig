@@ -585,13 +585,24 @@ func TestSplitBrainError(t *testing.T) {
 	})
 
 	t.Run("Update recovery instructions (plaintext to keychain)", func(t *testing.T) {
-		err := NewSplitBrainError(key, service, account, primaryErr, rollbackErr, false, "plaintext-val")
+		err := NewSplitBrainError(key, service, account, primaryErr, rollbackErr, false, "[REDACTED]")
 		instructions := err.RecoveryInstructions()
-		if !strings.Contains(instructions, "Your config file still references the OLD value (plaintext-val)") {
-			t.Error("RecoveryInstructions() should report old value mismatch")
+		if !strings.Contains(instructions, "The system currently resolves this key to a DIFFERENT value ([REDACTED])") {
+			t.Error("RecoveryInstructions() should report redacted old value mismatch")
 		}
 		if !strings.Contains(instructions, "DO NOT delete the keychain entry") {
 			t.Error("RecoveryInstructions() for update should warn against deletion")
+		}
+	})
+
+	t.Run("Update recovery instructions (inherited value)", func(t *testing.T) {
+		err := NewSplitBrainError(key, service, account, primaryErr, rollbackErr, false, "")
+		instructions := err.RecoveryInstructions()
+		if !strings.Contains(instructions, "user configuration file does not currently contain this key") {
+			t.Error("RecoveryInstructions() should report key not in user file")
+		}
+		if !strings.Contains(instructions, "inherited from defaults, env, or project config") {
+			t.Error("RecoveryInstructions() should suggest inheritance")
 		}
 	})
 
@@ -599,7 +610,7 @@ func TestSplitBrainError(t *testing.T) {
 		uri := "keychain://rig/jira.token"
 		err := NewSplitBrainError(key, service, account, primaryErr, rollbackErr, false, uri)
 		instructions := err.RecoveryInstructions()
-		if !strings.Contains(instructions, "Your config file ALREADY references this keychain entry") {
+		if !strings.Contains(instructions, "The system already references this keychain entry") {
 			t.Error("RecoveryInstructions() should report existing URI match")
 		}
 		if !strings.Contains(instructions, "no further action is required") {

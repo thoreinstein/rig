@@ -2,10 +2,10 @@ package cmd
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/cockroachdb/errors"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 
 	"thoreinstein.com/rig/pkg/config"
 	rigerrors "thoreinstein.com/rig/pkg/errors"
@@ -32,9 +32,19 @@ Use --keychain to store the value in the system keychain and save a reference UR
 			fmt.Fprintf(cmd.OutOrStdout(), "Warning: Storing sensitive key %q in plaintext. Consider using --keychain.\n", key)
 		}
 
-		// Capture the prior configuration value for accurate split-brain reporting.
-		// We use fmt.Sprint to handle any underlying type (string, int, etc).
-		priorConfig := fmt.Sprint(viper.Get(key))
+		// Capture the prior user-file value for accurate split-brain reporting.
+		// If the key is not in the user file, priorConfig remains empty.
+		var priorConfig string
+		if appLoader != nil {
+			if entry, ok := appLoader.Sources()[key]; ok && entry.Source == config.SourceUser {
+				priorConfig = fmt.Sprint(entry.Value)
+			}
+		}
+
+		// Redact sensitive prior values if they are not already keychain URIs.
+		if priorConfig != "" && config.IsSensitiveKey(key) && !strings.HasPrefix(priorConfig, config.KeychainPrefix) {
+			priorConfig = "[REDACTED]"
+		}
 
 		finalValue := value
 		var rollback func() error

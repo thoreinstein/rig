@@ -565,7 +565,9 @@ func (e *SplitBrainError) RecoveryInstructions() string {
 	sb.WriteString("MANUAL RECOVERY REQUIRED:\n")
 
 	if e.IsNew {
-		sb.WriteString("The keychain entry for this key may contain the NEW secret, but your config file does not reference it.\n")
+		sb.WriteString("The keychain entry for this key was newly created, but the configuration write failed.\n")
+		sb.WriteString("The attempt to delete the new entry ALSO failed.\n\n")
+		sb.WriteString("CRITICAL: The keychain entry may now contain the NEW secret, but your config does not reference it.\n")
 		sb.WriteString("To resolve this, manually delete the keychain entry and try again:\n\n")
 		sb.WriteString("  macOS: security delete-generic-password -s \"" + e.Service + "\" -a \"" + e.Account + "\"\n")
 		sb.WriteString("  Linux: secret-tool clear service " + e.Service + " account " + e.Account + "\n")
@@ -575,16 +577,20 @@ func (e *SplitBrainError) RecoveryInstructions() string {
 		sb.WriteString("CRITICAL: The keychain entry now contains the NEW secret.\n")
 
 		uri := "keychain://" + e.Service + "/" + e.Account
-		if e.PriorConfig == uri {
-			sb.WriteString("Your config file ALREADY references this keychain entry, so it is now using the NEW secret.\n")
+		switch e.PriorConfig {
+		case uri:
+			sb.WriteString("The system already references this keychain entry, so it is now using the NEW secret stored there.\n")
 			sb.WriteString("If this is acceptable, no further action is required.\n\n")
-		} else {
-			sb.WriteString("Your config file still references the OLD value (" + e.PriorConfig + ").\n")
+		case "":
+			sb.WriteString("The user configuration file does not currently contain this key (it may be inherited from defaults, env, or project config).\n")
+			sb.WriteString("The keychain entry is now inconsistent with the active configuration.\n\n")
+		default:
+			sb.WriteString("The system currently resolves this key to a DIFFERENT value (" + e.PriorConfig + ").\n")
 			sb.WriteString("DO NOT delete the keychain entry unless you have a backup of the credential.\n\n")
 		}
 
 		sb.WriteString("To resolve this, either:\n")
-		sb.WriteString("1. Manually update your config file to correctly reference the new secret (set to: " + uri + ").\n")
+		sb.WriteString("1. Manually update your user config file to reference the new secret (set to: " + uri + ").\n")
 		sb.WriteString("2. Manually restore the OLD secret to the keychain using your system tools.\n")
 	}
 
