@@ -46,21 +46,27 @@ func UpdateKeychainSecret(service, account, newValue string) (string, func() err
 	uri := fmt.Sprintf("%s%s/%s", KeychainPrefix, service, account)
 
 	// 3. Construct single-use rollback closure
-	var once sync.Once
+	var (
+		rollbackMu  sync.Mutex
+		called      bool
+		rollbackErr error
+	)
 	rollback := func() error {
-		var rollbackErr error
-		once.Do(func() {
-			defer func() { oldValue = "" }() // Zero sensitive data
-			if !exists {
-				rollbackErr = impl.Delete(service, account)
-			} else {
-				rollbackErr = impl.Set(service, account, oldValue)
-			}
-		})
-		if rollbackErr != nil {
-			return rollbackErr
+		rollbackMu.Lock()
+		defer rollbackMu.Unlock()
+
+		if called {
+			return errors.New("rollback already called")
 		}
-		return nil
+		called = true
+
+		defer func() { oldValue = "" }() // Zero sensitive data
+		if !exists {
+			rollbackErr = impl.Delete(service, account)
+		} else {
+			rollbackErr = impl.Set(service, account, oldValue)
+		}
+		return rollbackErr
 	}
 
 	return uri, rollback, !exists, nil

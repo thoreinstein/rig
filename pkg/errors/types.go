@@ -585,7 +585,7 @@ func (e *SplitBrainError) RecoveryInstructions() string {
 			sb.WriteString("The user configuration file does not currently contain this key (it may be inherited from defaults, env, or project config).\n")
 			sb.WriteString("The keychain entry is now inconsistent with the active configuration.\n\n")
 		default:
-			sb.WriteString("The system currently resolves this key to a DIFFERENT value (" + e.PriorConfig + ").\n")
+			sb.WriteString("The system currently resolves this key to a DIFFERENT value in your configuration.\n")
 			sb.WriteString("DO NOT delete the keychain entry unless you have a backup of the credential.\n\n")
 		}
 

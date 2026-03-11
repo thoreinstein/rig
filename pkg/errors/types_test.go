@@ -587,7 +587,7 @@ func TestSplitBrainError(t *testing.T) {
 	t.Run("Update recovery instructions (plaintext to keychain)", func(t *testing.T) {
 		err := NewSplitBrainError(key, service, account, primaryErr, rollbackErr, false, "[REDACTED]")
 		instructions := err.RecoveryInstructions()
-		if !strings.Contains(instructions, "The system currently resolves this key to a DIFFERENT value ([REDACTED])") {
+		if !strings.Contains(instructions, "The system currently resolves this key to a DIFFERENT value in your configuration") {
 			t.Error("RecoveryInstructions() should report redacted old value mismatch")
 		}
 		if !strings.Contains(instructions, "DO NOT delete the keychain entry") {
