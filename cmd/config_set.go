@@ -33,19 +33,21 @@ Use --keychain to store the value in the system keychain and save a reference UR
 
 		finalValue := value
 		var rollback func() error
+		var wasNew bool
 		if setKeychain {
-			uri, rb, err := config.UpdateKeychainSecret("rig", key, value)
+			uri, rb, isNew, err := config.UpdateKeychainSecret("rig", key, value)
 			if err != nil {
 				return err
 			}
 			finalValue = uri
 			rollback = rb
+			wasNew = isNew
 		}
 
 		if err := config.StoreConfigValue(key, finalValue); err != nil {
 			if rollback != nil {
 				if rollbackErr := rollback(); rollbackErr != nil {
-					sbErr := rigerrors.NewSplitBrainError(key, "rig", key, err, rollbackErr)
+					sbErr := rigerrors.NewSplitBrainError(key, "rig", key, err, rollbackErr, wasNew)
 					fmt.Fprint(cmd.ErrOrStderr(), sbErr.RecoveryInstructions())
 					return sbErr
 				}

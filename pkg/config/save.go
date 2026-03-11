@@ -21,7 +21,8 @@ func StoreKeychainSecret(service, account, value string) (string, error) {
 // UpdateKeychainSecret updates a secret in the keychain and returns a rollback function.
 // The rollback function will either restore the previous value or delete the new entry
 // if it didn't exist before. The rollback function is only intended to be called once.
-func UpdateKeychainSecret(service, account, newValue string) (string, func() error, error) {
+// It returns the URI, the rollback function, and a boolean indicating if it was a new entry.
+func UpdateKeychainSecret(service, account, newValue string) (string, func() error, bool, error) {
 	// Capture provider at closure creation time so rollback uses the same impl.
 	impl := getKeyringImpl()
 
@@ -32,14 +33,14 @@ func UpdateKeychainSecret(service, account, newValue string) (string, func() err
 		if ClassifyKeyringError(err) == ErrorClassNotFound {
 			exists = false
 		} else {
-			return "", nil, errors.Wrapf(err, "pre-flight check failed for keychain (%s/%s)", service, account)
+			return "", nil, false, errors.Wrapf(err, "pre-flight check failed for keychain (%s/%s)", service, account)
 		}
 	}
 
 	// 2. Set new value
 	uri, err := StoreKeychainSecret(service, account, newValue)
 	if err != nil {
-		return "", nil, err
+		return "", nil, false, err
 	}
 
 	// 3. Construct rollback closure
@@ -51,7 +52,7 @@ func UpdateKeychainSecret(service, account, newValue string) (string, func() err
 		return impl.Set(service, account, oldValue)
 	}
 
-	return uri, rollback, nil
+	return uri, rollback, !exists, nil
 }
 
 // StoreConfigValue updates a key-value pair in the user's config file.

@@ -48,8 +48,9 @@ func TestUpdateKeychainSecret(t *testing.T) {
 
 	t.Run("new secret update and rollback", func(t *testing.T) {
 		mock.storage = make(map[string]string) // Ensure empty
-		uri, rollback, err := UpdateKeychainSecret(service, account, "new-token")
+		uri, rollback, isNew, err := UpdateKeychainSecret(service, account, "new-token")
 		require.NoError(t, err)
+		require.True(t, isNew)
 		require.Equal(t, "keychain://rig/jira.token", uri)
 		require.Equal(t, "new-token", mock.storage[service+":"+account])
 
@@ -61,8 +62,9 @@ func TestUpdateKeychainSecret(t *testing.T) {
 
 	t.Run("existing secret update and rollback", func(t *testing.T) {
 		mock.storage = map[string]string{service + ":" + account: "old-token"}
-		uri, rollback, err := UpdateKeychainSecret(service, account, "new-token")
+		uri, rollback, isNew, err := UpdateKeychainSecret(service, account, "new-token")
 		require.NoError(t, err)
+		require.False(t, isNew)
 		require.Equal(t, "keychain://rig/jira.token", uri)
 		require.Equal(t, "new-token", mock.storage[service+":"+account])
 
@@ -75,7 +77,7 @@ func TestUpdateKeychainSecret(t *testing.T) {
 	t.Run("pre-flight failure", func(t *testing.T) {
 		mock.storage = make(map[string]string)
 		mock.getErr = errors.New("unauthorized (-25293)") // Permission error
-		_, _, err := UpdateKeychainSecret(service, account, "new-token")
+		_, _, _, err := UpdateKeychainSecret(service, account, "new-token")
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "pre-flight check failed")
 		mock.getErr = nil

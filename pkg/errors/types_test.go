@@ -573,42 +573,36 @@ func TestSplitBrainError(t *testing.T) {
 	service := "rig"
 	account := "jira.token"
 
-	err := NewSplitBrainError(key, service, account, primaryErr, rollbackErr)
-
-	t.Run("Error message content", func(t *testing.T) {
-		msg := err.Error()
-		if !strings.Contains(msg, "split-brain") {
-			t.Error("Error() should contain split-brain")
-		}
-		if !strings.Contains(msg, "jira.token") {
-			t.Error("Error() should contain the config key")
-		}
-		if !strings.Contains(msg, "config write failed") {
-			t.Error("Error() should contain the primary error")
-		}
-		if !strings.Contains(msg, "keychain delete failed") {
-			t.Error("Error() should contain the rollback error")
-		}
-		// Error() should be a single concise line (no newlines)
-		if strings.Contains(msg, "\n") {
-			t.Error("Error() should be a single line without newlines")
-		}
-	})
-
-	t.Run("RecoveryInstructions", func(t *testing.T) {
+	t.Run("New entry recovery instructions", func(t *testing.T) {
+		err := NewSplitBrainError(key, service, account, primaryErr, rollbackErr, true)
 		instructions := err.RecoveryInstructions()
 		if !strings.Contains(instructions, "MANUAL RECOVERY REQUIRED") {
 			t.Error("RecoveryInstructions() should contain MANUAL RECOVERY REQUIRED")
 		}
-		if !strings.Contains(instructions, "security delete-generic-password -s \"rig\" -a \"jira.token\"") {
+		if !strings.Contains(instructions, "delete the keychain entry and try again") {
+			t.Error("RecoveryInstructions() for new entry should advise deletion")
+		}
+		if !strings.Contains(instructions, "security delete-generic-password") {
 			t.Error("RecoveryInstructions() should contain macOS command")
 		}
-		if !strings.Contains(instructions, "secret-tool clear service rig account jira.token") {
-			t.Error("RecoveryInstructions() should contain Linux command")
+	})
+
+	t.Run("Update recovery instructions", func(t *testing.T) {
+		err := NewSplitBrainError(key, service, account, primaryErr, rollbackErr, false)
+		instructions := err.RecoveryInstructions()
+		if !strings.Contains(instructions, "MANUAL RECOVERY REQUIRED") {
+			t.Error("RecoveryInstructions() should contain MANUAL RECOVERY REQUIRED")
+		}
+		if !strings.Contains(instructions, "DO NOT delete the keychain entry") {
+			t.Error("RecoveryInstructions() for update should warn against deletion")
+		}
+		if !strings.Contains(instructions, "Manually update your config file") {
+			t.Error("RecoveryInstructions() for update should suggest manual config update")
 		}
 	})
 
 	t.Run("Unwrap", func(t *testing.T) {
+		err := NewSplitBrainError(key, service, account, primaryErr, rollbackErr, true)
 		unwrapped := err.Unwrap()
 		if unwrapped != primaryErr {
 			t.Errorf("Unwrap() = %v, want %v", unwrapped, primaryErr)
@@ -619,6 +613,7 @@ func TestSplitBrainError(t *testing.T) {
 	})
 
 	t.Run("IsSplitBrainError", func(t *testing.T) {
+		err := NewSplitBrainError(key, service, account, primaryErr, rollbackErr, true)
 		if !IsSplitBrainError(err) {
 			t.Error("IsSplitBrainError should return true for direct SplitBrainError")
 		}

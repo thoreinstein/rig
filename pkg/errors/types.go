@@ -550,6 +550,7 @@ type SplitBrainError struct {
 	Account     string // Keychain account (e.g., "jira.token")
 	PrimaryErr  error  // Why the config write failed
 	RollbackErr error  // Why the rollback failed
+	IsNew       bool   // Whether the keychain entry was newly created
 }
 
 // Error implements the error interface with a concise single-line message.
@@ -561,11 +562,21 @@ func (e *SplitBrainError) Error() string {
 func (e *SplitBrainError) RecoveryInstructions() string {
 	var sb strings.Builder
 	sb.WriteString("MANUAL RECOVERY REQUIRED:\n")
-	sb.WriteString("The keychain entry for this key may contain the NEW secret, but your config file does not reference it.\n")
-	sb.WriteString("To resolve this, manually delete the keychain entry and try again:\n\n")
 
-	sb.WriteString("  macOS: security delete-generic-password -s \"" + e.Service + "\" -a \"" + e.Account + "\"\n")
-	sb.WriteString("  Linux: secret-tool clear service " + e.Service + " account " + e.Account + "\n")
+	if e.IsNew {
+		sb.WriteString("The keychain entry for this key may contain the NEW secret, but your config file does not reference it.\n")
+		sb.WriteString("To resolve this, manually delete the keychain entry and try again:\n\n")
+		sb.WriteString("  macOS: security delete-generic-password -s \"" + e.Service + "\" -a \"" + e.Account + "\"\n")
+		sb.WriteString("  Linux: secret-tool clear service " + e.Service + " account " + e.Account + "\n")
+	} else {
+		sb.WriteString("The keychain entry for this key was updated, but the configuration write failed.\n")
+		sb.WriteString("The attempt to restore the previous value ALSO failed.\n\n")
+		sb.WriteString("CRITICAL: The keychain entry now contains the NEW secret, but your config file still points to the OLD one.\n")
+		sb.WriteString("DO NOT delete the keychain entry unless you have a backup of the credential.\n\n")
+		sb.WriteString("To resolve this, either:\n")
+		sb.WriteString("1. Manually update your config file to correctly reference the new secret.\n")
+		sb.WriteString("2. Manually restore the OLD secret to the keychain using your system tools.\n")
+	}
 
 	return sb.String()
 }
@@ -576,13 +587,14 @@ func (e *SplitBrainError) Unwrap() error {
 }
 
 // NewSplitBrainError creates a new SplitBrainError.
-func NewSplitBrainError(key, service, account string, primaryErr, rollbackErr error) *SplitBrainError {
+func NewSplitBrainError(key, service, account string, primaryErr, rollbackErr error, isNew bool) *SplitBrainError {
 	return &SplitBrainError{
 		Key:         key,
 		Service:     service,
 		Account:     account,
 		PrimaryErr:  primaryErr,
 		RollbackErr: rollbackErr,
+		IsNew:       isNew,
 	}
 }
 
